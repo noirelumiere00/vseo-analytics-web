@@ -15,6 +15,13 @@
       "when": 1771401189959,
       "tag": "0001_dark_agent_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771404350074,
+      "tag": "0002_purple_giant_girl",
+      "breakpoints": true
     }
   ]
 }

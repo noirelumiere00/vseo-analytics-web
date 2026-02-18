@@ -3,8 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Video, FileText, Mic, BarChart3, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Loader2, ArrowLeft, Play, Video, FileText, Mic, BarChart3, CheckCircle2, AlertCircle, Eye, Heart, MessageCircle, Share2, Bookmark, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
@@ -71,6 +76,31 @@ export default function AnalysisDetail() {
 
   const { job, videos } = data;
 
+  // センチメントのバッジ色
+  const getSentimentBadge = (sentiment: string | null) => {
+    if (!sentiment) return <Badge variant="outline">未分析</Badge>;
+    
+    switch (sentiment) {
+      case "positive":
+        return <Badge className="bg-green-500">Positive</Badge>;
+      case "negative":
+        return <Badge className="bg-red-500">Negative</Badge>;
+      case "neutral":
+        return <Badge className="bg-gray-500">Neutral</Badge>;
+      default:
+        return <Badge variant="outline">{sentiment}</Badge>;
+    }
+  };
+
+  // 数値をフォーマット（1000 -> 1K, 1000000 -> 1M）
+  const formatNumber = (num: number | bigint | null | undefined) => {
+    if (num === null || num === undefined) return "0";
+    const n = typeof num === "bigint" ? Number(num) : num;
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    return n.toString();
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container py-12">
@@ -85,7 +115,7 @@ export default function AnalysisDetail() {
                 {job.keyword ? `キーワード: ${job.keyword}` : "手動URL分析"}
               </p>
             </div>
-            <Button variant="outline" onClick={() => setLocation("/history")}>
+            <Button variant="outline" onClick={() => setLocation("/")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               履歴に戻る
             </Button>
@@ -104,7 +134,7 @@ export default function AnalysisDetail() {
                   </CardTitle>
                   <CardDescription>
                     {job.status === "completed" && "分析が完了しました"}
-                    {job.status === "processing" && progressData?.currentStep}
+                    {job.status === "processing" && "分析を実行中です..."}
                     {job.status === "failed" && "分析に失敗しました"}
                     {job.status === "pending" && "分析を開始してください"}
                   </CardDescription>
@@ -146,119 +176,219 @@ export default function AnalysisDetail() {
             )}
           </Card>
 
-          {/* Videos Grid */}
+          {/* Videos Accordion */}
           {videos.length > 0 ? (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold">分析対象動画 ({videos.length}件)</h2>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {videos.map((video) => (
-                  <Card key={video.id} className="overflow-hidden">
-                    {video.thumbnailUrl && (
-                      <div className="aspect-video bg-muted relative">
-                        <img 
-                          src={video.thumbnailUrl} 
-                          alt={video.title || "動画サムネイル"}
-                          className="w-full h-full object-cover"
-                        />
-                        {(video.duplicateCount ?? 0) > 0 && (
-                          <Badge className="absolute top-2 right-2 bg-primary">
-                            重複度: {video.duplicateCount}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                    <CardHeader>
-                      <CardTitle className="text-base line-clamp-2">
-                        {video.title || "タイトルなし"}
-                      </CardTitle>
-                      <CardDescription>
-                        {video.platform === "tiktok" ? "TikTok" : "YouTube Shorts"} • {video.duration}秒
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {/* Score Display */}
-                      {video.score ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-2">
-                              <Video className="h-4 w-4" />
-                              サムネイル
-                            </span>
-                            <span className="font-medium">{video.score.thumbnailScore}/100</span>
-                          </div>
-                          <Progress value={video.score.thumbnailScore} className="h-2" />
-
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-2">
-                              <FileText className="h-4 w-4" />
-                              テキスト
-                            </span>
-                            <span className="font-medium">{video.score.textScore}/100</span>
-                          </div>
-                          <Progress value={video.score.textScore} className="h-2" />
-
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-2">
-                              <Mic className="h-4 w-4" />
-                              音声
-                            </span>
-                            <span className="font-medium">{video.score.audioScore}/100</span>
-                          </div>
-                          <Progress value={video.score.audioScore} className="h-2" />
-
-                          <div className="flex items-center justify-between text-sm font-bold mt-4 pt-4 border-t">
-                            <span className="flex items-center gap-2">
-                              <BarChart3 className="h-4 w-4" />
-                              総合スコア
-                            </span>
-                            <span className="gradient-text text-lg">{video.score.overallScore}/100</span>
+            <Card>
+              <CardHeader>
+                <CardTitle>分析対象動画 ({videos.length}件)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="single" collapsible className="w-full">
+                  {videos.map((video) => (
+                    <AccordionItem key={video.id} value={`video-${video.id}`}>
+                      <AccordionTrigger className="hover:no-underline">
+                        <div className="flex items-center gap-4 w-full pr-4">
+                          <img
+                            src={video.thumbnailUrl || "https://placehold.co/120x80/8A2BE2/white?text=No+Image"}
+                            alt={video.title || "動画サムネイル"}
+                            className="w-32 h-20 object-cover rounded"
+                          />
+                          <div className="flex-1 text-left">
+                            <div className="font-medium line-clamp-1">
+                              {video.title || "タイトルなし"}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1 flex items-center gap-3">
+                              <span className="flex items-center gap-1">
+                                <Eye className="h-4 w-4" />
+                                {formatNumber(video.viewCount)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Heart className="h-4 w-4" />
+                                {formatNumber(video.likeCount)}
+                              </span>
+                              {getSentimentBadge(video.sentiment)}
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-                          分析中...
-                        </div>
-                      )}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="pt-4 space-y-6">
+                          {/* 基本情報 */}
+                          <div>
+                            <h4 className="font-semibold mb-2">基本情報</h4>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">プラットフォーム:</span>{" "}
+                                <span className="font-medium">{video.platform === "tiktok" ? "TikTok" : "YouTube Shorts"}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">尺:</span>{" "}
+                                <span className="font-medium">{video.duration}秒</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">投稿者:</span>{" "}
+                                <span className="font-medium">{video.accountName}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">フォロワー数:</span>{" "}
+                                <span className="font-medium flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {formatNumber(video.followerCount)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
 
-                      {/* Transcription Preview */}
-                      {video.transcription && (
-                        <Tabs defaultValue="transcript" className="mt-4">
-                          <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="transcript">音声</TabsTrigger>
-                            <TabsTrigger value="ocr">OCR</TabsTrigger>
-                          </TabsList>
-                          <TabsContent value="transcript" className="space-y-2">
-                            <p className="text-sm text-muted-foreground line-clamp-3">
-                              {video.transcription.fullText}
-                            </p>
-                          </TabsContent>
-                          <TabsContent value="ocr" className="space-y-2">
-                            {video.ocrResults && video.ocrResults.length > 0 ? (
-                              <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {video.ocrResults.slice(0, 3).map((ocr) => (
-                                  <p key={ocr.id} className="text-sm text-muted-foreground">
-                                    {ocr.frameTimestamp}秒: {ocr.extractedText}
-                                  </p>
+                          {/* エンゲージメント数値 */}
+                          <div>
+                            <h4 className="font-semibold mb-2">エンゲージメント数値</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                              <div className="flex items-center gap-2">
+                                <Eye className="h-5 w-5 text-blue-500" />
+                                <div>
+                                  <div className="text-xs text-muted-foreground">再生数</div>
+                                  <div className="font-semibold">{formatNumber(video.viewCount)}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Heart className="h-5 w-5 text-red-500" />
+                                <div>
+                                  <div className="text-xs text-muted-foreground">いいね</div>
+                                  <div className="font-semibold">{formatNumber(video.likeCount)}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <MessageCircle className="h-5 w-5 text-green-500" />
+                                <div>
+                                  <div className="text-xs text-muted-foreground">コメント</div>
+                                  <div className="font-semibold">{formatNumber(video.commentCount)}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Share2 className="h-5 w-5 text-purple-500" />
+                                <div>
+                                  <div className="text-xs text-muted-foreground">シェア</div>
+                                  <div className="font-semibold">{formatNumber(video.shareCount)}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Bookmark className="h-5 w-5 text-orange-500" />
+                                <div>
+                                  <div className="text-xs text-muted-foreground">保存</div>
+                                  <div className="font-semibold">{formatNumber(video.saveCount)}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 分析結果 */}
+                          <div>
+                            <h4 className="font-semibold mb-2">分析結果</h4>
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">センチメント:</span>{" "}
+                                {getSentimentBadge(video.sentiment)}
+                              </div>
+                              {video.keyHook && (
+                                <div>
+                                  <span className="text-muted-foreground">キーフック:</span>{" "}
+                                  <span className="font-medium">{video.keyHook}</span>
+                                </div>
+                              )}
+                              {video.keywords && video.keywords.length > 0 && (
+                                <div>
+                                  <span className="text-muted-foreground">キーワード:</span>{" "}
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {video.keywords.map((keyword: string, i: number) => (
+                                      <Badge key={i} variant="secondary">{keyword}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {video.hashtags && video.hashtags.length > 0 && (
+                                <div>
+                                  <span className="text-muted-foreground">ハッシュタグ:</span>{" "}
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {video.hashtags.map((tag: string, i: number) => (
+                                      <Badge key={i} variant="outline">{tag}</Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* スコア */}
+                          {video.score && (
+                            <div>
+                              <h4 className="font-semibold mb-2">スコア</h4>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                  <div className="text-xs text-muted-foreground">サムネイル</div>
+                                  <div className="text-2xl font-bold text-purple-600">
+                                    {video.score.thumbnailScore}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-muted-foreground">テキスト</div>
+                                  <div className="text-2xl font-bold text-blue-600">
+                                    {video.score.textScore}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-muted-foreground">音声</div>
+                                  <div className="text-2xl font-bold text-green-600">
+                                    {video.score.audioScore}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-muted-foreground">総合</div>
+                                  <div className="text-2xl font-bold text-orange-600">
+                                    {video.score.overallScore}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OCR結果 */}
+                          {video.ocrResults && video.ocrResults.length > 0 && (
+                            <div>
+                              <h4 className="font-semibold mb-2">OCR抽出テキスト</h4>
+                              <div className="bg-muted p-3 rounded text-sm max-h-40 overflow-y-auto">
+                                {video.ocrResults.map((ocr: any, i: number) => (
+                                  <div key={i} className="mb-1">
+                                    <span className="text-muted-foreground">{ocr.frameTimestamp}秒:</span>{" "}
+                                    {ocr.extractedText}
+                                  </div>
                                 ))}
                               </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">OCR結果なし</p>
-                            )}
-                          </TabsContent>
-                        </Tabs>
-                      )}
+                            </div>
+                          )}
 
-                      <Button variant="outline" className="w-full" asChild>
-                        <a href={video.videoUrl} target="_blank" rel="noopener noreferrer">
-                          動画を開く
-                        </a>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
+                          {/* 音声文字起こし */}
+                          {video.transcription && (
+                            <div>
+                              <h4 className="font-semibold mb-2">音声文字起こし</h4>
+                              <div className="bg-muted p-3 rounded text-sm max-h-40 overflow-y-auto">
+                                {video.transcription.fullText}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 動画を開くボタン */}
+                          <Button variant="outline" className="w-full" asChild>
+                            <a href={video.videoUrl} target="_blank" rel="noopener noreferrer">
+                              動画を開く
+                            </a>
+                          </Button>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </CardContent>
+            </Card>
           ) : (
             <Card>
               <CardContent className="py-12 text-center">

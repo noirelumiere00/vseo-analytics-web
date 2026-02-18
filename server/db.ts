@@ -8,11 +8,13 @@ import {
   ocrResults,
   transcriptions,
   analysisScores,
+  analysisReports,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
   InsertTranscription,
-  InsertAnalysisScore
+  InsertAnalysisScore,
+  InsertAnalysisReport
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -155,6 +157,13 @@ export async function updateVideoDuplicateCount(videoId: number, count: number) 
   await db.update(videos).set({ duplicateCount: count }).where(eq(videos.id, videoId));
 }
 
+export async function updateVideo(videoId: number, data: Partial<InsertVideo>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(videos).set(data).where(eq(videos.id, videoId));
+}
+
 // === OCR Results ===
 export async function createOcrResult(ocr: InsertOcrResult) {
   const db = await getDb();
@@ -200,4 +209,28 @@ export async function getAnalysisScoreByVideoId(videoId: number) {
   
   const result = await db.select().from(analysisScores).where(eq(analysisScores.videoId, videoId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+// === Analysis Reports ===
+export async function createAnalysisReport(report: InsertAnalysisReport) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(analysisReports).values(report);
+  return result[0].insertId;
+}
+
+export async function getAnalysisReportByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(analysisReports).where(eq(analysisReports.jobId, jobId)).limit(1);
+  return result[0];
+}
+
+export async function updateAnalysisReport(jobId: number, report: Partial<InsertAnalysisReport>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(analysisReports).set(report).where(eq(analysisReports.jobId, jobId));
 }

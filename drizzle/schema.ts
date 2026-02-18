@@ -44,12 +44,31 @@ export const videos = mysqlTable("videos", {
   videoUrl: varchar("videoUrl", { length: 512 }).notNull(),
   videoId: varchar("videoId", { length: 128 }).notNull(),
   title: text("title"),
+  description: text("description"),
   thumbnailUrl: varchar("thumbnailUrl", { length: 512 }),
   duration: int("duration"), // 秒
+  
+  // エンゲージメント数値
   viewCount: bigint("viewCount", { mode: "number" }),
   likeCount: bigint("likeCount", { mode: "number" }),
+  commentCount: bigint("commentCount", { mode: "number" }),
+  shareCount: bigint("shareCount", { mode: "number" }),
+  saveCount: bigint("saveCount", { mode: "number" }),
+  
+  // KOL（インフルエンサー）情報
   accountName: varchar("accountName", { length: 255 }),
+  accountId: varchar("accountId", { length: 128 }),
+  followerCount: bigint("followerCount", { mode: "number" }),
+  accountAvatarUrl: varchar("accountAvatarUrl", { length: 512 }),
+  
+  // 分析結果
+  sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]),
+  keyHook: text("keyHook"), // キーフック（動画の主要な訴求ポイント）
+  keywords: json("keywords").$type<string[]>(), // 抽出されたキーワード配列
+  hashtags: json("hashtags").$type<string[]>(), // ハッシュタグ配列
+  
   duplicateCount: int("duplicateCount").default(0), // 3アカウント間での重複出現回数
+  postedAt: timestamp("postedAt"), // 投稿日時
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -102,3 +121,52 @@ export const analysisScores = mysqlTable("analysis_scores", {
 
 export type AnalysisScore = typeof analysisScores.$inferSelect;
 export type InsertAnalysisScore = typeof analysisScores.$inferInsert;
+
+/**
+ * 分析レポート（キーワード全体の分析結果）
+ */
+export const analysisReports = mysqlTable("analysis_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull().unique(),
+  
+  // サマリー情報
+  totalVideos: int("totalVideos").default(0),
+  totalViews: bigint("totalViews", { mode: "number" }).default(0),
+  totalEngagement: bigint("totalEngagement", { mode: "number" }).default(0),
+  
+  // センチメント構成比
+  neutralCount: int("neutralCount").default(0),
+  neutralPercentage: int("neutralPercentage").default(0),
+  positiveCount: int("positiveCount").default(0),
+  positivePercentage: int("positivePercentage").default(0),
+  negativeCount: int("negativeCount").default(0),
+  negativePercentage: int("negativePercentage").default(0),
+  
+  // ポジネガ比較（Neutralを除く）
+  posNegPositiveCount: int("posNegPositiveCount").default(0),
+  posNegPositivePercentage: int("posNegPositivePercentage").default(0),
+  posNegNegativeCount: int("posNegNegativeCount").default(0),
+  posNegNegativePercentage: int("posNegNegativePercentage").default(0),
+  
+  // インパクト分析
+  positiveViewsShare: int("positiveViewsShare").default(0), // %
+  negativeViewsShare: int("negativeViewsShare").default(0), // %
+  positiveEngagementShare: int("positiveEngagementShare").default(0), // %
+  negativeEngagementShare: int("negativeEngagementShare").default(0), // %
+  
+  // 頻出ワード
+  positiveWords: json("positiveWords").$type<string[]>(),
+  negativeWords: json("negativeWords").$type<string[]>(),
+  
+  // 主要示唆
+  keyInsights: json("keyInsights").$type<Array<{
+    category: "risk" | "urgent" | "positive";
+    title: string;
+    description: string;
+  }>>(),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type AnalysisReport = typeof analysisReports.$inferSelect;
+export type InsertAnalysisReport = typeof analysisReports.$inferInsert;
