@@ -43,15 +43,15 @@
 }
 
 :root {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-600);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
+  --primary: oklch(0.45 0.25 290); /* Deep purple #8A2BE2 */
+  --primary-foreground: oklch(1 0 0);
+  --sidebar-primary: oklch(0.45 0.25 290);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --chart-1: oklch(0.75 0.15 25); /* Orange tones */
+  --chart-2: oklch(0.65 0.20 25);
+  --chart-3: oklch(0.55 0.22 290); /* Purple tones */
+  --chart-4: oklch(0.45 0.25 290);
+  --chart-5: oklch(0.35 0.20 290);
   --radius: 0.65rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.235 0.015 65);
@@ -173,5 +173,17 @@
       padding-right: 2rem;
       max-width: 1280px; /* Standard content width */
     }
+  }
+
+  /* Gradient utilities for purple-orange accent */
+  .gradient-primary {
+    background: linear-gradient(135deg, oklch(0.45 0.25 290) 0%, oklch(0.75 0.15 25) 100%);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, oklch(0.45 0.25 290) 0%, oklch(0.75 0.15 25) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
