@@ -4,10 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Video, FileText, Mic, BarChart3 } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Video, FileText, Mic, BarChart3, CheckCircle2, AlertCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
+import { useEffect } from "react";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -20,15 +21,34 @@ export default function AnalysisDetail() {
     { enabled: !!user && jobId > 0 }
   );
 
+  const { data: progressData, refetch: refetchProgress } = trpc.analysis.getProgress.useQuery(
+    { jobId },
+    { 
+      enabled: !!user && jobId > 0,
+      refetchInterval: (query) => {
+        // 処理中の場合は2秒ごとに更新
+        return query.state.data?.status === "processing" ? 2000 : false;
+      }
+    }
+  );
+
   const executeAnalysis = trpc.analysis.execute.useMutation({
-    onSuccess: () => {
-      toast.success("分析を開始しました");
+    onSuccess: (result) => {
+      toast.success(result.message || "分析を開始しました");
       refetch();
+      refetchProgress();
     },
     onError: (error) => {
       toast.error(error.message);
     },
   });
+
+  // 分析完了時に自動的にデータを再取得
+  useEffect(() => {
+    if (progressData?.status === "completed") {
+      refetch();
+    }
+  }, [progressData?.status, refetch]);
 
   if (isLoading) {
     return (
@@ -71,15 +91,20 @@ export default function AnalysisDetail() {
             </Button>
           </div>
 
-          {/* Status Card */}
+          {/* Status Card with Progress */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>ステータス</CardTitle>
+                <div className="flex-1">
+                  <CardTitle className="flex items-center gap-2">
+                    ステータス
+                    {job.status === "completed" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+                    {job.status === "failed" && <AlertCircle className="h-5 w-5 text-red-600" />}
+                    {job.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-blue-600" />}
+                  </CardTitle>
                   <CardDescription>
                     {job.status === "completed" && "分析が完了しました"}
-                    {job.status === "processing" && "分析を実行中です..."}
+                    {job.status === "processing" && progressData?.currentStep}
                     {job.status === "failed" && "分析に失敗しました"}
                     {job.status === "pending" && "分析を開始してください"}
                   </CardDescription>
@@ -105,6 +130,20 @@ export default function AnalysisDetail() {
                 )}
               </div>
             </CardHeader>
+            {job.status === "processing" && progressData && (
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>進捗状況</span>
+                    <span className="font-medium">{progressData.progress}%</span>
+                  </div>
+                  <Progress value={progressData.progress} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {progressData.completedVideos} / {progressData.totalVideos} 動画の分析が完了
+                  </p>
+                </div>
+              </CardContent>
+            )}
           </Card>
 
           {/* Videos Grid */}
@@ -133,12 +172,12 @@ export default function AnalysisDetail() {
                         {video.title || "タイトルなし"}
                       </CardTitle>
                       <CardDescription>
-                        {video.platform === "tiktok" ? "TikTok" : "YouTube Shorts"}
+                        {video.platform === "tiktok" ? "TikTok" : "YouTube Shorts"} • {video.duration}秒
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {/* Score Display */}
-                      {video.score && (
+                      {video.score ? (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between text-sm">
                             <span className="flex items-center gap-2">
@@ -174,6 +213,11 @@ export default function AnalysisDetail() {
                             </span>
                             <span className="gradient-text text-lg">{video.score.overallScore}/100</span>
                           </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                          分析中...
                         </div>
                       )}
 
@@ -221,6 +265,8 @@ export default function AnalysisDetail() {
                 <p className="text-muted-foreground">
                   {job.status === "pending" 
                     ? "「分析を実行」ボタンをクリックして分析を開始してください" 
+                    : job.status === "processing"
+                    ? "動画データを収集中です..."
                     : "動画データがありません"}
                 </p>
               </CardContent>

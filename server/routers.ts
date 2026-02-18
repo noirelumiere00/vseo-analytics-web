@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
+import { analyzeVideo, analyzeDuplicates } from "./videoAnalysis";
 
 export const appRouter = router({
   system: systemRouter,
@@ -112,17 +113,97 @@ export const appRouter = router({
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
 
-        // TODO: 実際の分析処理をここに実装
-        // 1. 3アカウント×上位20投稿の収集
-        // 2. 重複度分析
-        // 3. OCR解析（2秒/1フレーム）
-        // 4. Whisper音声文字起こし
-        // 5. スコアリング
+        // 非同期で分析を実行（バックグラウンド処理）
+        // 実際の本番環境ではジョブキューを使用することを推奨
+        setImmediate(async () => {
+          try {
+            // 分析対象の動画URLを取得
+            let videoUrls: string[] = [];
+            
+            if (job.manualUrls && job.manualUrls.length > 0) {
+              // 手動URL指定の場合
+              videoUrls = job.manualUrls;
+            } else if (job.keyword) {
+              // キーワード指定の場合：ダミーで3アカウント×3動画を生成
+              // 実際の実装では、TikTok/YouTube APIを使用して上位20投稿を取得
+              videoUrls = [
+                `https://www.tiktok.com/@account1/video/${Date.now()}001`,
+                `https://www.tiktok.com/@account1/video/${Date.now()}002`,
+                `https://www.tiktok.com/@account1/video/${Date.now()}003`,
+                `https://www.tiktok.com/@account2/video/${Date.now()}001`,
+                `https://www.tiktok.com/@account2/video/${Date.now()}002`,
+                `https://www.tiktok.com/@account2/video/${Date.now()}003`,
+                `https://www.tiktok.com/@account3/video/${Date.now()}001`,
+                `https://www.tiktok.com/@account3/video/${Date.now()}002`,
+                `https://www.tiktok.com/@account3/video/${Date.now()}003`,
+              ];
+            }
 
-        // 現時点ではダミーデータを返す
-        // 実装は次のステップで行う
+            // 各動画を分析
+            for (const videoUrl of videoUrls) {
+              await analyzeVideo(input.jobId, videoUrl);
+            }
 
-        return { success: true };
+            // 重複度分析
+            await analyzeDuplicates(input.jobId);
+
+            // ステータスを完了に更新
+            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
+          } catch (error) {
+            console.error("[Analysis] Error:", error);
+            await db.updateAnalysisJobStatus(input.jobId, "failed");
+          }
+        });
+
+        return { success: true, message: "分析を開始しました。完了までしばらくお待ちください。" };
+      }),
+
+    // 分析の進捗状況を取得
+    getProgress: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "分析ジョブが見つかりません",
+          });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "このジョブにアクセスする権限がありません",
+          });
+        }
+
+        const videos = await db.getVideosByJobId(input.jobId);
+        const totalVideos = videos.length;
+        
+        // 各動画の分析完了状況をチェック
+        let completedVideos = 0;
+        for (const video of videos) {
+          const score = await db.getAnalysisScoreByVideoId(video.id);
+          if (score) {
+            completedVideos++;
+          }
+        }
+
+        // 進捗率を計算
+        const progress = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0;
+
+        return {
+          status: job.status,
+          totalVideos,
+          completedVideos,
+          progress,
+          currentStep: job.status === "processing" 
+            ? `動画分析中... (${completedVideos}/${totalVideos})`
+            : job.status === "completed"
+            ? "分析完了"
+            : job.status === "failed"
+            ? "分析失敗"
+            : "待機中",
+        };
       }),
   }),
 });
