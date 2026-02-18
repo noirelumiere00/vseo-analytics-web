@@ -5,11 +5,14 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, analyzeDuplicates, generateAnalysisReport } from "./videoAnalysis";
-import { searchTikTokVideos, type TikTokVideo } from "./tiktokScraper";
+import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport } from "./videoAnalysis";
+import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 
 // 進捗状態を保持するインメモリストア
 const progressStore = new Map<number, { message: string; percent: number }>();
+
+// 3シークレットブラウザ検索結果を保持するインメモリストア
+const tripleSearchStore = new Map<number, TikTokTripleSearchResult>();
 
 export const appRouter = router({
   system: systemRouter,
@@ -18,9 +21,7 @@ export const appRouter = router({
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
+      return { success: true } as const;
     }),
   }),
 
@@ -60,16 +61,10 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "分析ジョブが見つかりません",
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "このジョブにアクセスする権限がありません",
-          });
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
         const videosData = await db.getVideosByJobId(input.jobId);
@@ -93,29 +88,42 @@ export const appRouter = router({
         // レポートを取得
         const report = await db.getAnalysisReportByJobId(input.jobId);
 
+        // 3シークレットブラウザ検索結果を取得（インメモリ）
+        const tripleSearchResult = tripleSearchStore.get(input.jobId);
+
         return {
           job,
           videos: videosWithDetails,
           report,
+          tripleSearch: tripleSearchResult ? {
+            searches: tripleSearchResult.searches.map(s => ({
+              sessionIndex: s.sessionIndex,
+              totalFetched: s.totalFetched,
+              videoIds: s.videos.map(v => v.id),
+            })),
+            duplicateAnalysis: {
+              appearedInAll3Count: tripleSearchResult.duplicateAnalysis.appearedInAll3.length,
+              appearedIn2Count: tripleSearchResult.duplicateAnalysis.appearedIn2.length,
+              appearedIn1OnlyCount: tripleSearchResult.duplicateAnalysis.appearedIn1Only.length,
+              overlapRate: tripleSearchResult.duplicateAnalysis.overlapRate,
+              appearedInAll3Ids: tripleSearchResult.duplicateAnalysis.appearedInAll3.map(v => v.id),
+              appearedIn2Ids: tripleSearchResult.duplicateAnalysis.appearedIn2.map(v => v.id),
+              appearedIn1OnlyIds: tripleSearchResult.duplicateAnalysis.appearedIn1Only.map(v => v.id),
+            },
+          } : null,
         };
       }),
 
-    // 分析を実行（バックグラウンド処理）
+    // 分析を実行（バックグラウンド処理）- 3シークレットブラウザ検索方式
     execute: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "分析ジョブが見つかりません",
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "このジョブにアクセスする権限がありません",
-          });
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
         // ステータスを処理中に更新
@@ -126,65 +134,48 @@ export const appRouter = router({
         setImmediate(async () => {
           try {
             if (job.keyword) {
-              // === TikTokスクレイピングで実データ取得 ===
-              console.log(`[Analysis] Starting TikTok scraping for keyword: ${job.keyword}`);
-              progressStore.set(input.jobId, { message: "TikTokから動画データを収集中...", percent: 5 });
+              // === 3シークレットブラウザでTikTok検索 ===
+              console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
+              progressStore.set(input.jobId, { message: "3つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
 
-              // TikTok検索で動画を取得（最大45件 = 3アカウント×15本を目標）
-              const searchResult = await searchTikTokVideos(
+              const tripleResult = await searchTikTokTriple(
                 job.keyword,
-                60, // 多めに取得してアカウント別に分類
-                (fetched, total) => {
-                  const percent = Math.min(30, Math.floor((fetched / total) * 30));
-                  progressStore.set(input.jobId, {
-                    message: `TikTok動画データ収集中... (${fetched}件取得)`,
-                    percent: 5 + percent,
-                  });
+                15, // 各セッション15件
+                (msg, percent) => {
+                  progressStore.set(input.jobId, { message: msg, percent: Math.min(percent, 40) });
                 }
               );
 
-              console.log(`[Analysis] Fetched ${searchResult.videos.length} videos from TikTok`);
-              progressStore.set(input.jobId, { message: "アカウント別に分類中...", percent: 35 });
+              // 3シークレットブラウザ検索結果をインメモリに保存
+              tripleSearchStore.set(input.jobId, tripleResult);
 
-              // アカウント別にグループ化して上位3アカウント×15本を選択
-              const accountMap = new Map<string, TikTokVideo[]>();
-              for (const video of searchResult.videos) {
-                const key = video.author.uniqueId;
-                if (!accountMap.has(key)) {
-                  accountMap.set(key, []);
-                }
-                accountMap.get(key)!.push(video);
-              }
+              console.log(`[Analysis] Triple search complete:`,
+                `3回全出現=${tripleResult.duplicateAnalysis.appearedInAll3.length},`,
+                `2回出現=${tripleResult.duplicateAnalysis.appearedIn2.length},`,
+                `1回のみ=${tripleResult.duplicateAnalysis.appearedIn1Only.length},`,
+                `重複率=${tripleResult.duplicateAnalysis.overlapRate.toFixed(1)}%`
+              );
 
-              // 総再生数が多い順にアカウントをソート
-              const sortedAccounts = Array.from(accountMap.entries())
-                .map(([uniqueId, vids]) => ({
-                  uniqueId,
-                  videos: vids.sort((a, b) => b.stats.playCount - a.stats.playCount),
-                  totalViews: vids.reduce((s, v) => s + v.stats.playCount, 0),
-                }))
-                .sort((a, b) => b.totalViews - a.totalViews)
-                .slice(0, 3); // 上位3アカウント
-
-              // 各アカウントから上位15本を選択
-              const selectedVideos: TikTokVideo[] = [];
-              for (const account of sortedAccounts) {
-                const topVideos = account.videos.slice(0, 15);
-                selectedVideos.push(...topVideos);
-              }
-
-              console.log(`[Analysis] Selected ${selectedVideos.length} videos from ${sortedAccounts.length} accounts`);
+              // 全ユニーク動画を分析対象にする（重複度情報付き）
+              const allUniqueVideos = tripleResult.duplicateAnalysis.allUniqueVideos;
+              
               progressStore.set(input.jobId, {
-                message: `${selectedVideos.length}件の動画を分析中...`,
-                percent: 40,
+                message: `${allUniqueVideos.length}件のユニーク動画を分析中...`,
+                percent: 42,
               });
 
-              // 各動画を分析
-              for (let i = 0; i < selectedVideos.length; i++) {
-                const tiktokVideo = selectedVideos[i];
-                const percent = 40 + Math.floor(((i + 1) / selectedVideos.length) * 45);
+              // 各動画を分析（重複度情報も含めてDB保存）
+              for (let i = 0; i < allUniqueVideos.length; i++) {
+                const tiktokVideo = allUniqueVideos[i];
+                const percent = 42 + Math.floor(((i + 1) / allUniqueVideos.length) * 40);
+                
+                // この動画が何回出現したか
+                const appearanceCount = tripleResult.searches.filter(
+                  s => s.videos.some(v => v.id === tiktokVideo.id)
+                ).length;
+                
                 progressStore.set(input.jobId, {
-                  message: `動画分析中... (${i + 1}/${selectedVideos.length}) - @${tiktokVideo.author.uniqueId}`,
+                  message: `動画分析中... (${i + 1}/${allUniqueVideos.length}) - @${tiktokVideo.author.uniqueId} [${appearanceCount}回出現]`,
                   percent,
                 });
 
@@ -204,12 +195,8 @@ export const appRouter = router({
               }
             }
 
-            // 重複度分析
-            progressStore.set(input.jobId, { message: "重複度分析中...", percent: 88 });
-            await analyzeDuplicates(input.jobId);
-
             // レポート生成
-            progressStore.set(input.jobId, { message: "分析レポート生成中...", percent: 92 });
+            progressStore.set(input.jobId, { message: "分析レポート生成中...", percent: 88 });
             await generateAnalysisReport(input.jobId);
 
             // ステータスを完了に更新
@@ -226,7 +213,7 @@ export const appRouter = router({
           }
         });
 
-        return { success: true, message: "分析を開始しました。TikTokから動画データを収集します。" };
+        return { success: true, message: "3つのシークレットブラウザでTikTok検索を開始しました。" };
       }),
 
     // 分析の進捗状況を取得
@@ -235,16 +222,10 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "分析ジョブが見つかりません",
-          });
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "このジョブにアクセスする権限がありません",
-          });
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
         // インメモリの進捗情報を取得

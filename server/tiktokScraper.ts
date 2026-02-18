@@ -1,7 +1,8 @@
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 
 // TikTok内部APIから検索結果を取得するモジュール
-// Puppeteerでブラウザコンテキストを作成し、内部APIを呼び出す
+// 3つの独立したシークレット（インコグニート）ブラウザコンテキストで
+// 同一キーワードを検索し、パーソナライズを排除した純粋なアルゴリズム評価を行う
 
 export interface TikTokVideo {
   id: string;
@@ -33,40 +34,33 @@ export interface TikTokSearchResult {
   videos: TikTokVideo[];
   keyword: string;
   totalFetched: number;
+  sessionIndex: number;
 }
 
-let browserInstance: Browser | null = null;
-
-async function getBrowser(): Promise<Browser> {
-  if (browserInstance && browserInstance.connected) {
-    return browserInstance;
-  }
-  browserInstance = await puppeteer.launch({
-    executablePath: "/usr/bin/chromium-browser",
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ],
-  });
-  return browserInstance;
+// 3回の検索結果と重複度分析を含む結果
+export interface TikTokTripleSearchResult {
+  searches: [TikTokSearchResult, TikTokSearchResult, TikTokSearchResult];
+  duplicateAnalysis: {
+    // 3回全てに出現（最強の勝ちパターン）
+    appearedInAll3: TikTokVideo[];
+    // 2回出現（準勝ちパターン）
+    appearedIn2: TikTokVideo[];
+    // 1回のみ出現
+    appearedIn1Only: TikTokVideo[];
+    // 全ユニーク動画
+    allUniqueVideos: TikTokVideo[];
+    // 重複率
+    overlapRate: number;
+  };
+  keyword: string;
 }
 
-async function createPage(browser: Browser): Promise<Page> {
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1920, height: 1080 });
-  await page.setUserAgent(
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-  );
-  await page.setExtraHTTPHeaders({
-    "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
-  });
-  return page;
-}
+// User-Agentのバリエーション（各シークレットブラウザで異なるUAを使用）
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+];
 
 // TikTokの内部APIを呼び出して検索結果を取得
 async function fetchSearchResults(
@@ -100,14 +94,12 @@ function parseVideoData(item: any): TikTokVideo | null {
   const stats = v.stats || {};
   const author = v.author || {};
 
-  // ハッシュタグを抽出
   const hashtags: string[] = [];
   if (v.textExtra) {
     v.textExtra.forEach((te: any) => {
       if (te.hashtagName) hashtags.push(te.hashtagName);
     });
   }
-  // descからも#タグを抽出
   const hashtagMatches = (v.desc || "").match(/#[\w\u3000-\u9FFF]+/g);
   if (hashtagMatches) {
     hashtagMatches.forEach((tag: string) => {
@@ -143,41 +135,68 @@ function parseVideoData(item: any): TikTokVideo | null {
   };
 }
 
-// メイン関数: キーワードで検索して指定件数の動画を取得
-export async function searchTikTokVideos(
+// 1つのシークレットブラウザコンテキストでキーワード検索して動画を取得
+async function searchInIncognitoContext(
+  browser: Browser,
   keyword: string,
-  maxVideos: number = 45,
-  onProgress?: (fetched: number, total: number) => void
+  maxVideos: number,
+  sessionIndex: number,
+  onProgress?: (message: string) => void
 ): Promise<TikTokSearchResult> {
-  const browser = await getBrowser();
-  const page = await createPage(browser);
+  // 新しいインコグニートコンテキストを作成（Cookie/履歴なし）
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
 
   try {
-    // Step 1: TikTokにアクセスしてCookieを取得
-    console.log(`[TikTok] Initializing browser session...`);
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(USER_AGENTS[sessionIndex % USER_AGENTS.length]);
+    await page.setExtraHTTPHeaders({
+      "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
+    });
+
+    // TikTokにアクセスしてCookieを取得
+    console.log(`[TikTok Session ${sessionIndex + 1}] Initializing...`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
+
     await page.goto("https://www.tiktok.com/", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+    // セッションごとに異なる待機時間（フィンガープリント対策）
+    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+
+    // 検索ページに遷移してCookieを確立
+    console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
+    
+    await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
     await new Promise((r) => setTimeout(r, 3000));
 
-    // Step 2: ページネーションで動画を取得
     const allVideos: TikTokVideo[] = [];
     let offset = 0;
-    const batchSize = 12; // TikTokのデフォルトバッチサイズ
+    const batchSize = 12;
     let hasMore = true;
     let retryCount = 0;
     const maxRetries = 3;
 
     while (allVideos.length < maxVideos && hasMore && retryCount < maxRetries) {
       console.log(
-        `[TikTok] Fetching offset=${offset}, current=${allVideos.length}/${maxVideos}`
+        `[TikTok Session ${sessionIndex + 1}] Fetching offset=${offset}, current=${allVideos.length}/${maxVideos}`
       );
+      if (onProgress)
+        onProgress(
+          `検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos})`
+        );
 
       const result = await fetchSearchResults(page, keyword, offset);
 
       if (result.error) {
-        console.error(`[TikTok] API error: ${result.error}`);
+        console.error(
+          `[TikTok Session ${sessionIndex + 1}] API error: ${result.error}`
+        );
         retryCount++;
         await new Promise((r) => setTimeout(r, 2000));
         continue;
@@ -189,7 +208,7 @@ export async function searchTikTokVideos(
         !result.data.data
       ) {
         console.log(
-          `[TikTok] No more data or error status: ${result.data?.status_code}`
+          `[TikTok Session ${sessionIndex + 1}] No more data or error status: ${result.data?.status_code}`
         );
         hasMore = false;
         break;
@@ -208,12 +227,8 @@ export async function searchTikTokVideos(
       }
 
       console.log(
-        `[TikTok] Got ${newVideos} new videos, total: ${allVideos.length}`
+        `[TikTok Session ${sessionIndex + 1}] Got ${newVideos} new videos, total: ${allVideos.length}`
       );
-
-      if (onProgress) {
-        onProgress(allVideos.length, maxVideos);
-      }
 
       if (newVideos === 0) {
         retryCount++;
@@ -223,131 +238,208 @@ export async function searchTikTokVideos(
 
       offset += batchSize;
 
-      // レート制限対策: リクエスト間隔を2-4秒に設定
-      const delay = 2000 + Math.random() * 2000;
+      // レート制限対策: セッションごとに異なる間隔
+      const delay = 1500 + Math.random() * 2000;
       await new Promise((r) => setTimeout(r, delay));
 
-      // has_moreフラグをチェック
       if (result.data.has_more === 0 || result.data.has_more === false) {
         hasMore = false;
       }
     }
 
     console.log(
-      `[TikTok] Search complete: ${allVideos.length} videos for "${keyword}"`
+      `[TikTok Session ${sessionIndex + 1}] Complete: ${allVideos.length} videos`
     );
 
     return {
       videos: allVideos.slice(0, maxVideos),
       keyword,
       totalFetched: allVideos.length,
+      sessionIndex,
     };
   } finally {
     await page.close();
+    await context.close(); // インコグニートコンテキストを完全に破棄
   }
 }
 
-// アカウント別に上位動画を取得（3アカウント × 上位15本）
-export async function searchTikTokByAccounts(
-  keyword: string,
-  maxAccountCount: number = 3,
-  videosPerAccount: number = 15,
-  onProgress?: (message: string, percent: number) => void
-): Promise<{
-  accounts: Array<{
-    uniqueId: string;
-    nickname: string;
-    avatarUrl: string;
-    followerCount: number;
-    videos: TikTokVideo[];
-    totalViews: number;
-    totalLikes: number;
-  }>;
-  allVideos: TikTokVideo[];
-  keyword: string;
-}> {
-  // まず十分な数の動画を取得
-  if (onProgress) onProgress("TikTok検索中...", 5);
+// 重複度分析: 3回の検索結果を比較して勝ちパターン動画を特定
+function analyzeDuplicates(
+  searches: [TikTokSearchResult, TikTokSearchResult, TikTokSearchResult]
+): TikTokTripleSearchResult["duplicateAnalysis"] {
+  // 各動画IDの出現回数をカウント
+  const videoAppearanceCount = new Map<string, number>();
+  const videoMap = new Map<string, TikTokVideo>();
 
-  const searchResult = await searchTikTokVideos(
-    keyword,
-    100, // 多めに取得してアカウント別に分類
-    (fetched, total) => {
-      if (onProgress) {
-        const percent = Math.min(40, Math.floor((fetched / total) * 40));
-        onProgress(`動画データ収集中... (${fetched}/${total})`, percent);
+  for (const search of searches) {
+    const seenInThisSearch = new Set<string>();
+    for (const video of search.videos) {
+      if (!seenInThisSearch.has(video.id)) {
+        seenInThisSearch.add(video.id);
+        videoAppearanceCount.set(
+          video.id,
+          (videoAppearanceCount.get(video.id) || 0) + 1
+        );
+        // 最新のデータで上書き（statsが最新のものを使う）
+        if (
+          !videoMap.has(video.id) ||
+          video.stats.playCount > (videoMap.get(video.id)?.stats.playCount || 0)
+        ) {
+          videoMap.set(video.id, video);
+        }
       }
     }
-  );
-
-  if (onProgress) onProgress("アカウント別に分類中...", 45);
-
-  // アカウント別にグループ化
-  const accountMap = new Map<
-    string,
-    {
-      uniqueId: string;
-      nickname: string;
-      avatarUrl: string;
-      followerCount: number;
-      videos: TikTokVideo[];
-    }
-  >();
-
-  for (const video of searchResult.videos) {
-    const key = video.author.uniqueId;
-    if (!accountMap.has(key)) {
-      accountMap.set(key, {
-        uniqueId: video.author.uniqueId,
-        nickname: video.author.nickname,
-        avatarUrl: video.author.avatarUrl,
-        followerCount: video.author.followerCount,
-        videos: [],
-      });
-    }
-    accountMap.get(key)!.videos.push(video);
   }
 
-  // 動画数が多い順にソートして上位アカウントを選択
-  const sortedAccounts = Array.from(accountMap.values())
-    .sort((a, b) => {
-      // 総再生数でソート
-      const aViews = a.videos.reduce((s, v) => s + v.stats.playCount, 0);
-      const bViews = b.videos.reduce((s, v) => s + v.stats.playCount, 0);
-      return bViews - aViews;
-    })
-    .slice(0, maxAccountCount);
+  const appearedInAll3: TikTokVideo[] = [];
+  const appearedIn2: TikTokVideo[] = [];
+  const appearedIn1Only: TikTokVideo[] = [];
 
-  // 各アカウントの上位動画を選択（再生数順）
-  const accounts = sortedAccounts.map((account) => {
-    const topVideos = account.videos
-      .sort((a, b) => b.stats.playCount - a.stats.playCount)
-      .slice(0, videosPerAccount);
+  for (const [videoId, count] of Array.from(videoAppearanceCount.entries())) {
+    const video = videoMap.get(videoId)!;
+    if (count >= 3) {
+      appearedInAll3.push(video);
+    } else if (count === 2) {
+      appearedIn2.push(video);
+    } else {
+      appearedIn1Only.push(video);
+    }
+  }
 
-    return {
-      ...account,
-      videos: topVideos,
-      totalViews: topVideos.reduce((s, v) => s + v.stats.playCount, 0),
-      totalLikes: topVideos.reduce((s, v) => s + v.stats.diggCount, 0),
-    };
-  });
+  // 各カテゴリ内で再生数順にソート
+  appearedInAll3.sort((a, b) => b.stats.playCount - a.stats.playCount);
+  appearedIn2.sort((a, b) => b.stats.playCount - a.stats.playCount);
+  appearedIn1Only.sort((a, b) => b.stats.playCount - a.stats.playCount);
 
-  // 全動画をフラットにまとめる
-  const allVideos = accounts.flatMap((a) => a.videos);
-
-  if (onProgress) onProgress("データ収集完了", 50);
+  const allUniqueVideos = [...appearedInAll3, ...appearedIn2, ...appearedIn1Only];
+  const totalUniqueCount = allUniqueVideos.length;
+  const duplicateCount = appearedInAll3.length + appearedIn2.length;
+  const overlapRate =
+    totalUniqueCount > 0 ? (duplicateCount / totalUniqueCount) * 100 : 0;
 
   return {
-    accounts,
-    allVideos,
-    keyword,
+    appearedInAll3,
+    appearedIn2,
+    appearedIn1Only,
+    allUniqueVideos,
+    overlapRate,
   };
 }
 
-// ブラウザを閉じる
-export async function closeBrowser(): Promise<void> {
-  if (browserInstance) {
-    await browserInstance.close();
-    browserInstance = null;
+// メイン関数: 3つのシークレットブラウザで同一キーワード検索→重複度分析
+export async function searchTikTokTriple(
+  keyword: string,
+  videosPerSearch: number = 15,
+  onProgress?: (message: string, percent: number) => void
+): Promise<TikTokTripleSearchResult> {
+  // ブラウザを起動
+  const browser = await puppeteer.launch({
+    executablePath: "/usr/bin/chromium-browser",
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1920,1080",
+      "--lang=ja-JP",
+    ],
+  });
+
+  try {
+    if (onProgress) onProgress("3つのシークレットブラウザを起動中...", 5);
+
+    // 3つのシークレットブラウザコンテキストで順次検索
+    // （並列だとレート制限に引っかかるため順次実行）
+    const searches: TikTokSearchResult[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      if (onProgress) {
+        onProgress(`検索${i + 1}/3: シークレットブラウザで検索中...`, 10 + i * 25);
+      }
+
+      const result = await searchInIncognitoContext(
+        browser,
+        keyword,
+        videosPerSearch,
+        i,
+        (msg) => {
+          if (onProgress) {
+            const basePercent = 10 + i * 25;
+            onProgress(msg, basePercent);
+          }
+        }
+      );
+
+      searches.push(result);
+
+      // 次の検索前に間隔を空ける（レート制限対策）
+      if (i < 2) {
+        if (onProgress)
+          onProgress(`検索${i + 1}完了。次の検索まで待機中...`, 10 + (i + 1) * 25 - 5);
+        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+      }
+    }
+
+    if (onProgress) onProgress("重複度分析中...", 85);
+
+    // 重複度分析
+    const tripleSearches = searches as [
+      TikTokSearchResult,
+      TikTokSearchResult,
+      TikTokSearchResult,
+    ];
+    const duplicateAnalysis = analyzeDuplicates(tripleSearches);
+
+    console.log(
+      `[TikTok] Triple search complete for "${keyword}":`,
+      `3回全出現=${duplicateAnalysis.appearedInAll3.length},`,
+      `2回出現=${duplicateAnalysis.appearedIn2.length},`,
+      `1回のみ=${duplicateAnalysis.appearedIn1Only.length},`,
+      `重複率=${duplicateAnalysis.overlapRate.toFixed(1)}%`
+    );
+
+    if (onProgress) onProgress("データ収集完了", 90);
+
+    return {
+      searches: tripleSearches,
+      duplicateAnalysis,
+      keyword,
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+// 後方互換性のために残す（単一検索）
+export async function searchTikTokVideos(
+  keyword: string,
+  maxVideos: number = 15,
+  onProgress?: (fetched: number, total: number) => void
+): Promise<TikTokSearchResult> {
+  const browser = await puppeteer.launch({
+    executablePath: "/usr/bin/chromium-browser",
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1920,1080",
+      "--lang=ja-JP",
+    ],
+  });
+
+  try {
+    const result = await searchInIncognitoContext(
+      browser,
+      keyword,
+      maxVideos,
+      0,
+      (msg) => console.log(msg)
+    );
+    return result;
+  } finally {
+    await browser.close();
   }
 }

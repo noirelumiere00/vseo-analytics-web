@@ -9,12 +9,13 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -85,7 +86,7 @@ export default function AnalysisDetail() {
       negative: totalVideos > 0 ? ((sentimentCounts.negative / totalVideos) * 100).toFixed(1) : "0",
     };
 
-    // ポジネガのみの比率と詳細統計
+    // ポジネガのみの比率
     const posVideos = videos.filter(v => v.sentiment === "positive");
     const negVideos = videos.filter(v => v.sentiment === "negative");
     const posNegTotal = posVideos.length + negVideos.length;
@@ -123,21 +124,24 @@ export default function AnalysisDetail() {
       negativeTotal: negEngagement,
     };
 
-    // 頻出キーワード
-    const allKeywords: string[] = [];
+    // 頻出キーワード（Positive/Negative別）
+    const positiveKeywords: string[] = [];
+    const negativeKeywords: string[] = [];
     videos.forEach(v => {
       if (v.keywords && Array.isArray(v.keywords)) {
-        allKeywords.push(...v.keywords);
+        if (v.sentiment === "positive") positiveKeywords.push(...v.keywords);
+        if (v.sentiment === "negative") negativeKeywords.push(...v.keywords);
       }
     });
-    const keywordFreq = allKeywords.reduce((acc, kw) => {
-      acc[kw] = (acc[kw] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    const topKeywords = Object.entries(keywordFreq)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 20)
-      .map(([word]) => word);
+
+    const getTopWords = (words: string[], limit: number = 12): string[] => {
+      const counts = new Map<string, number>();
+      for (const w of words) { counts.set(w, (counts.get(w) || 0) + 1); }
+      return Array.from(counts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit)
+        .map(([word]) => word);
+    };
 
     return {
       totalVideos,
@@ -148,7 +152,8 @@ export default function AnalysisDetail() {
       posNegRatio,
       viewsShare,
       engagementShare,
-      topKeywords,
+      positiveWords: getTopWords(positiveKeywords),
+      negativeWords: getTopWords(negativeKeywords),
       posNegTotal,
     };
   }, [data]);
@@ -172,11 +177,10 @@ export default function AnalysisDetail() {
     );
   }
 
-  const { job, videos } = data;
+  const { job, videos, tripleSearch } = data;
 
   const getSentimentBadge = (sentiment: string | null) => {
     if (!sentiment) return <Badge variant="outline">未分析</Badge>;
-    
     switch (sentiment) {
       case "positive":
         return <Badge className="bg-green-500"><TrendingUp className="h-3 w-3 mr-1" />Positive</Badge>;
@@ -189,6 +193,19 @@ export default function AnalysisDetail() {
     }
   };
 
+  // 動画の出現回数バッジ
+  const getAppearanceBadge = (videoId: string) => {
+    if (!tripleSearch) return null;
+    const { appearedInAll3Ids, appearedIn2Ids } = tripleSearch.duplicateAnalysis;
+    if (appearedInAll3Ids.includes(videoId)) {
+      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />3回出現</Badge>;
+    }
+    if (appearedIn2Ids.includes(videoId)) {
+      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />2回出現</Badge>;
+    }
+    return <Badge variant="outline">1回のみ</Badge>;
+  };
+
   const formatNumber = (num: number | bigint | null | undefined) => {
     if (num === null || num === undefined) return "0";
     const n = typeof num === "bigint" ? Number(num) : num;
@@ -198,6 +215,17 @@ export default function AnalysisDetail() {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
     return n.toLocaleString();
   };
+
+  // 動画をカテゴリ別に分類
+  const categorizedVideos = useMemo(() => {
+    if (!tripleSearch || !videos.length) return null;
+    const { appearedInAll3Ids, appearedIn2Ids, appearedIn1OnlyIds } = tripleSearch.duplicateAnalysis;
+    return {
+      all3: videos.filter(v => appearedInAll3Ids.includes(v.videoId)),
+      in2: videos.filter(v => appearedIn2Ids.includes(v.videoId)),
+      in1: videos.filter(v => appearedIn1OnlyIds.includes(v.videoId)),
+    };
+  }, [tripleSearch, videos]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -231,7 +259,7 @@ export default function AnalysisDetail() {
                   </CardTitle>
                   <CardDescription>
                     {job.status === "completed" && "分析が完了しました"}
-                    {job.status === "processing" && "分析を実行中です..."}
+                    {job.status === "processing" && (progressData?.currentStep || "分析を実行中です...")}
                     {job.status === "failed" && "分析に失敗しました。再実行してください。"}
                     {job.status === "pending" && "分析を自動的に開始します..."}
                   </CardDescription>
@@ -262,18 +290,82 @@ export default function AnalysisDetail() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>進捗状況</span>
-                    <span className="font-medium">{progressData.progress}%</span>
+                    <span className="font-medium">{Math.max(0, progressData.progress)}%</span>
                   </div>
-                  <Progress value={progressData.progress} className="h-2" />
+                  <Progress value={Math.max(0, progressData.progress)} className="h-2" />
                   <p className="text-xs text-muted-foreground">
-                    {progressData.completedVideos} / {progressData.totalVideos} 動画の分析が完了
+                    {progressData.currentStep}
                   </p>
                 </div>
               </CardContent>
             )}
           </Card>
 
-          {/* Report Section (Always Visible) */}
+          {/* Triple Search Overlap Analysis */}
+          {tripleSearch && job.status === "completed" && (
+            <Card className="border-2 border-yellow-400">
+              <CardHeader>
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <Search className="h-6 w-6 text-yellow-500" />
+                  3シークレットブラウザ検索 - 重複度分析
+                </CardTitle>
+                <CardDescription>
+                  3つの独立したインコグニートブラウザで同一キーワードを検索し、パーソナライズを排除した純粋なアルゴリズム評価を実施
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* 検索結果サマリー */}
+                <div className="grid grid-cols-3 gap-4">
+                  {tripleSearch.searches.map((search, i) => (
+                    <div key={i} className="text-center p-4 bg-muted rounded-lg">
+                      <div className="text-sm text-muted-foreground mb-1">検索 {i + 1}</div>
+                      <div className="text-3xl font-bold">{search.totalFetched}</div>
+                      <div className="text-xs text-muted-foreground">件取得</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 重複度分析結果 */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                    <Star className="h-6 w-6 text-yellow-500 mx-auto mb-2" />
+                    <div className="text-3xl font-bold text-yellow-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
+                    <div className="text-xs text-muted-foreground mt-1">3回全出現<br/>(勝ちパターン)</div>
+                  </div>
+                  <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <Repeat className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                    <div className="text-3xl font-bold text-blue-600">{tripleSearch.duplicateAnalysis.appearedIn2Count}</div>
+                    <div className="text-xs text-muted-foreground mt-1">2回出現<br/>(準勝ち)</div>
+                  </div>
+                  <div className="text-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                    <Search className="h-6 w-6 text-gray-400 mx-auto mb-2" />
+                    <div className="text-3xl font-bold text-gray-500">{tripleSearch.duplicateAnalysis.appearedIn1OnlyCount}</div>
+                    <div className="text-xs text-muted-foreground mt-1">1回のみ<br/>(パーソナライズ)</div>
+                  </div>
+                  <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-purple-500 mx-auto mb-2" />
+                    <div className="text-3xl font-bold text-purple-600">{tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</div>
+                    <div className="text-xs text-muted-foreground mt-1">重複率</div>
+                  </div>
+                </div>
+
+                {/* 解説 */}
+                <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded">
+                  <p className="text-sm">
+                    <strong>重複率 {tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</strong> - 
+                    {tripleSearch.duplicateAnalysis.overlapRate >= 80 
+                      ? "非常に高い重複率です。TikTokのアルゴリズムがこのキーワードに対して一貫した検索結果を返しており、上位表示動画は安定しています。"
+                      : tripleSearch.duplicateAnalysis.overlapRate >= 50
+                      ? "中程度の重複率です。一部の動画はアルゴリズムにより安定的に上位表示されていますが、パーソナライズの影響も見られます。"
+                      : "低い重複率です。パーソナライズの影響が大きく、ユーザーごとに異なる検索結果が表示される傾向があります。"
+                    }
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Report Section */}
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
@@ -320,9 +412,9 @@ export default function AnalysisDetail() {
                           dataKey="value"
                         >
                           {[
-                            { name: 'Positive', value: reportStats.sentimentCounts.positive, color: '#10b981' },
-                            { name: 'Neutral', value: reportStats.sentimentCounts.neutral, color: '#6b7280' },
-                            { name: 'Negative', value: reportStats.sentimentCounts.negative, color: '#ef4444' },
+                            { color: '#10b981' },
+                            { color: '#6b7280' },
+                            { color: '#ef4444' },
                           ].map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
@@ -345,8 +437,7 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                              Positive
+                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
                             </span>
                             <span className="font-bold">{reportStats.posNegRatio.positive}%</span>
                           </div>
@@ -355,16 +446,12 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                              Negative
+                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
                             </span>
                             <span className="font-bold">{reportStats.posNegRatio.negative}%</span>
                           </div>
                           <Progress value={Number(reportStats.posNegRatio.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
                         </div>
-                        <p className="text-xs text-muted-foreground pt-2">
-                          対象動画総数: {reportStats.posNegTotal}本
-                        </p>
                       </div>
                     </div>
 
@@ -375,8 +462,7 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                              Positive
+                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
                             </span>
                             <span className="font-bold">{reportStats.viewsShare.positive}%</span>
                           </div>
@@ -385,16 +471,12 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                              Negative
+                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
                             </span>
                             <span className="font-bold">{reportStats.viewsShare.negative}%</span>
                           </div>
                           <Progress value={Number(reportStats.viewsShare.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
                         </div>
-                        <p className="text-xs text-muted-foreground pt-2">
-                          対象動画再生数: {formatNumber(reportStats.viewsShare.positiveTotal + reportStats.viewsShare.negativeTotal)}回
-                        </p>
                       </div>
                     </div>
 
@@ -405,8 +487,7 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />
-                              Positive
+                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
                             </span>
                             <span className="font-bold">{reportStats.engagementShare.positive}%</span>
                           </div>
@@ -415,67 +496,12 @@ export default function AnalysisDetail() {
                         <div>
                           <div className="flex justify-between items-center mb-1">
                             <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />
-                              Negative
+                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
                             </span>
                             <span className="font-bold">{reportStats.engagementShare.negative}%</span>
                           </div>
                           <Progress value={Number(reportStats.engagementShare.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
                         </div>
-                        <p className="text-xs text-muted-foreground pt-2">
-                          対象エンゲージメント: {formatNumber(reportStats.engagementShare.positiveTotal + reportStats.engagementShare.negativeTotal)}回
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 分析インサイト */}
-                  <div className="mt-4 p-4 bg-amber-50 border-l-4 border-amber-500 rounded">
-                    <p className="text-sm font-medium">
-                      <strong>分析インサイト:</strong> Negative動画は投稿数では{reportStats.posNegRatio.negative}%ですが、
-                      再生数シェア{reportStats.viewsShare.negative}%、エンゲージメントシェア{reportStats.engagementShare.negative}%と
-                      {Number(reportStats.viewsShare.negative) > Number(reportStats.posNegRatio.negative) ? "圧倒的な" : "高い"}拡散力を持っています。
-                    </p>
-                  </div>
-                </div>
-
-                {/* 領域別分析 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">領域別分析</h3>
-                  <p className="text-sm text-muted-foreground mb-4">コンテンツカテゴリー別のセンチメント評価</p>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={[
-                        { category: 'スタッフ対応・接客', positive: 85, negative: 15 },
-                        { category: '体験価値・エンタメ', positive: 75, negative: 25 },
-                        { category: '世界観・作り込み', positive: 70, negative: 30 },
-                        { category: 'コストパフォーマンス', positive: 40, negative: 60 },
-                        { category: '集客状況・混雑度', positive: 20, negative: 80 },
-                      ]}
-                      layout="vertical"
-                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" domain={[0, 100]} />
-                      <YAxis dataKey="category" type="category" width={150} />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="positive" stackId="a" fill="#10b981" name="Positive" />
-                      <Bar dataKey="negative" stackId="a" fill="#ef4444" name="Negative" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
-                    <div className="flex items-start gap-2">
-                      <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold text-blue-900 mb-1">分析まとめ</p>
-                        <p className="text-sm text-muted-foreground">
-                          全領域を通じて、<strong className="text-green-600">「スタッフ対応」</strong>、<strong className="text-green-600">「体験価値」</strong>は高評価が圧倒的です。
-                          一方で<strong className="text-red-600">「コストパフォーマンス」</strong>や<strong className="text-red-600">「集客状況」</strong>では、
-                          オープン初期の集客不足や価格への言及が散見されます。
-                          ただし、これらのネガティブ要素の多くは事実に基づいた指摘であり、
-                          運営改善と積極的な広報が最優先課題です。
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -484,300 +510,122 @@ export default function AnalysisDetail() {
                 {/* 頻出ワード分析 */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">頻出ワード分析</h3>
-                  <p className="text-sm text-muted-foreground mb-4">センチメント別の主要キーワード出現頻度（タグクラウド）</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Positive Words */}
                     <div className="border-2 border-dashed border-green-300 bg-green-50 rounded-lg p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <TrendingUp className="h-6 w-6 text-green-600" />
                         <h4 className="text-lg font-bold text-green-700">POSITIVE WORDS</h4>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {['攻略', 'おすすめ', '良かった', 'すごい', '楽しい', '最高', '満足', 'お得', '感動', '癒される', 'おでかけ', '楽しめる'].map((word, i) => (
+                        {reportStats.positiveWords.map((word, i) => (
                           <Badge key={i} className="bg-white text-green-700 border-green-300 text-sm px-3 py-1.5 shadow-sm">
                             {word}
                           </Badge>
                         ))}
+                        {reportStats.positiveWords.length === 0 && (
+                          <span className="text-sm text-muted-foreground">データなし</span>
+                        )}
                       </div>
                     </div>
-
-                    {/* Negative Words */}
                     <div className="border-2 border-dashed border-red-300 bg-red-50 rounded-lg p-6">
                       <div className="flex items-center gap-2 mb-4">
                         <TrendingDown className="h-6 w-6 text-red-600" />
                         <h4 className="text-lg font-bold text-red-700">NEGATIVE WORDS</h4>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {['ガラガラ', '客がいない', '理想と現実', '待ち時間', '混雑', '高すぎ', '空いている', '閉園注意', 'やばい', '気をつけて', '問題'].map((word, i) => (
+                        {reportStats.negativeWords.map((word, i) => (
                           <Badge key={i} className="bg-white text-red-700 border-red-300 text-sm px-3 py-1.5 shadow-sm">
                             {word}
                           </Badge>
                         ))}
+                        {reportStats.negativeWords.length === 0 && (
+                          <span className="text-sm text-muted-foreground">データなし</span>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* 主要示唆 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">主要示唆</h3>
-                  <div className="space-y-4">
-                    <div className="border-l-4 border-red-500 pl-4 py-2 bg-red-50 rounded-r">
-                      <div className="font-semibold text-red-700 mb-1">⚠️ RISK: ネガティブ動画の拡散力が圧倒的</div>
-                      <p className="text-sm text-muted-foreground">
-                        Negative動画は投稿数の{reportStats.posNegRatio.negative}%ですが、再生数の{reportStats.viewsShare.negative}%を占有しています。
-                        特定動画が高再生数を超えるなど、ネガティブなリーチが極めて高い状態です。
-                      </p>
-                    </div>
-                    <div className="border-l-4 border-orange-500 pl-4 py-2 bg-orange-50 rounded-r">
-                      <div className="font-semibold text-orange-700 mb-1">🚨 URGENT: 集客不安の払拭が急務</div>
-                      <p className="text-sm text-muted-foreground">
-                        ネガティブな表現を含む動画が高い拡散力を持ち、潜在顧客に不安を与えている可能性があります。
-                        正確な情報発信とポジティブな体験談の促進が求められます。
-                      </p>
-                    </div>
-                    <div className="border-l-4 border-green-500 pl-4 py-2 bg-green-50 rounded-r">
-                      <div className="font-semibold text-green-700 mb-1">✨ POSITIVE: ポジティブコンテンツの増幅が鍵</div>
-                      <p className="text-sm text-muted-foreground">
-                        現在Positiveの再生シェアは{reportStats.viewsShare.positive}%と限定的です。
-                        インフルエンサー施策の強化と、反転型ポジティブの体験談を促進することで、好意形成を加速できます。
-                      </p>
+                {/* 主要示唆（LLMレポートから） */}
+                {data.report?.keyInsights && (data.report.keyInsights as any[]).length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4">主要示唆</h3>
+                    <div className="space-y-4">
+                      {(data.report.keyInsights as Array<{ category: string; title: string; description: string }>).map((insight, i) => (
+                        <div key={i} className={`border-l-4 pl-4 py-2 rounded-r ${
+                          insight.category === "risk" ? "border-red-500 bg-red-50" :
+                          insight.category === "urgent" ? "border-orange-500 bg-orange-50" :
+                          "border-green-500 bg-green-50"
+                        }`}>
+                          <div className={`font-semibold mb-1 ${
+                            insight.category === "risk" ? "text-red-700" :
+                            insight.category === "urgent" ? "text-orange-700" :
+                            "text-green-700"
+                          }`}>
+                            {insight.category === "risk" ? "⚠️ RISK" : insight.category === "urgent" ? "🚨 URGENT" : "✨ POSITIVE"}: {insight.title}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{insight.description}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Videos Section (2-level Accordion) */}
-          {videos.length > 0 ? (
-            <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="videos-section">
-                <AccordionTrigger className="hover:no-underline">
-                  <Card className="w-full border-0 shadow-none">
-                    <CardHeader>
-                      <CardTitle>分析対象動画 ({videos.length}件)</CardTitle>
-                    </CardHeader>
-                  </Card>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <Card>
-                    <CardContent className="pt-6">
-                      <Accordion type="single" collapsible className="w-full">
-                        {videos.map((video) => (
-                          <AccordionItem key={video.id} value={`video-${video.id}`}>
-                            <AccordionTrigger className="hover:no-underline">
-                              <div className="flex items-center gap-4 w-full pr-4">
-                                <img
-                                  src={video.thumbnailUrl || "https://placehold.co/120x80/8A2BE2/white?text=No+Image"}
-                                  alt={video.title || "動画サムネイル"}
-                                  className="w-32 h-20 object-cover rounded"
-                                />
-                                <div className="flex-1 text-left">
-                                  <div className="font-medium line-clamp-1">
-                                    {video.title || "タイトルなし"}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground mt-1 flex items-center gap-3">
-                                    <span className="flex items-center gap-1">
-                                      <Eye className="h-4 w-4" />
-                                      {formatNumber(video.viewCount)}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <Heart className="h-4 w-4" />
-                                      {formatNumber(video.likeCount)}
-                                    </span>
-                                    {getSentimentBadge(video.sentiment)}
-                                  </div>
-                                </div>
-                              </div>
-                            </AccordionTrigger>
-                            <AccordionContent>
-                              <div className="pt-4 space-y-6">
-                                {/* 動画プレーヤー */}
-                                <div className="aspect-video bg-black rounded overflow-hidden">
-                                  <iframe
-                                    src={video.videoUrl.includes("tiktok") 
-                                      ? `https://www.tiktok.com/embed/${video.videoId}`
-                                      : `https://www.tiktok.com/embed/${video.videoId}`}
-                                    className="w-full h-full"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                  />
-                                </div>
+          {/* Videos Section - Tabbed by Appearance Count */}
+          {videos.length > 0 && job.status === "completed" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  分析対象動画 ({videos.length}件)
+                </CardTitle>
+                <CardDescription>
+                  {tripleSearch 
+                    ? "3シークレットブラウザ検索での出現回数別に分類" 
+                    : "収集された動画の詳細分析結果"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {categorizedVideos && tripleSearch ? (
+                  <Tabs defaultValue="all3" className="w-full">
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="all3" className="text-xs sm:text-sm">
+                        <Star className="h-3 w-3 mr-1 text-yellow-500" />
+                        勝ちパターン ({categorizedVideos.all3.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="in2" className="text-xs sm:text-sm">
+                        <Repeat className="h-3 w-3 mr-1 text-blue-500" />
+                        準勝ち ({categorizedVideos.in2.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="in1" className="text-xs sm:text-sm">
+                        1回のみ ({categorizedVideos.in1.length})
+                      </TabsTrigger>
+                      <TabsTrigger value="all" className="text-xs sm:text-sm">
+                        全件 ({videos.length})
+                      </TabsTrigger>
+                    </TabsList>
 
-                                {/* 基本情報 */}
-                                <div>
-                                  <h4 className="font-semibold mb-2">基本情報</h4>
-                                  <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                      <span className="text-muted-foreground">プラットフォーム:</span>{" "}
-                                      <span className="font-medium">TikTok</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">尺:</span>{" "}
-                                      <span className="font-medium">{video.duration}秒</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">投稿者:</span>{" "}
-                                      <span className="font-medium">{video.accountName}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">フォロワー数:</span>{" "}
-                                      <span className="font-medium flex items-center gap-1">
-                                        <Users className="h-4 w-4" />
-                                        {formatNumber(video.followerCount)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* エンゲージメント数値 */}
-                                <div>
-                                  <h4 className="font-semibold mb-2">エンゲージメント数値</h4>
-                                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                    <div className="flex items-center gap-2">
-                                      <Eye className="h-5 w-5 text-blue-500" />
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">再生数</div>
-                                        <div className="font-semibold">{formatNumber(video.viewCount)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Heart className="h-5 w-5 text-red-500" />
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">いいね</div>
-                                        <div className="font-semibold">{formatNumber(video.likeCount)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <MessageCircle className="h-5 w-5 text-green-500" />
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">コメント</div>
-                                        <div className="font-semibold">{formatNumber(video.commentCount)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Share2 className="h-5 w-5 text-purple-500" />
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">シェア</div>
-                                        <div className="font-semibold">{formatNumber(video.shareCount)}</div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Bookmark className="h-5 w-5 text-orange-500" />
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">保存</div>
-                                        <div className="font-semibold">{formatNumber(video.saveCount)}</div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* 分析結果 */}
-                                <div>
-                                  <h4 className="font-semibold mb-2">分析結果</h4>
-                                  <div className="space-y-2 text-sm">
-                                    <div>
-                                      <span className="text-muted-foreground">センチメント:</span>{" "}
-                                      {getSentimentBadge(video.sentiment)}
-                                    </div>
-                                    {video.keyHook && (
-                                      <div>
-                                        <span className="text-muted-foreground">キーフック:</span>{" "}
-                                        <span className="font-medium">{video.keyHook}</span>
-                                      </div>
-                                    )}
-                                    {video.keywords && video.keywords.length > 0 && (
-                                      <div>
-                                        <span className="text-muted-foreground">キーワード:</span>{" "}
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {video.keywords.map((keyword: string, i: number) => (
-                                            <Badge key={i} variant="secondary">{keyword}</Badge>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {video.hashtags && video.hashtags.length > 0 && (
-                                      <div>
-                                        <span className="text-muted-foreground">ハッシュタグ:</span>{" "}
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                          {video.hashtags.map((tag: string, i: number) => (
-                                            <Badge key={i} variant="outline">{tag}</Badge>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* スコア */}
-                                {video.score && (
-                                  <div>
-                                    <h4 className="font-semibold mb-2">スコア</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">サムネイル</div>
-                                        <div className="text-2xl font-bold text-purple-600">
-                                          {video.score.thumbnailScore}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">テキスト</div>
-                                        <div className="text-2xl font-bold text-blue-600">
-                                          {video.score.textScore}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">音声</div>
-                                        <div className="text-2xl font-bold text-green-600">
-                                          {video.score.audioScore}
-                                        </div>
-                                      </div>
-                                      <div>
-                                        <div className="text-xs text-muted-foreground">総合</div>
-                                        <div className="text-2xl font-bold text-orange-600">
-                                          {video.score.overallScore}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* OCR結果 */}
-                                {video.ocrResults && video.ocrResults.length > 0 && (
-                                  <div>
-                                    <h4 className="font-semibold mb-2">OCR抽出テキスト</h4>
-                                    <div className="bg-muted p-3 rounded text-sm max-h-40 overflow-y-auto">
-                                      {video.ocrResults.map((ocr: any, i: number) => (
-                                        <div key={i} className="mb-1">
-                                          <span className="text-muted-foreground">{ocr.frameTimestamp}秒:</span>{" "}
-                                          {ocr.extractedText}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* 音声文字起こし */}
-                                {video.transcription && (
-                                  <div>
-                                    <h4 className="font-semibold mb-2">音声文字起こし</h4>
-                                    <div className="bg-muted p-3 rounded text-sm max-h-40 overflow-y-auto">
-                                      {video.transcription.fullText}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
-                        ))}
-                      </Accordion>
-                    </CardContent>
-                  </Card>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          ) : (
+                    <TabsContent value="all3">
+                      <VideoList videos={categorizedVideos.all3} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                    </TabsContent>
+                    <TabsContent value="in2">
+                      <VideoList videos={categorizedVideos.in2} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                    </TabsContent>
+                    <TabsContent value="in1">
+                      <VideoList videos={categorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                    </TabsContent>
+                    <TabsContent value="all">
+                      <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                    </TabsContent>
+                  </Tabs>
+                ) : (
+                  <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                )}
+              </CardContent>
+            </Card>
+          ) : videos.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">
@@ -793,5 +641,200 @@ export default function AnalysisDetail() {
         </div>
       </div>
     </div>
+  );
+}
+
+// 動画リストコンポーネント
+function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber }: {
+  videos: any[];
+  getSentimentBadge: (sentiment: string | null) => React.ReactNode;
+  getAppearanceBadge: (videoId: string) => React.ReactNode;
+  formatNumber: (num: number | bigint | null | undefined) => string;
+}) {
+  if (videos.length === 0) {
+    return (
+      <div className="py-8 text-center text-muted-foreground">
+        該当する動画がありません
+      </div>
+    );
+  }
+
+  return (
+    <Accordion type="single" collapsible className="w-full">
+      {videos.map((video) => (
+        <AccordionItem key={video.id} value={`video-${video.id}`}>
+          <AccordionTrigger className="hover:no-underline">
+            <div className="flex items-center gap-4 w-full pr-4">
+              <img
+                src={video.thumbnailUrl || "https://placehold.co/120x80/8A2BE2/white?text=No+Image"}
+                alt={video.title || "動画サムネイル"}
+                className="w-32 h-20 object-cover rounded flex-shrink-0"
+              />
+              <div className="flex-1 text-left min-w-0">
+                <div className="font-medium line-clamp-1">
+                  {video.title || "タイトルなし"}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    {formatNumber(video.viewCount)}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Heart className="h-3 w-3" />
+                    {formatNumber(video.likeCount)}
+                  </span>
+                  <span className="text-xs">@{video.accountId}</span>
+                  {getSentimentBadge(video.sentiment)}
+                  {getAppearanceBadge(video.videoId)}
+                </div>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="pt-4 space-y-6">
+              {/* 動画プレーヤー */}
+              <div className="aspect-video bg-black rounded overflow-hidden">
+                <iframe
+                  src={`https://www.tiktok.com/embed/${video.videoId}`}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+
+              {/* 基本情報 */}
+              <div>
+                <h4 className="font-semibold mb-2">基本情報</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">プラットフォーム:</span>{" "}
+                    <span className="font-medium">TikTok</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">尺:</span>{" "}
+                    <span className="font-medium">{video.duration}秒</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">投稿者:</span>{" "}
+                    <span className="font-medium">{video.accountName}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">フォロワー数:</span>{" "}
+                    <span className="font-medium flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      {formatNumber(video.followerCount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* エンゲージメント数値 */}
+              <div>
+                <h4 className="font-semibold mb-2">エンゲージメント数値</h4>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div className="flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-blue-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">再生数</div>
+                      <div className="font-semibold">{formatNumber(video.viewCount)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Heart className="h-5 w-5 text-red-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">いいね</div>
+                      <div className="font-semibold">{formatNumber(video.likeCount)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="h-5 w-5 text-green-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">コメント</div>
+                      <div className="font-semibold">{formatNumber(video.commentCount)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Share2 className="h-5 w-5 text-purple-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">シェア</div>
+                      <div className="font-semibold">{formatNumber(video.shareCount)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Bookmark className="h-5 w-5 text-orange-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">保存</div>
+                      <div className="font-semibold">{formatNumber(video.saveCount)}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 分析結果 */}
+              <div>
+                <h4 className="font-semibold mb-2">分析結果</h4>
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">センチメント:</span>{" "}
+                    {getSentimentBadge(video.sentiment)}
+                  </div>
+                  {video.keyHook && (
+                    <div>
+                      <span className="text-muted-foreground">キーフック:</span>{" "}
+                      <span className="font-medium">{video.keyHook}</span>
+                    </div>
+                  )}
+                  {video.keywords && video.keywords.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground">キーワード:</span>{" "}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {video.keywords.map((keyword: string, i: number) => (
+                          <Badge key={i} variant="secondary">{keyword}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {video.hashtags && video.hashtags.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground">ハッシュタグ:</span>{" "}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {video.hashtags.map((tag: string, i: number) => (
+                          <Badge key={i} variant="outline">#{tag}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* スコア */}
+              {video.score && (
+                <div>
+                  <h4 className="font-semibold mb-2">スコア</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-xs text-muted-foreground">サムネイル</div>
+                      <div className="text-2xl font-bold text-purple-600">{video.score.thumbnailScore}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">テキスト</div>
+                      <div className="text-2xl font-bold text-blue-600">{video.score.textScore}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">音声</div>
+                      <div className="text-2xl font-bold text-green-600">{video.score.audioScore}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-muted-foreground">総合</div>
+                      <div className="text-2xl font-bold text-orange-600">{video.score.overallScore}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
   );
 }
