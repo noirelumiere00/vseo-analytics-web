@@ -9,11 +9,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Loader2, ArrowLeft, Play, Video, FileText, Mic, BarChart3, CheckCircle2, AlertCircle, Eye, Heart, MessageCircle, Share2, Bookmark, Users } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -31,7 +31,6 @@ export default function AnalysisDetail() {
     { 
       enabled: !!user && jobId > 0,
       refetchInterval: (query) => {
-        // 処理中の場合は2秒ごとに更新
         return query.state.data?.status === "processing" ? 2000 : false;
       }
     }
@@ -48,12 +47,69 @@ export default function AnalysisDetail() {
     },
   });
 
-  // 分析完了時に自動的にデータを再取得
   useEffect(() => {
     if (progressData?.status === "completed") {
       refetch();
     }
   }, [progressData?.status, refetch]);
+
+  // レポート統計を計算
+  const reportStats = useMemo(() => {
+    if (!data?.videos || data.videos.length === 0) return null;
+
+    const videos = data.videos;
+    const totalVideos = videos.length;
+    const totalViews = videos.reduce((sum, v) => sum + (Number(v.viewCount) || 0), 0);
+    const totalEngagement = videos.reduce((sum, v) => 
+      sum + (Number(v.likeCount) || 0) + (Number(v.commentCount) || 0) + (Number(v.shareCount) || 0), 0
+    );
+
+    // センチメント集計
+    const sentimentCounts = {
+      positive: videos.filter(v => v.sentiment === "positive").length,
+      neutral: videos.filter(v => v.sentiment === "neutral").length,
+      negative: videos.filter(v => v.sentiment === "negative").length,
+    };
+
+    const sentimentPercentages = {
+      positive: totalVideos > 0 ? ((sentimentCounts.positive / totalVideos) * 100).toFixed(1) : "0",
+      neutral: totalVideos > 0 ? ((sentimentCounts.neutral / totalVideos) * 100).toFixed(1) : "0",
+      negative: totalVideos > 0 ? ((sentimentCounts.negative / totalVideos) * 100).toFixed(1) : "0",
+    };
+
+    // ポジネガのみの比率
+    const posNegTotal = sentimentCounts.positive + sentimentCounts.negative;
+    const posNegRatio = {
+      positive: posNegTotal > 0 ? ((sentimentCounts.positive / posNegTotal) * 100).toFixed(1) : "0",
+      negative: posNegTotal > 0 ? ((sentimentCounts.negative / posNegTotal) * 100).toFixed(1) : "0",
+    };
+
+    // 頻出キーワード
+    const allKeywords: string[] = [];
+    videos.forEach(v => {
+      if (v.keywords && Array.isArray(v.keywords)) {
+        allKeywords.push(...v.keywords);
+      }
+    });
+    const keywordFreq = allKeywords.reduce((acc, kw) => {
+      acc[kw] = (acc[kw] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    const topKeywords = Object.entries(keywordFreq)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([word]) => word);
+
+    return {
+      totalVideos,
+      totalViews,
+      totalEngagement,
+      sentimentCounts,
+      sentimentPercentages,
+      posNegRatio,
+      topKeywords,
+    };
+  }, [data]);
 
   if (isLoading) {
     return (
@@ -76,23 +132,21 @@ export default function AnalysisDetail() {
 
   const { job, videos } = data;
 
-  // センチメントのバッジ色
   const getSentimentBadge = (sentiment: string | null) => {
     if (!sentiment) return <Badge variant="outline">未分析</Badge>;
     
     switch (sentiment) {
       case "positive":
-        return <Badge className="bg-green-500">Positive</Badge>;
+        return <Badge className="bg-green-500"><TrendingUp className="h-3 w-3 mr-1" />Positive</Badge>;
       case "negative":
-        return <Badge className="bg-red-500">Negative</Badge>;
+        return <Badge className="bg-red-500"><TrendingDown className="h-3 w-3 mr-1" />Negative</Badge>;
       case "neutral":
-        return <Badge className="bg-gray-500">Neutral</Badge>;
+        return <Badge className="bg-gray-500"><Minus className="h-3 w-3 mr-1" />Neutral</Badge>;
       default:
         return <Badge variant="outline">{sentiment}</Badge>;
     }
   };
 
-  // 数値をフォーマット（1000 -> 1K, 1000000 -> 1M）
   const formatNumber = (num: number | bigint | null | undefined) => {
     if (num === null || num === undefined) return "0";
     const n = typeof num === "bigint" ? Number(num) : num;
@@ -121,15 +175,14 @@ export default function AnalysisDetail() {
             </Button>
           </div>
 
-          {/* Status Card with Progress */}
+          {/* Status Card */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <CardTitle className="flex items-center gap-2">
                     ステータス
-                    {job.status === "completed" && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                    {job.status === "failed" && <AlertCircle className="h-5 w-5 text-red-600" />}
+                    {job.status === "completed" && <span className="text-green-600">✓</span>}
                     {job.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-blue-600" />}
                   </CardTitle>
                   <CardDescription>
@@ -176,6 +229,164 @@ export default function AnalysisDetail() {
             )}
           </Card>
 
+          {/* Report Section (Accordion) */}
+          {reportStats && job.status === "completed" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>分析レポート</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="single" collapsible className="w-full">
+                  {/* サマリー情報 */}
+                  <AccordionItem value="summary">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">📊 サマリー情報</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-3 gap-4 pt-4">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-purple-600">{reportStats.totalVideos}</div>
+                          <div className="text-sm text-muted-foreground">総動画数</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-blue-600">{formatNumber(reportStats.totalViews)}</div>
+                          <div className="text-sm text-muted-foreground">総再生数</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-3xl font-bold text-orange-600">{formatNumber(reportStats.totalEngagement)}</div>
+                          <div className="text-sm text-muted-foreground">総エンゲージメント</div>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* センチメント構成比 */}
+                  <AccordionItem value="sentiment">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">😊 センチメント構成比</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pt-4 space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                              Negative
+                            </span>
+                            <span className="font-semibold">{reportStats.sentimentPercentages.negative}%</span>
+                          </div>
+                          <Progress value={Number(reportStats.sentimentPercentages.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <Minus className="h-4 w-4 text-gray-500" />
+                              Neutral
+                            </span>
+                            <span className="font-semibold">{reportStats.sentimentPercentages.neutral}%</span>
+                          </div>
+                          <Progress value={Number(reportStats.sentimentPercentages.neutral)} className="h-2 bg-gray-100 [&>div]:bg-gray-500" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                              Positive
+                            </span>
+                            <span className="font-semibold">{reportStats.sentimentPercentages.positive}%</span>
+                          </div>
+                          <Progress value={Number(reportStats.sentimentPercentages.positive)} className="h-2 bg-green-100 [&>div]:bg-green-500" />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* ポジネガ比較 */}
+                  <AccordionItem value="posneg">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">⚖️ ポジネガ比較</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pt-4 space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <TrendingUp className="h-4 w-4 text-green-500" />
+                              Positive
+                            </span>
+                            <span className="font-semibold">{reportStats.posNegRatio.positive}%</span>
+                          </div>
+                          <Progress value={Number(reportStats.posNegRatio.positive)} className="h-2 bg-green-100 [&>div]:bg-green-500" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="flex items-center gap-2">
+                              <TrendingDown className="h-4 w-4 text-red-500" />
+                              Negative
+                            </span>
+                            <span className="font-semibold">{reportStats.posNegRatio.negative}%</span>
+                          </div>
+                          <Progress value={Number(reportStats.posNegRatio.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 頻出ワード */}
+                  <AccordionItem value="keywords">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">🏷️ 頻出キーワード</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pt-4">
+                        <div className="flex flex-wrap gap-2">
+                          {reportStats.topKeywords.map((keyword, i) => (
+                            <Badge key={i} variant="secondary" className="text-sm">
+                              {keyword}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* 主要示唆 */}
+                  <AccordionItem value="insights">
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">💡 主要示唆</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pt-4 space-y-4">
+                        <div className="border-l-4 border-red-500 pl-4">
+                          <div className="font-semibold text-red-600">RISK: ネガティブ動画の拡散力</div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Negative動画は投稿数の{reportStats.sentimentPercentages.negative}%を占め、高い拡散力を持っています。
+                          </p>
+                        </div>
+                        <div className="border-l-4 border-green-500 pl-4">
+                          <div className="font-semibold text-green-600">POSITIVE: ポジティブコンテンツの増幅</div>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Positiveコンテンツは現在{reportStats.sentimentPercentages.positive}%ですが、インフルエンサー施策の強化により好意形成を加速できます。
+                          </p>
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Videos Accordion */}
           {videos.length > 0 ? (
             <Card>
@@ -213,6 +424,18 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent>
                         <div className="pt-4 space-y-6">
+                          {/* 動画プレーヤー */}
+                          <div className="aspect-video bg-black rounded overflow-hidden">
+                            <iframe
+                              src={video.videoUrl.includes("tiktok") 
+                                ? `https://www.tiktok.com/embed/${video.videoId}`
+                                : `https://www.youtube.com/embed/${video.videoId}`}
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+
                           {/* 基本情報 */}
                           <div>
                             <h4 className="font-semibold mb-2">基本情報</h4>
@@ -375,13 +598,6 @@ export default function AnalysisDetail() {
                               </div>
                             </div>
                           )}
-
-                          {/* 動画を開くボタン */}
-                          <Button variant="outline" className="w-full" asChild>
-                            <a href={video.videoUrl} target="_blank" rel="noopener noreferrer">
-                              動画を開く
-                            </a>
-                          </Button>
                         </div>
                       </AccordionContent>
                     </AccordionItem>
