@@ -79,3 +79,9 @@
   - [x] 総再生数シェア（Positive vs Negative）
   - [x] 総エンゲージメントシェア（Positive vs Negative）
   - [x] 詳細なインサイト（RISK/URGENT/POSITIVE）
+
+## 分析自動実行とTikTok特化
+- [x] 分析結果画面に遷移したら自動的に分析を開始（pending状態の場合）
+- [x] 再実行ボタンの追加（エラー時や完了後の再分析用）
+- [x] TikTok特化への変更（YouTube Shortsサポート削除）
+- [x] 分析対象を3アカウント×上位15本（合計45本）に調整

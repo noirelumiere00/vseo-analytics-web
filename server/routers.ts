@@ -117,19 +117,17 @@ export const appRouter = router({
           // 手動URL指定の場合
           videoUrls = job.manualUrls;
         } else if (job.keyword) {
-          // キーワード指定の場合：ダミーで3アカウント×3動画を生成
-          // 実際の実装では、TikTok/YouTube APIを使用して上位20投稿を取得
-          videoUrls = [
-            `https://www.tiktok.com/@account1/video/${Date.now()}001`,
-            `https://www.tiktok.com/@account1/video/${Date.now()}002`,
-            `https://www.tiktok.com/@account1/video/${Date.now()}003`,
-            `https://www.tiktok.com/@account2/video/${Date.now()}001`,
-            `https://www.tiktok.com/@account2/video/${Date.now()}002`,
-            `https://www.tiktok.com/@account2/video/${Date.now()}003`,
-            `https://www.tiktok.com/@account3/video/${Date.now()}001`,
-            `https://www.tiktok.com/@account3/video/${Date.now()}002`,
-            `https://www.tiktok.com/@account3/video/${Date.now()}003`,
-          ];
+          // キーワード指定の場合：ダミーで3アカウント×15動画を生成（合計45本）
+          // 実際の実装では、TikTok APIを使用して上位15投稿を取得
+          const accounts = ['account1', 'account2', 'account3'];
+          const videosPerAccount = 15;
+          videoUrls = [];
+          
+          for (const account of accounts) {
+            for (let i = 1; i <= videosPerAccount; i++) {
+              videoUrls.push(`https://www.tiktok.com/@${account}/video/${Date.now()}${String(i).padStart(3, '0')}`);
+            }
+          }
         }
 
         // ステータスを処理中に更新

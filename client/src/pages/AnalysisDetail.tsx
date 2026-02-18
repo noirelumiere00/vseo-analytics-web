@@ -53,6 +53,13 @@ export default function AnalysisDetail() {
     }
   }, [progressData?.status, refetch]);
 
+  // 自動的に分析を開始（pending状態の場合）
+  useEffect(() => {
+    if (data?.job.status === "pending" && !executeAnalysis.isPending) {
+      executeAnalysis.mutate({ jobId });
+    }
+  }, [data?.job.status, jobId]);
+
   // レポート統計を計算
   const reportStats = useMemo(() => {
     if (!data?.videos || data.videos.length === 0) return null;
@@ -224,11 +231,11 @@ export default function AnalysisDetail() {
                   <CardDescription>
                     {job.status === "completed" && "分析が完了しました"}
                     {job.status === "processing" && "分析を実行中です..."}
-                    {job.status === "failed" && "分析に失敗しました"}
-                    {job.status === "pending" && "分析を開始してください"}
+                    {job.status === "failed" && "分析に失敗しました。再実行してください。"}
+                    {job.status === "pending" && "分析を自動的に開始します..."}
                   </CardDescription>
                 </div>
-                {job.status === "pending" && (
+                {(job.status === "failed" || job.status === "completed") && (
                   <Button 
                     className="gradient-primary text-white"
                     onClick={() => executeAnalysis.mutate({ jobId })}
@@ -242,7 +249,7 @@ export default function AnalysisDetail() {
                     ) : (
                       <>
                         <Play className="mr-2 h-4 w-4" />
-                        分析を実行
+                        再実行
                       </>
                     )}
                   </Button>
@@ -534,7 +541,7 @@ export default function AnalysisDetail() {
                                   <iframe
                                     src={video.videoUrl.includes("tiktok") 
                                       ? `https://www.tiktok.com/embed/${video.videoId}`
-                                      : `https://www.youtube.com/embed/${video.videoId}`}
+                                      : `https://www.tiktok.com/embed/${video.videoId}`}
                                     className="w-full h-full"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                     allowFullScreen
@@ -547,7 +554,7 @@ export default function AnalysisDetail() {
                                   <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                       <span className="text-muted-foreground">プラットフォーム:</span>{" "}
-                                      <span className="font-medium">{video.platform === "tiktok" ? "TikTok" : "YouTube Shorts"}</span>
+                                      <span className="font-medium">TikTok</span>
                                     </div>
                                     <div>
                                       <span className="text-muted-foreground">尺:</span>{" "}
@@ -718,7 +725,7 @@ export default function AnalysisDetail() {
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">
                   {job.status === "pending" 
-                    ? "「分析を実行」ボタンをクリックして分析を開始してください" 
+                    ? "分析を自動的に開始します..." 
                     : job.status === "processing"
                     ? "動画データを収集中です..."
                     : "動画データがありません"}

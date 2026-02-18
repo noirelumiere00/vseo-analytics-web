@@ -72,7 +72,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    3アカウント×上位20投稿を自動収集し、重複度から真の人気動画を特定
+                    3アカウント×上位15投稿を自動収集し、重複度から真の人気動画を特定
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -147,7 +147,7 @@ export default function Home() {
                     onChange={(e) => setKeyword(e.target.value)}
                   />
                   <p className="text-sm text-muted-foreground">
-                    このキーワードで3アカウント×上位20投稿を自動収集します
+                    このキーワードで3アカウント×上位15投稿を自動収集します
                   </p>
                 </div>
 
@@ -156,13 +156,13 @@ export default function Home() {
                   <Label htmlFor="urls">動画URL（任意、1行に1つ）</Label>
                   <Textarea
                     id="urls"
-                    placeholder="https://www.tiktok.com/@user/video/123456789&#10;https://youtube.com/shorts/abc123"
+                    placeholder="https://www.tiktok.com/@user/video/123456789&#10;https://www.tiktok.com/@user/video/987654321"
                     rows={6}
                     value={manualUrls}
                     onChange={(e) => setManualUrls(e.target.value)}
                   />
                   <p className="text-sm text-muted-foreground">
-                    TikTokまたはYouTube ShortsのURLを入力してください
+                    TikTokのURLを入力してください
                   </p>
                 </div>
 
