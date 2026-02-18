@@ -70,3 +70,12 @@
   - [x] 頻出ワード分析（バッジ表示）
   - [x] 主要示唆（RISK/POSITIVEカテゴリ別）
 - [x] 現在の美しいダミーUIデザインを保持
+
+## UI修正タスク（緊急）
+- [x] 分析レポートのアコーディオンを削除し、常に表示される形式に変更
+- [x] 分析対象動画を2重アコーディオン化（カード全体→各動画）
+- [x] 分析内容の拡張
+  - [x] 投稿数比率（Positive vs Negative）
+  - [x] 総再生数シェア（Positive vs Negative）
+  - [x] 総エンゲージメントシェア（Positive vs Negative）
+  - [x] 詳細なインサイト（RISK/URGENT/POSITIVE）
