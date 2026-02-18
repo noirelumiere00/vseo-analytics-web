@@ -110,6 +110,28 @@ export const appRouter = router({
           });
         }
 
+        // 分析対象の動画URLを取得
+        let videoUrls: string[] = [];
+        
+        if (job.manualUrls && job.manualUrls.length > 0) {
+          // 手動URL指定の場合
+          videoUrls = job.manualUrls;
+        } else if (job.keyword) {
+          // キーワード指定の場合：ダミーで3アカウント×3動画を生成
+          // 実際の実装では、TikTok/YouTube APIを使用して上位20投稿を取得
+          videoUrls = [
+            `https://www.tiktok.com/@account1/video/${Date.now()}001`,
+            `https://www.tiktok.com/@account1/video/${Date.now()}002`,
+            `https://www.tiktok.com/@account1/video/${Date.now()}003`,
+            `https://www.tiktok.com/@account2/video/${Date.now()}001`,
+            `https://www.tiktok.com/@account2/video/${Date.now()}002`,
+            `https://www.tiktok.com/@account2/video/${Date.now()}003`,
+            `https://www.tiktok.com/@account3/video/${Date.now()}001`,
+            `https://www.tiktok.com/@account3/video/${Date.now()}002`,
+            `https://www.tiktok.com/@account3/video/${Date.now()}003`,
+          ];
+        }
+
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
 
@@ -117,28 +139,8 @@ export const appRouter = router({
         // 実際の本番環境ではジョブキューを使用することを推奨
         setImmediate(async () => {
           try {
-            // 分析対象の動画URLを取得
-            let videoUrls: string[] = [];
+            console.log(`[Analysis] Starting analysis for ${videoUrls.length} videos`);
             
-            if (job.manualUrls && job.manualUrls.length > 0) {
-              // 手動URL指定の場合
-              videoUrls = job.manualUrls;
-            } else if (job.keyword) {
-              // キーワード指定の場合：ダミーで3アカウント×3動画を生成
-              // 実際の実装では、TikTok/YouTube APIを使用して上位20投稿を取得
-              videoUrls = [
-                `https://www.tiktok.com/@account1/video/${Date.now()}001`,
-                `https://www.tiktok.com/@account1/video/${Date.now()}002`,
-                `https://www.tiktok.com/@account1/video/${Date.now()}003`,
-                `https://www.tiktok.com/@account2/video/${Date.now()}001`,
-                `https://www.tiktok.com/@account2/video/${Date.now()}002`,
-                `https://www.tiktok.com/@account2/video/${Date.now()}003`,
-                `https://www.tiktok.com/@account3/video/${Date.now()}001`,
-                `https://www.tiktok.com/@account3/video/${Date.now()}002`,
-                `https://www.tiktok.com/@account3/video/${Date.now()}003`,
-              ];
-            }
-
             // 各動画を分析
             for (const videoUrl of videoUrls) {
               await analyzeVideo(input.jobId, videoUrl);
@@ -149,13 +151,14 @@ export const appRouter = router({
 
             // ステータスを完了に更新
             await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
+            console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
           } catch (error) {
             console.error("[Analysis] Error:", error);
             await db.updateAnalysisJobStatus(input.jobId, "failed");
           }
         });
 
-        return { success: true, message: "分析を開始しました。完了までしばらくお待ちください。" };
+        return { success: true, message: `分析を開始しました。${videoUrls.length}件の動画を分析します。` };
       }),
 
     // 分析の進捗状況を取得
