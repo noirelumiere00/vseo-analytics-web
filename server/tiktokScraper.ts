@@ -76,8 +76,13 @@ async function fetchSearchResults(
       try {
         const response = await fetch(url, { credentials: "include" });
         const json = await response.json();
+        if (!response.ok) {
+          console.error(`[TikTok API] HTTP Error ${response.status}`);
+          console.error(`[TikTok API] Response body:`, JSON.stringify(json).substring(0, 500));
+        }
         return { status: response.status, data: json };
       } catch (e: any) {
+        console.error(`[TikTok API] Fetch error: ${e.message}`);
         return { error: e.message };
       }
     },
@@ -176,6 +181,16 @@ async function searchInIncognitoContext(
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
+    
+    // CAPTCHA検出用のスクリーンショットを取得
+    try {
+      const debugScreenshotPath = `/tmp/debug-tiktok-session${sessionIndex + 1}.png`;
+      await page.screenshot({ path: debugScreenshotPath });
+      console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot saved to ${debugScreenshotPath}`);
+    } catch (screenshotError: any) {
+      console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to capture screenshot:`, screenshotError.message);
+    }
+    
     await new Promise((r) => setTimeout(r, 3000));
 
     const allVideos: TikTokVideo[] = [];
@@ -336,18 +351,29 @@ export async function searchTikTokTriple(
   onProgress?: (message: string, percent: number) => void
 ): Promise<TikTokTripleSearchResult> {
   // ブラウザを起動
-  const browser = await puppeteer.launch({
-    executablePath: "/usr/bin/chromium-browser",
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ],
-  });
+  let browser: Browser;
+  try {
+    console.log("[Puppeteer] Launching browser with executablePath: /usr/bin/chromium-browser");
+    browser = await puppeteer.launch({
+      executablePath: "/usr/bin/chromium-browser",
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--window-size=1920,1080",
+        "--lang=ja-JP",
+      ],
+    });
+    console.log("[Puppeteer] Browser launched successfully");
+  } catch (launchError: any) {
+    console.error("[Puppeteer] CRITICAL: Failed to launch browser");
+    console.error("[Puppeteer] Error message:", launchError.message);
+    console.error("[Puppeteer] Error code:", launchError.code);
+    console.error("[Puppeteer] Error stack:", launchError.stack);
+    throw launchError;
+  }
 
   try {
     if (onProgress) onProgress("3つのシークレットブラウザを起動中...", 5);

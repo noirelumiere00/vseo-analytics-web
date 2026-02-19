@@ -189,3 +189,9 @@
 ## バグ修正: フォロワー数が0になっている
 - [x] tiktokScraper.tsのparseVideoData関数を修正（authorStats対応）
 - [ ] 修正後の動作確認
+
+## デバッグ機能: TikTokスクレイピング失敗原因の特定
+- [x] puppeteer.launch失敗時の詳細エラーロギング
+- [x] CAPTCHA検出用スクリーンショット機能
+- [x] APIエラー時の詳細レスポンスロギング
+- [x] テスト実行と動作確認
