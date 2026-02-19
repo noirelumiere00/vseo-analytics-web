@@ -2,17 +2,39 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
+import { toast } from "sonner";
 
 export default function History() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
   const { data: jobs, isLoading } = trpc.analysis.list.useQuery(undefined, {
     enabled: !!user,
+  });
+
+  const deleteJob = trpc.analysis.delete.useMutation({
+    onSuccess: () => {
+      toast.success("分析ジョブを削除しました");
+      utils.analysis.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const retryJob = trpc.analysis.retry.useMutation({
+    onSuccess: (data) => {
+      toast.success("再実行を開始します");
+      setLocation(`/analysis/${data.jobId}`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
   });
 
   if (authLoading || isLoading) {
@@ -34,6 +56,18 @@ export default function History() {
       default:
         return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />待機中</Badge>;
     }
+  };
+
+  const handleDelete = (e: React.MouseEvent, jobId: number) => {
+    e.stopPropagation();
+    if (window.confirm("この分析ジョブを削除しますか？関連する全てのデータが削除されます。")) {
+      deleteJob.mutate({ jobId });
+    }
+  };
+
+  const handleRetry = (e: React.MouseEvent, jobId: number) => {
+    e.stopPropagation();
+    retryJob.mutate({ jobId });
   };
 
   return (
@@ -76,7 +110,7 @@ export default function History() {
                 >
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
+                      <div className="space-y-1 flex-1">
                         <CardTitle>
                           {job.keyword ? `キーワード: ${job.keyword}` : "手動URL分析"}
                         </CardTitle>
@@ -84,7 +118,34 @@ export default function History() {
                           {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true, locale: ja })}
                         </CardDescription>
                       </div>
-                      {getStatusBadge(job.status)}
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(job.status)}
+                        {/* 再実行ボタン（failed/pendingの場合） */}
+                        {(job.status === "failed" || job.status === "pending") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => handleRetry(e, job.id)}
+                            disabled={retryJob.isPending}
+                            title="再実行"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {/* 削除ボタン（processing以外） */}
+                        {job.status !== "processing" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => handleDelete(e, job.id)}
+                            disabled={deleteJob.isPending}
+                            className="text-destructive hover:text-destructive"
+                            title="削除"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </CardHeader>
                   {job.manualUrls && job.manualUrls.length > 0 && (

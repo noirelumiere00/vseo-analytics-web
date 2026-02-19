@@ -263,6 +263,42 @@ export const appRouter = router({
           ),
         };
       }),
+    // ジョブを削除
+    delete: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+        if (job.status === "processing") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "処理中のジョブは削除できません" });
+        }
+        await db.deleteAnalysisJob(input.jobId);
+        return { success: true };
+      }),
+
+    // ジョブを再実行（failed/pendingのジョブをリセットして再実行）
+    retry: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+        if (job.status !== "failed" && job.status !== "pending") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "失敗または待機中のジョブのみ再実行できます" });
+        }
+        // ステータスをpendingにリセット
+        await db.updateAnalysisJobStatus(input.jobId, "pending");
+        return { success: true, jobId: input.jobId };
+      }),
   }),
 });
 

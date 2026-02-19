@@ -1,0 +1,22 @@
+{
+  "query": "SELECT status, COUNT(*) as count FROM analysis_jobs GROUP BY status;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT status, COUNT(*) as count FROM analysis_jobs GROUP BY status;",
+  "rows": [
+    {
+      "status": "pending",
+      "count": "10"
+    },
+    {
+      "status": "completed",
+      "count": "4"
+    },
+    {
+      "status": "processing",
+      "count": "11"
+    }
+  ],
+  "messages": [],
+  "stdout": "status\tcount\npending\t10\ncompleted\t4\nprocessing\t11\n",
+  "stderr": "",
+  "execution_time_ms": 1652
+}

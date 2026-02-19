@@ -1,4 +1,4 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, 
@@ -260,4 +260,43 @@ export async function getTripleSearchResultByJobId(jobId: number) {
   
   const result = await db.select().from(tripleSearchResults).where(eq(tripleSearchResults.jobId, jobId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+// === Stuck Job Recovery ===
+/**
+ * サーバー起動時にprocessing状態のジョブをfailedにリセット
+ * （サーバー再起動やクラッシュで中断されたジョブの回復）
+ */
+export async function resetStuckProcessingJobs() {
+  const db = await getDb();
+  if (!db) return 0;
+  
+  const result = await db.update(analysisJobs)
+    .set({ status: "failed" })
+    .where(eq(analysisJobs.status, "processing"));
+  
+  return result[0].affectedRows ?? 0;
+}
+
+/**
+ * 分析ジョブを削除（関連データも含む）
+ */
+export async function deleteAnalysisJob(jobId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 関連する動画IDを取得
+  const jobVideos = await db.select({ id: videos.id }).from(videos).where(eq(videos.jobId, jobId));
+  const videoIds = jobVideos.map(v => v.id);
+  
+  // 関連データを削除
+  if (videoIds.length > 0) {
+    await db.delete(ocrResults).where(inArray(ocrResults.videoId, videoIds));
+    await db.delete(transcriptions).where(inArray(transcriptions.videoId, videoIds));
+    await db.delete(analysisScores).where(inArray(analysisScores.videoId, videoIds));
+  }
+  await db.delete(videos).where(eq(videos.jobId, jobId));
+  await db.delete(analysisReports).where(eq(analysisReports.jobId, jobId));
+  await db.delete(tripleSearchResults).where(eq(tripleSearchResults.jobId, jobId));
+  await db.delete(analysisJobs).where(eq(analysisJobs.id, jobId));
 }

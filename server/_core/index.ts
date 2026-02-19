@@ -57,8 +57,19 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // サーバー起動時にスタックしたprocessingジョブをリセット
+    try {
+      const { resetStuckProcessingJobs } = await import("../db");
+      const resetCount = await resetStuckProcessingJobs();
+      if (resetCount > 0) {
+        console.log(`[Startup] Reset ${resetCount} stuck processing jobs to failed`);
+      }
+    } catch (e) {
+      console.warn("[Startup] Failed to reset stuck jobs:", e);
+    }
   });
 }
 

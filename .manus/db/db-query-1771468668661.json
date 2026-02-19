@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE analysis_jobs SET status = 'failed' WHERE status = 'processing' AND completedAt IS NULL; UPDATE analysis_jobs SET status = 'failed' WHERE status = 'pending' AND keyword = 'テスト'; UPDATE analysis_jobs SET status = 'failed' WHERE status = 'pending' AND keyword IN ('重複テスト', 'レポートテスト');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute UPDATE analysis_jobs SET status = 'failed' WHERE status = 'processing' AND completedAt IS NULL; UPDATE analysis_jobs SET status = 'failed' WHERE status = 'pending' AND keyword = 'テスト'; UPDATE analysis_jobs SET status = 'failed' WHERE status = 'pending' AND keyword IN ('重複テスト', 'レポートテスト');",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2063
+}

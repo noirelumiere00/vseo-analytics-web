@@ -1,0 +1,150 @@
+{
+  "query": "SELECT id, keyword, status, createdAt, completedAt FROM analysis_jobs ORDER BY id DESC LIMIT 20;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT id, keyword, status, createdAt, completedAt FROM analysis_jobs ORDER BY id DESC LIMIT 20;",
+  "rows": [
+    {
+      "id": "150003",
+      "keyword": "レポートテスト",
+      "status": "processing",
+      "createdAt": "2026-02-19 02:31:14",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "150002",
+      "keyword": "重複テスト",
+      "status": "processing",
+      "createdAt": "2026-02-19 02:31:11",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "150001",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-19 02:30:45",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "120004",
+      "keyword": "レポートテスト",
+      "status": "processing",
+      "createdAt": "2026-02-19 01:41:30",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "120003",
+      "keyword": "重複テスト",
+      "status": "processing",
+      "createdAt": "2026-02-19 01:41:27",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "120002",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-19 01:41:00",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "120001",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-19 01:37:10",
+      "completedAt": "2026-02-19 01:45:32"
+    },
+    {
+      "id": "90012",
+      "keyword": "レポートテスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:43:32",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90011",
+      "keyword": "重複テスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:43:32",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90010",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:43:16",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90009",
+      "keyword": "レポートテスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:40:34",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90008",
+      "keyword": "重複テスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:40:34",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90007",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:40:17",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90006",
+      "keyword": "レポートテスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:39:28",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90005",
+      "keyword": "重複テスト",
+      "status": "processing",
+      "createdAt": "2026-02-18 10:39:28",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90004",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:39:18",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90003",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:38:13",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90002",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:38:02",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "90001",
+      "keyword": "テスト",
+      "status": "pending",
+      "createdAt": "2026-02-18 10:37:52",
+      "completedAt": "NULL"
+    },
+    {
+      "id": "60002",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-18 10:00:32",
+      "completedAt": "2026-02-18 10:01:08"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tkeyword\tstatus\tcreatedAt\tcompletedAt\n150003\tレポートテスト\tprocessing\t2026-02-19 02:31:14\tNULL\n150002\t重複テスト\tprocessing\t2026-02-19 02:31:11\tNULL\n150001\tテスト\tpending\t2026-02-19 02:30:45\tNULL\n120004\tレポートテスト\tprocessing\t2026-02-19 01:41:30\tNULL\n120003\t重複テスト\tprocessing\t2026-02-19 01:41:27\tNULL\n120002\tテスト\tpending\t2026-02-19 01:41:00\tNULL\n120001\tジャングリア沖縄\tcompleted\t2026-02-19 01:37:10\t2026-02-19 01:45:32\n90012\tレポートテスト\tprocessing\t2026-02-18 10:43:32\tNULL\n90011\t重複テスト\tprocessing\t2026-02-18 10:43:32\tNULL\n90010\tテスト\tpending\t2026-02-18 10:43:16\tNULL\n90009\tレポートテスト\tprocessing\t2026-02-18 10:40:34\tNULL\n90008\t重複テスト\tprocessing\t2026-02-18 10:40:34\tNULL\n90007\tテスト\tpending\t2026-02-18 10:40:17\tNULL\n90006\tレポートテスト\tprocessing\t2026-02-18 10:39:28\tNULL\n90005\t重複テスト\tprocessing\t2026-02-18 10:39:28\tNULL\n90004\tテスト\tpending\t2026-02-18 10:39:18\tNULL\n90003\tテスト\tpending\t2026-02-18 10:38:13\tNULL\n90002\tテスト\tpending\t2026-02-18 10:38:02\tNULL\n90001\tテスト\tpending\t2026-02-18 10:37:52\tNULL\n60002\tジャングリア沖縄\tcompleted\t2026-02-18 10:00:32\t2026-02-18 10:01:08\n",
+  "stderr": "",
+  "execution_time_ms": 1621
+}
