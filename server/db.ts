@@ -116,9 +116,20 @@ export async function createAnalysisJob(job: InsertAnalysisJob) {
 
 export async function getAnalysisJobsByUserId(userId: number) {
   const db = await getDb();
-  if (!db) return [];
+  if (!db) {
+    console.warn("[Database] Cannot get analysis jobs: database not available");
+    return [];
+  }
   
-  return db.select().from(analysisJobs).where(eq(analysisJobs.userId, userId)).orderBy(desc(analysisJobs.createdAt));
+  try {
+    console.log(`[Database] Fetching analysis jobs for userId: ${userId}`);
+    const result = await db.select().from(analysisJobs).where(eq(analysisJobs.userId, userId)).orderBy(desc(analysisJobs.createdAt));
+    console.log(`[Database] Found ${result.length} jobs for userId: ${userId}`);
+    return result;
+  } catch (error) {
+    console.error("[Database] Error fetching analysis jobs:", error);
+    return [];
+  }
 }
 
 export async function getAnalysisJobById(jobId: number) {

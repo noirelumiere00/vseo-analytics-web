@@ -93,6 +93,8 @@ function parseVideoData(item: any): TikTokVideo | null {
   const v = item.item;
   const stats = v.stats || {};
   const author = v.author || {};
+  // 投稿者の統計情報用オブジェクトを取得（authorStats または author_stats）
+  const authorStats = v.authorStats || v.author_stats || {};
 
   const hashtags: string[] = [];
   if (v.textExtra) {
@@ -119,10 +121,11 @@ function parseVideoData(item: any): TikTokVideo | null {
       uniqueId: author.uniqueId || "",
       nickname: author.nickname || "",
       avatarUrl: author.avatarThumb || author.avatarMedium || "",
-      followerCount: author.followerCount || 0,
-      followingCount: author.followingCount || 0,
-      heartCount: author.heartCount || author.heart || 0,
-      videoCount: author.videoCount || 0,
+      // authorの中になければ、authorStatsから取得するようにフォールバックを追加
+      followerCount: author.followerCount || authorStats.followerCount || 0,
+      followingCount: author.followingCount || authorStats.followingCount || 0,
+      heartCount: author.heartCount || author.heart || authorStats.heartCount || 0,
+      videoCount: author.videoCount || authorStats.videoCount || 0,
     },
     stats: {
       playCount: stats.playCount || 0,
