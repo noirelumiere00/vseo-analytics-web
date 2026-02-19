@@ -457,18 +457,14 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   // キーワード集計
   const allKeywords: string[] = [];
-  const positiveKeywords: string[] = [];
-  const negativeKeywords: string[] = [];
 
   for (const video of videosData) {
     const keywords = video.keywords as string[] || [];
     allKeywords.push(...keywords);
-    if (video.sentiment === "positive") positiveKeywords.push(...keywords);
-    if (video.sentiment === "negative") negativeKeywords.push(...keywords);
   }
 
   // 頻出ワードを抽出（出現回数でソート）
-  const getTopWords = (words: string[], limit: number = 15): string[] => {
+  const getTopWords = (words: string[], limit: number = 30): string[] => {
     const counts = new Map<string, number>();
     for (const w of words) {
       counts.set(w, (counts.get(w) || 0) + 1);
@@ -479,8 +475,62 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
       .map(([word]) => word);
   };
 
-  const positiveWords = getTopWords(positiveKeywords);
-  const negativeWords = getTopWords(negativeKeywords);
+  const topAllKeywords = getTopWords(allKeywords, 30);
+
+  // LLMを使ったキーワード仕分け
+  let positiveWords: string[] = [];
+  let negativeWords: string[] = [];
+
+  try {
+    const keywordSortingPrompt = `
+Following keyword list from TikTok video analysis. Please classify them into positive (15 words) and negative (15 words) categories.
+
+Keywords: ${topAllKeywords.join(", ")}
+
+Return as JSON with 'positive' and 'negative' arrays.
+`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a keyword classification expert. Always respond in valid JSON format." },
+        { role: "user", content: keywordSortingPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "keyword_classification",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              positive: {
+                type: "array",
+                items: { type: "string" },
+              },
+              negative: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+            required: ["positive", "negative"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = JSON.parse(content || "{}");
+    positiveWords = parsed.positive || [];
+    negativeWords = parsed.negative || [];
+  } catch (error) {
+    console.error("[Report] Error sorting keywords with LLM:", error);
+    // Fallback: mechanical sorting
+    positiveWords = getTopWords(allKeywords, 15);
+    negativeWords = [];
+  }
 
   // LLMで主要示唆を生成
   let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
