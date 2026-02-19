@@ -308,18 +308,15 @@ export default function AnalysisDetail() {
               <CardHeader>
                 <CardTitle className="text-2xl flex items-center gap-2">
                   <Search className="h-6 w-6 text-yellow-500" />
-                  3シークレットブラウザ検索 - 重複度分析
+                  重複度分析
                 </CardTitle>
-                <CardDescription>
-                  3つの独立したインコグニートブラウザで同一キーワードを検索し、パーソナライズを排除した純粋なアルゴリズム評価を実施
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
                 <div className="grid grid-cols-3 gap-4">
                   {tripleSearch.searches.map((search: any, i: number) => (
                     <div key={i} className="text-center p-4 bg-muted rounded-lg">
-                      <div className="text-sm text-muted-foreground mb-1">検索 {i + 1}</div>
+                      <div className="text-sm font-medium mb-1">アカウント {i + 1}</div>
                       <div className="text-3xl font-bold">{search.totalFetched}</div>
                       <div className="text-xs text-muted-foreground">件取得</div>
                     </div>
