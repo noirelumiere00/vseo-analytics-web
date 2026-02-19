@@ -75,12 +75,38 @@ async function fetchSearchResults(
 
       try {
         const response = await fetch(url, { credentials: "include" });
-        const json = await response.json();
-        if (!response.ok) {
-          console.error(`[TikTok API] HTTP Error ${response.status}`);
-          console.error(`[TikTok API] Response body:`, JSON.stringify(json).substring(0, 500));
+        
+        // いきなり .json() でパースせず、まずはテキストとして受け取る
+        const text = await response.text();
+        
+        // 空のレスポンス（Bot弾きの典型）の場合
+        if (!text || text.trim() === "") {
+          console.error(`[TikTok API] Empty response (Status: ${response.status}). Likely blocked by anti-bot.`);
+          return { error: `TikTok returned an empty response (Status: ${response.status}). Likely blocked by anti-bot.` };
         }
-        return { status: response.status, data: json };
+        
+        // HTMLエラーページの検出（CAPTCHA等）
+        if (text.includes("<html") || text.includes("<!DOCTYPE")) {
+          const htmlSnippet = text.substring(0, 200).replace(/\n/g, " ");
+          console.error(`[TikTok API] Received HTML instead of JSON (likely CAPTCHA or error page):`, htmlSnippet);
+          return { error: `TikTok returned an error page (possibly CAPTCHA). Please try again later.` };
+        }
+        
+        try {
+          // テキストをJSONにパースする
+          const json = JSON.parse(text);
+          if (!response.ok) {
+            console.error(`[TikTok API] HTTP Error ${response.status}`);
+            console.error(`[TikTok API] Response body:`, JSON.stringify(json).substring(0, 500));
+          }
+          return { status: response.status, data: json };
+        } catch (parseError: any) {
+          // JSONパースに失敗した場合、返ってきたテキストの先頭100文字をエラーに含める
+          const snippet = text.substring(0, 100).replace(/\n/g, " ");
+          console.error(`[TikTok API] JSON Parse Error: ${parseError.message}`);
+          console.error(`[TikTok API] Response snippet:`, snippet);
+          return { error: `JSON Parse Error: ${parseError.message}. Response: ${snippet}` };
+        }
       } catch (e: any) {
         console.error(`[TikTok API] Fetch error: ${e.message}`);
         return { error: e.message };

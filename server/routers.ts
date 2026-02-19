@@ -215,10 +215,25 @@ export const appRouter = router({
             progressStore.set(input.jobId, { message: "分析完了", percent: 100 });
             console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
           } catch (error) {
-            console.error("[Analysis] Error:", error);
+            const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+            console.error("[Analysis] Error:", errorMessage);
+            console.error("[Analysis] Full error:", error);
+            
             await db.updateAnalysisJobStatus(input.jobId, "failed");
+            
+            let userMessage = "分析に失敗しました。";
+            if (errorMessage.includes("empty response")) {
+              userMessage = "TikTokがアクセスを制限しています。しばらく待ってから再度お試しください。";
+            } else if (errorMessage.includes("CAPTCHA")) {
+              userMessage = "TikTokのCAPTCHA認証が必要です。しばらく待ってから再度お試しください。";
+            } else if (errorMessage.includes("JSON Parse Error")) {
+              userMessage = "TikTokからのデータ取得に失敗しました。ネットワークを確認してから再度お試しください。";
+            } else if (errorMessage.includes("Puppeteer")) {
+              userMessage = "ブラウザの起動に失敗しました。サーバーリソースが不足している可能性があります。";
+            }
+            
             progressStore.set(input.jobId, {
-              message: `分析失敗: ${error instanceof Error ? error.message : "不明なエラー"}`,
+              message: `分析失敗: ${userMessage}`,
               percent: -1,
             });
           }

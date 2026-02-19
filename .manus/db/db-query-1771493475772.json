@@ -1,0 +1,45 @@
+{
+  "query": "SELECT id, userId, keyword, status, createdAt FROM analysis_jobs WHERE userId = 240084 ORDER BY createdAt DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT id, userId, keyword, status, createdAt FROM analysis_jobs WHERE userId = 240084 ORDER BY createdAt DESC LIMIT 10",
+  "rows": [
+    {
+      "id": "300002",
+      "userId": "240084",
+      "keyword": "Osina",
+      "status": "failed",
+      "createdAt": "2026-02-19 09:26:08"
+    },
+    {
+      "id": "300001",
+      "userId": "240084",
+      "keyword": "Osina",
+      "status": "failed",
+      "createdAt": "2026-02-19 09:24:37"
+    },
+    {
+      "id": "240005",
+      "userId": "240084",
+      "keyword": "シャウエッセン",
+      "status": "failed",
+      "createdAt": "2026-02-19 06:12:08"
+    },
+    {
+      "id": "240004",
+      "userId": "240084",
+      "keyword": "ピュレグミ",
+      "status": "failed",
+      "createdAt": "2026-02-19 06:11:54"
+    },
+    {
+      "id": "240003",
+      "userId": "240084",
+      "keyword": "ピュレグミ",
+      "status": "failed",
+      "createdAt": "2026-02-19 06:10:38"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tkeyword\tstatus\tcreatedAt\n300002\t240084\tOsina\tfailed\t2026-02-19 09:26:08\n300001\t240084\tOsina\tfailed\t2026-02-19 09:24:37\n240005\t240084\tシャウエッセン\tfailed\t2026-02-19 06:12:08\n240004\t240084\tピュレグミ\tfailed\t2026-02-19 06:11:54\n240003\t240084\tピュレグミ\tfailed\t2026-02-19 06:10:38\n",
+  "stderr": "",
+  "execution_time_ms": 1579
+}

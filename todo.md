@@ -195,3 +195,9 @@
 - [x] CAPTCHA検出用スクリーンショット機能
 - [x] APIエラー時の詳細レスポンスロギング
 - [x] テスト実行と動作確認
+
+## 緗急修正: TikTok API「Unexpected end of JSON input」エラー対応
+- [x] fetchSearchResults関数のJSON解析エラー詳細化（空レスポンス、HTMLエラーページ検出）
+- [x] バックエンドのエラーハンドリング改善（TRPCErrorを投げる）
+- [x] フロントエンドのエラー表示改善（ユーザーに分かりやすいメッセージ）
+- [x] テスト実行と動作確認

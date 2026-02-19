@@ -276,7 +276,7 @@ export default function AnalysisDetail() {
                   <CardDescription>
                     {job.status === "completed" && "分析が完了しました"}
                     {job.status === "processing" && (progressData?.currentStep || "分析を実行中です...")}
-                    {job.status === "failed" && "分析に失敗しました。再実行してください。"}
+                    {job.status === "failed" && (progressData?.currentStep ? progressData.currentStep : "分析に失敗しました。再実行してください。")}
                     {job.status === "pending" && "分析を自動的に開始します..."}
                   </CardDescription>
                 </div>
