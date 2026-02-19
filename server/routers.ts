@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport } from "./videoAnalysis";
+import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, filterAdHashtags } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
@@ -103,6 +103,7 @@ export const appRouter = router({
               appearedIn2Ids: tripleSearchData.appearedIn2Ids ?? [],
               appearedIn1OnlyIds: tripleSearchData.appearedIn1OnlyIds ?? [],
             },
+            commonalityAnalysis: tripleSearchData.commonalityAnalysis ?? null,
           } : null,
         };
       }),
@@ -200,8 +201,14 @@ export const appRouter = router({
             }
 
             // レポート生成
-            progressStore.set(input.jobId, { message: "分析レポート生成中...", percent: 88 });
+            progressStore.set(input.jobId, { message: "分析レポート生成中...", percent: 85 });
             await generateAnalysisReport(input.jobId);
+
+            // 勝ちパターン動画の共通点をLLMで分析
+            progressStore.set(input.jobId, { message: "勝ちパターン動画の共通点を分析中...", percent: 92 });
+            if (job.keyword) {
+              await analyzeWinPatternCommonality(input.jobId, job.keyword);
+            }
 
             // ステータスを完了に更新
             await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());

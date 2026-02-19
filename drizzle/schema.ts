@@ -186,6 +186,14 @@ export const tripleSearchResults = mysqlTable("triple_search_results", {
   appearedIn2Ids: json("appearedIn2Ids").$type<string[]>(),
   appearedIn1OnlyIds: json("appearedIn1OnlyIds").$type<string[]>(),
   overlapRate: int("overlapRate").default(0), // percentage * 10 for decimal precision
+  commonalityAnalysis: json("commonalityAnalysis").$type<{
+    summary: string;
+    keyHook: string;
+    contentTrend: string;
+    formatFeatures: string;
+    hashtagStrategy: string;
+    vseoTips: string;
+  }>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

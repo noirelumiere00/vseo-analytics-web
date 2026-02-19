@@ -585,3 +585,156 @@ JSON形式で返してください。
 
   console.log(`[Analysis] Report generated for job ${jobId}`);
 }
+
+
+/**
+ * 広告系ハッシュタグのフィルター
+ * #PR, #ad, #sponsored 等の広告を示すハッシュタグを除外
+ */
+const AD_HASHTAG_PATTERNS = [
+  /^pr$/i,
+  /^ad$/i,
+  /^ads$/i,
+  /^sponsored$/i,
+  /^提供$/,
+  /^タイアップ$/,
+  /^プロモーション$/,
+  /^promotion$/i,
+  /^gifted$/i,
+  /^supplied$/i,
+  /^ambassador$/i,
+  /^アンバサダー$/,
+  /^案件$/,
+  /^企業案件$/,
+];
+
+export function filterAdHashtags(hashtags: string[]): string[] {
+  return hashtags.filter(tag => {
+    const cleanTag = tag.replace(/^#/, '').trim();
+    return !AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
+  });
+}
+
+/**
+ * 重複動画（勝ちパターン）の共通点をLLMで分析
+ */
+export async function analyzeWinPatternCommonality(
+  jobId: number,
+  keyword: string
+): Promise<void> {
+  console.log(`[Analysis] Analyzing win pattern commonality for job ${jobId}...`);
+
+  // 3シークレットブラウザ検索結果を取得
+  const tripleSearch = await db.getTripleSearchResultByJobId(jobId);
+  if (!tripleSearch || !tripleSearch.appearedInAll3Ids || tripleSearch.appearedInAll3Ids.length === 0) {
+    console.log(`[Analysis] No win pattern videos found for job ${jobId}, skipping commonality analysis`);
+    return;
+  }
+
+  // 勝ちパターン動画の詳細データを取得
+  const allVideos = await db.getVideosByJobId(jobId);
+  const winPatternVideos = allVideos.filter(v => 
+    tripleSearch.appearedInAll3Ids!.includes(v.videoId)
+  );
+
+  if (winPatternVideos.length === 0) {
+    console.log(`[Analysis] Win pattern videos not found in DB for job ${jobId}`);
+    return;
+  }
+
+  // 広告ハッシュタグを除外した上で動画情報を構築
+  const videoSummaries = winPatternVideos.map(v => {
+    const cleanHashtags = filterAdHashtags(v.hashtags || []);
+    return {
+      author: v.accountName || "不明",
+      followers: v.followerCount || 0,
+      description: (v.description || "").substring(0, 200),
+      hashtags: cleanHashtags,
+      duration: v.duration || 0,
+      views: v.viewCount || 0,
+      likes: v.likeCount || 0,
+      comments: v.commentCount || 0,
+      shares: v.shareCount || 0,
+      keyHook: v.keyHook || "",
+      sentiment: v.sentiment || "neutral",
+    };
+  });
+
+  try {
+    const prompt = `
+あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「勝ちパターン動画」${winPatternVideos.length}本のデータです。
+
+これらの動画がなぜTikTokのアルゴリズムに選ばれているのか、共通点を分析してください。
+
+【勝ちパターン動画データ】
+${videoSummaries.map((v, i) => `
+動画${i + 1}: @${v.author} (フォロワー${v.followers.toLocaleString()})
+- 説明: ${v.description}
+- ハッシュタグ: ${v.hashtags.join(', ')}
+- 動画長: ${v.duration}秒
+- 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
+- キーフック: ${v.keyHook}
+- センチメント: ${v.sentiment}
+`).join('')}
+
+以下の6項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a TikTok VSEO expert. Always respond in Japanese. Return valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "commonality_analysis",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary: {
+                type: "string",
+                description: "全体の共通点を1〜2文でまとめた総括。例: 「この動画群は〇〇という共通のキーフックを持ち、〇〇なフォーマットで統一されている」",
+              },
+              keyHook: {
+                type: "string",
+                description: "共通するキーフック（視聴者を引きつける要素）。例: 「冒頭3秒で完成品を見せ、手軽さを強調する構成」",
+              },
+              contentTrend: {
+                type: "string",
+                description: "コンテンツの傾向・テーマ。例: 「時短・簡単をテーマにした実用的なレシピ紹介が中心」",
+              },
+              formatFeatures: {
+                type: "string",
+                description: "フォーマット上の特徴（動画長、編集スタイル等）。例: 「20〜40秒のテンポ良い編集、テキストオーバーレイで手順を表示」",
+              },
+              hashtagStrategy: {
+                type: "string",
+                description: "ハッシュタグ戦略の共通点。例: 「検索キーワード + ジャンル系タグ + トレンドタグの3層構造」",
+              },
+              vseoTips: {
+                type: "string",
+                description: "このキーワードでVSEO上位を狙うための具体的なアドバイス。例: 「〇〇を冒頭に配置し、〇〇系のハッシュタグを併用すると効果的」",
+              },
+            },
+            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = JSON.parse(content || "{}");
+
+    // DBに保存
+    await db.updateTripleSearchCommonality(jobId, parsed);
+
+    console.log(`[Analysis] Win pattern commonality analysis completed for job ${jobId}`);
+  } catch (error) {
+    console.error("[Analysis] Error analyzing win pattern commonality:", error);
+  }
+}

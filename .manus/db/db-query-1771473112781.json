@@ -1,0 +1,9 @@
+{
+  "query": "\nDELETE FROM triple_search_results WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_reports WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_scores WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM transcriptions WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM ocr_results WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM videos WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_jobs WHERE id IN (30002, 60001, 60002);\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute \nDELETE FROM triple_search_results WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_reports WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_scores WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM transcriptions WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM ocr_results WHERE videoId IN (SELECT id FROM videos WHERE jobId IN (30002, 60001, 60002));\nDELETE FROM videos WHERE jobId IN (30002, 60001, 60002);\nDELETE FROM analysis_jobs WHERE id IN (30002, 60001, 60002);\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2832
+}

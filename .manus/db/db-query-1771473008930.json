@@ -1,0 +1,46 @@
+{
+  "query": "SELECT id, keyword, status, createdAt FROM analysis_jobs ORDER BY id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT id, keyword, status, createdAt FROM analysis_jobs ORDER BY id;",
+  "rows": [
+    {
+      "id": "30002",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-18 08:54:22"
+    },
+    {
+      "id": "60001",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-18 09:17:31"
+    },
+    {
+      "id": "60002",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-18 10:00:32"
+    },
+    {
+      "id": "120001",
+      "keyword": "ジャングリア沖縄",
+      "status": "completed",
+      "createdAt": "2026-02-19 01:37:10"
+    },
+    {
+      "id": "150004",
+      "keyword": "テスト",
+      "status": "completed",
+      "createdAt": "2026-02-19 02:40:52"
+    },
+    {
+      "id": "150007",
+      "keyword": "クイックディナー",
+      "status": "completed",
+      "createdAt": "2026-02-19 02:50:27"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tkeyword\tstatus\tcreatedAt\n30002\tジャングリア沖縄\tcompleted\t2026-02-18 08:54:22\n60001\tジャングリア沖縄\tcompleted\t2026-02-18 09:17:31\n60002\tジャングリア沖縄\tcompleted\t2026-02-18 10:00:32\n120001\tジャングリア沖縄\tcompleted\t2026-02-19 01:37:10\n150004\tテスト\tcompleted\t2026-02-19 02:40:52\n150007\tクイックディナー\tcompleted\t2026-02-19 02:50:27\n",
+  "stderr": "",
+  "execution_time_ms": 1596
+}

@@ -250,8 +250,18 @@ export async function saveTripleSearchResult(data: InsertTripleSearchResult) {
       appearedIn2Ids: data.appearedIn2Ids,
       appearedIn1OnlyIds: data.appearedIn1OnlyIds,
       overlapRate: data.overlapRate,
+      commonalityAnalysis: data.commonalityAnalysis,
     },
   });
+}
+
+export async function updateTripleSearchCommonality(jobId: number, commonalityAnalysis: InsertTripleSearchResult['commonalityAnalysis']) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(tripleSearchResults)
+    .set({ commonalityAnalysis })
+    .where(eq(tripleSearchResults.jobId, jobId));
 }
 
 export async function getTripleSearchResultByJobId(jobId: number) {

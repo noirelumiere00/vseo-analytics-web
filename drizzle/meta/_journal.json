@@ -29,6 +29,13 @@
       "when": 1771468174830,
       "tag": "0003_spotty_adam_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1771472517726,
+      "tag": "0004_white_tarot",
+      "breakpoints": true
     }
   ]
 }

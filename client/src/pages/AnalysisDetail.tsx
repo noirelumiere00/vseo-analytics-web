@@ -17,6 +17,21 @@ import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+// 広告系ハッシュタグのフィルター（フロントエンド用）
+const AD_HASHTAG_PATTERNS = [
+  /^pr$/i, /^ad$/i, /^ads$/i, /^sponsored$/i,
+  /^提供$/, /^タイアップ$/, /^プロモーション$/,
+  /^promotion$/i, /^gifted$/i, /^supplied$/i,
+  /^ambassador$/i, /^アンバサダー$/, /^案件$/, /^企業案件$/,
+];
+
+function filterAdHashtags(hashtags: string[]): string[] {
+  return hashtags.filter(tag => {
+    const cleanTag = tag.replace(/^#/, '').trim();
+    return !AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
+  });
+}
+
 export default function AnalysisDetail() {
   const { user } = useAuth();
   const params = useParams<{ id: string }>();
@@ -302,7 +317,7 @@ export default function AnalysisDetail() {
             )}
           </Card>
 
-          {/* Triple Search Overlap Analysis */}
+          {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
             <Card className="border-2 border-yellow-400">
               <CardHeader>
@@ -347,8 +362,8 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
 
-                {/* 解説 */}
-                <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded">
+                {/* 重複率サマリー + LLM共通点分析 */}
+                <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded space-y-3">
                   <p className="text-sm">
                     <strong>重複率 {tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</strong> - 
                     {tripleSearch.duplicateAnalysis.overlapRate >= 80 
@@ -358,6 +373,56 @@ export default function AnalysisDetail() {
                       : "低い重複率です。パーソナライズの影響が大きく、ユーザーごとに異なる検索結果が表示される傾向があります。"
                     }
                   </p>
+
+                  {/* LLM共通点分析 - アコーディオン */}
+                  {tripleSearch.commonalityAnalysis && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="commonality" className="border-amber-300">
+                        <AccordionTrigger className="text-sm font-semibold text-amber-800 hover:no-underline py-2">
+                          <span className="flex items-center gap-2">
+                            <Star className="h-4 w-4 text-amber-600" />
+                            勝ちパターン動画の共通点分析
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            {/* 総括 */}
+                            <div className="p-3 bg-white/70 rounded-lg border border-amber-200">
+                              <p className="text-sm font-medium text-amber-900">
+                                {tripleSearch.commonalityAnalysis.summary}
+                              </p>
+                            </div>
+
+                            {/* 分析項目 */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="p-3 bg-white/50 rounded-lg">
+                                <div className="text-xs font-semibold text-amber-700 mb-1">🎣 共通キーフック</div>
+                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.keyHook}</p>
+                              </div>
+                              <div className="p-3 bg-white/50 rounded-lg">
+                                <div className="text-xs font-semibold text-amber-700 mb-1">📋 コンテンツ傾向</div>
+                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.contentTrend}</p>
+                              </div>
+                              <div className="p-3 bg-white/50 rounded-lg">
+                                <div className="text-xs font-semibold text-amber-700 mb-1">🎬 フォーマット特徴</div>
+                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.formatFeatures}</p>
+                              </div>
+                              <div className="p-3 bg-white/50 rounded-lg">
+                                <div className="text-xs font-semibold text-amber-700 mb-1"># ハッシュタグ戦略</div>
+                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.hashtagStrategy}</p>
+                              </div>
+                            </div>
+
+                            {/* VSEO攻略ポイント */}
+                            <div className="p-3 bg-gradient-to-r from-amber-100 to-yellow-100 rounded-lg border border-amber-300">
+                              <div className="text-xs font-semibold text-amber-800 mb-1">💡 VSEO攻略ポイント</div>
+                              <p className="text-sm text-amber-900 font-medium">{tripleSearch.commonalityAnalysis.vseoTips}</p>
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -792,16 +857,19 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                       </div>
                     </div>
                   )}
-                  {video.hashtags && video.hashtags.length > 0 && (
-                    <div>
-                      <span className="text-muted-foreground">ハッシュタグ:</span>{" "}
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {video.hashtags.map((tag: string, i: number) => (
-                          <Badge key={i} variant="outline">#{tag}</Badge>
-                        ))}
+                  {video.hashtags && video.hashtags.length > 0 && (() => {
+                    const filteredTags = filterAdHashtags(video.hashtags);
+                    return filteredTags.length > 0 ? (
+                      <div>
+                        <span className="text-muted-foreground">ハッシュタグ:</span>{" "}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {filteredTags.map((tag: string, i: number) => (
+                            <Badge key={i} variant="outline">#{tag}</Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ) : null;
+                  })()}
                 </div>
               </div>
 

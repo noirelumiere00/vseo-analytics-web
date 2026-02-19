@@ -1,0 +1,95 @@
+{
+  "query": "SELECT id, keyword, status FROM analysis_jobs WHERE status IN ('failed', 'processing', 'pending') ORDER BY status, id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT id, keyword, status FROM analysis_jobs WHERE status IN ('failed', 'processing', 'pending') ORDER BY status, id;",
+  "rows": [
+    {
+      "id": "90002",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90003",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90004",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90005",
+      "keyword": "重複テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90006",
+      "keyword": "レポートテスト",
+      "status": "failed"
+    },
+    {
+      "id": "90007",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90008",
+      "keyword": "重複テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90009",
+      "keyword": "レポートテスト",
+      "status": "failed"
+    },
+    {
+      "id": "90010",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90011",
+      "keyword": "重複テスト",
+      "status": "failed"
+    },
+    {
+      "id": "90012",
+      "keyword": "レポートテスト",
+      "status": "failed"
+    },
+    {
+      "id": "120002",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "120003",
+      "keyword": "重複テスト",
+      "status": "failed"
+    },
+    {
+      "id": "120004",
+      "keyword": "レポートテスト",
+      "status": "failed"
+    },
+    {
+      "id": "150001",
+      "keyword": "テスト",
+      "status": "failed"
+    },
+    {
+      "id": "150002",
+      "keyword": "重複テスト",
+      "status": "failed"
+    },
+    {
+      "id": "150003",
+      "keyword": "レポートテスト",
+      "status": "failed"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tkeyword\tstatus\n90002\tテスト\tfailed\n90003\tテスト\tfailed\n90004\tテスト\tfailed\n90005\t重複テスト\tfailed\n90006\tレポートテスト\tfailed\n90007\tテスト\tfailed\n90008\t重複テスト\tfailed\n90009\tレポートテスト\tfailed\n90010\tテスト\tfailed\n90011\t重複テスト\tfailed\n90012\tレポートテスト\tfailed\n120002\tテスト\tfailed\n120003\t重複テスト\tfailed\n120004\tレポートテスト\tfailed\n150001\tテスト\tfailed\n150002\t重複テスト\tfailed\n150003\tレポートテスト\tfailed\n",
+  "stderr": "",
+  "execution_time_ms": 1611
+}
