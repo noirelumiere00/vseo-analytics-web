@@ -170,3 +170,24 @@ export const analysisReports = mysqlTable("analysis_reports", {
 
 export type AnalysisReport = typeof analysisReports.$inferSelect;
 export type InsertAnalysisReport = typeof analysisReports.$inferInsert;
+
+/**
+ * 3シークレットブラウザ検索結果（永続化）
+ */
+export const tripleSearchResults = mysqlTable("triple_search_results", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull().unique(),
+  searchData: json("searchData").$type<Array<{
+    sessionIndex: number;
+    totalFetched: number;
+    videoIds: string[];
+  }>>(),
+  appearedInAll3Ids: json("appearedInAll3Ids").$type<string[]>(),
+  appearedIn2Ids: json("appearedIn2Ids").$type<string[]>(),
+  appearedIn1OnlyIds: json("appearedIn1OnlyIds").$type<string[]>(),
+  overlapRate: int("overlapRate").default(0), // percentage * 10 for decimal precision
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TripleSearchResult = typeof tripleSearchResults.$inferSelect;
+export type InsertTripleSearchResult = typeof tripleSearchResults.$inferInsert;

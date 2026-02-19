@@ -8,11 +8,8 @@ import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 
-// 進捗状態を保持するインメモリストア
+// 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
-
-// 3シークレットブラウザ検索結果を保持するインメモリストア
-const tripleSearchStore = new Map<number, TikTokTripleSearchResult>();
 
 export const appRouter = router({
   system: systemRouter,
@@ -88,27 +85,23 @@ export const appRouter = router({
         // レポートを取得
         const report = await db.getAnalysisReportByJobId(input.jobId);
 
-        // 3シークレットブラウザ検索結果を取得（インメモリ）
-        const tripleSearchResult = tripleSearchStore.get(input.jobId);
+        // 3シークレットブラウザ検索結果をDBから取得
+        const tripleSearchData = await db.getTripleSearchResultByJobId(input.jobId);
 
         return {
           job,
           videos: videosWithDetails,
           report,
-          tripleSearch: tripleSearchResult ? {
-            searches: tripleSearchResult.searches.map(s => ({
-              sessionIndex: s.sessionIndex,
-              totalFetched: s.totalFetched,
-              videoIds: s.videos.map(v => v.id),
-            })),
+          tripleSearch: tripleSearchData ? {
+            searches: tripleSearchData.searchData ?? [],
             duplicateAnalysis: {
-              appearedInAll3Count: tripleSearchResult.duplicateAnalysis.appearedInAll3.length,
-              appearedIn2Count: tripleSearchResult.duplicateAnalysis.appearedIn2.length,
-              appearedIn1OnlyCount: tripleSearchResult.duplicateAnalysis.appearedIn1Only.length,
-              overlapRate: tripleSearchResult.duplicateAnalysis.overlapRate,
-              appearedInAll3Ids: tripleSearchResult.duplicateAnalysis.appearedInAll3.map(v => v.id),
-              appearedIn2Ids: tripleSearchResult.duplicateAnalysis.appearedIn2.map(v => v.id),
-              appearedIn1OnlyIds: tripleSearchResult.duplicateAnalysis.appearedIn1Only.map(v => v.id),
+              appearedInAll3Count: tripleSearchData.appearedInAll3Ids?.length ?? 0,
+              appearedIn2Count: tripleSearchData.appearedIn2Ids?.length ?? 0,
+              appearedIn1OnlyCount: tripleSearchData.appearedIn1OnlyIds?.length ?? 0,
+              overlapRate: (tripleSearchData.overlapRate ?? 0) / 10, // DB stores as percentage * 10
+              appearedInAll3Ids: tripleSearchData.appearedInAll3Ids ?? [],
+              appearedIn2Ids: tripleSearchData.appearedIn2Ids ?? [],
+              appearedIn1OnlyIds: tripleSearchData.appearedIn1OnlyIds ?? [],
             },
           } : null,
         };
@@ -146,8 +139,19 @@ export const appRouter = router({
                 }
               );
 
-              // 3シークレットブラウザ検索結果をインメモリに保存
-              tripleSearchStore.set(input.jobId, tripleResult);
+              // 3シークレットブラウザ検索結果をDBに永続化
+              await db.saveTripleSearchResult({
+                jobId: input.jobId,
+                searchData: tripleResult.searches.map(s => ({
+                  sessionIndex: s.sessionIndex,
+                  totalFetched: s.totalFetched,
+                  videoIds: s.videos.map(v => v.id),
+                })),
+                appearedInAll3Ids: tripleResult.duplicateAnalysis.appearedInAll3.map(v => v.id),
+                appearedIn2Ids: tripleResult.duplicateAnalysis.appearedIn2.map(v => v.id),
+                appearedIn1OnlyIds: tripleResult.duplicateAnalysis.appearedIn1Only.map(v => v.id),
+                overlapRate: Math.round(tripleResult.duplicateAnalysis.overlapRate * 10), // Store as percentage * 10
+              });
 
               console.log(`[Analysis] Triple search complete:`,
                 `3回全出現=${tripleResult.duplicateAnalysis.appearedInAll3.length},`,

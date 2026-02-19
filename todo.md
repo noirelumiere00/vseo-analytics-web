@@ -136,3 +136,8 @@
 ## バグ修正: React Hooks順序エラー
 - [x] AnalysisDetail.tsxの「Rendered more hooks than during the previous render」エラーを修正
 - [x] 条件分岐の前後でHooksの呼び出し数が変わらないよう修正
+
+## バグ修正: Failed to fetch APIエラー
+- [x] /analysis/120001ページで「Failed to fetch」TRPCClientErrorが発生する問題を修正
+- [x] tripleSearchStoreをインメモリ(Map)からDBに永続化してサーバー再起動時のデータ消失を防止
+- [x] フロントエンドのエラーハンドリング改善（DB永続化によりサーバー再起動後もデータ保持）

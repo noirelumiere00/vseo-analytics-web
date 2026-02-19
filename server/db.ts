@@ -9,12 +9,14 @@ import {
   transcriptions,
   analysisScores,
   analysisReports,
+  tripleSearchResults,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
   InsertTranscription,
   InsertAnalysisScore,
-  InsertAnalysisReport
+  InsertAnalysisReport,
+  InsertTripleSearchResult
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -233,4 +235,29 @@ export async function updateAnalysisReport(jobId: number, report: Partial<Insert
   if (!db) throw new Error("Database not available");
   
   await db.update(analysisReports).set(report).where(eq(analysisReports.jobId, jobId));
+}
+
+// === Triple Search Results ===
+export async function saveTripleSearchResult(data: InsertTripleSearchResult) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // Upsert: if exists for this jobId, update; otherwise insert
+  await db.insert(tripleSearchResults).values(data).onDuplicateKeyUpdate({
+    set: {
+      searchData: data.searchData,
+      appearedInAll3Ids: data.appearedInAll3Ids,
+      appearedIn2Ids: data.appearedIn2Ids,
+      appearedIn1OnlyIds: data.appearedIn1OnlyIds,
+      overlapRate: data.overlapRate,
+    },
+  });
+}
+
+export async function getTripleSearchResultByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(tripleSearchResults).where(eq(tripleSearchResults.jobId, jobId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
 }

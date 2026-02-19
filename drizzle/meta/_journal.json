@@ -22,6 +22,13 @@
       "when": 1771404350074,
       "tag": "0002_purple_giant_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1771468174830,
+      "tag": "0003_spotty_adam_warlock",
+      "breakpoints": true
     }
   ]
 }
