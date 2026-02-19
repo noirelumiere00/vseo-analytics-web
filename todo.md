@@ -132,3 +132,7 @@
 - [x] 各インコグニートコンテキストでCookieを取得してAPI呼び出し
 - [x] 3シークレットブラウザでの順次検索実装
 - [x] 重複度分析ロジック（3回全出現/2回出現/1回のみ）
+
+## バグ修正: React Hooks順序エラー
+- [x] AnalysisDetail.tsxの「Rendered more hooks than during the previous render」エラーを修正
+- [x] 条件分岐の前後でHooksの呼び出し数が変わらないよう修正

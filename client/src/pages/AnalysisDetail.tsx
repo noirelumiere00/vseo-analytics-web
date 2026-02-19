@@ -15,7 +15,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Ba
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -62,7 +62,7 @@ export default function AnalysisDetail() {
     }
   }, [data?.job.status, jobId]);
 
-  // レポート統計を計算
+  // レポート統計を計算 - MUST be before any early returns
   const reportStats = useMemo(() => {
     if (!data?.videos || data.videos.length === 0) return null;
 
@@ -158,6 +158,55 @@ export default function AnalysisDetail() {
     };
   }, [data]);
 
+  // 動画をカテゴリ別に分類 - MUST be before any early returns
+  const categorizedVideos = useMemo(() => {
+    if (!data?.tripleSearch || !data?.videos?.length) return null;
+    const { appearedInAll3Ids, appearedIn2Ids, appearedIn1OnlyIds } = data.tripleSearch.duplicateAnalysis;
+    return {
+      all3: data.videos.filter(v => appearedInAll3Ids.includes(v.videoId)),
+      in2: data.videos.filter(v => appearedIn2Ids.includes(v.videoId)),
+      in1: data.videos.filter(v => appearedIn1OnlyIds.includes(v.videoId)),
+    };
+  }, [data]);
+
+  // Helper functions as callbacks - MUST be before any early returns
+  const getSentimentBadge = useCallback((sentiment: string | null) => {
+    if (!sentiment) return <Badge variant="outline">未分析</Badge>;
+    switch (sentiment) {
+      case "positive":
+        return <Badge className="bg-green-500"><TrendingUp className="h-3 w-3 mr-1" />Positive</Badge>;
+      case "negative":
+        return <Badge className="bg-red-500"><TrendingDown className="h-3 w-3 mr-1" />Negative</Badge>;
+      case "neutral":
+        return <Badge className="bg-gray-500"><Minus className="h-3 w-3 mr-1" />Neutral</Badge>;
+      default:
+        return <Badge variant="outline">{sentiment}</Badge>;
+    }
+  }, []);
+
+  const getAppearanceBadge = useCallback((videoId: string) => {
+    if (!data?.tripleSearch) return null;
+    const { appearedInAll3Ids, appearedIn2Ids } = data.tripleSearch.duplicateAnalysis;
+    if (appearedInAll3Ids.includes(videoId)) {
+      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />3回出現</Badge>;
+    }
+    if (appearedIn2Ids.includes(videoId)) {
+      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />2回出現</Badge>;
+    }
+    return <Badge variant="outline">1回のみ</Badge>;
+  }, [data?.tripleSearch]);
+
+  const formatNumber = useCallback((num: number | bigint | null | undefined) => {
+    if (num === null || num === undefined) return "0";
+    const n = typeof num === "bigint" ? Number(num) : num;
+    if (n >= 10000000) return `${(n / 10000000).toFixed(1)}千万`;
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+    return n.toLocaleString();
+  }, []);
+
+  // === Early returns AFTER all hooks ===
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -178,54 +227,6 @@ export default function AnalysisDetail() {
   }
 
   const { job, videos, tripleSearch } = data;
-
-  const getSentimentBadge = (sentiment: string | null) => {
-    if (!sentiment) return <Badge variant="outline">未分析</Badge>;
-    switch (sentiment) {
-      case "positive":
-        return <Badge className="bg-green-500"><TrendingUp className="h-3 w-3 mr-1" />Positive</Badge>;
-      case "negative":
-        return <Badge className="bg-red-500"><TrendingDown className="h-3 w-3 mr-1" />Negative</Badge>;
-      case "neutral":
-        return <Badge className="bg-gray-500"><Minus className="h-3 w-3 mr-1" />Neutral</Badge>;
-      default:
-        return <Badge variant="outline">{sentiment}</Badge>;
-    }
-  };
-
-  // 動画の出現回数バッジ
-  const getAppearanceBadge = (videoId: string) => {
-    if (!tripleSearch) return null;
-    const { appearedInAll3Ids, appearedIn2Ids } = tripleSearch.duplicateAnalysis;
-    if (appearedInAll3Ids.includes(videoId)) {
-      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />3回出現</Badge>;
-    }
-    if (appearedIn2Ids.includes(videoId)) {
-      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />2回出現</Badge>;
-    }
-    return <Badge variant="outline">1回のみ</Badge>;
-  };
-
-  const formatNumber = (num: number | bigint | null | undefined) => {
-    if (num === null || num === undefined) return "0";
-    const n = typeof num === "bigint" ? Number(num) : num;
-    if (n >= 10000000) return `${(n / 10000000).toFixed(1)}千万`;
-    if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
-    if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-    return n.toLocaleString();
-  };
-
-  // 動画をカテゴリ別に分類
-  const categorizedVideos = useMemo(() => {
-    if (!tripleSearch || !videos.length) return null;
-    const { appearedInAll3Ids, appearedIn2Ids, appearedIn1OnlyIds } = tripleSearch.duplicateAnalysis;
-    return {
-      all3: videos.filter(v => appearedInAll3Ids.includes(v.videoId)),
-      in2: videos.filter(v => appearedIn2Ids.includes(v.videoId)),
-      in1: videos.filter(v => appearedIn1OnlyIds.includes(v.videoId)),
-    };
-  }, [tripleSearch, videos]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -316,7 +317,7 @@ export default function AnalysisDetail() {
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
                 <div className="grid grid-cols-3 gap-4">
-                  {tripleSearch.searches.map((search, i) => (
+                  {tripleSearch.searches.map((search: any, i: number) => (
                     <div key={i} className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-sm text-muted-foreground mb-1">検索 {i + 1}</div>
                       <div className="text-3xl font-bold">{search.totalFetched}</div>
