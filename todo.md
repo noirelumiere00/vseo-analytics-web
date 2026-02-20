@@ -265,3 +265,16 @@
   - [x] JSON body size limit は既に 50mb に設定済み
   - [x] TypeScript コンパイルエラー解決
   - [x] 既存テスト全てパス
+
+## 改善: PDF エクスポート時のアコーディオン全開処理
+- [x] 問題の特定: HTML スナップショット取得時にアコーディオンが閉じたままになっていた
+- [x] 根本原因: document.documentElement.outerHTML を実行する瞬間のアコーディオン状態が反映されていた
+- [x] 解決策の実装
+  - [x] handleExportPdfSnapshot を async 関数に変更
+  - [x] button[aria-expanded="false"] で閉じたアコーディオンを全て検出
+  - [x] .click() で各アコーディオンを開く
+  - [x] 0.5秒待機してアニメーション完了を待つ
+  - [x] その後 HTML スナップショットを取得
+  - [x] デバッグログを追加
+- [x] TypeScript コンパイルエラーなし
+- [x] サーバー正常動作確認

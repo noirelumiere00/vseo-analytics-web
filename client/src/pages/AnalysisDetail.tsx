@@ -116,10 +116,27 @@ export default function AnalysisDetail() {
     },
   });
 
-  const handleExportPdfSnapshot = useCallback(() => {
-    const html = document.documentElement.outerHTML;
-    const baseUrl = window.location.origin;
-    exportPdfSnapshot.mutate({ html, baseUrl });
+  const handleExportPdfSnapshot = useCallback(async () => {
+    try {
+      const closedAccordions = document.querySelectorAll('button[aria-expanded="false"]');
+      console.log(`[PDF Export] Found ${closedAccordions.length} closed accordions`);
+      
+      closedAccordions.forEach((button) => {
+        (button as HTMLElement).click();
+      });
+      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log('[PDF Export] Accordions expanded, waiting for animation...');
+      
+      const html = document.documentElement.outerHTML;
+      const baseUrl = window.location.origin;
+      console.log('[PDF Export] HTML snapshot captured with all accordions open');
+      
+      exportPdfSnapshot.mutate({ html, baseUrl });
+    } catch (error) {
+      console.error("[PDF Export] Error during accordion expansion:", error);
+      toast.error("PDF生成中にエラーが発生しました");
+    }
   }, [exportPdfSnapshot]);
 
   useEffect(() => {
