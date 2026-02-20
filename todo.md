@@ -206,3 +206,9 @@
 - [x] generateAnalysisReport関数の現在のキーワード整理ロジックを確認
 - [x] LLMを使ったキーワード仕分け機能を実装（ポジティブ、15個、ネガティブ、15個）
 - [x] テスト実行と動作確認
+
+## 新機能: TikTokコメント取得とLLM分析
+- [x] tiktokScraper.tsのscrapeTikTokComments関数を追加
+- [x] videoAnalysis.tsでコメント取得・LLM分析を統合
+- [x] puppeteer-extra-plugin-stealthを導入
+- [x] テスト実行と動作確認

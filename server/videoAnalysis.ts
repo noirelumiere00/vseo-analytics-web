@@ -692,6 +692,23 @@ export async function analyzeWinPatternCommonality(
     return;
   }
 
+  // 勝ちパターン動画のコメントを取得（オプション）
+  const { scrapeTikTokComments } = require('./tiktokScraper');
+  const commentsByVideo: { [key: string]: string[] } = {};
+  
+  for (const video of winPatternVideos) {
+    try {
+      const videoUrl = video.videoUrl || `https://www.tiktok.com/@${video.accountId}/video/${video.videoId}`;
+      const comments = await scrapeTikTokComments(videoUrl);
+      if (comments.length > 0) {
+        commentsByVideo[video.videoId] = comments;
+        console.log(`[Analysis] Scraped ${comments.length} comments from video ${video.videoId}`);
+      }
+    } catch (error) {
+      console.error(`[Analysis] Failed to scrape comments for video ${video.videoId}:`, error);
+    }
+  }
+
   // 広告ハッシュタグを除外した上で動画情報を構築
   const videoSummaries = winPatternVideos.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);

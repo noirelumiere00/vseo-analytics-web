@@ -1,4 +1,8 @@
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+
+// Stealth プラグインを有効化
+const stealthPlugin = StealthPlugin();
 
 // TikTok内部APIから検索結果を取得するモジュール
 // 3つの独立したシークレット（インコグニート）ブラウザコンテキストで
@@ -497,4 +501,70 @@ export async function searchTikTokVideos(
   } finally {
     await browser.close();
   }
+}
+
+
+/**
+ * TikTok動画のコメントを取得する関数
+ * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
+ */
+export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
+  const puppeteer = require("puppeteer-extra");
+  
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1920,1080",
+      "--lang=ja-JP",
+    ],
+  });
+
+  const page = await browser.newPage();
+  const comments: string[] = [];
+
+  try {
+    // 【最重要】ネットワーク通信を監視してコメントAPIの返事を横取りする
+    page.on("response", async (response: any) => {
+      const url = response.url();
+      // URLに「api/comment/list」が含まれていたら、それはコメントのデータ
+      if (url.includes("/api/comment/list/")) {
+        try {
+          const json = await response.json();
+          // json.comments の中にコメントデータの配列が入っている
+          if (json && json.comments) {
+            json.comments.forEach((c: any) => {
+              if (c.text) {
+                comments.push(c.text); // コメントの文章だけを抽出
+              }
+            });
+          }
+        } catch (e) {
+          console.error("[TikTok Comments] JSON parsing error:", e);
+        }
+      }
+    });
+
+    // 動画ページにアクセス
+    await page.goto(videoUrl, { waitUntil: "networkidle2" });
+
+    // コメント欄を読み込ませるために、画面を少し下にスクロールする
+    await page.evaluate(() => {
+      window.scrollBy(0, 800);
+    });
+
+    // 通信が終わるまで数秒待機
+    await new Promise((r) => setTimeout(r, 3000));
+
+    console.log(`[TikTok Comments] Extracted ${comments.length} comments from ${videoUrl}`);
+  } catch (error) {
+    console.error("[TikTok Comments] Error scraping comments:", error);
+  } finally {
+    await browser.close();
+  }
+
+  return comments;
 }
