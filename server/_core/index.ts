@@ -8,6 +8,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { initializeBrowser } from "../pdfExporter";
+import { logBuffer } from "../logBuffer";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -29,6 +30,9 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // インメモリログバッファを初期化（console.log/error/warn をキャプチャ）
+  logBuffer.init();
+  
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads

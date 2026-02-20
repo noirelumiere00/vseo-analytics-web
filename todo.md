@@ -436,3 +436,13 @@
   - [x] tiktokScraper.ts: require('puppeteer-extra') → import puppeteerExtra
   - [x] ビルド後 Dynamic require が 0 件に
 - [ ] Phase 4: チェックポイント保存と再デプロイ
+
+## 緗急: 本番環境ログ取得とTikTok分析失敗（分析ID 390004）
+- [x] 問題1: 本番環境に .manus-logs/devserver.log が存在しない
+  - [x] server/logBuffer.ts 作成: console.log/error/warn をインメモリバッファにキャプチャ
+  - [x] server/_core/index.ts: logBuffer.init() をサーバー起動時に呼び出し
+  - [x] routers.ts: admin.getLogs をインメモリバッファ優先に変更
+  - [x] 開発環境で動作確認済み
+- [ ] 問題2: 本番環境でのTikTok分析失敗の原因特定
+  - [ ] デプロイ後、分析を実行して /admin/logs でエラーを確認
+- [ ] チェックポイント保存と再デプロイ

@@ -12,6 +12,7 @@ import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
 import * as fs from "fs";
 import * as path from "path";
+import { logBuffer } from "./logBuffer";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
@@ -461,24 +462,32 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         try {
-          // fs, path は ESM import でトップレベルで読み込み済み
+          // まずインメモリバッファからログを取得（本番環境対応）
+          const memoryLogs = logBuffer.getLines(input.lines);
           
-          const logPath = path.join(process.cwd(), '.manus-logs', 'devserver.log');
-          
-          // ログファイルが存在しない場合
-          if (!fs.existsSync(logPath)) {
+          if (memoryLogs.length > 0) {
             return {
-              success: false,
-              logs: [],
-              message: 'ログファイルが見つかりません',
+              success: true,
+              logs: memoryLogs,
+              totalLines: logBuffer.totalLines,
+              displayedLines: memoryLogs.length,
+              message: `インメモリバッファから最新 ${memoryLogs.length} 行を取得しました`,
             };
           }
           
-          // ログファイルを読み込む
+          // フォールバック: ファイルから読み取り（開発環境）
+          const logPath = path.join(process.cwd(), '.manus-logs', 'devserver.log');
+          
+          if (!fs.existsSync(logPath)) {
+            return {
+              success: false,
+              logs: ['[情報] ログファイルが見つからず、インメモリバッファも空です。サーバーが起動したばかりか、まだログが出力されていません。'],
+              message: 'ログファイルが見つからず、インメモリバッファも空です',
+            };
+          }
+          
           const content = fs.readFileSync(logPath, 'utf-8');
           const lines = content.split('\n').filter((line: string) => line.trim());
-          
-          // 最新N行を取得（デフォルト500行）
           const recentLines = lines.slice(Math.max(0, lines.length - input.lines));
           
           return {
@@ -486,14 +495,14 @@ export const appRouter = router({
             logs: recentLines,
             totalLines: lines.length,
             displayedLines: recentLines.length,
-            message: `最新 ${recentLines.length} 行を取得しました`,
+            message: `ファイルから最新 ${recentLines.length} 行を取得しました`,
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : '不明なエラー';
           console.error('[Admin] Log retrieval error:', errorMessage);
           return {
             success: false,
-            logs: [],
+            logs: [`[エラー] ログ取得失敗: ${errorMessage}`],
             message: `ログ取得エラー: ${errorMessage}`,
           };
         }
