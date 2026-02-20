@@ -310,3 +310,21 @@
 - [x] TypeScript コンパイルエラー確認
 - [x] サーバー動作確認
 - [x] チェックポイント保存
+
+## 改善: Puppeteer 通信最適化（帯域幅削減）
+- [x] 既存コード影響範囲調査（server/tiktokScraper.ts）
+  - [x] waitForSelector などの待機ロジックを確認
+  - [x] スクロール処理のロジックを確認
+  - [x] 画像・動画に依存した処理がないか確認
+- [x] リクエストインターセプト実装
+  - [x] page.setRequestInterception(true) を有効化
+  - [x] 許可ルール：document, script, xhr, fetch
+  - [x] 遭断ルール：image, media, stylesheet, font
+  - [x] トラッキング URL（google-analytics.com など）をブロック
+- [x] 既存コード修正
+  - [x] screenshot() を削除（画像ブロックのため削除）
+  - [x] waitUntil を domcontentloaded に統一
+  - [x] デバッグログを追加
+- [x] TypeScript コンパイルエラー確認
+- [x] テスト実行と動作確認
+- [x] チェックポイント保存

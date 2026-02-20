@@ -192,12 +192,58 @@ async function searchInIncognitoContext(
       "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
     });
 
+    // 【通信最適化】リクエストインターセプトを有効化（画像・動画・フォント・トラッキングをブロック）
+    await page.setRequestInterception(true);
+
+    page.on('request', (request) => {
+      const resourceType = request.resourceType();
+      const url = request.url();
+
+      // 許可：document, script, xhr, fetch （TikTok画面構篆とAPI JSON取得に必須）
+      if (
+        resourceType === 'document' ||
+        resourceType === 'script' ||
+        resourceType === 'xhr' ||
+        resourceType === 'fetch'
+      ) {
+        request.continue();
+        return;
+      }
+
+      // 遭断：image, media, stylesheet, font （通信量を跳ね上げる原因）
+      if (
+        resourceType === 'image' ||
+        resourceType === 'media' ||
+        resourceType === 'stylesheet' ||
+        resourceType === 'font'
+      ) {
+        request.abort();
+        return;
+      }
+
+      // 遭断：Google Analytics 等のトラッキング URL
+      if (
+        url.includes('google-analytics.com') ||
+        url.includes('analytics.google.com') ||
+        url.includes('googletagmanager.com') ||
+        url.includes('doubleclick.net')
+      ) {
+        request.abort();
+        return;
+      }
+
+      // その他のリソース種別は続行
+      request.continue();
+    });
+
+    console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled (images, media, fonts, tracking blocked)`);
+
     // TikTokにアクセスしてCookieを取得
     console.log(`[TikTok Session ${sessionIndex + 1}] Initializing...`);
     if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
 
     await page.goto("https://www.tiktok.com/", {
-      waitUntil: "domcontentloaded",
+      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
       timeout: 30000,
     });
     // セッションごとに異なる待機時間（フィンガープリント対策）
@@ -208,18 +254,13 @@ async function searchInIncognitoContext(
     if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
     
     await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
-      waitUntil: "domcontentloaded",
+      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
       timeout: 30000,
     });
     
-    // CAPTCHA検出用のスクリーンショットを取得
-    try {
-      const debugScreenshotPath = `/tmp/debug-tiktok-session${sessionIndex + 1}.png`;
-      await page.screenshot({ path: debugScreenshotPath });
-      console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot saved to ${debugScreenshotPath}`);
-    } catch (screenshotError: any) {
-      console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to capture screenshot:`, screenshotError.message);
-    }
+    // 【通信最適化】画像ブロックのためスクリーンショットを削除
+    // （画像ブロックで画像データが取得できないため削除）
+    console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot skipped (images blocked for bandwidth optimization)`);
     
     await new Promise((r) => setTimeout(r, 3000));
 
