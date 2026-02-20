@@ -10,6 +10,8 @@ import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } f
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
+import * as fs from "fs";
+import * as path from "path";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
@@ -459,8 +461,7 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         try {
-          const fs = require('fs');
-          const path = require('path');
+          // fs, path は ESM import でトップレベルで読み込み済み
           
           const logPath = path.join(process.cwd(), '.manus-logs', 'devserver.log');
           

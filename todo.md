@@ -420,3 +420,19 @@
   - [x] テストスクリプト実行
   - [x] Country: JP 確認済み (三重県尾鷷市, ZTV CO.,LTD)
   - [x] チェックポイント保存
+
+## 緗急: Web版（本番環境）分析失敗の徹底調査
+- [x] Phase 1: 本番環境のログとエラーを徹底確認
+  - [x] /admin/logs で本番環境のログを確認
+  - [x] エラー: "Dynamic require of 'fs' is not supported"
+  - [x] ESM ビルドで require() が動作しないことを特定
+- [x] Phase 2: 開発環境と本番環境の差異を分析
+  - [x] 開発環境: tsx (CommonJS require サポート)
+  - [x] 本番環境: esbuild --format=esm (require 非サポート)
+  - [x] 4箱所の require() を特定
+- [x] Phase 3: 根本原因の特定と修正実装
+  - [x] routers.ts: require('fs')/require('path') → import * as fs/path
+  - [x] tiktokScraper.ts: require('fs')/require('os') → import * as fs/os
+  - [x] tiktokScraper.ts: require('puppeteer-extra') → import puppeteerExtra
+  - [x] ビルド後 Dynamic require が 0 件に
+- [ ] Phase 4: チェックポイント保存と再デプロイ

@@ -178,9 +178,12 @@ importers:
       puppeteer-core:
         specifier: ^24.37.3
         version: 24.37.3
+      puppeteer-extra:
+        specifier: ^3.3.6
+        version: 3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))
       puppeteer-extra-plugin-stealth:
         specifier: ^2.11.2
-        version: 2.11.2
+        version: 2.11.2(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
       react:
         specifier: ^19.2.1
         version: 19.2.1
@@ -4180,6 +4183,21 @@ packages:
       playwright-extra:
         optional: true
       puppeteer-extra:
+        optional: true
+
+  puppeteer-extra@3.3.6:
+    resolution: {integrity: sha512-rsLBE/6mMxAjlLd06LuGacrukP2bqbzKCLzV1vrhHFavqQE/taQ2UXv3H5P0Ls7nsrASa+6x3bDbXHpqMwq+7A==}
+    engines: {node: '>=8'}
+    peerDependencies:
+      '@types/puppeteer': '*'
+      puppeteer: '*'
+      puppeteer-core: '*'
+    peerDependenciesMeta:
+      '@types/puppeteer':
+        optional: true
+      puppeteer:
+        optional: true
+      puppeteer-core:
         optional: true
 
   puppeteer@24.37.5:
@@ -9387,37 +9405,56 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  puppeteer-extra-plugin-stealth@2.11.2:
+  puppeteer-extra-plugin-stealth@2.11.2(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))):
     dependencies:
       debug: 4.4.3
-      puppeteer-extra-plugin: 3.2.3
-      puppeteer-extra-plugin-user-preferences: 2.4.1
+      puppeteer-extra-plugin: 3.2.3(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
+      puppeteer-extra-plugin-user-preferences: 2.4.1(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
+    optionalDependencies:
+      puppeteer-extra: 3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))
     transitivePeerDependencies:
       - supports-color
 
-  puppeteer-extra-plugin-user-data-dir@2.4.1:
+  puppeteer-extra-plugin-user-data-dir@2.4.1(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))):
     dependencies:
       debug: 4.4.3
       fs-extra: 10.1.0
-      puppeteer-extra-plugin: 3.2.3
+      puppeteer-extra-plugin: 3.2.3(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
       rimraf: 3.0.2
+    optionalDependencies:
+      puppeteer-extra: 3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))
     transitivePeerDependencies:
       - supports-color
 
-  puppeteer-extra-plugin-user-preferences@2.4.1:
+  puppeteer-extra-plugin-user-preferences@2.4.1(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))):
     dependencies:
       debug: 4.4.3
       deepmerge: 4.3.1
-      puppeteer-extra-plugin: 3.2.3
-      puppeteer-extra-plugin-user-data-dir: 2.4.1
+      puppeteer-extra-plugin: 3.2.3(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
+      puppeteer-extra-plugin-user-data-dir: 2.4.1(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)))
+    optionalDependencies:
+      puppeteer-extra: 3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))
     transitivePeerDependencies:
       - supports-color
 
-  puppeteer-extra-plugin@3.2.3:
+  puppeteer-extra-plugin@3.2.3(puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))):
     dependencies:
       '@types/debug': 4.1.12
       debug: 4.4.3
       merge-deep: 3.0.3
+    optionalDependencies:
+      puppeteer-extra: 3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3))
+    transitivePeerDependencies:
+      - supports-color
+
+  puppeteer-extra@3.3.6(puppeteer-core@24.37.3)(puppeteer@24.37.5(typescript@5.9.3)):
+    dependencies:
+      '@types/debug': 4.1.12
+      debug: 4.4.3
+      deepmerge: 4.3.1
+    optionalDependencies:
+      puppeteer: 24.37.5(typescript@5.9.3)
+      puppeteer-core: 24.37.3
     transitivePeerDependencies:
       - supports-color
 

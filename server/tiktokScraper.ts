@@ -1,5 +1,8 @@
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import puppeteerExtra from "puppeteer-extra";
+import * as fs from "fs";
+import * as os from "os";
 
 // Stealth プラグインを有効化
 const stealthPlugin = StealthPlugin();
@@ -567,7 +570,6 @@ export async function searchTikTokTriple(
     
     // Chromium path check
     try {
-      const fs = require('fs');
       const chromiumPath = '/usr/bin/chromium-browser';
       if (!fs.existsSync(chromiumPath)) {
         console.error(`[Puppeteer] Chromium not found at: ${chromiumPath}`);
@@ -582,7 +584,6 @@ export async function searchTikTokTriple(
     console.error("[Puppeteer] Environment info:");
     console.error("[Puppeteer] NODE_ENV:", process.env.NODE_ENV);
     console.error("[Puppeteer] Platform:", process.platform);
-    const os = require('os');
     console.error("[Puppeteer] Memory available:", Math.round(os.freemem() / 1024 / 1024), "MB");
     
     throw launchError;
@@ -694,9 +695,10 @@ export async function searchTikTokVideos(
  * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
  */
 export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
-  const puppeteer = require("puppeteer-extra");
+  // puppeteer-extra は ESM import でトップレベルで読み込み済み
+  puppeteerExtra.use(stealthPlugin);
   
-  const browser = await puppeteer.launch({
+  const browser = await puppeteerExtra.launch({
     headless: true,
     args: [
       "--no-sandbox",
