@@ -405,3 +405,18 @@
   - [x] 根本原因特定: ERR_CERT_AUTHORITY_INVALID
   - [x] --ignore-certificate-errors フラグ追加で解決
   - [x] プロキシ経由で Country: JP 確認済み
+
+## 安定化設定: SSL エラー修正に加えて安定性を向上
+- [x] Phase 1: 起動フラグの確認と強化
+  - [x] tiktokScraper.ts の全3箱所で --no-sandbox と --disable-setuid-sandbox を確認
+  - [x] 既に追加済みか確認
+- [x] Phase 2: User-Agent の最新設定
+  - [x] page.setUserAgent で最新 Windows Chrome UA をセット (Chrome 132.0.0.0)
+  - [x] 全3つの searchInIncognitoContext、searchTikTokVideos、scrapeTikTokComments に適用
+- [x] Phase 3: page.goto タイムアウトを 90 秒に緩和
+  - [x] searchInIncognitoContext の page.goto を 90000ms に設定
+  - [x] 他の page.goto も同様に設定
+- [x] Phase 4: lumtest.com 接続テストで Country: JP 確認
+  - [x] テストスクリプト実行
+  - [x] Country: JP 確認済み (三重県尾鷷市, ZTV CO.,LTD)
+  - [x] チェックポイント保存

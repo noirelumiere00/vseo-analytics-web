@@ -60,10 +60,11 @@ export interface TikTokTripleSearchResult {
 }
 
 // User-Agentのバリエーション（各シークレットブラウザで異なるUAを使用）
+// 最新の Windows Chrome を優先し、検出回避性を向上
 const USER_AGENTS = [
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
 ];
 
 // TikTokの内部APIを呼び出して検索結果を取得
@@ -322,7 +323,7 @@ async function searchInIncognitoContext(
     try {
       await page.goto("https://www.tiktok.com/", {
         waitUntil: "domcontentloaded",
-        timeout: 30000,
+        timeout: 90000,
       });
     } catch (gotoError: any) {
       console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to TikTok homepage`);
@@ -352,7 +353,7 @@ async function searchInIncognitoContext(
     try {
       await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
         waitUntil: "domcontentloaded",
-        timeout: 30000,
+        timeout: 90000,
       });
     } catch (gotoError: any) {
       console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to search page`);
