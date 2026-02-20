@@ -101,6 +101,27 @@ export default function AnalysisDetail() {
     },
   });
 
+  const exportPdfSnapshot = trpc.analysis.exportPdfSnapshot.useMutation({
+    onSuccess: (result) => {
+      const link = document.createElement("a");
+      link.href = result.downloadUrl;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("画面そのままのPDFをダウンロードしました");
+    },
+    onError: (error) => {
+      toast.error("PDFの生成に失敗しました: " + error.message);
+    },
+  });
+
+  const handleExportPdfSnapshot = useCallback(() => {
+    const html = document.documentElement.outerHTML;
+    const baseUrl = window.location.origin;
+    exportPdfSnapshot.mutate({ html, baseUrl });
+  }, [exportPdfSnapshot]);
+
   useEffect(() => {
     if (progressData?.status === "completed") {
       refetch();
@@ -358,11 +379,11 @@ export default function AnalysisDetail() {
                       </Button>
                       <Button 
                         variant="outline"
-                        onClick={() => exportPdfPuppeteer.mutate({ jobId })}
-                        disabled={exportPdfPuppeteer.isPending}
+                        onClick={handleExportPdfSnapshot}
+                        disabled={exportPdfSnapshot.isPending}
                         className="bg-blue-50 hover:bg-blue-100"
                       >
-                        {exportPdfPuppeteer.isPending ? (
+                        {exportPdfSnapshot.isPending ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             生成中...

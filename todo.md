@@ -243,3 +243,25 @@
   - [ ] 改ページ処理の検証
   - [ ] ユニットテスト作成・実行
   - [ ] 本番環境での動作確認
+
+## 改善: HTML スナップショット方式への切り替え（認証回避）
+- [x] 根本原因の特定: Puppeteer でのセッション Cookie 引き継ぎが失敗
+- [x] 方針変更: フロントエンドで描画済みの HTML をそのまま送信
+- [x] バックエンド実装
+  - [x] pdfExporter.ts に generatePdfFromSnapshot 関数を追加
+  - [x] <base href> タグを注入して相対パスを解決
+  - [x] page.emulateMediaType('screen') で画面用 CSS を強制適用
+  - [x] printBackground: true で背景色を保持
+- [x] フロントエンド実装
+  - [x] AnalysisDetail.tsx に exportPdfSnapshot mutation を追加
+  - [x] handleExportPdfSnapshot 関数で HTML スナップショット取得
+  - [x] document.documentElement.outerHTML で完全な HTML を取得
+  - [x] window.location.origin で baseUrl を取得
+  - [x] PDF (全開) ボタンを新方式に切り替え
+- [x] バックエンド API
+  - [x] routers.ts に exportPdfSnapshot エンドポイントを追加
+  - [x] HTML + baseUrl を受け取る入力スキーマ
+- [x] 確認事項
+  - [x] JSON body size limit は既に 50mb に設定済み
+  - [x] TypeScript コンパイルエラー解決
+  - [x] 既存テスト全てパス

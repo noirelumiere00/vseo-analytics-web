@@ -8,7 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, filterAdHashtags } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
-import { generatePdfFromUrl } from "./pdfExporter";
+import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
@@ -358,16 +358,34 @@ export const appRouter = router({
         const baseUrl = process.env.VITE_FRONTEND_URL || "http://localhost:3000";
         const reportUrl = `${baseUrl}/report/view/${input.jobId}?token=${token}`;
 
+        // リクエストからセッション Cookie を取得（堅牢な正規表現処理）
+        const rawCookieHeader = ctx.req.headers.cookie || "";
+        const match = rawCookieHeader.match(/(?:^|;\s*)app_session_id=([^;]*)/);
+        let sessionCookie: string | undefined = match ? match[1] : undefined;
+
+        if (sessionCookie) {
+          try {
+            // URLエンコードされている場合にデコード
+            sessionCookie = decodeURIComponent(sessionCookie);
+            console.log("[PDF Export] Session cookie extracted and decoded");
+          } catch (e) {
+            console.warn("[PDF Export] Cookie decode error:", e);
+            sessionCookie = undefined;
+          }
+        }
+
         try {
           // Puppeteer でPDFを生成
           const pdfBuffer = await generatePdfFromUrl(reportUrl, {
             width: 1200,
             height: 1600,
-            waitForSelector: ".analysis-section",
+            waitForSelector: "h1.gradient-text",
             waitForTimeout: 3000,
+            sessionCookie: sessionCookie,
           });
 
           const filename = `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.pdf`;
+          console.log(`[PDF Export] PDF generated successfully for jobId: ${job.id}`);
           
           return {
             success: true,
@@ -377,6 +395,35 @@ export const appRouter = router({
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : "不明なエラー";
           console.error("[PDF Export] Puppeteer error:", errorMessage);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "PDFの生成に失敗しました: " + errorMessage,
+          });
+        }
+      }),
+
+    // HTML スナップショットから PDF を生成（認証不要）
+    exportPdfSnapshot: protectedProcedure
+      .input(z.object({
+        html: z.string(),
+        baseUrl: z.string().url(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        try {
+          console.log(`[PDF Export] Generating PDF from HTML snapshot`);
+          const pdfBuffer = await generatePdfFromSnapshot(input.html, input.baseUrl);
+          
+          const filename = `VSEO_Report_${new Date().toISOString().split("T")[0]}.pdf`;
+          console.log(`[PDF Export] PDF generated successfully from snapshot`);
+          
+          return {
+            success: true,
+            downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+            filename,
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+          console.error("[PDF Export] Snapshot PDF generation error:", errorMessage);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "PDFの生成に失敗しました: " + errorMessage,
