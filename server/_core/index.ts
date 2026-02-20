@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
-import { initializeBrowser } from "../pdfExporter";
+
 import { logBuffer } from "../logBuffer";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -65,13 +65,8 @@ async function startServer() {
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
     
-    // Puppeteer ブラウザを初期化
-    try {
-      await initializeBrowser();
-      console.log("[Startup] Puppeteer browser initialized for PDF export");
-    } catch (e) {
-      console.warn("[Startup] Failed to initialize Puppeteer (PDF export will be unavailable):", e);
-    }
+    // Puppeteer ブラウザは必要な時だけ起動（メモリ節約）
+    console.log("[Startup] Puppeteer browser will be initialized on-demand (memory-saving mode)");
     
     // サーバー起動時にスタックしたprocessingジョブをリセット
     try {

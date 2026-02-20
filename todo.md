@@ -478,3 +478,22 @@
   - [x] インストール後の executablePath を確認
   - [x] lumtest.com テストで Country: JP を確認（Sakurada, 11）
 - [ ] チェックポイント保存と再デプロイ
+
+## 緊急: 本番環境のメモリ不足対策（Memory: 886-889MB）
+- [x] PDF Exporter の起動時ブラウザ初期化を無効化
+  - [x] server/_core/index.ts から initializeBrowser() 呼び出しを削除
+  - [x] 必要な時だけブラウザを起動するように変更（メモリ節約モード）
+- [x] Chromium パス問題の修正
+  - [x] package.json に postinstall スクリプトを追加
+  - [x] デプロイ時に Chromium を自動インストール
+  - [x] 開発環境でテスト成功
+- [x] browser.close() を全箇所で徹底
+  - [x] searchTikTokTriple の browser.close() が try-finally で確実に実行されることを確認
+  - [x] searchTikTokVideos の browser.close() が try-finally で確実に実行されることを確認
+  - [x] scrapeTikTokComments の browser.close() が try-finally で確実に実行されることを確認
+  - [x] エラー時も必ず browser.close() を実行してメモリリークを防止
+- [x] 同時実行数を制限（1ページずつ処理）
+  - [x] searchTikTokTriple の3つのシークレットウィンドウが順次実行（for ループ）であることを確認
+  - [x] Promise.all() を使わず、1つずつ await で実行されることを確認
+  - [x] メモリ使用量をログ出力して監視（起動前・起動後・終了前・終了後）
+- [ ] チェックポイント保存と再デプロイ

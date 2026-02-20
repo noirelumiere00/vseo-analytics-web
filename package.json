@@ -10,7 +10,8 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "postinstall": "node -e \"try { require('puppeteer').executablePath(); console.log('[Puppeteer] Chromium already installed'); } catch (e) { console.log('[Puppeteer] Installing Chromium...'); require('child_process').execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' }); }\""
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

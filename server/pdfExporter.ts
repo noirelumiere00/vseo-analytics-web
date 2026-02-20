@@ -5,9 +5,9 @@ let browserInstance: Browser | null = null;
 const limit = pLimit(3);
 
 /**
- * Puppeteer ブラウザインスタンスを初期化（サーバー起動時に呼び出し）
+ * Puppeteer ブラウザインスタンスを初期化（必要な時だけ起動）
  */
-export async function initializeBrowser(): Promise<void> {
+async function ensureBrowserInitialized(): Promise<void> {
   if (browserInstance) {
     return;
   }
@@ -19,8 +19,9 @@ export async function initializeBrowser(): Promise<void> {
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
-        "--font-render-hinting=none",
         "--disable-gpu",
+        "--single-process",
+        "--font-render-hinting=none",
       ],
     };
 
@@ -32,19 +33,14 @@ export async function initializeBrowser(): Promise<void> {
       console.warn("[PDF Exporter] PROXY_SERVER environment variable not set. Running without proxy.");
     }
 
-    // システム Chromium を使用（Docker/Linux 環境対応）
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-    }
+    // Puppeteer のバンドル Chromium を使用
+    launchOptions.executablePath = puppeteer.executablePath();
 
     browserInstance = await puppeteer.launch(launchOptions);
-    console.log("[PDF Exporter] Puppeteer browser initialized");
+    console.log("[PDF Exporter] Puppeteer browser initialized (on-demand)");
   } catch (error) {
     console.error("[PDF Exporter] Failed to initialize browser:", error);
-    console.error("[PDF Exporter] Ensure Chromium is installed: apt-get install chromium-browser");
-    if (process.env.NODE_ENV === "production") {
-      throw error;
-    }
+    throw error;
   }
 }
 
@@ -69,9 +65,7 @@ export async function generatePdfFromSnapshot(
   html: string,
   baseUrl: string
 ): Promise<Buffer> {
-  if (!browserInstance) {
-    throw new Error("Browser not initialized. Call initializeBrowser() first.");
-  }
+  await ensureBrowserInitialized();
 
   return limit(async () => {
     let page: Page | null = null;

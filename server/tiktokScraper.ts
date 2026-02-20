@@ -534,6 +534,7 @@ export async function searchTikTokTriple(
   // ブラウザを起動
   let browser: Browser;
   try {
+    console.log(`[Puppeteer] Memory before browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
     const detectedPath = puppeteer.executablePath();
     console.log(`[Puppeteer] Launching browser with executablePath: ${detectedPath}`);
     
@@ -564,6 +565,7 @@ export async function searchTikTokTriple(
       args: launchArgs,
     });
     console.log("[Puppeteer] Browser launched successfully with proxy configuration");
+    console.log(`[Puppeteer] Memory after browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
   } catch (launchError: any) {
     console.error("[Puppeteer] CRITICAL: Failed to launch browser");
     console.error("[Puppeteer] Error message:", launchError.message);
@@ -653,7 +655,9 @@ export async function searchTikTokTriple(
       keyword,
     };
   } finally {
+    console.log(`[Puppeteer] Memory before browser close: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
     await browser.close();
+    console.log(`[Puppeteer] Memory after browser close: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
   }
 }
 
