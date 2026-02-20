@@ -446,3 +446,10 @@
 - [ ] 問題2: 本番環境でのTikTok分析失敗の原因特定
   - [ ] デプロイ後、分析を実行して /admin/logs でエラーを確認
 - [ ] チェックポイント保存と再デプロイ
+
+## 緗急: 本番環境に Chromium がない問題
+- [x] puppeteer-core → puppeteer に切り替え（バンドル Chromium 使用）
+- [x] executablePath を自動検出に変更（ハードコード廃止）
+- [x] pdfExporter.ts は既に puppeteer 使用済み（変更不要）
+- [x] ビルド確認: /usr/bin ハードコード 0件
+- [ ] チェックポイント保存と再デプロイ
