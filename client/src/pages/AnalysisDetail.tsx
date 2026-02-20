@@ -134,14 +134,39 @@ export default function AnalysisDetail() {
       });
       console.log('[PDF Export] Lazy loading disabled for all images');
       
+      // 開発環境のプレビューバナーを一時的に非表示にする
+      const bannerText = 'This page is not live and cannot be shared directly';
+      const elements = Array.from(document.querySelectorAll('div, p, span, a'));
+      const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
+      console.log(`[PDF Export] Found ${bannerElements.length} banner elements`);
+      
+      const originalDisplays = bannerElements.map((el) => (el as HTMLElement).style.display);
+      bannerElements.forEach((el) => {
+        (el as HTMLElement).style.display = 'none';
+      });
+      console.log('[PDF Export] Preview banner hidden');
+      
       const html = document.documentElement.outerHTML;
       const baseUrl = window.location.origin;
       console.log('[PDF Export] HTML snapshot captured with all accordions open');
+      
+      bannerElements.forEach((el, i) => {
+        (el as HTMLElement).style.display = originalDisplays[i];
+      });
+      console.log('[PDF Export] Preview banner restored');
       
       exportPdfSnapshot.mutate({ html, baseUrl });
     } catch (error) {
       console.error("[PDF Export] Error during accordion expansion:", error);
       toast.error("PDF生成中にエラーが発生しました");
+    } finally {
+      // エラー時もバナーを元に戻す
+      const bannerText = 'This page is not live and cannot be shared directly';
+      const elements = Array.from(document.querySelectorAll('div, p, span, a'));
+      const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
+      bannerElements.forEach((el) => {
+        (el as HTMLElement).style.display = '';
+      });
     }
   }, [exportPdfSnapshot]);
 

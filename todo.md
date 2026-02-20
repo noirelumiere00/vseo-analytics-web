@@ -289,3 +289,14 @@
   - [x] document.querySelectorAll('img').forEach(img => img.removeAttribute('loading'))
 - [x] テスト実行と動作確認
 - [x] チェックポイント保存
+
+## 改善: PDF 出力時のプレビューバナー非表示処理
+- [x] フロントエンド修正
+  - [x] handleExportPdfSnapshot 内にバナー非表示ロジックを追加
+  - [x] "This page is not live and cannot be shared directly" テキストを検出
+  - [x] バナー要素を一時的に非表示（display: none）
+  - [x] HTML スナップショット取得
+  - [x] バナーを元に戻す（任意）
+- [x] TypeScript コンパイルエラー確認
+- [x] サーバー動作確認
+- [x] チェックポイント保存
