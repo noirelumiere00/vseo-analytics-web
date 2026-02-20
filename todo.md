@@ -300,3 +300,13 @@
 - [x] TypeScript コンパイルエラー確認
 - [x] サーバー動作確認
 - [x] チェックポイント保存
+
+## 改善: PDF 出力時のフォント・レイアウト一致化
+- [x] バックエンド修正（pdfExporter.ts）
+  - [x] Viewport サイズ固定：page.setViewport({ width: 1280, height: 1024, deviceScaleFactor: 2 })
+  - [x] メディアタイプを screen に強制：page.emulateMediaType('screen')
+  - [x] Webfont 完全読み込み待機：page.evaluateHandle('document.fonts.ready')
+  - [x] 背景色維持：page.pdf({ printBackground: true })
+- [x] TypeScript コンパイルエラー確認
+- [x] サーバー動作確認
+- [x] チェックポイント保存

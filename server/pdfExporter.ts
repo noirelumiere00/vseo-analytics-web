@@ -71,7 +71,8 @@ export async function generatePdfFromSnapshot(
     try {
       page = await browserInstance!.newPage();
       if (!page) throw new Error("Failed to create page");
-      await page.setViewport({ width: 1200, height: 1600 });
+      // PC画面サイズを固定（画面用CSSを強制適用）
+      await page.setViewport({ width: 1280, height: 1024, deviceScaleFactor: 2 });
 
       // <base href> を注入して相対パスを解決
       const finalHtml = html.replace(
@@ -85,6 +86,10 @@ export async function generatePdfFromSnapshot(
         timeout: 60000,
       });
       console.log(`[PDF Exporter] HTML content set successfully`);
+
+      // Webfontの完全読み込みを待機
+      await page.evaluateHandle('document.fonts.ready');
+      console.log(`[PDF Exporter] Webfonts loaded successfully`);
 
       // アニメーション完了待機
       await new Promise((resolve) => setTimeout(resolve, 1000));
