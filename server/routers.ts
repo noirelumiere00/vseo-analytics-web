@@ -450,6 +450,54 @@ export const appRouter = router({
         return { success: true, jobId: input.jobId };
       }),
   }),
+
+  admin: router({
+    // デバッグ用: サーバーログを取得
+    getLogs: publicProcedure
+      .input(z.object({
+        lines: z.number().default(500),
+      }))
+      .query(async ({ input }) => {
+        try {
+          const fs = require('fs');
+          const path = require('path');
+          
+          const logPath = path.join(process.cwd(), '.manus-logs', 'devserver.log');
+          
+          // ログファイルが存在しない場合
+          if (!fs.existsSync(logPath)) {
+            return {
+              success: false,
+              logs: [],
+              message: 'ログファイルが見つかりません',
+            };
+          }
+          
+          // ログファイルを読み込む
+          const content = fs.readFileSync(logPath, 'utf-8');
+          const lines = content.split('\n').filter((line: string) => line.trim());
+          
+          // 最新N行を取得（デフォルト500行）
+          const recentLines = lines.slice(Math.max(0, lines.length - input.lines));
+          
+          return {
+            success: true,
+            logs: recentLines,
+            totalLines: lines.length,
+            displayedLines: recentLines.length,
+            message: `最新 ${recentLines.length} 行を取得しました`,
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+          console.error('[Admin] Log retrieval error:', errorMessage);
+          return {
+            success: false,
+            logs: [],
+            message: `ログ取得エラー: ${errorMessage}`,
+          };
+        }
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

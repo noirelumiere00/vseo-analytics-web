@@ -347,3 +347,17 @@
 - [x] TypeScript コンパイルエラー確認
 - [x] テスト実行と接続確認
 - [x] チェックポイント保存
+
+
+## 新機能: デバッグ用ログページ（/admin/logs）
+- [x] バックエンド修正
+  - [x] routers.ts に admin.getLogs エンドポイント作成
+  - [x] .manus-logs/devserver.log から最新 500 行を取得
+  - [x] TikTok Session、Proxy、Country 関連ログをフィルタリング
+- [x] フロントエンド修正
+  - [x] client/src/pages/AdminLogs.tsx 作成
+  - [x] App.tsx にルート登録
+  - [x] ログをテキスト形式で表示
+  - [x] リアルタイム更新機能（5 秒ごと）
+- [x] テスト実行と動作確認
+- [ ] チェックポイント保存
