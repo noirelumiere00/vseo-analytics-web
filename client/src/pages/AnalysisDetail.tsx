@@ -10,7 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
@@ -61,6 +61,29 @@ export default function AnalysisDetail() {
     },
     onError: (error) => {
       toast.error(error.message);
+    },
+  });
+
+  const exportPdf = trpc.analysis.exportPdf.useMutation({
+    onSuccess: (result) => {
+      const binaryString = atob(result.buffer);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("PDFをダウンロードしました");
+    },
+    onError: (error) => {
+      toast.error("PDFの生成に失敗しました: " + error.message);
     },
   });
 
@@ -280,25 +303,46 @@ export default function AnalysisDetail() {
                     {job.status === "pending" && "分析を自動的に開始します..."}
                   </CardDescription>
                 </div>
-                {(job.status === "failed" || job.status === "completed") && (
-                  <Button 
-                    className="gradient-primary text-white"
-                    onClick={() => executeAnalysis.mutate({ jobId })}
-                    disabled={executeAnalysis.isPending}
-                  >
-                    {executeAnalysis.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        実行中...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="mr-2 h-4 w-4" />
-                        再実行
-                      </>
-                    )}
-                  </Button>
-                )}
+                <div className="flex gap-2">
+                  {(job.status === "failed" || job.status === "completed") && (
+                    <Button 
+                      className="gradient-primary text-white"
+                      onClick={() => executeAnalysis.mutate({ jobId })}
+                      disabled={executeAnalysis.isPending}
+                    >
+                      {executeAnalysis.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          実行中...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="mr-2 h-4 w-4" />
+                          再実行
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {job.status === "completed" && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => exportPdf.mutate({ jobId })}
+                      disabled={exportPdf.isPending}
+                    >
+                      {exportPdf.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          生成中...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-2 h-4 w-4" />
+                          PDFダウンロード
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             {job.status === "processing" && progressData && (

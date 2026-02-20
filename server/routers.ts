@@ -7,6 +7,7 @@ import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, filterAdHashtags } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
+import { generateAnalysisReportDocx } from "./pdfGenerator";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
@@ -301,6 +302,39 @@ export const appRouter = router({
         }
         await db.deleteAnalysisJob(input.jobId);
         return { success: true };
+      }),
+
+    // 単一ジョブのPDFエクスポート
+    exportPdf: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+
+        // 分析データを取得
+        const videosData = await db.getVideosByJobId(input.jobId);
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+
+        // PDFを生成
+        const docxBuffer = await generateAnalysisReportDocx({
+          job,
+          report: report || undefined,
+          videos: videosData,
+          tripleSearch: tripleSearch || undefined,
+          keyword: job.keyword || undefined,
+        });
+
+        return {
+          success: true,
+          buffer: docxBuffer.toString("base64"),
+          filename: `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.docx`,
+        };
       }),
 
     // ジョブを再実行（failed/pendingのジョブをリセットして再実行）

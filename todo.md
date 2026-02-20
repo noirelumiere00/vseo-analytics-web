@@ -212,3 +212,14 @@
 - [x] videoAnalysis.tsでコメント取得・LLM分析を統合
 - [x] puppeteer-extra-plugin-stealthを導入
 - [x] テスト実行と動作確認
+
+## 新機能: 分析レポートのPDFエクスポート
+- [x] バックエンド: PDF生成ロジックの実装（docxライブラリ）
+  - [x] 単一ジョブのPDF生成API（/api/trpc/analysis.exportPdf）
+  - [ ] 全レポートの一括PDF生成API（/api/trpc/analysis.exportAllPdf）
+  - [x] PDF内容: タイトル、サマリー、グラフ、動画リスト、共通点分析
+- [x] フロントエンド: PDFエクスポートUI
+  - [x] AnalysisDetail.tsxに「PDFダウンロード」ボタンを追加
+  - [ ] History.tsxに「全レポートをPDF化」ボタンを追加
+  - [x] ダウンロード進捗表示
+- [x] テスト・検証 (pdfGenerator.test.ts: 6テスト全てパス)
