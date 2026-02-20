@@ -381,3 +381,26 @@
   - [ ] https://vseo.manus.space/admin/logs でプロキシ接続ログを確認
   - [ ] エラーコード（407、Connection Refused）が表示されるか確認
   - [ ] 分析実行時のエラーメッセージを確認
+
+
+## 緗急: Bright Data プロキシ接続失敗の詳細対応
+- [x] Phase 1: ポート番号の変更（33335 → 22225）
+  - [x] PROXY_SERVER を http://brd.superproxy.io:22225 に変更
+  - [x] webdev_request_secrets で環境変数を更新
+  - [ ] チェックポイント保存して再デプロイ
+- [x] Phase 2: エラーハンドリングの詳細化
+  - [x] tiktokScraper.ts の fetchSearchResults 関数を強化
+  - [x] error.name、error.cause、response.status をログ出力
+  - [x] page.goto のエラーハンドリングを詳細化
+  - [x] プロキシ接続テストのエラー情報を詳細化
+  - [x] /admin/logs で確認できるようにする
+- [x] Phase 3: Bright Data IP許可設定を空っぽで保存
+  - [x] Bright Data ダッシュボードで IP許可設定を確認
+  - [x] 現在の設定内容を記録
+  - [x] IP許可を空っぽで保存（すべての通信を許可）
+  - [x] 設定が正常に保存されたか確認
+- [ ] Phase 4: テスト実行と検証
+  - [ ] 開発環境で分析を実行
+  - [ ] /admin/logs でプロキシ接続ログを確認
+  - [ ] エラーコード（407、403など）が表示されるか確認
+  - [ ] Web版でも同様にテスト

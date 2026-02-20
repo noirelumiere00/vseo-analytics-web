@@ -113,7 +113,10 @@ async function fetchSearchResults(
         }
       } catch (e: any) {
         console.error(`[TikTok API] Fetch error: ${e.message}`);
-        return { error: e.message };
+        console.error(`[TikTok API] Error name: ${e.name}`);
+        console.error(`[TikTok API] Error cause: ${e.cause}`);
+        console.error(`[TikTok API] Error stack: ${e.stack}`);
+        return { error: e.message, errorName: e.name, errorCause: e.cause };
       }
     },
     keyword,
@@ -280,7 +283,10 @@ async function searchInIncognitoContext(
           }
           return JSON.parse(text);
         } catch (err: any) {
-          return { error: err.message, type: 'FetchError' };
+          console.error(`[Proxy Check] Fetch error: ${err.message}`);
+          console.error(`[Proxy Check] Error name: ${err.name}`);
+          console.error(`[Proxy Check] Error cause: ${err.cause}`);
+          return { error: err.message, errorName: err.name, errorCause: err.cause, type: 'FetchError' };
         }
       });
 
@@ -303,6 +309,9 @@ async function searchInIncognitoContext(
       }
     } catch (ipCheckError: any) {
       console.error(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${ipCheckError.name}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${ipCheckError.cause}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error stack: ${ipCheckError.stack}`);
       if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ接続失敗 - ${ipCheckError.message}`);
     }
 
@@ -310,10 +319,18 @@ async function searchInIncognitoContext(
     console.log(`[TikTok Session ${sessionIndex + 1}] Initializing...`);
     if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
 
-    await page.goto("https://www.tiktok.com/", {
-      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
-      timeout: 30000,
-    });
+    try {
+      await page.goto("https://www.tiktok.com/", {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+    } catch (gotoError: any) {
+      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to TikTok homepage`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error message: ${gotoError.message}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${gotoError.name}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${gotoError.cause}`);
+      throw gotoError;
+    }
     // セッションごとに異なる待機時間（フィンガープリント対策）
     await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
 
@@ -332,10 +349,18 @@ async function searchInIncognitoContext(
     console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
     if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
     
-    await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
-      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
-      timeout: 30000,
-    });
+    try {
+      await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
+        waitUntil: "domcontentloaded",
+        timeout: 30000,
+      });
+    } catch (gotoError: any) {
+      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to search page`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error message: ${gotoError.message}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${gotoError.name}`);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${gotoError.cause}`);
+      throw gotoError;
+    }
     
     // 【通信最適化】画像ブロックのためスクリーンショットを削除
     // （画像ブロックで画像データが取得できないため削除）
