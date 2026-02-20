@@ -223,3 +223,23 @@
   - [ ] History.tsxに「全レポートをPDF化」ボタンを追加
   - [x] ダウンロード進捗表示
 - [x] テスト・検証 (pdfGenerator.test.ts: 6テスト全てパス)
+## 改善: PDF出力機能の Puppeteer 方式への切り替え
+- [x] Phase 1: Puppeteer 環境構築・設計
+  - [x] puppeteer パッケージのインストール
+  - [x] Puppeteer + Headless Chrome の動作確認
+  - [x] 日本語フォント（Google Noto Fonts）の設定
+- [x] Phase 2: バックエンド Puppeteer PDF生成ロジック
+  - [x] /api/trpc/analysis.exportPdfPuppeteer エンドポイント作成
+  - [x] jobId → 分析ページURL生成ロジック
+  - [x] Puppeteer レンダリング・出力処理
+  - [x] A4サイズ、printBackground: true オプション設定
+- [x] Phase 3: フロントエンド UI・CSS実装
+  - [x] AnalysisDetail.tsx に Puppeteer PDF ボタン追加
+  - [x] @media print CSS でアコーディオン全開制御
+  - [x] page-break-inside: avoid で改ページ制御
+  - [x] ヘッダー/フッター（ページ番号）CSS実装
+- [x] Phase 4: 日本語フォント・改ページ処理・テスト・デプロイ (pdfExporter.test.ts: 11テスト全てパス) - [ ] Google Noto Fonts の HTML 読み込み確認
+  - [ ] 日本語文字化けテスト
+  - [ ] 改ページ処理の検証
+  - [ ] ユニットテスト作成・実行
+  - [ ] 本番環境での動作確認

@@ -187,3 +187,100 @@
     background-clip: text;
   }
 }
+
+/* ============================================================
+   PDF出力用スタイル（@media print）
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+@media print {
+  /* ========== アコーディオン全開制御 ========== */
+  /* shadcn/ui Accordion（Radix UI）のアニメーションと高さ制限を無効化 */
+  [data-state="closed"] > [role="region"],
+  .accordion-content,
+  [data-radix-collapsible-content] {
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* 開閉ボタン（Trigger）内のアイコンは非表示 */
+  [data-radix-collection-item] svg,
+  .accordion-icon,
+  [role="button"] svg {
+    display: none !important;
+  }
+
+  /* ========== 改ページ制御 ========== */
+  /* 動画カード、分析セクション、アコーディオンコンテンツは途中で改ページしない */
+  .video-card,
+  .analysis-section,
+  [role="region"],
+  .accordion-item {
+    page-break-inside: avoid;
+  }
+
+  /* テーブル行の分割を防止 */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* ========== ページマージン・サイズ ========== */
+  @page {
+    margin: 1cm;
+    size: A4;
+  }
+
+  /* ========== 背景色・テキスト色 ========== */
+  body {
+    background: white;
+    color: black;
+    font-family: 'Noto Sans JP', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+
+  /* グラフ・スコアボックスの背景色を保持 */
+  [class*="bg-"],
+  [class*="gradient"],
+  .card,
+  .chart-container {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* ========== ヘッダー/フッター ========== */
+  /* ページ番号は Puppeteer の displayHeaderFooter で自動付与 */
+  header,
+  nav {
+    display: none !important;
+  }
+
+  /* ========== 不要な要素を非表示 ========== */
+  .no-print,
+  button,
+  [role="button"],
+  .btn-group {
+    display: none !important;
+  }
+
+  /* ========== リンク色 ========== */
+  a {
+    color: black;
+    text-decoration: underline;
+  }
+
+  /* ========== 画像・グラフの最適化 ========== */
+  img,
+  canvas,
+  svg {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  /* ========== 日本語フォント指定 ========== */
+  * {
+    font-family: 'Noto Sans JP', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  }
+}

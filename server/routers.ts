@@ -8,6 +8,8 @@ import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, filterAdHashtags } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
+import { generatePdfFromUrl } from "./pdfExporter";
+import { generateExportToken } from "./_core/exportToken";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
@@ -335,6 +337,51 @@ export const appRouter = router({
           buffer: docxBuffer.toString("base64"),
           filename: `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.docx`,
         };
+      }),
+
+    // Puppeteer を使用したPDF出力（アコーディオン全開）
+    exportPdfPuppeteer: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+
+        // トークンを生成（10分有効）
+        const token = generateExportToken(input.jobId, ctx.user.id, 600);
+
+        // レポートビューページのURLを構築
+        const baseUrl = process.env.VITE_FRONTEND_URL || "http://localhost:3000";
+        const reportUrl = `${baseUrl}/report/view/${input.jobId}?token=${token}`;
+
+        try {
+          // Puppeteer でPDFを生成
+          const pdfBuffer = await generatePdfFromUrl(reportUrl, {
+            width: 1200,
+            height: 1600,
+            waitForSelector: ".analysis-section",
+            waitForTimeout: 3000,
+          });
+
+          const filename = `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.pdf`;
+          
+          return {
+            success: true,
+            downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+            filename,
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+          console.error("[PDF Export] Puppeteer error:", errorMessage);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "PDFの生成に失敗しました: " + errorMessage,
+          });
+        }
       }),
 
     // ジョブを再実行（failed/pendingのジョブをリセットして再実行）

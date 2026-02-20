@@ -86,6 +86,20 @@ export default function AnalysisDetail() {
       toast.error("PDFの生成に失敗しました: " + error.message);
     },
   });
+  const exportPdfPuppeteer = trpc.analysis.exportPdfPuppeteer.useMutation({
+    onSuccess: (result) => {
+      const link = document.createElement("a");
+      link.href = result.downloadUrl;
+      link.download = result.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("アコーディオン全開状態のPDFをダウンロードしました");
+    },
+    onError: (error) => {
+      toast.error("PDFの生成に失敗しました: " + error.message);
+    },
+  });
 
   useEffect(() => {
     if (progressData?.status === "completed") {
@@ -324,23 +338,43 @@ export default function AnalysisDetail() {
                     </Button>
                   )}
                   {job.status === "completed" && (
-                    <Button 
-                      variant="outline"
-                      onClick={() => exportPdf.mutate({ jobId })}
-                      disabled={exportPdf.isPending}
-                    >
-                      {exportPdf.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          生成中...
-                        </>
-                      ) : (
-                        <>
-                          <Download className="mr-2 h-4 w-4" />
-                          PDFダウンロード
-                        </>
-                      )}
-                    </Button>
+                    <>
+                      <Button 
+                        variant="outline"
+                        onClick={() => exportPdf.mutate({ jobId })}
+                        disabled={exportPdf.isPending}
+                      >
+                        {exportPdf.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            生成中...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="mr-2 h-4 w-4" />
+                            PDF (表形式)
+                          </>
+                        )}
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => exportPdfPuppeteer.mutate({ jobId })}
+                        disabled={exportPdfPuppeteer.isPending}
+                        className="bg-blue-50 hover:bg-blue-100"
+                      >
+                        {exportPdfPuppeteer.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            生成中...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="mr-2 h-4 w-4" />
+                            PDF (全開)
+                          </>
+                        )}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

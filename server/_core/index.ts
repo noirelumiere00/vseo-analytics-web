@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initializeBrowser } from "../pdfExporter";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -59,6 +60,14 @@ async function startServer() {
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    
+    // Puppeteer ブラウザを初期化
+    try {
+      await initializeBrowser();
+      console.log("[Startup] Puppeteer browser initialized for PDF export");
+    } catch (e) {
+      console.warn("[Startup] Failed to initialize Puppeteer (PDF export will be unavailable):", e);
+    }
     
     // サーバー起動時にスタックしたprocessingジョブをリセット
     try {
