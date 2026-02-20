@@ -81,8 +81,8 @@ export async function generatePdfFromSnapshot(
 
       console.log(`[PDF Exporter] Setting HTML content with base URL: ${baseUrl}`);
       await page.setContent(finalHtml, {
-        waitUntil: ['networkidle0', 'load', 'domcontentloaded'],
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 60000,
       });
       console.log(`[PDF Exporter] HTML content set successfully`);
 

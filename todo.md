@@ -278,3 +278,14 @@
   - [x] デバッグログを追加
 - [x] TypeScript コンパイルエラーなし
 - [x] サーバー正常動作確認
+
+## 緗急修正: Puppeteer page.setContent() のタイムアウトエラー
+- [x] バックエンド修正
+  - [x] waitUntil 条件を 'domcontentloaded' に変更（networkidle0 から緩和）
+  - [x] timeout を 60000ms に設定
+  - [x] page.goto() が残っていないか確認・削除
+- [x] フロントエンド修正
+  - [x] HTML 取得前に img[loading="lazy"] を無効化
+  - [x] document.querySelectorAll('img').forEach(img => img.removeAttribute('loading'))
+- [x] テスト実行と動作確認
+- [x] チェックポイント保存

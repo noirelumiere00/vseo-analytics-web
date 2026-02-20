@@ -128,6 +128,12 @@ export default function AnalysisDetail() {
       await new Promise((resolve) => setTimeout(resolve, 500));
       console.log('[PDF Export] Accordions expanded, waiting for animation...');
       
+      // Lazy Load を無効化（Puppeteer が画像読み込み完了を永遠に待つのを防ぐ）
+      document.querySelectorAll('img').forEach((img) => {
+        img.removeAttribute('loading');
+      });
+      console.log('[PDF Export] Lazy loading disabled for all images');
+      
       const html = document.documentElement.outerHTML;
       const baseUrl = window.location.origin;
       console.log('[PDF Export] HTML snapshot captured with all accordions open');
