@@ -453,3 +453,28 @@
 - [x] pdfExporter.ts は既に puppeteer 使用済み（変更不要）
 - [x] ビルド確認: /usr/bin ハードコード 0件
 - [ ] チェックポイント保存と再デプロイ
+
+## 完璧な動作確認（エンドツーエンドテスト）
+- [x] 起動引数の再確認
+  - [x] --disable-dev-shm-usage が全箱所に含まれているか確認
+  - [x] --no-sandbox が全箱所に含まれているか確認
+  - [x] --ignore-certificate-errors が全箱所に含まれているか確認
+- [x] タイムアウト設定の確認
+  - [x] page.goto のタイムアウトが 90 秒（90000ms）に設定されているか確認
+- [x] lumtest.com 接続テストの実行
+  - [x] Browser Launch 成功（パスエラーが出ないこと）
+  - [x] Proxy Status 成功（SSLエラーが出ないこと）
+  - [x] Country: 'JP' であること（プロキシが効いていること）
+- [x] 検証完了（チェックポイント不要）
+
+## 緗急: 本番環境にブラウザ本体が存在しない問題
+- [x] ブラウザの強制インストール
+  - [x] npx puppeteer browsers install chrome を実行
+  - [x] インストール後のパスを確認: /home/ubuntu/.cache/puppeteer/chrome/linux-145.0.7632.77/chrome-linux64/chrome
+- [x] 起動設定の軽量化（メモリ 889MB 対応）
+  - [x] --single-process を起動引数に追加（全3箱所）
+  - [x] --disable-dev-shm-usage, --no-sandbox, --disable-gpu を再確認
+- [x] パスの再確認とテスト
+  - [x] インストール後の executablePath を確認
+  - [x] lumtest.com テストで Country: JP を確認（Sakurada, 11）
+- [ ] チェックポイント保存と再デプロイ
