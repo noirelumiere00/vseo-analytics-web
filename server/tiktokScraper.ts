@@ -262,22 +262,48 @@ async function searchInIncognitoContext(
 
     try {
       const ipCheckResponse = await page.evaluate(async () => {
-        const response = await fetch('https://lumtest.com/myip.json');
-        return response.json();
+        try {
+          const response = await fetch('https://lumtest.com/myip.json');
+          if (!response.ok) {
+            if (response.status === 407) {
+              return { error: 'Proxy Authentication Required (407)', statusCode: 407 };
+            } else if (response.status === 403) {
+              return { error: 'Forbidden (403) - IP blocked', statusCode: 403 };
+            } else if (response.status === 502 || response.status === 503) {
+              return { error: `Proxy Service Error (${response.status})`, statusCode: response.status };
+            }
+            return { error: `HTTP Error: ${response.status}`, statusCode: response.status };
+          }
+          const text = await response.text();
+          if (!text) {
+            return { error: 'Empty response from proxy check', statusCode: response.status };
+          }
+          return JSON.parse(text);
+        } catch (err: any) {
+          return { error: err.message, type: 'FetchError' };
+        }
       });
 
-      const ip = ipCheckResponse.ip || 'unknown';
-      const country = ipCheckResponse.country || 'unknown';
-      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip}, Country: ${country}`);
-      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ IP: ${ip} (${country})`);
-
-      if (country !== 'JP') {
-        console.warn(`[TikTok Session ${sessionIndex + 1}] WARNING: Expected country JP, but got ${country}`);
+      if (ipCheckResponse.error) {
+        console.error(`[TikTok Session ${sessionIndex + 1}] Proxy connection error: ${ipCheckResponse.error}`);
+        if (ipCheckResponse.statusCode) {
+          console.error(`[TikTok Session ${sessionIndex + 1}] HTTP Status Code: ${ipCheckResponse.statusCode}`);
+        }
+        if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシエラー - ${ipCheckResponse.error}`);
       } else {
-        console.log(`[TikTok Session ${sessionIndex + 1}] ✓ Confirmed: Japanese residential IP`);
+        const ip = ipCheckResponse.ip || 'unknown';
+        const country = ipCheckResponse.country || 'unknown';
+        console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip}, Country: ${country}`);
+        if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ IP: ${ip} (${country})`);
+        if (country !== 'JP') {
+          console.warn(`[TikTok Session ${sessionIndex + 1}] WARNING: Expected country JP, but got ${country}`);
+        } else {
+          console.log(`[TikTok Session ${sessionIndex + 1}] ✓ Confirmed: Japanese residential IP`);
+        }
       }
     } catch (ipCheckError: any) {
-      console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
+      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
+      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ接続失敗 - ${ipCheckError.message}`);
     }
 
     // TikTokにアクセスしてCookieを取得
@@ -510,6 +536,27 @@ export async function searchTikTokTriple(
     console.error("[Puppeteer] Error message:", launchError.message);
     console.error("[Puppeteer] Error code:", launchError.code);
     console.error("[Puppeteer] Error stack:", launchError.stack);
+    
+    // Chromium path check
+    try {
+      const fs = require('fs');
+      const chromiumPath = '/usr/bin/chromium-browser';
+      if (!fs.existsSync(chromiumPath)) {
+        console.error(`[Puppeteer] Chromium not found at: ${chromiumPath}`);
+      } else {
+        console.error(`[Puppeteer] Chromium exists at: ${chromiumPath}`);
+      }
+    } catch (e: any) {
+      console.error(`[Puppeteer] Failed to check Chromium path:`, e.message);
+    }
+    
+    // Environment info
+    console.error("[Puppeteer] Environment info:");
+    console.error("[Puppeteer] NODE_ENV:", process.env.NODE_ENV);
+    console.error("[Puppeteer] Platform:", process.platform);
+    const os = require('os');
+    console.error("[Puppeteer] Memory available:", Math.round(os.freemem() / 1024 / 1024), "MB");
+    
     throw launchError;
   }
 

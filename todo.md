@@ -360,4 +360,24 @@
   - [x] ログをテキスト形式で表示
   - [x] リアルタイム更新機能（5 秒ごと）
 - [x] テスト実行と動作確認
-- [ ] チェックポイント保存
+- [x] チェックポイント保存
+
+
+## 緗急: 本番環境（Web版）でのTikTok分析失敗対応
+- [x] 環境変数の同期確認と再デプロイ
+  - [x] PROXY_SERVER, PROXY_USERNAME, PROXY_PASSWORD が本番環境に正しくセットされているか確認
+  - [x] webdev_request_secrets で環境変数を再確認
+  - [ ] チェックポイント保存して再デプロイ
+- [x] プロキシ接続テストのログ出力強化
+  - [x] tiktokScraper.ts に詳細なエラーハンドリングを追加
+  - [x] HTTP ステータスコード（407、Connection Refused など）をログ出力
+  - [x] プロキシ接続失敗時の詳細情報を記録
+  - [x] /admin/logs で確認できるようにする
+- [x] ヘッドレス設定の確認と修正
+  - [x] Puppeteer 起動時の --no-sandbox フラグを確認
+  - [x] Web版（Linux環境）での Chromium パス確認
+  - [x] メモリ・リソース制限の影響を調査
+- [ ] Web版での動作確認
+  - [ ] https://vseo.manus.space/admin/logs でプロキシ接続ログを確認
+  - [ ] エラーコード（407、Connection Refused）が表示されるか確認
+  - [ ] 分析実行時のエラーメッセージを確認
