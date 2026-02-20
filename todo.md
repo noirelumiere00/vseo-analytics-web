@@ -328,3 +328,22 @@
 - [x] TypeScript コンパイルエラー確認
 - [x] テスト実行と動作確認
 - [x] チェックポイント保存
+
+## 改善: Bright Data プロキシ導入と 120 点完成度化
+- [x] 環境変数設定と基本接続
+  - [x] .env に PROXY_SERVER, PROXY_USERNAME, PROXY_PASSWORD を設定
+  - [x] webdev_request_secrets で環境変数を登録
+  - [x] Puppeteer 起動時に --proxy-server を設定
+  - [x] page.authenticate で認証情報を設定
+  - [x] lumtest.com/myip.json で接続確認とログ出力
+- [x] セッション固定（Sticky Session）実装
+  - [x] PROXY_USERNAME の末尾に -session-${Date.now()}-${sessionIndex} を付下
+  - [x] 同じ住宅用 IP を維持してブロック率低下
+  - [x] セッション ID をログ出力
+- [x] 通信量完全遮断フィルター強化
+  - [x] image, media, font, stylesheet を全て abort()
+  - [x] xhr, fetch, script, document のみに限定
+  - [x] スクロール処理（window.scrollBy）を「力技」化
+- [x] TypeScript コンパイルエラー確認
+- [x] テスト実行と接続確認
+- [x] チェックポイント保存

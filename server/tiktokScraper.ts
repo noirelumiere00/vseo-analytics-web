@@ -192,6 +192,24 @@ async function searchInIncognitoContext(
       "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
     });
 
+    // 【Bright Data プロキシ設定】セッション固定（Sticky Session）の動的生成
+    const proxyServer = process.env.PROXY_SERVER;
+    const proxyUsername = process.env.PROXY_USERNAME;
+    const proxyPassword = process.env.PROXY_PASSWORD;
+
+    if (proxyServer && proxyUsername && proxyPassword) {
+      const sessionId = `session-${Date.now()}-${sessionIndex}`;
+      const authenticatedUsername = `${proxyUsername}-${sessionId}`;
+      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy authentication with session: ${sessionId}`);
+      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ認証中 (${sessionId})...`);
+      await page.authenticate({
+        username: authenticatedUsername,
+        password: proxyPassword,
+      });
+    } else {
+      console.warn(`[TikTok Session ${sessionIndex + 1}] Proxy environment variables not set. Running without proxy.`);
+    }
+
     // 【通信最適化】リクエストインターセプトを有効化（画像・動画・フォント・トラッキングをブロック）
     await page.setRequestInterception(true);
 
@@ -238,6 +256,30 @@ async function searchInIncognitoContext(
 
     console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled (images, media, fonts, tracking blocked)`);
 
+    // 【接続確認】lumtest.com/myip.json でプロキシ経由の IP を確認
+    console.log(`[TikTok Session ${sessionIndex + 1}] Verifying proxy connection...`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ接続確認中...`);
+
+    try {
+      const ipCheckResponse = await page.evaluate(async () => {
+        const response = await fetch('https://lumtest.com/myip.json');
+        return response.json();
+      });
+
+      const ip = ipCheckResponse.ip || 'unknown';
+      const country = ipCheckResponse.country || 'unknown';
+      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip}, Country: ${country}`);
+      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ IP: ${ip} (${country})`);
+
+      if (country !== 'JP') {
+        console.warn(`[TikTok Session ${sessionIndex + 1}] WARNING: Expected country JP, but got ${country}`);
+      } else {
+        console.log(`[TikTok Session ${sessionIndex + 1}] ✓ Confirmed: Japanese residential IP`);
+      }
+    } catch (ipCheckError: any) {
+      console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
+    }
+
     // TikTokにアクセスしてCookieを取得
     console.log(`[TikTok Session ${sessionIndex + 1}] Initializing...`);
     if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
@@ -248,6 +290,17 @@ async function searchInIncognitoContext(
     });
     // セッションごとに異なる待機時間（フィンガープリント対策）
     await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+
+    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール
+    const performRobustScroll = async (maxScrolls: number = 5) => {
+      for (let i = 0; i < maxScrolls; i++) {
+        await page.evaluate(() => {
+          window.scrollBy(0, 500);
+        });
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      console.log(`[TikTok Session ${sessionIndex + 1}] Robust scroll completed (${maxScrolls} scrolls)`);
+    };
 
     // 検索ページに遷移してCookieを確立
     console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
@@ -263,6 +316,8 @@ async function searchInIncognitoContext(
     console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot skipped (images blocked for bandwidth optimization)`);
     
     await new Promise((r) => setTimeout(r, 3000));
+    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール実行
+    await performRobustScroll(3);
 
     const allVideos: TikTokVideo[] = [];
     let offset = 0;
