@@ -2,6 +2,7 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
+import { scrapeTikTokComments } from "./tiktokScraper";
 
 /**
  * 動画分析エンジン
@@ -693,7 +694,6 @@ export async function analyzeWinPatternCommonality(
   }
 
   // 勝ちパターン動画のコメントを取得（オプション）
-  const { scrapeTikTokComments } = require('./tiktokScraper');
   const commentsByVideo: { [key: string]: string[] } = {};
   
   for (const video of winPatternVideos) {
