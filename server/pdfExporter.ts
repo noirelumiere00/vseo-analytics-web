@@ -24,6 +24,14 @@ export async function initializeBrowser(): Promise<void> {
       ],
     };
 
+    // 【Bright Data プロキシ設定】Puppeteer ブラウザ起動時にプロキシサーバーを設定
+    if (process.env.PROXY_SERVER) {
+      launchOptions.args.push(`--proxy-server=${process.env.PROXY_SERVER}`);
+      console.log(`[PDF Exporter] Proxy server configured: ${process.env.PROXY_SERVER}`);
+    } else {
+      console.warn("[PDF Exporter] PROXY_SERVER environment variable not set. Running without proxy.");
+    }
+
     // システム Chromium を使用（Docker/Linux 環境対応）
     if (process.env.PUPPETEER_EXECUTABLE_PATH) {
       launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;

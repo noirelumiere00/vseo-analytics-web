@@ -60,7 +60,12 @@ export default function AnalysisDetail() {
       refetchProgress();
     },
     onError: (error) => {
-      toast.error(error.message);
+      // エラーコードと詳細メッセージを表示
+      const errorMessage = error.data?.code 
+        ? `[${error.data.code}] ${error.message}`
+        : error.message;
+      console.error("[Analysis Error]", error);
+      toast.error(errorMessage, { duration: 5000 });
     },
   });
 

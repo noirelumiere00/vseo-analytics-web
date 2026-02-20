@@ -480,19 +480,31 @@ export async function searchTikTokTriple(
   let browser: Browser;
   try {
     console.log("[Puppeteer] Launching browser with executablePath: /usr/bin/chromium-browser");
+    
+    // 【Bright Data プロキシ設定】launchOptions を共通化
+    const launchArgs = [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--window-size=1920,1080",
+      "--lang=ja-JP",
+    ];
+
+    // プロキシサーバーを設定（環境変数から取得）
+    if (process.env.PROXY_SERVER) {
+      launchArgs.push(`--proxy-server=${process.env.PROXY_SERVER}`);
+      console.log(`[Puppeteer] Proxy server configured: ${process.env.PROXY_SERVER}`);
+    } else {
+      console.warn("[Puppeteer] PROXY_SERVER environment variable not set. Running without proxy.");
+    }
+
     browser = await puppeteer.launch({
       executablePath: "/usr/bin/chromium-browser",
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-        "--lang=ja-JP",
-      ],
+      args: launchArgs,
     });
-    console.log("[Puppeteer] Browser launched successfully");
+    console.log("[Puppeteer] Browser launched successfully with proxy configuration");
   } catch (launchError: any) {
     console.error("[Puppeteer] CRITICAL: Failed to launch browser");
     console.error("[Puppeteer] Error message:", launchError.message);
