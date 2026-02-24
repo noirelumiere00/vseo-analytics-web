@@ -510,4 +510,22 @@
   - [x] .gitignore に .cache/puppeteer を追加
 - [x] build スクリプトに Chromium インストールを追加
   - [x] package.json の build コマンドに npx puppeteer browsers install chrome を追加
-- [ ] チェックポイント保存と本番環境テスト
+- [x] チェックポイント保存と本番環境テスト（version: b48347cb）
+
+## メモリ制限対策とTikTokブロック回避（2026-02-24）
+- [x] Puppeteer起動引数の最適化
+  - [x] --disable-dev-shm-usage を確実に含める
+  - [x] --single-process を確実に含める
+  - [x] --no-sandbox を確実に含める
+  - [x] --disable-gpu を確実に含める
+- [x] リソースの軽量化
+  - [x] searchInIncognitoContext で page.setRequestInterception(true) を実装
+  - [x] image, font, stylesheet, media リクエストを abort()
+  - [x] document, script, xhr, fetch は許可
+- [x] User-Agentの偽装
+  - [x] page.setUserAgent で最新 Windows Chrome を設定
+  - [x] 全3つのシークレットウィンドウで異なるUser-Agentを使用
+- [ ] 本番環境でテスト実行
+  - [ ] 『#ジャングリア沖縄』で分析を1回実行
+  - [ ] /admin/logs で Country: JP を確認
+  - [ ] 動画データが1件以上取得できることを確認
