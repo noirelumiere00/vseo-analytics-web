@@ -281,9 +281,7 @@ export default function AnalysisDetail() {
   const formatNumber = useCallback((num: number | bigint | null | undefined) => {
     if (num === null || num === undefined) return "0";
     const n = typeof num === "bigint" ? Number(num) : num;
-    if (n >= 10000000) return `${(n / 10000000).toFixed(1)}千万`;
     if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
     return n.toLocaleString();
   }, []);
