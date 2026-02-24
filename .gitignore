@@ -84,6 +84,9 @@ jspm_packages/
 .cache
 .parcel-cache
 
+# Puppeteer browser cache
+.cache/puppeteer
+
 # Next.js build output
 .next
 

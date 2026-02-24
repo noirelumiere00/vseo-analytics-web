@@ -535,8 +535,15 @@ export async function searchTikTokTriple(
   let browser: Browser;
   try {
     console.log(`[Puppeteer] Memory before browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
-    const detectedPath = puppeteer.executablePath();
-    console.log(`[Puppeteer] Launching browser with executablePath: ${detectedPath}`);
+    
+    // 環境変数 PUPPETEER_EXECUTABLE_PATH を優先、フォールバックで puppeteer.executablePath()
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+    console.log(`[Puppeteer] Launching browser with executablePath: ${executablePath}`);
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+      console.log(`[Puppeteer] Using PUPPETEER_EXECUTABLE_PATH from environment variable`);
+    } else {
+      console.log(`[Puppeteer] Using puppeteer.executablePath() as fallback`);
+    }
     
     // 【Bright Data プロキシ設定】launchOptions を共通化
     const launchArgs = [
@@ -560,7 +567,7 @@ export async function searchTikTokTriple(
     }
 
     browser = await puppeteer.launch({
-      executablePath: puppeteer.executablePath(),
+      executablePath,
       headless: true,
       args: launchArgs,
     });
@@ -574,12 +581,17 @@ export async function searchTikTokTriple(
     
     // Chromium path check
     try {
-      const autoDetectedPath = puppeteer.executablePath();
-      console.error(`[Puppeteer] Auto-detected executablePath: ${autoDetectedPath}`);
-      if (!fs.existsSync(autoDetectedPath)) {
-        console.error(`[Puppeteer] Chromium NOT found at auto-detected path: ${autoDetectedPath}`);
+      const attemptedPath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+      console.error(`[Puppeteer] Attempted executablePath: ${attemptedPath}`);
+      if (!fs.existsSync(attemptedPath)) {
+        console.error(`[Puppeteer] Chromium NOT found at: ${attemptedPath}`);
+        console.error(`[Puppeteer] PUPPETEER_EXECUTABLE_PATH env: ${process.env.PUPPETEER_EXECUTABLE_PATH || 'not set'}`);
+        console.error(`[Puppeteer] puppeteer.executablePath(): ${puppeteer.executablePath()}`);
+        if (!fs.existsSync(puppeteer.executablePath())) {
+          console.error(`[Puppeteer] Fallback path also NOT found: ${puppeteer.executablePath()}`);
+        }
       } else {
-        console.error(`[Puppeteer] Chromium exists at: ${autoDetectedPath}`);
+        console.error(`[Puppeteer] Chromium exists at: ${attemptedPath}`);
       }
     } catch (e: any) {
       console.error(`[Puppeteer] Failed to check Chromium path:`, e.message);
@@ -667,9 +679,10 @@ export async function searchTikTokVideos(
   maxVideos: number = 15,
   onProgress?: (fetched: number, total: number) => void
 ): Promise<TikTokSearchResult> {
-  console.log(`[Puppeteer searchTikTokVideos] executablePath: ${puppeteer.executablePath()}`);
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+  console.log(`[Puppeteer searchTikTokVideos] executablePath: ${executablePath}`);
   const browser = await puppeteer.launch({
-    executablePath: puppeteer.executablePath(),
+    executablePath,
     headless: true,
     args: [
       "--no-sandbox",
@@ -707,9 +720,10 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
   // puppeteer-extra は ESM import でトップレベルで読み込み済み
   puppeteerExtra.use(stealthPlugin);
   
-  console.log(`[Puppeteer scrapeTikTokComments] executablePath: ${puppeteer.executablePath()}`);
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+  console.log(`[Puppeteer scrapeTikTokComments] executablePath: ${executablePath}`);
   const browser = await puppeteerExtra.launch({
-    executablePath: puppeteer.executablePath(),
+    executablePath,
     headless: true,
     args: [
       "--no-sandbox",

@@ -496,4 +496,18 @@
   - [x] searchTikTokTriple の3つのシークレットウィンドウが順次実行（for ループ）であることを確認
   - [x] Promise.all() を使わず、1つずつ await で実行されることを確認
   - [x] メモリ使用量をログ出力して監視（起動前・起動後・終了前・終了後）
-- [ ] チェックポイント保存と再デプロイ
+- [x] チェックポイント保存と再デプロイ（version: 4c59bcce）
+
+## Puppeteer の Browser was not found エラー対策（2026-02-20）
+- [x] 環境変数 PUPPETEER_EXECUTABLE_PATH を優先読み込み
+  - [x] searchTikTokTriple で環境変数を優先読み込み
+  - [x] searchTikTokVideos で環境変数を優先読み込み
+  - [x] scrapeTikTokComments で環境変数を優先読み込み
+  - [x] フォールバックとして puppeteer.executablePath() を使用
+- [x] .puppeteerrc.cjs でキャッシュディレクトリをプロジェクト内に設定
+  - [x] プロジェクトルートに .puppeteerrc.cjs を作成
+  - [x] cacheDirectory を join(__dirname, '.cache', 'puppeteer') に設定
+  - [x] .gitignore に .cache/puppeteer を追加
+- [x] build スクリプトに Chromium インストールを追加
+  - [x] package.json の build コマンドに npx puppeteer browsers install chrome を追加
+- [ ] チェックポイント保存と本番環境テスト
