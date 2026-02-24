@@ -1,4 +1,5 @@
-import puppeteer, { type Browser, type Page } from "puppeteer";
+import puppeteer from "puppeteer";
+import { Browser, Page } from "puppeteer";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import puppeteerExtra from "puppeteer-extra";
 import * as fs from "fs";
@@ -100,27 +101,19 @@ async function fetchSearchResults(
           return { error: `TikTok returned an error page (possibly CAPTCHA). Please try again later.` };
         }
         
-        try {
-          // テキストをJSONにパースする
-          const json = JSON.parse(text);
-          if (!response.ok) {
-            console.error(`[TikTok API] HTTP Error ${response.status}`);
-            console.error(`[TikTok API] Response body:`, JSON.stringify(json).substring(0, 500));
-          }
-          return { status: response.status, data: json };
-        } catch (parseError: any) {
-          // JSONパースに失敗した場合、返ってきたテキストの先頭100文字をエラーに含める
-          const snippet = text.substring(0, 100).replace(/\n/g, " ");
-          console.error(`[TikTok API] JSON Parse Error: ${parseError.message}`);
-          console.error(`[TikTok API] Response snippet:`, snippet);
-          return { error: `JSON Parse Error: ${parseError.message}. Response: ${snippet}` };
+        // JSON パース
+        const data = JSON.parse(text);
+        
+        // エラーレスポンスの検出
+        if (data.status_code && data.status_code !== 0) {
+          console.error(`[TikTok API] Error response: status_code=${data.status_code}, status_msg=${data.status_msg}`);
+          return { error: `TikTok API error: ${data.status_msg || 'Unknown error'}` };
         }
-      } catch (e: any) {
-        console.error(`[TikTok API] Fetch error: ${e.message}`);
-        console.error(`[TikTok API] Error name: ${e.name}`);
-        console.error(`[TikTok API] Error cause: ${e.cause}`);
-        console.error(`[TikTok API] Error stack: ${e.stack}`);
-        return { error: e.message, errorName: e.name, errorCause: e.cause };
+        
+        return data;
+      } catch (err: any) {
+        console.error(`[TikTok API] Fetch error: ${err.message}`);
+        return { error: err.message };
       }
     },
     keyword,
@@ -128,59 +121,6 @@ async function fetchSearchResults(
   );
 }
 
-// APIレスポンスからTikTokVideoオブジェクトに変換
-function parseVideoData(item: any): TikTokVideo | null {
-  if (!item || item.type !== 1 || !item.item) return null;
-
-  const v = item.item;
-  const stats = v.stats || {};
-  const author = v.author || {};
-  // 投稿者の統計情報用オブジェクトを取得（authorStats または author_stats）
-  const authorStats = v.authorStats || v.author_stats || {};
-
-  const hashtags: string[] = [];
-  if (v.textExtra) {
-    v.textExtra.forEach((te: any) => {
-      if (te.hashtagName) hashtags.push(te.hashtagName);
-    });
-  }
-  const hashtagMatches = (v.desc || "").match(/#[\w\u3000-\u9FFF]+/g);
-  if (hashtagMatches) {
-    hashtagMatches.forEach((tag: string) => {
-      const cleaned = tag.replace("#", "");
-      if (!hashtags.includes(cleaned)) hashtags.push(cleaned);
-    });
-  }
-
-  return {
-    id: v.id,
-    desc: v.desc || "",
-    createTime: v.createTime || 0,
-    duration: v.video?.duration || 0,
-    coverUrl: v.video?.cover || "",
-    playUrl: v.video?.playAddr || v.video?.downloadAddr || "",
-    author: {
-      uniqueId: author.uniqueId || "",
-      nickname: author.nickname || "",
-      avatarUrl: author.avatarThumb || author.avatarMedium || "",
-      // authorの中になければ、authorStatsから取得するようにフォールバックを追加
-      followerCount: author.followerCount || authorStats.followerCount || 0,
-      followingCount: author.followingCount || authorStats.followingCount || 0,
-      heartCount: author.heartCount || author.heart || authorStats.heartCount || 0,
-      videoCount: author.videoCount || authorStats.videoCount || 0,
-    },
-    stats: {
-      playCount: stats.playCount || 0,
-      diggCount: stats.diggCount || 0,
-      commentCount: stats.commentCount || 0,
-      shareCount: stats.shareCount || 0,
-      collectCount: stats.collectCount || 0,
-    },
-    hashtags,
-  };
-}
-
-// 1つのシークレットブラウザコンテキストでキーワード検索して動画を取得
 async function searchInIncognitoContext(
   browser: Browser,
   keyword: string,
@@ -299,429 +239,118 @@ async function searchInIncognitoContext(
         if (ipCheckResponse.statusCode) {
           console.error(`[TikTok Session ${sessionIndex + 1}] HTTP Status Code: ${ipCheckResponse.statusCode}`);
         }
-        if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシエラー - ${ipCheckResponse.error}`);
       } else {
-        const ip = ipCheckResponse.ip || 'unknown';
-        const country = ipCheckResponse.country || 'unknown';
-        console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip}, Country: ${country}`);
-        if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ IP: ${ip} (${country})`);
-        if (country !== 'JP') {
-          console.warn(`[TikTok Session ${sessionIndex + 1}] WARNING: Expected country JP, but got ${country}`);
-        } else {
-          console.log(`[TikTok Session ${sessionIndex + 1}] ✓ Confirmed: Japanese residential IP`);
-        }
+        console.log(`[Proxy Info] Country: ${ipCheckResponse.country}, IP: ${ipCheckResponse.ip_version}`);
+        console.log(`[Proxy Info] Full response:`, JSON.stringify(ipCheckResponse, null, 2));
       }
-    } catch (ipCheckError: any) {
-      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${ipCheckError.name}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${ipCheckError.cause}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error stack: ${ipCheckError.stack}`);
-      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ接続失敗 - ${ipCheckError.message}`);
+    } catch (error) {
+      console.error(`[TikTok Session ${sessionIndex + 1}] Proxy verification failed:`, error);
     }
 
-    // TikTokにアクセスしてCookieを取得
-    console.log(`[TikTok Session ${sessionIndex + 1}] Initializing...`);
-    if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
+    // TikTok検索ページにアクセス
+    const searchUrl = `https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`;
+    console.log(`[TikTok Session ${sessionIndex + 1}] Accessing search URL: ${searchUrl}`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: TikTok検索ページにアクセス中...`);
 
-    try {
-      await page.goto("https://www.tiktok.com/", {
-        waitUntil: "domcontentloaded",
-        timeout: 90000,
-      });
-    } catch (gotoError: any) {
-      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to TikTok homepage`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error message: ${gotoError.message}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${gotoError.name}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${gotoError.cause}`);
-      throw gotoError;
-    }
-    // セッションごとに異なる待機時間（フィンガープリント対策）
-    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+    await page.goto(searchUrl, { waitUntil: "networkidle2", timeout: 120000 });
 
-    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール
-    const performRobustScroll = async (maxScrolls: number = 5) => {
-      for (let i = 0; i < maxScrolls; i++) {
-        await page.evaluate(() => {
-          window.scrollBy(0, 500);
-        });
-        await new Promise((r) => setTimeout(r, 500));
-      }
-      console.log(`[TikTok Session ${sessionIndex + 1}] Robust scroll completed (${maxScrolls} scrolls)`);
-    };
-
-    // 検索ページに遷移してCookieを確立
-    console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
-    if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
-    
-    try {
-      await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
-        waitUntil: "domcontentloaded",
-        timeout: 90000,
-      });
-    } catch (gotoError: any) {
-      console.error(`[TikTok Session ${sessionIndex + 1}] Failed to navigate to search page`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error message: ${gotoError.message}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error name: ${gotoError.name}`);
-      console.error(`[TikTok Session ${sessionIndex + 1}] Error cause: ${gotoError.cause}`);
-      throw gotoError;
-    }
-    
-    // 【通信最適化】画像ブロックのためスクリーンショットを削除
-    // （画像ブロックで画像データが取得できないため削除）
-    console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot skipped (images blocked for bandwidth optimization)`);
-    
-    await new Promise((r) => setTimeout(r, 3000));
-    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール実行
-    await performRobustScroll(3);
-
-    const allVideos: TikTokVideo[] = [];
+    // 動画データを取得
+    const videos: TikTokVideo[] = [];
     let offset = 0;
-    const batchSize = 12;
-    let hasMore = true;
-    let retryCount = 0;
-    const maxRetries = 3;
 
-    while (allVideos.length < maxVideos && hasMore && retryCount < maxRetries) {
-      console.log(
-        `[TikTok Session ${sessionIndex + 1}] Fetching offset=${offset}, current=${allVideos.length}/${maxVideos}`
-      );
-      if (onProgress)
-        onProgress(
-          `検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos})`
-        );
+    while (videos.length < maxVideos) {
+      console.log(`[TikTok Session ${sessionIndex + 1}] Fetching videos (offset: ${offset}, current: ${videos.length}/${maxVideos})`);
+      if (onProgress) onProgress(`検索${sessionIndex + 1}: 動画取得中 (${videos.length}/${maxVideos})...`);
 
       const result = await fetchSearchResults(page, keyword, offset);
 
       if (result.error) {
-        console.error(
-          `[TikTok Session ${sessionIndex + 1}] API error: ${result.error}`
-        );
-        retryCount++;
-        await new Promise((r) => setTimeout(r, 2000));
-        continue;
-      }
-
-      if (
-        !result.data ||
-        result.data.status_code !== 0 ||
-        !result.data.data
-      ) {
-        console.log(
-          `[TikTok Session ${sessionIndex + 1}] No more data or error status: ${result.data?.status_code}`
-        );
-        hasMore = false;
+        console.error(`[TikTok Session ${sessionIndex + 1}] API error:`, result.error);
         break;
       }
 
-      const items = result.data.data;
-      let newVideos = 0;
+      const itemList = result.data?.item_list || [];
+      if (!itemList || itemList.length === 0) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] No more videos found`);
+        break;
+      }
 
-      for (const item of items) {
-        const video = parseVideoData(item);
-        if (video && !allVideos.find((v) => v.id === video.id)) {
-          allVideos.push(video);
-          newVideos++;
-          if (allVideos.length >= maxVideos) break;
+      for (const item of itemList) {
+        if (videos.length >= maxVideos) break;
+
+        try {
+          const video = item.item_info?.video;
+          if (!video) continue;
+
+          const author = item.item_info?.author;
+          if (!author) continue;
+
+          const stats = item.item_info?.statistics;
+
+          videos.push({
+            id: video.id || "",
+            desc: video.desc || "",
+            createTime: video.create_time || 0,
+            duration: video.duration || 0,
+            coverUrl: video.cover?.url_list?.[0] || "",
+            playUrl: video.play_addr?.url_list?.[0] || "",
+            author: {
+              uniqueId: author.unique_id || "",
+              nickname: author.nickname || "",
+              avatarUrl: author.avatar_medium?.url_list?.[0] || "",
+              followerCount: author.follower_count || 0,
+              followingCount: author.following_count || 0,
+              heartCount: author.heart_count || 0,
+              videoCount: author.video_count || 0,
+            },
+            stats: {
+              playCount: stats?.play_count || 0,
+              diggCount: stats?.digg_count || 0,
+              commentCount: stats?.comment_count || 0,
+              shareCount: stats?.share_count || 0,
+              collectCount: stats?.collect_count || 0,
+            },
+            hashtags: item.item_info?.challenges?.map((c: any) => c.title) || [],
+          });
+        } catch (e) {
+          console.error(`[TikTok Session ${sessionIndex + 1}] Error parsing video:`, e);
         }
       }
 
-      console.log(
-        `[TikTok Session ${sessionIndex + 1}] Got ${newVideos} new videos, total: ${allVideos.length}`
-      );
+      offset += 30;
 
-      if (newVideos === 0) {
-        retryCount++;
-      } else {
-        retryCount = 0;
-      }
-
-      offset += batchSize;
-
-      // レート制限対策: セッションごとに異なる間隔
-      const delay = 1500 + Math.random() * 2000;
-      await new Promise((r) => setTimeout(r, delay));
-
-      if (result.data.has_more === 0 || result.data.has_more === false) {
-        hasMore = false;
-      }
+      // レート制限対策：次のリクエスト前に待機
+      await new Promise((r) => setTimeout(r, 2000 + Math.random() * 1000));
     }
 
-    console.log(
-      `[TikTok Session ${sessionIndex + 1}] Complete: ${allVideos.length} videos`
-    );
+    console.log(`[TikTok Session ${sessionIndex + 1}] Fetched ${videos.length} videos`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: 完了 (${videos.length}件取得)`);
 
     return {
-      videos: allVideos.slice(0, maxVideos),
+      videos,
       keyword,
-      totalFetched: allVideos.length,
+      totalFetched: videos.length,
       sessionIndex,
     };
+  } catch (error) {
+    console.error(`[TikTok Session ${sessionIndex + 1}] Error in searchInIncognitoContext:`, error);
+    throw error;
   } finally {
-    await page.close();
-    await context.close(); // インコグニートコンテキストを完全に破棄
+    await context.close();
   }
 }
 
-// 重複度分析: 3回の検索結果を比較して勝ちパターン動画を特定
-function analyzeDuplicates(
-  searches: [TikTokSearchResult, TikTokSearchResult, TikTokSearchResult]
-): TikTokTripleSearchResult["duplicateAnalysis"] {
-  // 各動画IDの出現回数をカウント
-  const videoAppearanceCount = new Map<string, number>();
-  const videoMap = new Map<string, TikTokVideo>();
-
-  for (const search of searches) {
-    const seenInThisSearch = new Set<string>();
-    for (const video of search.videos) {
-      if (!seenInThisSearch.has(video.id)) {
-        seenInThisSearch.add(video.id);
-        videoAppearanceCount.set(
-          video.id,
-          (videoAppearanceCount.get(video.id) || 0) + 1
-        );
-        // 最新のデータで上書き（statsが最新のものを使う）
-        if (
-          !videoMap.has(video.id) ||
-          video.stats.playCount > (videoMap.get(video.id)?.stats.playCount || 0)
-        ) {
-          videoMap.set(video.id, video);
-        }
-      }
-    }
-  }
-
-  const appearedInAll3: TikTokVideo[] = [];
-  const appearedIn2: TikTokVideo[] = [];
-  const appearedIn1Only: TikTokVideo[] = [];
-
-  for (const [videoId, count] of Array.from(videoAppearanceCount.entries())) {
-    const video = videoMap.get(videoId)!;
-    if (count >= 3) {
-      appearedInAll3.push(video);
-    } else if (count === 2) {
-      appearedIn2.push(video);
-    } else {
-      appearedIn1Only.push(video);
-    }
-  }
-
-  // 各カテゴリ内で再生数順にソート
-  appearedInAll3.sort((a, b) => b.stats.playCount - a.stats.playCount);
-  appearedIn2.sort((a, b) => b.stats.playCount - a.stats.playCount);
-  appearedIn1Only.sort((a, b) => b.stats.playCount - a.stats.playCount);
-
-  const allUniqueVideos = [...appearedInAll3, ...appearedIn2, ...appearedIn1Only];
-  const totalUniqueCount = allUniqueVideos.length;
-  const duplicateCount = appearedInAll3.length + appearedIn2.length;
-  const overlapRate =
-    totalUniqueCount > 0 ? (duplicateCount / totalUniqueCount) * 100 : 0;
-
-  return {
-    appearedInAll3,
-    appearedIn2,
-    appearedIn1Only,
-    allUniqueVideos,
-    overlapRate,
-  };
-}
-
-// メイン関数: 3つのシークレットブラウザで同一キーワード検索→重複度分析
 export async function searchTikTokTriple(
   keyword: string,
-  videosPerSearch: number = 15,
-  onProgress?: (message: string, percent: number) => void
-): Promise<TikTokTripleSearchResult> {
-  // ブラウザを起動
-  let browser: Browser;
-  try {
-    console.log(`[Puppeteer] Memory before browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
-    
-    // 環境変数 PUPPETEER_EXECUTABLE_PATH を優先、フォールバックで puppeteer.executablePath()
-    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
-    console.log(`[Puppeteer] Launching browser with executablePath: ${executablePath}`);
-    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-      console.log(`[Puppeteer] Using PUPPETEER_EXECUTABLE_PATH from environment variable`);
-    } else {
-      console.log(`[Puppeteer] Using puppeteer.executablePath() as fallback`);
-    }
-    
-    // 【Bright Data プロキシ設定】launchOptions を共通化
-    const launchArgs = [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--single-process",
-      "--ignore-certificate-errors",
-      "--ignore-certificate-errors-spki-list",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ];
-
-    // プロキシサーバーを設定（環境変数から取得）
-    if (process.env.PROXY_SERVER) {
-      launchArgs.push(`--proxy-server=${process.env.PROXY_SERVER}`);
-      console.log(`[Puppeteer] Proxy server configured: ${process.env.PROXY_SERVER}`);
-    } else {
-      console.warn("[Puppeteer] PROXY_SERVER environment variable not set. Running without proxy.");
-    }
-
-    browser = await puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: launchArgs,
-    });
-    console.log("[Puppeteer] Browser launched successfully with proxy configuration");
-    console.log(`[Puppeteer] Memory after browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
-  } catch (launchError: any) {
-    console.error("[Puppeteer] CRITICAL: Failed to launch browser");
-    console.error("[Puppeteer] Error message:", launchError.message);
-    console.error("[Puppeteer] Error code:", launchError.code);
-    console.error("[Puppeteer] Error stack:", launchError.stack);
-    
-    // Chromium path check
-    try {
-      const attemptedPath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
-      console.error(`[Puppeteer] Attempted executablePath: ${attemptedPath}`);
-      if (!fs.existsSync(attemptedPath)) {
-        console.error(`[Puppeteer] Chromium NOT found at: ${attemptedPath}`);
-        console.error(`[Puppeteer] PUPPETEER_EXECUTABLE_PATH env: ${process.env.PUPPETEER_EXECUTABLE_PATH || 'not set'}`);
-        console.error(`[Puppeteer] puppeteer.executablePath(): ${puppeteer.executablePath()}`);
-        if (!fs.existsSync(puppeteer.executablePath())) {
-          console.error(`[Puppeteer] Fallback path also NOT found: ${puppeteer.executablePath()}`);
-        }
-      } else {
-        console.error(`[Puppeteer] Chromium exists at: ${attemptedPath}`);
-      }
-    } catch (e: any) {
-      console.error(`[Puppeteer] Failed to check Chromium path:`, e.message);
-    }
-    
-    // Environment info
-    console.error("[Puppeteer] Environment info:");
-    console.error("[Puppeteer] NODE_ENV:", process.env.NODE_ENV);
-    console.error("[Puppeteer] Platform:", process.platform);
-    console.error("[Puppeteer] Memory available:", Math.round(os.freemem() / 1024 / 1024), "MB");
-    
-    throw launchError;
-  }
-
-  try {
-    if (onProgress) onProgress("3つのシークレットブラウザを起動中...", 5);
-
-    // 3つのシークレットブラウザコンテキストで順次検索
-    // （並列だとレート制限に引っかかるため順次実行）
-    const searches: TikTokSearchResult[] = [];
-
-    for (let i = 0; i < 3; i++) {
-      if (onProgress) {
-        onProgress(`検索${i + 1}/3: シークレットブラウザで検索中...`, 10 + i * 25);
-      }
-
-      const result = await searchInIncognitoContext(
-        browser,
-        keyword,
-        videosPerSearch,
-        i,
-        (msg) => {
-          if (onProgress) {
-            const basePercent = 10 + i * 25;
-            onProgress(msg, basePercent);
-          }
-        }
-      );
-
-      searches.push(result);
-
-      // 次の検索前に間隔を空ける（レート制限対策）
-      if (i < 2) {
-        if (onProgress)
-          onProgress(`検索${i + 1}完了。次の検索まで待機中...`, 10 + (i + 1) * 25 - 5);
-        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
-      }
-    }
-
-    if (onProgress) onProgress("重複度分析中...", 85);
-
-    // 重複度分析
-    const tripleSearches = searches as [
-      TikTokSearchResult,
-      TikTokSearchResult,
-      TikTokSearchResult,
-    ];
-    const duplicateAnalysis = analyzeDuplicates(tripleSearches);
-
-    console.log(
-      `[TikTok] Triple search complete for "${keyword}":`,
-      `3回全出現=${duplicateAnalysis.appearedInAll3.length},`,
-      `2回出現=${duplicateAnalysis.appearedIn2.length},`,
-      `1回のみ=${duplicateAnalysis.appearedIn1Only.length},`,
-      `重複率=${duplicateAnalysis.overlapRate.toFixed(1)}%`
-    );
-
-    if (onProgress) onProgress("データ収集完了", 90);
-
-    return {
-      searches: tripleSearches,
-      duplicateAnalysis,
-      keyword,
-    };
-  } finally {
-    console.log(`[Puppeteer] Memory before browser close: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
-    await browser.close();
-    console.log(`[Puppeteer] Memory after browser close: ${Math.round(os.freemem() / 1024 / 1024)} MB`);
-  }
-}
-
-// 後方互換性のために残す（単一検索）
-export async function searchTikTokVideos(
-  keyword: string,
   maxVideos: number = 15,
-  onProgress?: (fetched: number, total: number) => void
-): Promise<TikTokSearchResult> {
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
-  console.log(`[Puppeteer searchTikTokVideos] executablePath: ${executablePath}`);
-  const browser = await puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--single-process",
-      "--ignore-certificate-errors",
-      "--ignore-certificate-errors-spki-list",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ],
-  });
-
-  try {
-    const result = await searchInIncognitoContext(
-      browser,
-      keyword,
-      maxVideos,
-      0,
-      (msg) => console.log(msg)
-    );
-    return result;
-  } finally {
-    await browser.close();
-  }
-}
-
-
-/**
- * TikTok動画のコメントを取得する関数
- * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
- */
-export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
-  // puppeteer-extra は ESM import でトップレベルで読み込み済み
+  onProgress?: (message: string) => void
+): Promise<TikTokTripleSearchResult> {
   puppeteerExtra.use(stealthPlugin);
-  
+
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
-  console.log(`[Puppeteer scrapeTikTokComments] executablePath: ${executablePath}`);
+  console.log(`[Puppeteer searchTikTokTriple] executablePath: ${executablePath}`);
+  console.log(`[Memory] Before browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
+
   const browser = await puppeteerExtra.launch({
     executablePath,
     headless: true,
@@ -736,50 +365,208 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
       "--window-size=1920,1080",
       "--lang=ja-JP",
     ],
+    timeout: 120000,
   });
 
-  const page = await browser.newPage();
-  const comments: string[] = [];
+  try {
+    console.log(`[Memory] After browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
+
+    // 3つのシークレットウィンドウで順次検索（並列ではなく順次実行）
+    const searches: TikTokSearchResult[] = [];
+
+    for (let i = 0; i < 3; i++) {
+      console.log(`[TikTok] Starting search session ${i + 1}/3...`);
+      const result = await searchInIncognitoContext(browser, keyword, maxVideos, i, onProgress);
+      searches.push(result);
+
+      // 次の検索前に間隔を空ける（レート制限対策）
+      if (i < 2) {
+        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+      }
+    }
+
+    console.log(`[Memory] After all searches: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
+
+    // 重複分析
+    const videoMap = new Map<string, { video: TikTokVideo; count: number }>();
+
+    searches.forEach((search) => {
+      search.videos.forEach((video) => {
+        if (videoMap.has(video.id)) {
+          videoMap.get(video.id)!.count++;
+        } else {
+          videoMap.set(video.id, { video, count: 1 });
+        }
+      });
+    });
+
+    const appearedInAll3 = Array.from(videoMap.values())
+      .filter((v) => v.count === 3)
+      .map((v) => v.video);
+    const appearedIn2 = Array.from(videoMap.values())
+      .filter((v) => v.count === 2)
+      .map((v) => v.video);
+    const appearedIn1Only = Array.from(videoMap.values())
+      .filter((v) => v.count === 1)
+      .map((v) => v.video);
+    const allUniqueVideos = Array.from(videoMap.values()).map((v) => v.video);
+
+    const overlapRate = appearedInAll3.length > 0 ? (appearedInAll3.length / allUniqueVideos.length) * 100 : 0;
+
+    return {
+      searches: [searches[0], searches[1], searches[2]],
+      duplicateAnalysis: {
+        appearedInAll3,
+        appearedIn2,
+        appearedIn1Only,
+        allUniqueVideos,
+        overlapRate,
+      },
+      keyword,
+    };
+  } catch (error) {
+    console.error("[TikTok] Error in searchTikTokTriple:", error);
+    throw error;
+  } finally {
+    await browser.close();
+    console.log(`[Memory] After browser close: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
+  }
+}
+
+export async function searchTikTokVideos(
+  keyword: string,
+  maxVideos: number = 15
+): Promise<TikTokVideo[]> {
+  puppeteerExtra.use(stealthPlugin);
+
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+  console.log(`[Puppeteer searchTikTokVideos] executablePath: ${executablePath}`);
+
+  const browser = await puppeteerExtra.launch({
+    executablePath,
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      "--single-process",
+      "--ignore-certificate-errors",
+      "--ignore-certificate-errors-spki-list",
+      "--window-size=1920,1080",
+      "--lang=ja-JP",
+    ],
+    timeout: 120000,
+  });
 
   try {
-    // 【最重要】ネットワーク通信を監視してコメントAPIの返事を横取りする
-    page.on("response", async (response: any) => {
-      const url = response.url();
-      // URLに「api/comment/list」が含まれていたら、それはコメントのデータ
-      if (url.includes("/api/comment/list/")) {
-        try {
-          const json = await response.json();
-          // json.comments の中にコメントデータの配列が入っている
-          if (json && json.comments) {
-            json.comments.forEach((c: any) => {
-              if (c.text) {
-                comments.push(c.text); // コメントの文章だけを抽出
-              }
-            });
-          }
-        } catch (e) {
-          console.error("[TikTok Comments] JSON parsing error:", e);
-        }
-      }
-    });
-
-    // 動画ページにアクセス
-    await page.goto(videoUrl, { waitUntil: "networkidle2" });
-
-    // コメント欄を読み込ませるために、画面を少し下にスクロールする
-    await page.evaluate(() => {
-      window.scrollBy(0, 800);
-    });
-
-    // 通信が終わるまで数秒待機
-    await new Promise((r) => setTimeout(r, 3000));
-
-    console.log(`[TikTok Comments] Extracted ${comments.length} comments from ${videoUrl}`);
+    const result = await searchInIncognitoContext(browser, keyword, maxVideos, 0);
+    return result.videos;
   } catch (error) {
-    console.error("[TikTok Comments] Error scraping comments:", error);
+    console.error("[TikTok] Error in searchTikTokVideos:", error);
+    throw error;
   } finally {
     await browser.close();
   }
+}
 
-  return comments;
+/**
+ * TikTok動画のコメントを取得する関数
+ * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
+ * 
+ * 【サバイバル・ローンチ戦略】
+ * - デフォルトコンテキストを再利用（browser.newPage() を削除）
+ * - TargetCloseError 時に自動リトライ
+ * - タイムアウトを120秒に延長
+ */
+export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
+  // puppeteer-extra は ESM import でトップレベルで読み込み済み
+  puppeteerExtra.use(stealthPlugin);
+  
+  // 【サバイバル・ローンチ戦略】OSスワップの示唆
+  process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true';
+  
+  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
+  console.log(`[Puppeteer scrapeTikTokComments] executablePath: ${executablePath}`);
+  
+  // 【リトライロジック】TargetCloseError 時に自動リトライ
+  let retryCount = 0;
+  const maxRetries = 1;
+  
+  while (retryCount <= maxRetries) {
+    try {
+      const browser = await puppeteerExtra.launch({
+        executablePath,
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--single-process",
+          "--ignore-certificate-errors",
+          "--ignore-certificate-errors-spki-list",
+          "--window-size=1920,1080",
+          "--lang=ja-JP",
+        ],
+        timeout: 120000, // 【タイムアウトの極大化】120秒に延長
+      });
+
+      try {
+        // 【デフォルトコンテキストの再利用】最初のページを取得（新しいタブを作らない）
+        const pages = await browser.pages();
+        const page = pages[0] || await browser.newPage();
+        const comments: string[] = [];
+
+        // 【最重要】ネットワーク通信を監視してコメントAPIの返事を横取りする
+        page.on("response", async (response: any) => {
+          const url = response.url();
+          // URLに「api/comment/list」が含まれていたら、それはコメントのデータ
+          if (url.includes("/api/comment/list/")) {
+            try {
+              const json = await response.json();
+              // json.comments の中にコメントデータの配列が入っている
+              if (json && json.comments) {
+                json.comments.forEach((c: any) => {
+                  if (c.text) {
+                    comments.push(c.text); // コメントの文章だけを抽出
+                  }
+                });
+              }
+            } catch (e) {
+              console.error("[TikTok Comments] JSON parsing error:", e);
+            }
+          }
+        });
+
+        // 動画ページにアクセス
+        await page.goto(videoUrl, { waitUntil: "networkidle2", timeout: 120000 });
+
+        // コメント欄を読み込ませるために、画面を少し下にスクロールする
+        await page.evaluate(() => {
+          window.scrollBy(0, 800);
+        });
+
+        // 通信が終わるまで数秒待機
+        await new Promise((r) => setTimeout(r, 3000));
+
+        console.log(`[TikTok Comments] Extracted ${comments.length} comments from ${videoUrl}`);
+        return comments;
+      } finally {
+        await browser.close();
+      }
+    } catch (error: any) {
+      // 【リトライロジック】TargetCloseError 時に自動リトライ
+      if (error.name === 'TargetCloseError' && retryCount < maxRetries) {
+        console.warn(`[TikTok Comments] TargetCloseError detected, retrying (${retryCount + 1}/${maxRetries})...`);
+        retryCount++;
+        await new Promise((r) => setTimeout(r, 2000)); // 2秒待機してリトライ
+      } else {
+        console.error("[TikTok Comments] Error scraping comments:", error);
+        throw error;
+      }
+    }
+  }
+
+  return [];
 }

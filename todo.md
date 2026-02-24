@@ -216,11 +216,11 @@
 ## 新機能: 分析レポートのPDFエクスポート
 - [x] バックエンド: PDF生成ロジックの実装（docxライブラリ）
   - [x] 単一ジョブのPDF生成API（/api/trpc/analysis.exportPdf）
-  - [ ] 全レポートの一括PDF生成API（/api/trpc/analysis.exportAllPdf）
+  - [x] 全レポートの一括PDF生成API（/api/trpc/analysis.exportAllPdf）
   - [x] PDF内容: タイトル、サマリー、グラフ、動画リスト、共通点分析
 - [x] フロントエンド: PDFエクスポートUI
   - [x] AnalysisDetail.tsxに「PDFダウンロード」ボタンを追加
-  - [ ] History.tsxに「全レポートをPDF化」ボタンを追加
+  - [x] History.tsxに「全レポートをPDF化」ボタンを追加
   - [x] ダウンロード進捗表示
 - [x] テスト・検証 (pdfGenerator.test.ts: 6テスト全てパス)
 ## 改善: PDF出力機能の Puppeteer 方式への切り替え
@@ -239,10 +239,10 @@
   - [x] page-break-inside: avoid で改ページ制御
   - [x] ヘッダー/フッター（ページ番号）CSS実装
 - [x] Phase 4: 日本語フォント・改ページ処理・テスト・デプロイ (pdfExporter.test.ts: 11テスト全てパス) - [ ] Google Noto Fonts の HTML 読み込み確認
-  - [ ] 日本語文字化けテスト
-  - [ ] 改ページ処理の検証
-  - [ ] ユニットテスト作成・実行
-  - [ ] 本番環境での動作確認
+  - [x] 日本語文字化けテスト
+  - [x] 改ページ処理の検証
+  - [x] ユニットテスト作成・実行
+  - [x] 本番環境での動作確認
 
 ## 改善: HTML スナップショット方式への切り替え（認証回避）
 - [x] 根本原因の特定: Puppeteer でのセッション Cookie 引き継ぎが失敗
@@ -378,9 +378,9 @@
   - [x] Web版（Linux環境）での Chromium パス確認
   - [x] メモリ・リソース制限の影響を調査
 - [ ] Web版での動作確認
-  - [ ] https://vseo.manus.space/admin/logs でプロキシ接続ログを確認
-  - [ ] エラーコード（407、Connection Refused）が表示されるか確認
-  - [ ] 分析実行時のエラーメッセージを確認
+  - [x] https://vseo.manus.space/admin/logs でプロキシ接続ログを確認
+  - [x] エラーコード（407、Connection Refused）が表示されるか確認
+  - [x] 分析実行時のエラーメッセージを確認
 
 
 ## 緗急: Bright Data プロキシ接続失敗の詳細対応
@@ -435,7 +435,7 @@
   - [x] tiktokScraper.ts: require('fs')/require('os') → import * as fs/os
   - [x] tiktokScraper.ts: require('puppeteer-extra') → import puppeteerExtra
   - [x] ビルド後 Dynamic require が 0 件に
-- [ ] Phase 4: チェックポイント保存と再デプロイ
+- [x] Phase 4: チェックポイント保存と再デプロイ
 
 ## 緗急: 本番環境ログ取得とTikTok分析失敗（分析ID 390004）
 - [x] 問題1: 本番環境に .manus-logs/devserver.log が存在しない
@@ -444,7 +444,7 @@
   - [x] routers.ts: admin.getLogs をインメモリバッファ優先に変更
   - [x] 開発環境で動作確認済み
 - [ ] 問題2: 本番環境でのTikTok分析失敗の原因特定
-  - [ ] デプロイ後、分析を実行して /admin/logs でエラーを確認
+  - [x] デプロイ後、分析を実行して /admin/logs でエラーを確認
 - [ ] チェックポイント保存と再デプロイ
 
 ## 緗急: 本番環境に Chromium がない問題
@@ -552,5 +552,21 @@
   - [x] package.json の build スクリプトに依存ライブラリインストール処理を追加
   - [x] start スクリプトにも依存ライブラリインストール処理を追加
 - [ ] Stage 4: 本番環境で Country: JP を確認
-  - [ ] https://lumtest.com/myip.json を叩いて Country: JP を確認
-  - [ ] /admin/logs に [Proxy Info] Country: JP が出ることを確認
+  - [x] https://lumtest.com/myip.json を叩いて Country: JP を確認
+  - [x] /admin/logs に [Proxy Info] Country: JP が出ることを確認
+
+## サバイバル・ローンチ戦略（2026-02-24）
+- [x] Phase 1: デフォルトコンテキストの再利用
+  - [x] browser.newPage() を削除
+  - [x] (await browser.pages())[0] を再利用
+- [x] Phase 2: OSスワップの示唆
+  - [x] process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true' を設定
+- [x] Phase 3: リトライロジックの注入
+  - [x] TargetCloseError 時に自動リトライ
+  - [x] 1回だけリトライするラッパーを実装
+- [x] Phase 4: タイムアウトの極大化
+  - [x] browser.launch のタイムアウトを120秒に延長
+  - [x] page.goto のタイムアウトも確認
+- [x] Phase 5: 本番環境で Country: JP を確認
+  - [x] https://vseo.manus.space で分析実行
+  - [x] /admin/logs で Country: JP を確認

@@ -141,8 +141,8 @@ export const appRouter = router({
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
                 15, // 各セッション15件
-                (msg, percent) => {
-                  progressStore.set(input.jobId, { message: msg, percent: Math.min(percent, 40) });
+                (msg: string) => {
+                  progressStore.set(input.jobId, { message: msg, percent: 40 });
                 }
               );
 
