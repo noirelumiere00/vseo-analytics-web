@@ -4,6 +4,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import puppeteerExtra from "puppeteer-extra";
 import * as fs from "fs";
 import * as os from "os";
+import { setupSwap } from "./setupSwap";
 
 // Stealth プラグインを有効化
 const stealthPlugin = StealthPlugin();
@@ -347,19 +348,23 @@ export async function searchTikTokTriple(
 ): Promise<TikTokTripleSearchResult> {
   puppeteerExtra.use(stealthPlugin);
 
+  setupSwap();
+
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
   console.log(`[Puppeteer searchTikTokTriple] executablePath: ${executablePath}`);
   console.log(`[Memory] Before browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
 
   const browser = await puppeteerExtra.launch({
     executablePath,
-    headless: true,
+    headless: false, // --headless=shell を使用するため false に設定
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--no-zygote",
       "--single-process",
+      "--headless=shell",
       "--ignore-certificate-errors",
       "--ignore-certificate-errors-spki-list",
       "--window-size=1920,1080",
@@ -439,18 +444,22 @@ export async function searchTikTokVideos(
 ): Promise<TikTokVideo[]> {
   puppeteerExtra.use(stealthPlugin);
 
+  setupSwap();
+
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
   console.log(`[Puppeteer searchTikTokVideos] executablePath: ${executablePath}`);
 
   const browser = await puppeteerExtra.launch({
     executablePath,
-    headless: true,
+    headless: false, // --headless=shell を使用するため false に設定
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
+      "--no-zygote",
       "--single-process",
+      "--headless=shell",
       "--ignore-certificate-errors",
       "--ignore-certificate-errors-spki-list",
       "--window-size=1920,1080",
@@ -482,6 +491,8 @@ export async function searchTikTokVideos(
 export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
   // puppeteer-extra は ESM import でトップレベルで読み込み済み
   puppeteerExtra.use(stealthPlugin);
+
+  setupSwap();
   
   // 【サバイバル・ローンチ戦略】OSスワップの示唆
   process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true';

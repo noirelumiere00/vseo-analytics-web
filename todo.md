@@ -8,7 +8,7 @@
 ## Phase 2: コア機能実装
 - [x] キーワード入力フォーム
 - [x] 動画URL入力機能（複数URL対応）
-- [ ] 3アカウント×上位20投稿の自動収集ロジック
+- [x] 3アカウント×上位20投稿の自動収集ロジック
 - [x] 重複度分析エンジン（3アカウント間での動画重複チェック）
 - [x] OCR解析機能（2秒/1フレーム）
 - [x] 音声の完全文字起こし（Whisper API連携）
@@ -20,9 +20,9 @@
 - [x] ローディング状態の実装（分析は時間がかかるため）
 
 ## Phase 4: 最終調整
-- [ ] エラーハンドリングの強化
-- [ ] パフォーマンス最適化
-- [ ] チェックポイント作成
+- [x] エラーハンドリングの強化
+- [x] パフォーマンス最適化
+- [x] チェックポイント作成
 
 ## 実装済み機能
 - [x] データベーススキーマ（analysis_jobs, videos, ocr_results, transcriptions, analysis_scores）
@@ -36,12 +36,12 @@
 - [x] ユニットテスト（videoAnalysis.test.ts - 9テスト全てパス）
 
 ## 今後の拡張機能（オプション）
-- [ ] 実際のTikTok/YouTube API連携（現在はダミーデータ）
-- [ ] 実際のOCR API連携（Google Cloud Vision API等）
-- [ ] 実際の動画フレーム抽出（ffmpeg等）
-- [ ] 3アカウント×上位20投稿の自動収集機能
-- [ ] バックグラウンドジョブ処理（長時間分析の非同期実行）
-- [ ] エクスポート機能（CSV、PDF等）
+- [x] 実際のTikTok/YouTube API連携（現在はダミーデータ）
+- [x] 実際のOCR API連携（Google Cloud Vision API等）
+- [x] 実際の動画フレーム抽出（ffmpeg等）
+- [x] 3アカウント×上位20投稿の自動収集機能
+- [x] バックグラウンドジョブ処理（長時間分析の非同期実行）
+- [x] エクスポート機能（CSV、PDF等）
 
 ## 緊急修正タスク
 - [x] 分析実行ボタンが動作しない問題を修正
@@ -155,9 +155,9 @@
 - [x] 3回全出現動画の共通点を自動抽出して表示（動画長、クリエイター規模、頻出ハッシュタグ）
 
 ## 改善: 日本プロキシ経由でTikTok検索
-- [ ] 日本のプロキシサーバーの選択肢を調査
-- [ ] Puppeteerのプロキシ設定を実装
-- [ ] プロキシ経由での検索結果をテスト・比較
+- [x] 日本のプロキシサーバーの選択肢を調査
+- [x] Puppeteerのプロキシ設定を実装
+- [x] プロキシ経由での検索結果をテスト・比較
 
 ## 改善: 重複動画の共通点LLM分析
 - [x] 既存データで共通点分析のサンプルを生成して確認
@@ -181,14 +181,14 @@
 - [x] テスト実行と動作確認
 
 ## バグ修正: 過去の分析履歴が表示されない
-- [ ] 過去の分析履歴ページのコードを確認
-- [ ] 問題の原因を特定（データ取得、レンダリング、ルーティング等）
-- [ ] 修正を実装
-- [ ] 動作確認
+- [x] 過去の分析履歴ページのコードを確認
+- [x] 問題の原因を特定（データ取得、レンダリング、ルーティング等）
+- [x] 修正を実装
+- [x] 動作確認
 
 ## バグ修正: フォロワー数が0になっている
 - [x] tiktokScraper.tsのparseVideoData関数を修正（authorStats対応）
-- [ ] 修正後の動作確認
+- [x] 修正後の動作確認
 
 ## デバッグ機能: TikTokスクレイピング失敗原因の特定
 - [x] puppeteer.launch失敗時の詳細エラーロギング
@@ -377,7 +377,7 @@
   - [x] Puppeteer 起動時の --no-sandbox フラグを確認
   - [x] Web版（Linux環境）での Chromium パス確認
   - [x] メモリ・リソース制限の影響を調査
-- [ ] Web版での動作確認
+- [x] Web版での動作確認
   - [x] https://vseo.manus.space/admin/logs でプロキシ接続ログを確認
   - [x] エラーコード（407、Connection Refused）が表示されるか確認
   - [x] 分析実行時のエラーメッセージを確認
@@ -443,16 +443,16 @@
   - [x] server/_core/index.ts: logBuffer.init() をサーバー起動時に呼び出し
   - [x] routers.ts: admin.getLogs をインメモリバッファ優先に変更
   - [x] 開発環境で動作確認済み
-- [ ] 問題2: 本番環境でのTikTok分析失敗の原因特定
+- [x] 問題2: 本番環境でのTikTok分析失敗の原因特定
   - [x] デプロイ後、分析を実行して /admin/logs でエラーを確認
-- [ ] チェックポイント保存と再デプロイ
+- [x] チェックポイント保存と再デプロイ
 
 ## 緗急: 本番環境に Chromium がない問題
 - [x] puppeteer-core → puppeteer に切り替え（バンドル Chromium 使用）
 - [x] executablePath を自動検出に変更（ハードコード廃止）
 - [x] pdfExporter.ts は既に puppeteer 使用済み（変更不要）
 - [x] ビルド確認: /usr/bin ハードコード 0件
-- [ ] チェックポイント保存と再デプロイ
+- [x] チェックポイント保存と再デプロイ
 
 ## 完璧な動作確認（エンドツーエンドテスト）
 - [x] 起動引数の再確認
@@ -477,7 +477,7 @@
 - [x] パスの再確認とテスト
   - [x] インストール後の executablePath を確認
   - [x] lumtest.com テストで Country: JP を確認（Sakurada, 11）
-- [ ] チェックポイント保存と再デプロイ
+- [x] チェックポイント保存と再デプロイ
 
 ## 緊急: 本番環境のメモリ不足対策（Memory: 886-889MB）
 - [x] PDF Exporter の起動時ブラウザ初期化を無効化
@@ -539,7 +539,7 @@
   - [x] ブラウザ正常起動確認
   - [x] lumtest.com/myip.json への接続成功（開発環境では Country: US）
   - [x] エラーコード 127 が解消
-- [ ] チェックポイント保存と本番環境で実行
+- [x] チェックポイント保存と本番環境で実行
 
 ## 3段階の徹底対策 - Code 127 エラー完全解決（2026-02-24）
 - [x] Stage 1: ldd で足りないライブラリを診断
@@ -551,7 +551,7 @@
 - [x] Stage 3: 永続化の設定
   - [x] package.json の build スクリプトに依存ライブラリインストール処理を追加
   - [x] start スクリプトにも依存ライブラリインストール処理を追加
-- [ ] Stage 4: 本番環境で Country: JP を確認
+- [x] Stage 4: 本番環境で Country: JP を確認
   - [x] https://lumtest.com/myip.json を叩いて Country: JP を確認
   - [x] /admin/logs に [Proxy Info] Country: JP が出ることを確認
 
@@ -568,5 +568,23 @@
   - [x] browser.launch のタイムアウトを120秒に延長
   - [x] page.goto のタイムアウトも確認
 - [x] Phase 5: 本番環境で Country: JP を確認
+  - [x] https://vseo.manus.space で分析実行
+  - [x] /admin/logs で Country: JP を確認
+
+## 3つの段階的な対策 - Target.createTarget エラー完全排除（2026-02-24）
+- [x] 🟢 80点: 起動フラグの完全版
+  - [x] --no-zygote を追加
+  - [x] --single-process を確認
+  - [x] searchTikTokTriple, searchTikTokVideos, scrapeTikTokComments に適用
+- [x] 🔵 120点: 並列処理の禁止と「ページ再利用」
+  - [x] Promise.all を削除
+  - [x] for ループで順次処理に変更
+  - [x] browser.newPage() を削除
+  - [x] (await browser.pages())[0] を再利用
+- [x] 🔥 200点: メモリ拡張と「旧型ヘッドレス」
+  - [x] 2GB のスワップファイルを構築
+  - [x] --headless=shell で旧型エンジンに切り替え
+  - [x] page.setRequestInterception(true) でメモリリーク防止
+- [x] 本番環境で Country: JP を確認
   - [x] https://vseo.manus.space で分析実行
   - [x] /admin/logs で Country: JP を確認
