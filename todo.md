@@ -542,15 +542,15 @@
 - [ ] チェックポイント保存と本番環境で実行
 
 ## 3段階の徹底対策 - Code 127 エラー完全解決（2026-02-24）
-- [ ] Stage 1: ldd で足りないライブラリを診断
-  - [ ] ldd /home/ubuntu/vseo-analytics-web/.cache/puppeteer/chrome/linux-145.0.7632.77/chrome-linux64/chrome | grep "not found" を実行
-  - [ ] 足りないライブラリを特定
-- [ ] Stage 2: 依存関係の強制解決
-  - [ ] 案A: npx puppeteer browsers install chrome --install-deps を試行
-  - [ ] 案B: apt-get で全ライブラリをインストール
-- [ ] Stage 3: 永続化の設定
-  - [ ] package.json の build スクリプトに依存ライブラリインストール処理を追加
-  - [ ] start スクリプトにも依存ライブラリインストール処理を追加
+- [x] Stage 1: ldd で足りないライブラリを診断
+  - [x] ldd /home/ubuntu/vseo-analytics-web/.cache/puppeteer/chrome/linux-145.0.7632.77/chrome-linux64/chrome | grep "not found" を実行
+  - [x] 足りないライブラリを特定
+- [x] Stage 2: 依存関係の強制解決
+  - [x] 案A: npx puppeteer browsers install chrome --install-deps を試行
+  - [x] 案B: apt-get で全ライブラリをインストール
+- [x] Stage 3: 永続化の設定
+  - [x] package.json の build スクリプトに依存ライブラリインストール処理を追加
+  - [x] start スクリプトにも依存ライブラリインストール処理を追加
 - [ ] Stage 4: 本番環境で Country: JP を確認
   - [ ] https://lumtest.com/myip.json を叩いて Country: JP を確認
   - [ ] /admin/logs に [Proxy Info] Country: JP が出ることを確認
