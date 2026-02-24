@@ -227,6 +227,11 @@ export const appRouter = router({
             // ステータスを完了に更新
             await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
             progressStore.set(input.jobId, { message: "分析完了", percent: 100 });
+            // メモリリーク対策: 完了後に進捗情報を削除
+            setTimeout(() => {
+              progressStore.delete(input.jobId);
+              console.log(`[Analysis] Progress store cleaned for job ${input.jobId}`);
+            }, 5000);
             console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "不明なエラー";
@@ -234,6 +239,11 @@ export const appRouter = router({
             console.error("[Analysis] Full error:", error);
             
             await db.updateAnalysisJobStatus(input.jobId, "failed");
+            // メモリリーク対策: 失敗後に進捗情報を削除
+            setTimeout(() => {
+              progressStore.delete(input.jobId);
+              console.log(`[Analysis] Progress store cleaned for job ${input.jobId}`);
+            }, 5000);
             
             let userMessage = "分析に失敗しました。";
             if (errorMessage.includes("empty response")) {
@@ -250,6 +260,11 @@ export const appRouter = router({
               message: `分析失敗: ${userMessage}`,
               percent: -1,
             });
+            // メモリリーク対策: エラー時も進捗情報を削除
+            setTimeout(() => {
+              progressStore.delete(input.jobId);
+              console.log(`[Analysis] Progress store cleaned after error for job ${input.jobId}`);
+            }, 5000);
           }
         });
 
@@ -317,130 +332,130 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // 単一ジョブのPDFエクスポート
-    exportPdf: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        const job = await db.getAnalysisJobById(input.jobId);
-        if (!job) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
-        }
-        if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
-        }
+    // 単一ジョブのPDFエクスポート（仮組環境では停止）
+    // exportPdf: protectedProcedure
+    //   .input(z.object({ jobId: z.number() }))
+    //   .mutation(async ({ ctx, input }) => {
+    //     const job = await db.getAnalysisJobById(input.jobId);
+    //     if (!job) {
+    //       throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+    //     }
+    //     if (job.userId !== ctx.user.id) {
+    //       throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+    //     }
+    //
+    //     // 分析データを取得
+    //     const videosData = await db.getVideosByJobId(input.jobId);
+    //     const report = await db.getAnalysisReportByJobId(input.jobId);
+    //     const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+    //
+    //     // PDFを生成
+    //     const docxBuffer = await generateAnalysisReportDocx({
+    //       job,
+    //       report: report || undefined,
+    //       videos: videosData,
+    //       tripleSearch: tripleSearch || undefined,
+    //       keyword: job.keyword || undefined,
+    //     });
+    //
+    //     return {
+    //       success: true,
+    //       buffer: docxBuffer.toString("base64"),
+    //       filename: `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.docx`,
+    //     };
+    //   }),
 
-        // 分析データを取得
-        const videosData = await db.getVideosByJobId(input.jobId);
-        const report = await db.getAnalysisReportByJobId(input.jobId);
-        const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+    // Puppeteer を使用したPDF出力（アコーディオン全開）（仮組環境では停止）
+    // exportPdfPuppeteer: protectedProcedure
+    //   .input(z.object({ jobId: z.number() }))
+    //   .mutation(async ({ ctx, input }) => {
+    //     const job = await db.getAnalysisJobById(input.jobId);
+    //     if (!job) {
+    //       throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+    //     }
+    //     if (job.userId !== ctx.user.id) {
+    //       throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+    //     }
+    //
+    //     // トークンを生成（10分有効）
+    //     const token = generateExportToken(input.jobId, ctx.user.id, 600);
+    //
+    //     // レポートビューページのURLを構築
+    //     const baseUrl = process.env.VITE_FRONTEND_URL || "http://localhost:3000";
+    //     const reportUrl = `${baseUrl}/report/view/${input.jobId}?token=${token}`;
+    //
+    //     // リクエストからセッション Cookie を取得（堅牢な正規表現処理）
+    //     const rawCookieHeader = ctx.req.headers.cookie || "";
+    //     const match = rawCookieHeader.match(/(?:^|;\\s*)app_session_id=([^;]*)/);
+    //     let sessionCookie: string | undefined = match ? match[1] : undefined;
+    //
+    //     if (sessionCookie) {
+    //       try {
+    //         // URLエンコードされている場合にデコード
+    //         sessionCookie = decodeURIComponent(sessionCookie);
+    //         console.log("[PDF Export] Session cookie extracted and decoded");
+    //       } catch (e) {
+    //         console.warn("[PDF Export] Cookie decode error:", e);
+    //         sessionCookie = undefined;
+    //       }
+    //     }
+    //
+    //     try {
+    //       // Puppeteer でPDFを生成
+    //       const pdfBuffer = await generatePdfFromUrl(reportUrl, {
+    //         width: 1200,
+    //         height: 1600,
+    //         waitForSelector: "h1.gradient-text",
+    //         waitForTimeout: 3000,
+    //         sessionCookie: sessionCookie,
+    //       });
+    //
+    //       const filename = `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.pdf`;
+    //       console.log(`[PDF Export] PDF generated successfully for jobId: ${job.id}`);
+    //       
+    //       return {
+    //         success: true,
+    //         downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+    //         filename,
+    //       };
+    //     } catch (error) {
+    //       const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+    //       console.error("[PDF Export] Puppeteer error:", errorMessage);
+    //       throw new TRPCError({
+    //         code: "INTERNAL_SERVER_ERROR",
+    //         message: "PDFの生成に失敗しました: " + errorMessage,
+    //       });
+    //     }
+    //   }),
 
-        // PDFを生成
-        const docxBuffer = await generateAnalysisReportDocx({
-          job,
-          report: report || undefined,
-          videos: videosData,
-          tripleSearch: tripleSearch || undefined,
-          keyword: job.keyword || undefined,
-        });
-
-        return {
-          success: true,
-          buffer: docxBuffer.toString("base64"),
-          filename: `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.docx`,
-        };
-      }),
-
-    // Puppeteer を使用したPDF出力（アコーディオン全開）
-    exportPdfPuppeteer: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        const job = await db.getAnalysisJobById(input.jobId);
-        if (!job) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
-        }
-        if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
-        }
-
-        // トークンを生成（10分有効）
-        const token = generateExportToken(input.jobId, ctx.user.id, 600);
-
-        // レポートビューページのURLを構築
-        const baseUrl = process.env.VITE_FRONTEND_URL || "http://localhost:3000";
-        const reportUrl = `${baseUrl}/report/view/${input.jobId}?token=${token}`;
-
-        // リクエストからセッション Cookie を取得（堅牢な正規表現処理）
-        const rawCookieHeader = ctx.req.headers.cookie || "";
-        const match = rawCookieHeader.match(/(?:^|;\s*)app_session_id=([^;]*)/);
-        let sessionCookie: string | undefined = match ? match[1] : undefined;
-
-        if (sessionCookie) {
-          try {
-            // URLエンコードされている場合にデコード
-            sessionCookie = decodeURIComponent(sessionCookie);
-            console.log("[PDF Export] Session cookie extracted and decoded");
-          } catch (e) {
-            console.warn("[PDF Export] Cookie decode error:", e);
-            sessionCookie = undefined;
-          }
-        }
-
-        try {
-          // Puppeteer でPDFを生成
-          const pdfBuffer = await generatePdfFromUrl(reportUrl, {
-            width: 1200,
-            height: 1600,
-            waitForSelector: "h1.gradient-text",
-            waitForTimeout: 3000,
-            sessionCookie: sessionCookie,
-          });
-
-          const filename = `VSEO_Report_${job.id}_${new Date().toISOString().split("T")[0]}.pdf`;
-          console.log(`[PDF Export] PDF generated successfully for jobId: ${job.id}`);
-          
-          return {
-            success: true,
-            downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
-            filename,
-          };
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "不明なエラー";
-          console.error("[PDF Export] Puppeteer error:", errorMessage);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "PDFの生成に失敗しました: " + errorMessage,
-          });
-        }
-      }),
-
-    // HTML スナップショットから PDF を生成（認証不要）
-    exportPdfSnapshot: protectedProcedure
-      .input(z.object({
-        html: z.string(),
-        baseUrl: z.string().url(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        try {
-          console.log(`[PDF Export] Generating PDF from HTML snapshot`);
-          const pdfBuffer = await generatePdfFromSnapshot(input.html, input.baseUrl);
-          
-          const filename = `VSEO_Report_${new Date().toISOString().split("T")[0]}.pdf`;
-          console.log(`[PDF Export] PDF generated successfully from snapshot`);
-          
-          return {
-            success: true,
-            downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
-            filename,
-          };
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : "不明なエラー";
-          console.error("[PDF Export] Snapshot PDF generation error:", errorMessage);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "PDFの生成に失敗しました: " + errorMessage,
-          });
-        }
-      }),
+    // HTML スナップショットから PDF を生成（認証不要）（仮組環境では停止）
+    // exportPdfSnapshot: protectedProcedure
+    //   .input(z.object({
+    //     html: z.string(),
+    //     baseUrl: z.string().url(),
+    //   }))
+    //   .mutation(async ({ ctx, input }) => {
+    //     try {
+    //       console.log(`[PDF Export] Generating PDF from HTML snapshot`);
+    //       const pdfBuffer = await generatePdfFromSnapshot(input.html, input.baseUrl);
+    //       
+    //       const filename = `VSEO_Report_${new Date().toISOString().split("T")[0]}.pdf`;
+    //       console.log(`[PDF Export] PDF generated successfully from snapshot`);
+    //       
+    //       return {
+    //         success: true,
+    //         downloadUrl: `data:application/pdf;base64,${pdfBuffer.toString("base64")}`,
+    //         filename,
+    //       };
+    //     } catch (error) {
+    //       const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+    //       console.error("[PDF Export] Snapshot PDF generation error:", errorMessage);
+    //       throw new TRPCError({
+    //         code: "INTERNAL_SERVER_ERROR",
+    //         message: "PDFの生成に失敗しました: " + errorMessage,
+    //       });
+    //     }
+    //   }),
 
     // ジョブを再実行（failed/pendingのジョブをリセットして再実行）
     retry: protectedProcedure

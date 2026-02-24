@@ -1,4 +1,3 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +15,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 // 広告系ハッシュタグのフィルター（フロントエンド用）
 const AD_HASHTAG_PATTERNS = [
@@ -38,15 +38,16 @@ export default function AnalysisDetail() {
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
 
+  // user が undefined の場合は query を無効化
   const { data, isLoading, refetch } = trpc.analysis.getById.useQuery(
     { jobId },
-    { enabled: !!user && jobId > 0 }
+    { enabled: user !== undefined && jobId > 0 }
   );
 
   const { data: progressData, refetch: refetchProgress } = trpc.analysis.getProgress.useQuery(
     { jobId },
     { 
-      enabled: !!user && jobId > 0,
+      enabled: user !== undefined && jobId > 0,
       refetchInterval: (query) => {
         return query.state.data?.status === "processing" ? 2000 : false;
       }
@@ -69,111 +70,65 @@ export default function AnalysisDetail() {
     },
   });
 
-  const exportPdf = trpc.analysis.exportPdf.useMutation({
-    onSuccess: (result) => {
-      const binaryString = atob(result.buffer);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = result.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success("PDFをダウンロードしました");
-    },
-    onError: (error) => {
-      toast.error("PDFの生成に失敗しました: " + error.message);
-    },
-  });
-  const exportPdfPuppeteer = trpc.analysis.exportPdfPuppeteer.useMutation({
-    onSuccess: (result) => {
-      const link = document.createElement("a");
-      link.href = result.downloadUrl;
-      link.download = result.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("アコーディオン全開状態のPDFをダウンロードしました");
-    },
-    onError: (error) => {
-      toast.error("PDFの生成に失敗しました: " + error.message);
-    },
-  });
+  // PDF機能は仮組環境では停止
+  // const exportPdf = trpc.analysis.exportPdf.useMutation({...});
+  // const exportPdfPuppeteer = trpc.analysis.exportPdfPuppeteer.useMutation({...});
+  // const exportPdfSnapshot = trpc.analysis.exportPdfSnapshot.useMutation({...});
 
-  const exportPdfSnapshot = trpc.analysis.exportPdfSnapshot.useMutation({
-    onSuccess: (result) => {
-      const link = document.createElement("a");
-      link.href = result.downloadUrl;
-      link.download = result.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success("画面そのままのPDFをダウンロードしました");
-    },
-    onError: (error) => {
-      toast.error("PDFの生成に失敗しました: " + error.message);
-    },
-  });
-
-  const handleExportPdfSnapshot = useCallback(async () => {
-    try {
-      const closedAccordions = document.querySelectorAll('button[aria-expanded="false"]');
-      console.log(`[PDF Export] Found ${closedAccordions.length} closed accordions`);
-      
-      closedAccordions.forEach((button) => {
-        (button as HTMLElement).click();
-      });
-      
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      console.log('[PDF Export] Accordions expanded, waiting for animation...');
-      
-      // Lazy Load を無効化（Puppeteer が画像読み込み完了を永遠に待つのを防ぐ）
-      document.querySelectorAll('img').forEach((img) => {
-        img.removeAttribute('loading');
-      });
-      console.log('[PDF Export] Lazy loading disabled for all images');
-      
-      // 開発環境のプレビューバナーを一時的に非表示にする
-      const bannerText = 'This page is not live and cannot be shared directly';
-      const elements = Array.from(document.querySelectorAll('div, p, span, a'));
-      const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
-      console.log(`[PDF Export] Found ${bannerElements.length} banner elements`);
-      
-      const originalDisplays = bannerElements.map((el) => (el as HTMLElement).style.display);
-      bannerElements.forEach((el) => {
-        (el as HTMLElement).style.display = 'none';
-      });
-      console.log('[PDF Export] Preview banner hidden');
-      
-      const html = document.documentElement.outerHTML;
-      const baseUrl = window.location.origin;
-      console.log('[PDF Export] HTML snapshot captured with all accordions open');
-      
-      bannerElements.forEach((el, i) => {
-        (el as HTMLElement).style.display = originalDisplays[i];
-      });
-      console.log('[PDF Export] Preview banner restored');
-      
-      exportPdfSnapshot.mutate({ html, baseUrl });
-    } catch (error) {
-      console.error("[PDF Export] Error during accordion expansion:", error);
-      toast.error("PDF生成中にエラーが発生しました");
-    } finally {
-      // エラー時もバナーを元に戻す
-      const bannerText = 'This page is not live and cannot be shared directly';
-      const elements = Array.from(document.querySelectorAll('div, p, span, a'));
-      const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
-      bannerElements.forEach((el) => {
-        (el as HTMLElement).style.display = '';
-      });
-    }
-  }, [exportPdfSnapshot]);
+  // PDF機能は仮組環境では停止
+  // const handleExportPdfSnapshot = useCallback(async () => {
+  //   try {
+  //     const closedAccordions = document.querySelectorAll('button[aria-expanded="false"]');
+  //     console.log(`[PDF Export] Found ${closedAccordions.length} closed accordions`);
+  //     
+  //     closedAccordions.forEach((button) => {
+  //       (button as HTMLElement).click();
+  //     });
+  //     
+  //     await new Promise((resolve) => setTimeout(resolve, 500));
+  //     console.log('[PDF Export] Accordions expanded, waiting for animation...');
+  //     
+  //     // Lazy Load を無効化（Puppeteer が画像読み込み完了を永遠に待つのを防ぐ）
+  //     document.querySelectorAll('img').forEach((img) => {
+  //       img.removeAttribute('loading');
+  //     });
+  //     console.log('[PDF Export] Lazy loading disabled for all images');
+  //     
+  //     // 開発環境のプレビューバナーを一時的に非表示にする
+  //     const bannerText = 'This page is not live and cannot be shared directly';
+  //     const elements = Array.from(document.querySelectorAll('div, p, span, a'));
+  //     const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
+  //     console.log(`[PDF Export] Found ${bannerElements.length} banner elements`);
+  //     
+  //     const originalDisplays = bannerElements.map((el) => (el as HTMLElement).style.display);
+  //     bannerElements.forEach((el) => {
+  //       (el as HTMLElement).style.display = 'none';
+  //     });
+  //     console.log('[PDF Export] Preview banner hidden');
+  //     
+  //     const html = document.documentElement.outerHTML;
+  //     const baseUrl = window.location.origin;
+  //     console.log('[PDF Export] HTML snapshot captured with all accordions open');
+  //     
+  //     bannerElements.forEach((el, i) => {
+  //       (el as HTMLElement).style.display = originalDisplays[i];
+  //     });
+  //     console.log('[PDF Export] Preview banner restored');
+  //     
+  //     exportPdfSnapshot.mutate({ html, baseUrl });
+  //   } catch (error) {
+  //     console.error("[PDF Export] Error during accordion expansion:", error);
+  //     toast.error("PDF生成中にエラーが発生しました");
+  //   } finally {
+  //     // エラー時もバナーを元に戻す
+  //     const bannerText = 'This page is not live and cannot be shared directly';
+  //     const elements = Array.from(document.querySelectorAll('div, p, span, a'));
+  //     const bannerElements = elements.filter((el) => el.textContent && el.textContent.includes(bannerText));
+  //     bannerElements.forEach((el) => {
+  //       (el as HTMLElement).style.display = '';
+  //     });
+  //   }
+  // }, [exportPdfSnapshot]);
 
   useEffect(() => {
     if (progressData?.status === "completed") {
@@ -411,7 +366,8 @@ export default function AnalysisDetail() {
                       )}
                     </Button>
                   )}
-                  {job.status === "completed" && (
+                  {/* PDF機能は仮組環境では停止 */}
+                  {/* {job.status === "completed" && (
                     <>
                       <Button 
                         variant="outline"
@@ -449,7 +405,7 @@ export default function AnalysisDetail() {
                         )}
                       </Button>
                     </>
-                  )}
+                  ) */}
                 </div>
               </div>
             </CardHeader>
