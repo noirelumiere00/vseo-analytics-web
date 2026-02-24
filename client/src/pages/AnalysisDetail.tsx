@@ -547,18 +547,30 @@ export default function AnalysisDetail() {
                 {/* サマリー情報 */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
-                  <div className="grid grid-cols-3 gap-6">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-4xl font-bold text-purple-600">{reportStats.totalVideos}</div>
-                      <div className="text-sm text-muted-foreground mt-2">総動画数</div>
+                      <div className="text-3xl font-bold text-purple-600">{reportStats.totalVideos}</div>
+                      <div className="text-xs text-muted-foreground mt-2">総動画数</div>
                     </div>
                     <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-4xl font-bold text-blue-600">{formatNumber(reportStats.totalViews)}</div>
-                      <div className="text-sm text-muted-foreground mt-2">総再生数</div>
+                      <div className="text-3xl font-bold text-blue-600">{formatNumber(reportStats.totalViews)}</div>
+                      <div className="text-xs text-muted-foreground mt-2">総再生数</div>
                     </div>
-                    <div className="text-center p-4 bg-orange-50 rounded-lg">
-                      <div className="text-4xl font-bold text-orange-600">{formatNumber(reportStats.totalEngagement)}</div>
-                      <div className="text-sm text-muted-foreground mt-2">総エンゲージメント</div>
+                    <div className="text-center p-4 bg-red-50 rounded-lg">
+                      <div className="text-3xl font-bold text-red-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-muted-foreground mt-2">いいね数</div>
+                    </div>
+                    <div className="text-center p-4 bg-green-50 rounded-lg">
+                      <div className="text-3xl font-bold text-green-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-muted-foreground mt-2">コメント数</div>
+                    </div>
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
+                      <div className="text-3xl font-bold text-yellow-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-muted-foreground mt-2">シェア数</div>
+                    </div>
+                    <div className="text-center p-4 bg-indigo-50 rounded-lg">
+                      <div className="text-3xl font-bold text-indigo-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-muted-foreground mt-2">保存数</div>
                     </div>
                   </div>
                 </div>
