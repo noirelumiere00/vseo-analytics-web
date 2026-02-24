@@ -208,6 +208,13 @@ export async function getTranscriptionByVideoId(videoId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+export async function getTranscriptionsByVideoId(videoId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return db.select().from(transcriptions).where(eq(transcriptions.videoId, videoId));
+}
+
 // === Analysis Scores ===
 export async function createAnalysisScore(score: InsertAnalysisScore) {
   const db = await getDb();

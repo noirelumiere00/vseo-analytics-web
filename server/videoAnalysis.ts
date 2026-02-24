@@ -457,27 +457,61 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   const positiveEngagementShare = totalEngagement > 0 ? Math.round((positiveEng / totalEngagement) * 100) : 0;
   const negativeEngagementShare = totalEngagement > 0 ? Math.round((negativeEng / totalEngagement) * 100) : 0;
 
-  // キーワード集計
+  // キーワード集計（OCR・音声データの重要度を高く）
   const allKeywords: string[] = [];
+  const ocrAndAudioKeywords: string[] = []; // OCR・音声データから抽出したキーワード
 
   for (const video of videosData) {
     const keywords = video.keywords as string[] || [];
     allKeywords.push(...keywords);
+    
+    // OCR結果から抽出したテキスト
+    const ocrResults = await db.getOcrResultsByVideoId(video.id);
+    for (const ocr of ocrResults) {
+      if (ocr.extractedText) {
+        // OCRテキストから単語を抽出（簡易的な分割）
+        const words = ocr.extractedText.split(/[\s、。！？，]+/).filter(w => w.length > 1);
+        ocrAndAudioKeywords.push(...words);
+      }
+    }
+    
+    // 音声文字起こし結果から抽出したテキスト
+    const transcriptions = await db.getTranscriptionsByVideoId(video.id);
+    for (const trans of transcriptions) {
+      if (trans.fullText) {
+        const words = trans.fullText.split(/[\s、。！？，]+/).filter(w => w.length > 1);
+        ocrAndAudioKeywords.push(...words);
+      }
+    }
   }
 
-  // 頻出ワードを抽出（出現回数でソート）
-  const getTopWords = (words: string[], limit: number = 30): string[] => {
+  // 頻出ワードを抽出（出現回数でソート、OCR・音声データを優先）
+  const getTopWords = (words: string[], ocrAudioWords: string[], limit: number = 30): string[] => {
     const counts = new Map<string, number>();
+    const ocrAudioCounts = new Map<string, number>();
+    
+    // OCR・音声データのカウント（重要度2倍）
+    for (const w of ocrAudioWords) {
+      ocrAudioCounts.set(w, (ocrAudioCounts.get(w) || 0) + 2);
+    }
+    
+    // 通常のキーワードのカウント
     for (const w of words) {
       counts.set(w, (counts.get(w) || 0) + 1);
     }
+    
+    // マージ（OCR・音声データの重要度を優先）
+    for (const [word, count] of ocrAudioCounts) {
+      counts.set(word, (counts.get(word) || 0) + count);
+    }
+    
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
       .map(([word]) => word);
   };
 
-  const topAllKeywords = getTopWords(allKeywords, 30);
+  const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30);
 
   // LLMを使った感情ワード抽出
   let positiveWords: string[] = [];
@@ -488,16 +522,18 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
     const negativeEmotionPrompt = `
 Below are TikTok video descriptions. Please extract ONLY negative emotion words and phrases that express dissatisfaction, criticism, or negative feelings.
 
-IMPORTANT CLASSIFICATION RULES:
+CRITICAL RULES FOR NEGATIVE WORDS:
 - Extract ONLY words that express negative emotions or dissatisfaction
-- DO NOT include: proper nouns (place names, facility names), dates, numbers, neutral nouns, or neutral verbs
+- ABSOLUTELY DO NOT include: proper nouns, place names, facility names, brand names
+- ABSOLUTELY DO NOT include: "沖縄", "ジャングリア", "テーマパーク", location names, dates, numbers
+- ABSOLUTELY DO NOT include: neutral nouns or neutral verbs
 - Examples of NEGATIVE words: "ゴミ", "最悪", "つまらない", "不快", "混雑", "退屈", "失望", "ひどい"
-- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "2024年", "100円", "訪問", "体験"
+- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "ジャングリア沖縄", "2024年", "100円", "訪問", "体験"
 
 Texts:
 ${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
 
-Return as JSON with 'negative_words' array containing up to 15 words/phrases. Only include true negative emotion words.
+Return as JSON with 'negative_words' array containing up to 15 words/phrases. Only include true negative emotion words. NEVER include proper nouns or place names.
 `;
 
     const negativeResponse = await invokeLLM({
