@@ -2,7 +2,7 @@ import { invokeLLM } from "./_core/llm";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
-import { scrapeTikTokComments } from "./tiktokScraper";
+// import { scrapeTikTokComments } from "./tiktokScraper"; // TODO: Implement comment scraping if needed
 
 /**
  * 動画分析エンジン
@@ -699,7 +699,8 @@ export async function analyzeWinPatternCommonality(
   for (const video of winPatternVideos) {
     try {
       const videoUrl = video.videoUrl || `https://www.tiktok.com/@${video.accountId}/video/${video.videoId}`;
-      const comments = await scrapeTikTokComments(videoUrl);
+      // const comments = await scrapeTikTokComments(videoUrl); // TODO: Implement comment scraping
+      const comments: any[] = []; // Placeholder
       if (comments.length > 0) {
         commentsByVideo[video.videoId] = comments;
         console.log(`[Analysis] Scraped ${comments.length} comments from video ${video.videoId}`);

@@ -1,0 +1,35 @@
+{
+  "query": "SELECT * FROM analysis_reports WHERE jobId = 330011;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT * FROM analysis_reports WHERE jobId = 330011;",
+  "rows": [
+    {
+      "id": "210008",
+      "jobId": "330011",
+      "totalVideos": "14",
+      "totalViews": "598007",
+      "totalEngagement": "79631",
+      "neutralCount": "2",
+      "neutralPercentage": "14",
+      "positiveCount": "12",
+      "positivePercentage": "86",
+      "negativeCount": "0",
+      "negativePercentage": "0",
+      "posNegPositiveCount": "12",
+      "posNegPositivePercentage": "100",
+      "posNegNegativeCount": "0",
+      "posNegNegativePercentage": "0",
+      "positiveViewsShare": "98",
+      "negativeViewsShare": "0",
+      "positiveEngagementShare": "100",
+      "negativeEngagementShare": "0",
+      "positiveWords": "[\"おすすめ\", \"癒し\", \"美しい\", \"かわいい\", \"頑張ろう\", \"応援\", \"ポジティブ\", \"FANTASTICS\", \"BTS\", \"ARMY\", \"ファン\", \"コラボ\", \"新CM\", \"紅茶花伝\", \"ピーチティー\"]",
+      "negativeWords": "[\"リクエスト\", \"日常\", \"20歳\", \"限定\", \"3月7日\", \"CM\", \"ASMR\", \"ASMRドリンク\", \"紅茶\", \"ドリンク\", \"飲み物\", \"猫\", \"八木勇征\", \"TinyTAN\", \"白ぶどうフルーツティー\"]",
+      "keyInsights": "[{\"category\": \"positive\", \"description\": \"BTS (TinyTAN) やFANTASTICS (八木勇征) とのコラボ動画が総再生数の大半を占めており、特にBTS関連動画は単独で約46.5万回再生を記録しています。これは、ターゲット層に響く有名人やキャラクターとの連携が、紅茶花伝のブランド認知度向上と動画の拡散に極めて効果的であることを示しています。今後も人気のあるIPやインフルエンサーとの継続的なコラボレーションは、高いエンゲージメントとリーチを獲得するための強力な戦略となります。\", \"title\": \"有名人・キャラクターコラボによる圧倒的なリーチとエンゲージメント\"}, {\"category\": \"positive\", \"description\": \"ポジティブな動画が86%を占め、ネガティブな動画が0%であることから、紅茶花伝はTikTok上で非常に良好なブランドイメージを確立していると言えます。「おすすめ」「癒し」「美しい」「かわいい」「応援」といったポジティブワードが頻出しており、特にBTSやFANTASTICSの「ファン」が積極的に動画を視聴・拡散しています。この強力なファンベースをさらに活用し、UGC（ユーザー生成コンテンツ）の促進やコミュニティ形成を強化することで、ブランドロイヤルティを一層高めることができます。\", \"title\": \"ポジティブなブランドイメージの確立とファン層の活用\"}, {\"category\": \"positive\", \"description\": \"ASMR動画が複数投稿されており、特に「@tengu.asmr」の動画は2万回以上の再生数を記録しています。ASMRはリラックス効果や五感を刺激する特性があり、「紅茶花伝」の「癒し」というイメージと合致しています。このジャンルは、飲料製品の魅力を音や視覚で伝える新たな手法として有効であり、既存のファン層だけでなく、ASMRコンテンツを好む層へのリーチ拡大に貢献しています。今後もASMRコンテンツの質を高め、多様な表現方法を模索することで、ブランドの多面的な魅力を引き出すことが可能です。\", \"title\": \"ASMRコンテンツによる新たな顧客層へのアプローチ\"}, {\"category\": \"risk\", \"description\": \"総再生数の大半がBTS (TinyTAN) とFANTASTICS (八木勇征) 関連動画に集中しており、これらを除くと個別の動画再生数は比較的低い傾向にあります。これは、特定のコラボレーションが終了した場合や、次に同等の影響力を持つコラボレーションが実施できない場合に、全体の再生数やエンゲージメントが大幅に減少するリスクを示唆しています。コラボレーション以外の、製品そのものの魅力や多様なコンテンツでユーザーを引きつける戦略を強化する必要があります。\", \"title\": \"コラボ依存による再生数の偏り\"}, {\"category\": \"risk\", \"description\": \"ネガティブ頻出ワードに「日常」「ドリンク」「飲み物」といった一般的なワードが含まれているものの、ポジティブな文脈での言及が少ないことから、製品の多様な飲用シーンや日常的な魅力が十分に訴求されていない可能性があります。現状ではコラボレーションや特定のイベントに注目が集まりがちで、紅茶花伝が人々の日常にどのように溶け込んでいるか、どのようなシーンで楽しむのがおすすめかといった、より幅広いユーザー層に響くコンテンツの不足が懸念されます。\", \"title\": \"製品の多様性や日常的な飲用シーンの訴求不足\"}]",
+      "createdAt": "2026-02-20 02:41:08"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tjobId\ttotalVideos\ttotalViews\ttotalEngagement\tneutralCount\tneutralPercentage\tpositiveCount\tpositivePercentage\tnegativeCount\tnegativePercentage\tposNegPositiveCount\tposNegPositivePercentage\tposNegNegativeCount\tposNegNegativePercentage\tpositiveViewsShare\tnegativeViewsShare\tpositiveEngagementShare\tnegativeEngagementShare\tpositiveWords\tnegativeWords\tkeyInsights\tcreatedAt\n210008\t330011\t14\t598007\t79631\t2\t14\t12\t86\t0\t0\t12\t100\t0\t0\t98\t0\t100\t0\t[\"おすすめ\", \"癒し\", \"美しい\", \"かわいい\", \"頑張ろう\", \"応援\", \"ポジティブ\", \"FANTASTICS\", \"BTS\", \"ARMY\", \"ファン\", \"コラボ\", \"新CM\", \"紅茶花伝\", \"ピーチティー\"]\t[\"リクエスト\", \"日常\", \"20歳\", \"限定\", \"3月7日\", \"CM\", \"ASMR\", \"ASMRドリンク\", \"紅茶\", \"ドリンク\", \"飲み物\", \"猫\", \"八木勇征\", \"TinyTAN\", \"白ぶどうフルーツティー\"]\t[{\"category\": \"positive\", \"description\": \"BTS (TinyTAN) やFANTASTICS (八木勇征) とのコラボ動画が総再生数の大半を占めており、特にBTS関連動画は単独で約46.5万回再生を記録しています。これは、ターゲット層に響く有名人やキャラクターとの連携が、紅茶花伝のブランド認知度向上と動画の拡散に極めて効果的であることを示しています。今後も人気のあるIPやインフルエンサーとの継続的なコラボレーションは、高いエンゲージメントとリーチを獲得するための強力な戦略となります。\", \"title\": \"有名人・キャラクターコラボによる圧倒的なリーチとエンゲージメント\"}, {\"category\": \"positive\", \"description\": \"ポジティブな動画が86%を占め、ネガティブな動画が0%であることから、紅茶花伝はTikTok上で非常に良好なブランドイメージを確立していると言えます。「おすすめ」「癒し」「美しい」「かわいい」「応援」といったポジティブワードが頻出しており、特にBTSやFANTASTICSの「ファン」が積極的に動画を視聴・拡散しています。この強力なファンベースをさらに活用し、UGC（ユーザー生成コンテンツ）の促進やコミュニティ形成を強化することで、ブランドロイヤルティを一層高めることができます。\", \"title\": \"ポジティブなブランドイメージの確立とファン層の活用\"}, {\"category\": \"positive\", \"description\": \"ASMR動画が複数投稿されており、特に「@tengu.asmr」の動画は2万回以上の再生数を記録しています。ASMRはリラックス効果や五感を刺激する特性があり、「紅茶花伝」の「癒し」というイメージと合致しています。このジャンルは、飲料製品の魅力を音や視覚で伝える新たな手法として有効であり、既存のファン層だけでなく、ASMRコンテンツを好む層へのリーチ拡大に貢献しています。今後もASMRコンテンツの質を高め、多様な表現方法を模索することで、ブランドの多面的な魅力を引き出すことが可能です。\", \"title\": \"ASMRコンテンツによる新たな顧客層へのアプローチ\"}, {\"category\": \"risk\", \"description\": \"総再生数の大半がBTS (TinyTAN) とFANTASTICS (八木勇征) 関連動画に集中しており、これらを除くと個別の動画再生数は比較的低い傾向にあります。これは、特定のコラボレーションが終了した場合や、次に同等の影響力を持つコラボレーションが実施できない場合に、全体の再生数やエンゲージメントが大幅に減少するリスクを示唆しています。コラボレーション以外の、製品そのものの魅力や多様なコンテンツでユーザーを引きつける戦略を強化する必要があります。\", \"title\": \"コラボ依存による再生数の偏り\"}, {\"category\": \"risk\", \"description\": \"ネガティブ頻出ワードに「日常」「ドリンク」「飲み物」といった一般的なワードが含まれているものの、ポジティブな文脈での言及が少ないことから、製品の多様な飲用シーンや日常的な魅力が十分に訴求されていない可能性があります。現状ではコラボレーションや特定のイベントに注目が集まりがちで、紅茶花伝が人々の日常にどのように溶け込んでいるか、どのようなシーンで楽しむのがおすすめかといった、より幅広いユーザー層に響くコンテンツの不足が懸念されます。\", \"title\": \"製品の多様性や日常的な飲用シーンの訴求不足\"}]\t2026-02-20 02:41:08\n",
+  "stderr": "",
+  "execution_time_ms": 1544
+}

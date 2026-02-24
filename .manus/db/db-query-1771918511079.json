@@ -1,0 +1,15 @@
+{
+  "query": "SELECT COUNT(*) as total, SUM(viewCount) as totalViews, SUM(likeCount) as totalLikes FROM videos WHERE jobId = 330011;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT COUNT(*) as total, SUM(viewCount) as totalViews, SUM(likeCount) as totalLikes FROM videos WHERE jobId = 330011;",
+  "rows": [
+    {
+      "total": "14",
+      "totalViews": "598007",
+      "totalLikes": "69100"
+    }
+  ],
+  "messages": [],
+  "stdout": "total\ttotalViews\ttotalLikes\n14\t598007\t69100\n",
+  "stderr": "",
+  "execution_time_ms": 1546
+}

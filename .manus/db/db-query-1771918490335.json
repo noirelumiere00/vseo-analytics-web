@@ -1,0 +1,19 @@
+{
+  "query": "SELECT * FROM analysis_jobs WHERE id = 330011;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT * FROM analysis_jobs WHERE id = 330011;",
+  "rows": [
+    {
+      "id": "330011",
+      "userId": "1",
+      "keyword": "紅茶花伝",
+      "manualUrls": "NULL",
+      "status": "completed",
+      "createdAt": "2026-02-20 02:36:56",
+      "completedAt": "2026-02-20 02:41:17"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tuserId\tkeyword\tmanualUrls\tstatus\tcreatedAt\tcompletedAt\n330011\t1\t紅茶花伝\tNULL\tcompleted\t2026-02-20 02:36:56\t2026-02-20 02:41:17\n",
+  "stderr": "",
+  "execution_time_ms": 1553
+}
