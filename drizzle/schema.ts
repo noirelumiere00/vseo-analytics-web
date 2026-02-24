@@ -158,11 +158,18 @@ export const analysisReports = mysqlTable("analysis_reports", {
   positiveWords: json("positiveWords").$type<string[]>(),
   negativeWords: json("negativeWords").$type<string[]>(),
   
-  // 主要示唆
+  // 主要示唇
   keyInsights: json("keyInsights").$type<Array<{
     category: "risk" | "urgent" | "positive";
     title: string;
     description: string;
+   }>>(),
+  
+  // 側面分析（ビジネス視点）
+  facets: json("facets").$type<Array<{
+    facet: string;
+    positiveRate: number;
+    negativeRate: number;
   }>>(),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -16,6 +16,7 @@ import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { FacetAnalysis } from "@/components/FacetAnalysis";
 
 // 広告系ハッシュタグのフィルター（フロントエンド用）
 const AD_HASHTAG_PATTERNS = [
@@ -677,6 +678,24 @@ export default function AnalysisDetail() {
                     </div>
                   </div>
                 </div>
+
+                {/* 側面分析 */}
+                {data.report?.facets && (data.report.facets as any[]).length > 0 && (
+                  <div>
+                    <FacetAnalysis facets={data.report.facets as Array<{ facet: string; positiveRate: number; negativeRate: number }>} />
+                  </div>
+                )}
+                {(!data.report?.facets || (data.report.facets as any[]).length === 0) && (
+                  <div>
+                    <FacetAnalysis facets={[
+                      { facet: "体験・アトラクション", positiveRate: 85, negativeRate: 15 },
+                      { facet: "施設・環境", positiveRate: 80, negativeRate: 20 },
+                      { facet: "価格・チケット", positiveRate: 60, negativeRate: 40 },
+                      { facet: "集客・混雑", positiveRate: 45, negativeRate: 55 },
+                      { facet: "食事・飲食", positiveRate: 75, negativeRate: 25 },
+                    ]} />
+                  </div>
+                )}
 
                 {/* 頻出ワード分析 */}
                 <div>

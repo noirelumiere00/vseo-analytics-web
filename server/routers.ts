@@ -17,6 +17,9 @@ import { logBuffer } from "./logBuffer";
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
 
+// LLM 呼び出しキャッシュ（同じテキストの分析結果を再利用）
+const llmCache = new Map<string, any>();
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -184,21 +187,21 @@ export const appRouter = router({
               });
 
               // 各動画を分析（重複度情報も含めてDB保存）
-              for (let i = 0; i < allUniqueVideos.length; i++) {
-                const tiktokVideo = allUniqueVideos[i];
-                const percent = 42 + Math.floor(((i + 1) / allUniqueVideos.length) * 40);
-                
-                // この動画が何回出現したか
-                const appearanceCount = tripleResult.searches.filter(
-                  s => s.videos.some(v => v.id === tiktokVideo.id)
-                ).length;
+              // 並列化：5本ずつ同時に分析
+              const BATCH_SIZE = 5;
+              for (let i = 0; i < allUniqueVideos.length; i += BATCH_SIZE) {
+                const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
+                const percent = 42 + Math.floor(((i + BATCH_SIZE) / allUniqueVideos.length) * 40);
                 
                 progressStore.set(input.jobId, {
-                  message: `動画分析中... (${i + 1}/${allUniqueVideos.length}) - @${tiktokVideo.author.uniqueId} [${appearanceCount}回出現]`,
+                  message: `動画分析中... (${Math.min(i + BATCH_SIZE, allUniqueVideos.length)}/${allUniqueVideos.length})`,
                   percent,
                 });
 
-                await analyzeVideoFromTikTok(input.jobId, tiktokVideo);
+                // バッチ内の動画を並列分析
+                await Promise.all(
+                  batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo))
+                );
               }
 
             } else if (job.manualUrls && job.manualUrls.length > 0) {
