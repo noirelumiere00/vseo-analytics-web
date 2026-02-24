@@ -4,7 +4,7 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import puppeteerExtra from "puppeteer-extra";
 import * as fs from "fs";
 import * as os from "os";
-import { setupSwap } from "./setupSwap";
+// setupSwap は本番環境のコンテナでは swapon が禁止されているため削除
 
 // Stealth プラグインを有効化
 const stealthPlugin = StealthPlugin();
@@ -129,9 +129,10 @@ async function searchInIncognitoContext(
   sessionIndex: number,
   onProgress?: (message: string) => void
 ): Promise<TikTokSearchResult> {
-  // 新しいインコグニートコンテキストを作成（Cookie/履歴なし）
-  const context = await browser.createBrowserContext();
-  const page = await context.newPage();
+  // 【サバイバルモード】デフォルトページを再利用（createBrowserContext を使わない）
+  // --single-process + --no-zygote モードでは createBrowserContext が Target.createTarget エラーを引き起こすため
+  const pages = await browser.pages();
+  const page = pages[0] || await browser.newPage();
 
   try {
     await page.setViewport({ width: 1920, height: 1080 });
@@ -337,7 +338,16 @@ async function searchInIncognitoContext(
     console.error(`[TikTok Session ${sessionIndex + 1}] Error in searchInIncognitoContext:`, error);
     throw error;
   } finally {
-    await context.close();
+    // Cookie/履歴をクリアして次のセッションに備える
+    try {
+      const cookies = await page.cookies();
+      if (cookies.length > 0) {
+        await page.deleteCookie(...cookies);
+      }
+      await page.goto('about:blank', { timeout: 10000 });
+    } catch (cleanupError) {
+      console.warn(`[TikTok Session] Cleanup warning:`, cleanupError);
+    }
   }
 }
 
@@ -348,7 +358,9 @@ export async function searchTikTokTriple(
 ): Promise<TikTokTripleSearchResult> {
   puppeteerExtra.use(stealthPlugin);
 
-  setupSwap();
+  // setupSwap は本番環境のコンテナでは swapon が禁止されているため削除
+  // 代わりに超・省エネモードでメモリを節約
+  process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true';
 
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
   console.log(`[Puppeteer searchTikTokTriple] executablePath: ${executablePath}`);
@@ -369,6 +381,16 @@ export async function searchTikTokTriple(
       "--ignore-certificate-errors-spki-list",
       "--window-size=1920,1080",
       "--lang=ja-JP",
+      "--js-flags=--max-old-space-size=128",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-translate",
+      "--mute-audio",
+      "--disable-sync",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
     ],
     timeout: 120000,
   });
@@ -376,7 +398,7 @@ export async function searchTikTokTriple(
   try {
     console.log(`[Memory] After browser launch: ${Math.round(os.freemem() / 1024 / 1024)} MB free`);
 
-    // 3つのシークレットウィンドウで順次検索（並列ではなく順次実行）
+    // 3つのセッションで順次検索（デフォルトページを再利用）
     const searches: TikTokSearchResult[] = [];
 
     for (let i = 0; i < 3; i++) {
@@ -444,7 +466,7 @@ export async function searchTikTokVideos(
 ): Promise<TikTokVideo[]> {
   puppeteerExtra.use(stealthPlugin);
 
-  setupSwap();
+  process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true';
 
   const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || puppeteer.executablePath();
   console.log(`[Puppeteer searchTikTokVideos] executablePath: ${executablePath}`);
@@ -464,6 +486,16 @@ export async function searchTikTokVideos(
       "--ignore-certificate-errors-spki-list",
       "--window-size=1920,1080",
       "--lang=ja-JP",
+      "--js-flags=--max-old-space-size=128",
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--disable-translate",
+      "--mute-audio",
+      "--disable-sync",
+      "--disable-background-timer-throttling",
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
     ],
     timeout: 120000,
   });
@@ -492,8 +524,6 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
   // puppeteer-extra は ESM import でトップレベルで読み込み済み
   puppeteerExtra.use(stealthPlugin);
 
-  setupSwap();
-  
   // 【サバイバル・ローンチ戦略】OSスワップの示唆
   process.env.PUPPETEER_DISABLE_HEADLESS_WARNING = 'true';
   
@@ -508,17 +538,29 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
     try {
       const browser = await puppeteerExtra.launch({
         executablePath,
-        headless: true,
+        headless: false,
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-gpu",
+          "--no-zygote",
           "--single-process",
+          "--headless=shell",
           "--ignore-certificate-errors",
           "--ignore-certificate-errors-spki-list",
           "--window-size=1920,1080",
           "--lang=ja-JP",
+          "--js-flags=--max-old-space-size=128",
+          "--disable-extensions",
+          "--disable-background-networking",
+          "--disable-default-apps",
+          "--disable-translate",
+          "--mute-audio",
+          "--disable-sync",
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
         ],
         timeout: 120000, // 【タイムアウトの極大化】120秒に延長
       });

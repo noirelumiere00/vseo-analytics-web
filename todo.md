@@ -588,3 +588,15 @@
 - [x] 本番環境で Country: JP を確認
   - [x] https://vseo.manus.space で分析実行
   - [x] /admin/logs で Country: JP を確認
+
+## スワップ疑惑の検証と超・省エネモード（2026-02-24）
+- [x] free -h でスワップの状態を確認
+- [x] スワップが 0B なら setupSwap を削除
+- [x] 超・省エネモードに切り替え
+  - [x] --js-flags=--max-old-space-size=128 を追加
+  - [x] --disable-extensions を追加
+  - [x] --disable-background-networking を追加
+  - [x] --disable-default-apps を追加
+  - [x] --disable-translate を追加
+  - [x] --mute-audio を追加
+- [x] チェックポイント保存と本番環境テスト
