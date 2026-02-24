@@ -486,12 +486,18 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   try {
     // ステップ 1: ネガティブ感情ワードを抽出
     const negativeEmotionPrompt = `
-Below are TikTok video descriptions. Please extract negative emotion words and phrases that express dissatisfaction, criticism, or negative feelings (e.g., "ゴミ", "最悪", "つまらない", "高い", "混雑", etc.).
+Below are TikTok video descriptions. Please extract ONLY negative emotion words and phrases that express dissatisfaction, criticism, or negative feelings.
+
+IMPORTANT CLASSIFICATION RULES:
+- Extract ONLY words that express negative emotions or dissatisfaction
+- DO NOT include: proper nouns (place names, facility names), dates, numbers, neutral nouns, or neutral verbs
+- Examples of NEGATIVE words: "ゴミ", "最悪", "つまらない", "不快", "混雑", "退屈", "失望", "ひどい"
+- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "2024年", "100円", "訪問", "体験"
 
 Texts:
 ${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
 
-Return as JSON with 'negative_words' array containing up to 15 words/phrases.
+Return as JSON with 'negative_words' array containing up to 15 words/phrases. Only include true negative emotion words.
 `;
 
     const negativeResponse = await invokeLLM({
@@ -528,12 +534,18 @@ Return as JSON with 'negative_words' array containing up to 15 words/phrases.
 
     // ステップ 2: ポジティブ感情ワードを抽出
     const positiveEmotionPrompt = `
-Below are TikTok video descriptions. Please extract positive emotion words and phrases that express satisfaction, praise, or positive feelings (e.g., "楽しい", "最高", "素晴らしい", "安い", "快適", etc.).
+Below are TikTok video descriptions. Please extract ONLY positive emotion words and phrases that express satisfaction, praise, or positive feelings.
+
+IMPORTANT CLASSIFICATION RULES:
+- Extract ONLY words that express positive emotions or satisfaction
+- DO NOT include: proper nouns (place names, facility names), dates, numbers, neutral nouns, or neutral verbs
+- Examples of POSITIVE words: "楽しい", "最高", "素晴らしい", "安い", "快適", "美しい", "感動", "おすすめ"
+- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "2024年", "100円", "訪問", "体験"
 
 Texts:
 ${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
 
-Return as JSON with 'positive_words' array containing up to 15 words/phrases.
+Return as JSON with 'positive_words' array containing up to 15 words/phrases. Only include true positive emotion words.
 `;
 
     const positiveResponse = await invokeLLM({
