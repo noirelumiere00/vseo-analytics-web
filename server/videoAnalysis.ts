@@ -501,14 +501,14 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
     }
     
     // マージ（OCR・音声データの重要度を優先）
-    for (const [word, count] of ocrAudioCounts) {
+    ocrAudioCounts.forEach((count, word) => {
       counts.set(word, (counts.get(word) || 0) + count);
-    }
+    });
     
     return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
+      .sort((a: any, b: any) => b[1] - a[1])
       .slice(0, limit)
-      .map(([word]) => word);
+      .map((entry: any) => entry[0]);
   };
 
   const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30);
@@ -618,7 +618,7 @@ Return as JSON with 'positive_words' array containing up to 15 words/phrases. On
   } catch (error) {
     console.error("[Report] Error extracting emotion words with LLM:", error);
     // Fallback: use top keywords
-    positiveWords = getTopWords(allKeywords, 15);
+    positiveWords = getTopWords(allKeywords, ocrAndAudioKeywords, 15);
     negativeWords = [];
   }
 
