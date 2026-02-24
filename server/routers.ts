@@ -62,7 +62,8 @@ export const appRouter = router({
     getById: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const job = await db.getAnalysisJobById(input.jobId);
+        try {
+          const job = await db.getAnalysisJobById(input.jobId);
         if (!job) {
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
@@ -112,6 +113,13 @@ export const appRouter = router({
             commonalityAnalysis: tripleSearchData.commonalityAnalysis ?? null,
           } : null,
         };
+        } catch (error) {
+          console.error(`[Analysis] Error in getById for job ${input.jobId}:`, error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error instanceof Error ? error.message : "分析ジョブの詳細取得に失敗しました",
+          });
+        }
       }),
 
     // 分析を実行（バックグラウンド処理）- 3シークレットブラウザ検索方式
