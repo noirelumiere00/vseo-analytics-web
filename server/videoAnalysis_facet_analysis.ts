@@ -6,7 +6,8 @@
 import { invokeLLM } from "./_core/llm";
 
 export async function analyzeFacetsImproved(
-  videosData: Array<{ accountName: string | null; description: string | null }>
+  videosData: Array<{ accountName: string | null; description: string | null; jobId?: number }>,
+  jobId?: number
 ): Promise<Array<{ facet: string; positiveRate: number; negativeRate: number }>> {
   try {
     // 複数動画のテキストを統合

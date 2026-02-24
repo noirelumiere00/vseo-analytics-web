@@ -1,5 +1,5 @@
 import { invokeLLM } from "./_core/llm";
-import { analyzeFacetsImproved } from "./videoAnalysis_facet_analysis";
+import { analyzeFacetsImproved } from "./videoAnalysis_facet_analysis_improved";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
@@ -699,7 +699,7 @@ JSON形式で返してください。
   }
 
   // 側面分析（ビジネス視点）
-  const facets = await analyzeFacetsImproved(videosData);  // レポートをDBに保存
+  const facets = await analyzeFacetsImproved(videosData, jobId);  // レポートをDBに保存
   await db.createAnalysisReport({
     jobId,
     totalVideos,

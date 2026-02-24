@@ -167,9 +167,9 @@ export const analysisReports = mysqlTable("analysis_reports", {
   
   // 側面分析（ビジネス視点）
   facets: json("facets").$type<Array<{
-    facet: string;
-    positiveRate: number;
-    negativeRate: number;
+    aspect: string;
+    positive_percentage: number;
+    negative_percentage: number;
   }>>(),
   
   createdAt: timestamp("createdAt").defaultNow().notNull(),

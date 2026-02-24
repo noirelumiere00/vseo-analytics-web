@@ -692,17 +692,17 @@ export default function AnalysisDetail() {
                 {/* 側面分析 */}
                 {data.report?.facets && (data.report.facets as any[]).length > 0 && (
                   <div>
-                    <FacetAnalysis facets={data.report.facets as Array<{ facet: string; positiveRate: number; negativeRate: number }>} />
+                    <FacetAnalysis facets={data.report.facets as Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>} />
                   </div>
                 )}
                 {(!data.report?.facets || (data.report.facets as any[]).length === 0) && (
                   <div>
                     <FacetAnalysis facets={[
-                      { facet: "体験・アトラクション", positiveRate: 85, negativeRate: 15 },
-                      { facet: "施設・環境", positiveRate: 80, negativeRate: 20 },
-                      { facet: "価格・チケット", positiveRate: 60, negativeRate: 40 },
-                      { facet: "集客・混雑", positiveRate: 45, negativeRate: 55 },
-                      { facet: "食事・飲食", positiveRate: 75, negativeRate: 25 },
+                      { aspect: "体験・アトラクション", positive_percentage: 85, negative_percentage: 15 },
+                      { aspect: "施設・環境", positive_percentage: 80, negative_percentage: 20 },
+                      { aspect: "価格・チケット", positive_percentage: 60, negative_percentage: 40 },
+                      { aspect: "集客・混雑", positive_percentage: 45, negative_percentage: 55 },
+                      { aspect: "食事・飲食", positive_percentage: 75, negative_percentage: 25 },
                     ]} />
                   </div>
                 )}

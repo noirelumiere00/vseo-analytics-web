@@ -1,9 +1,9 @@
 import React from "react";
 
 interface Facet {
-  facet: string;
-  positiveRate: number;
-  negativeRate: number;
+  aspect: string;
+  positive_percentage: number;
+  negative_percentage: number;
 }
 
 interface FacetAnalysisProps {
@@ -18,22 +18,22 @@ export function FacetAnalysis({ facets }: FacetAnalysisProps) {
         {facets.map((facet, idx) => (
           <div key={idx} className="space-y-1">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-foreground">{facet.facet}</span>
+              <span className="text-sm font-medium text-foreground">{facet.aspect}</span>
               <div className="flex gap-2 text-xs">
-                <span className="text-green-500">ポジ {facet.positiveRate}%</span>
-                <span className="text-red-500">ネガ {facet.negativeRate}%</span>
+                <span className="text-green-500">ポジ {facet.positive_percentage}%</span>
+                <span className="text-red-500">ネガ {facet.negative_percentage}%</span>
               </div>
             </div>
             <div className="flex h-6 rounded-sm overflow-hidden bg-gray-200">
               {/* ポジティブバー（緑） */}
               <div
                 className="bg-green-500 transition-all"
-                style={{ width: `${facet.positiveRate}%` }}
+                style={{ width: `${facet.positive_percentage}%` }}
               />
               {/* ネガティブバー（赤） */}
               <div
                 className="bg-red-500 transition-all"
-                style={{ width: `${facet.negativeRate}%` }}
+                style={{ width: `${facet.negative_percentage}%` }}
               />
             </div>
           </div>
