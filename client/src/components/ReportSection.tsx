@@ -402,7 +402,7 @@ export function ReportSection({
               lineHeight: 1.7,
             }}
           >
-            {platform}上の #{keyword} 関連動画{videoCount}本を分析し、主要な評価側面ごとのポジティブ/ネガティブ比率を算出しました。
+            {platform}上の #{keyword} 関連動画{videoCount}本を分析し、各側面のポジティブ/ネガティブ比率を算出しました。
           </p>
           <div
             style={{
@@ -506,19 +506,6 @@ export function ReportSection({
           title="マーケティング施策提案"
           badge={{ text: `${proposals.length} ACTIONS`, color: "#b45309", bg: "#fffbeb" }}
         >
-          <div style={{ marginBottom: 16 }}>
-            <p
-              style={{
-                margin: "0 0 8px",
-                fontSize: 13,
-                color: "#6b7a8d",
-                lineHeight: 1.7,
-              }}
-            >
-              <strong style={{ color: "#1a2a3a" }}>ターゲット層:</strong> 安全性と快適性を重視するファミリー層 / 価格と燃費を気にする経済性重視層
-            </p>
-          </div>
-
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {proposals.map((p, i) => (
               <div
