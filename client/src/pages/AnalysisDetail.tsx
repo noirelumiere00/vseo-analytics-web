@@ -1,3 +1,4 @@
+import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -288,7 +289,26 @@ export default function AnalysisDetail() {
 
   // === Early returns AFTER all hooks ===
   if (isLoading) {
+  
+  // マークダウンレポートセクション
+  const renderMarkdownReport = () => {
+    if (!data || !data.report?.keyInsights) {
+      return null;
+    }
+
+    // keyInsights がマークダウン形式のレポートを含むと仮定
+    // 実際のレポートが別フィールドに保存されている場合は調整が必要
     return (
+      <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
+        <h2 className="text-2xl font-bold mb-6">📊 詳細分析レポート</h2>
+        <div className="prose prose-sm max-w-none">
+          <Streamdown>{data.report.keyInsights}</Streamdown>
+        </div>
+      </div>
+    );
+  };
+
+  return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="animate-spin h-8 w-8 text-primary" />
       </div>
