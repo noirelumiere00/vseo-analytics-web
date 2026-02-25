@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection } from '@/components/ReportSection';
+import { FrequentWordsCloud } from '@/components/FrequentWordsCloud';
 
 // 広告系ハッシュタグのフィルター（フロントエンド用）
 const AD_HASHTAG_PATTERNS = [
@@ -218,14 +219,22 @@ export default function AnalysisDetail() {
       }
     });
 
-    const getTopWords = (words: string[], limit: number = 12): string[] => {
+    const getTopWords = (words: string[], limit: number = 12): { word: string; count: number }[] => {
       const counts = new Map<string, number>();
       for (const w of words) { counts.set(w, (counts.get(w) || 0) + 1); }
       return Array.from(counts.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, limit)
-        .map(([word]) => word);
+        .map(([word, count]) => ({ word, count }));
     };
+
+    const proposals = generateMarketingProposals({
+      totalVideos,
+      totalViews,
+      totalEngagement,
+      posNegRatio,
+      viewsShare,
+    });
 
     return {
       totalVideos,
@@ -236,11 +245,110 @@ export default function AnalysisDetail() {
       posNegRatio,
       viewsShare,
       engagementShare,
-      positiveWords: getTopWords(positiveKeywords),
-      negativeWords: getTopWords(negativeKeywords),
+      positiveWords: getTopWords(positiveKeywords, 12),
+      negativeWords: getTopWords(negativeKeywords, 12),
       posNegTotal,
+      proposals,
     };
   }, [data]);
+
+  // マーケティング提案を生成
+  const generateMarketingProposals = useCallback((stats: any) => {
+    if (!stats) return [];
+    
+    const proposals = [];
+    const posRatio = Number(stats.posNegRatio.positive);
+    const negRatio = Number(stats.posNegRatio.negative);
+    const totalEngagement = stats.totalEngagement || 0;
+    const totalViews = stats.totalViews || 0;
+    const avgEngagementRate = totalViews > 0 ? ((totalEngagement / totalViews) * 100).toFixed(2) : "0";
+    
+    // 提案 1: ポジティブ率が高い場合
+    if (posRatio >= 70) {
+      proposals.push({
+        area: "ポジティブ感情の強化",
+        action: "高いポジティブ率を活かし、ユーザーの満足度を高める要素（レビュー、事例紹介、成功事例）をさらに増加させる",
+        priority: "高" as const,
+        icon: "🎯"
+      });
+    } else if (posRatio < 40) {
+      // 提案 1 (代替): ネガティブ率が高い場合
+      proposals.push({
+        area: "ネガティブ要素の改善",
+        action: "ネガティブ感情が高いため、ユーザーの懸念点を解決するコンテンツ（FAQ、トラブルシューティング、改善事例）を追加",
+        priority: "高" as const,
+        icon: "⚠️"
+      });
+    } else {
+      proposals.push({
+        area: "バランスの取れたコンテンツ戦略",
+        action: "ポジティブとネガティブが混在しているため、両方の要素を活かしたストーリーテリングで信頼性を向上",
+        priority: "中" as const,
+        icon: "⚖️"
+      });
+    }
+    
+    // 提案 2: エンゲージメント率に基づく提案
+    if (Number(avgEngagementRate) > 5) {
+      proposals.push({
+        area: "高エンゲージメント層への集中",
+        action: "エンゲージメント率が高いため、このコンテンツスタイルを分析し、類似コンテンツの制作を増加させる",
+        priority: "高" as const,
+        icon: "📈"
+      });
+    } else {
+      proposals.push({
+        area: "エンゲージメント向上施策",
+        action: "エンゲージメント率が低いため、CTA（行動喚起）の明確化、インタラクティブ要素の追加、視聴者への問いかけを増加",
+        priority: "中" as const,
+        icon: "💬"
+      });
+    }
+    
+    // 提案 3: 動画数に基づく提案
+    if (stats.totalVideos >= 10) {
+      proposals.push({
+        area: "コンテンツの多様化",
+        action: "十分な動画数があるため、異なるフォーマット（チュートリアル、インタビュー、ビハインドザシーンズ）を試験的に導入",
+        priority: "中" as const,
+        icon: "🎬"
+      });
+    } else {
+      proposals.push({
+        area: "コンテンツ量の拡大",
+        action: "動画数が少ないため、定期的な投稿スケジュールを設定し、コンテンツ量を段階的に増加",
+        priority: "高" as const,
+        icon: "📹"
+      });
+    }
+    
+    // 提案 4: 再生数シェアに基づく提案
+    const posViewShare = Number(stats.viewsShare.positive);
+    if (posViewShare > 60) {
+      proposals.push({
+        area: "ポジティブコンテンツの拡大",
+        action: "ポジティブ感情の動画が多くの再生数を獲得しているため、このテーマの掘り下げと関連キーワードでの展開を推奨",
+        priority: "高" as const,
+        icon: "⭐"
+      });
+    } else if (posViewShare < 40) {
+      proposals.push({
+        area: "ネガティブ要素の対策と差別化",
+        action: "ネガティブ感情の動画が多く再生されているため、その原因を分析し、対抗メッセージやポジティブな代替案を提示",
+        priority: "高" as const,
+        icon: "🔄"
+      });
+    } else {
+      proposals.push({
+        area: "感情バランスの最適化",
+        action: "ポジティブとネガティブの再生数がバランスしているため、両方の視点を統合した包括的なコンテンツ戦略を構築",
+        priority: "中" as const,
+        icon: "🎨"
+      });
+    }
+    
+    return proposals.slice(0, 4); // 最大 4 件の提案を返す
+  }, []);
 
   // 動画をカテゴリ別に分類 - MUST be before any early returns
   const categorizedVideos = useMemo(() => {
@@ -728,7 +836,7 @@ export default function AnalysisDetail() {
                       neg: f.negative_percentage || f.neg || 0,
                       desc: f.description || f.desc || ""
                     }))}
-                    proposals={[]}
+                    proposals={reportStats?.proposals || []}
                     sentimentData={{
                       positive: reportStats.sentimentCounts.positive || 0,
                       negative: reportStats.sentimentCounts.negative || 0,
@@ -737,44 +845,16 @@ export default function AnalysisDetail() {
                   />
                 )}
 
-                {/* 頻出ワード分析 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">頻出ワード分析</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="border-2 border-dashed border-green-300 bg-green-50 rounded-lg p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <TrendingUp className="h-6 w-6 text-green-600" />
-                        <h4 className="text-lg font-bold text-green-700">POSITIVE WORDS</h4>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {reportStats.positiveWords.map((word, i) => (
-                          <Badge key={i} className="bg-white text-green-700 border-green-300 text-sm px-3 py-1.5 shadow-sm">
-                            {word}
-                          </Badge>
-                        ))}
-                        {reportStats.positiveWords.length === 0 && (
-                          <span className="text-sm text-muted-foreground">データなし</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="border-2 border-dashed border-red-300 bg-red-50 rounded-lg p-6">
-                      <div className="flex items-center gap-2 mb-4">
-                        <TrendingDown className="h-6 w-6 text-red-600" />
-                        <h4 className="text-lg font-bold text-red-700">NEGATIVE WORDS</h4>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {reportStats.negativeWords.map((word, i) => (
-                          <Badge key={i} className="bg-white text-red-700 border-red-300 text-sm px-3 py-1.5 shadow-sm">
-                            {word}
-                          </Badge>
-                        ))}
-                        {reportStats.negativeWords.length === 0 && (
-                          <span className="text-sm text-muted-foreground">データなし</span>
-                        )}
-                      </div>
-                    </div>
+                {/* 頻出ワード分析 - ワードクラウド風 */}
+                {reportStats && (reportStats.positiveWords.length > 0 || reportStats.negativeWords.length > 0) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-6">頻出ワード分析</h3>
+                    <FrequentWordsCloud
+                      positiveWords={reportStats.positiveWords}
+                      negativeWords={reportStats.negativeWords}
+                    />
                   </div>
-                </div>
+                )}
 
                 {/* 主要示唆（LLMレポートから） */}
                 {data.report?.keyInsights && (data.report.keyInsights as any[]).length > 0 && (

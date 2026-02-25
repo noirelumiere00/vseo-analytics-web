@@ -655,3 +655,27 @@
 - [x] 側面データの形式変換（aspect → name, positive_percentage → pos）
 - [x] React Hooks エラーを修正（useState → useEffect）
 - [x] チェックポイント保存準備
+
+
+## 頻出ワード分析 UI 改修と マーケティング戦略拡充（2026-02-25）
+- [x] 現在の頻出ワード分析セクション（バッジ形式）を削除
+- [x] 新しい頻出ワード分析コンポーネント実装（ワードクラウド風）
+  - [x] FrequentWordsCloud.tsx コンポーネント作成
+  - [x] 頻出量により文字サイズを動的に変更（14px～38px）
+  - [x] ポジティブ/ネガティブ両方で視覚的に表示
+  - [x] ホバー時にスケール変更でインタラクティブ性を追加
+- [x] AnalysisDetail.tsx に FrequentWordsCloud を統合
+- [x] マーケティング戦略セクションを 4 点の提案に拡張
+  - [x] generateMarketingProposals() 関数を実装
+  - [x] ポジティブ率に基づく提案（ポジティブ感情の強化 or ネガティブ要素の改善）
+  - [x] エンゲージメント率に基づく提案（高エンゲージメント層への集中 or 向上施策）
+  - [x] 動画数に基づく提案（コンテンツの多様化 or 量の拡大）
+  - [x] 再生数シェアに基づく提案（ポジティブ/ネガティブ/バランス型）
+- [x] ReportSection に proposals を渡すように修正
+- [x] 単体テスト作成・実行
+  - [x] vitest 設定を更新（jsdom 環境、client テスト対応）
+  - [x] @testing-library/react をインストール
+  - [x] FrequentWordsCloud.test.tsx を作成（5 テスト）
+  - [x] すべてのテストが成功（5/5 パス）
+- [x] TypeScript コンパイルエラー確認（0 エラー）
+- [x] 開発サーバー正常動作確認
