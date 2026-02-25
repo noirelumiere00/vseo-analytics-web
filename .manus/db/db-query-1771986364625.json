@@ -1,0 +1,9 @@
+{
+  "query": "SELECT j.id, j.keyword, j.status, r.facets FROM analysis_jobs j LEFT JOIN analysis_reports r ON j.id = r.jobId WHERE j.keyword LIKE '%ハリアー%' ORDER BY j.id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT j.id, j.keyword, j.status, r.facets FROM analysis_jobs j LEFT JOIN analysis_reports r ON j.id = r.jobId WHERE j.keyword LIKE '%ハリアー%' ORDER BY j.id DESC LIMIT 5;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1506
+}

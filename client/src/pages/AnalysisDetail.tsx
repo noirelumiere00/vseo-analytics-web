@@ -1,3 +1,4 @@
+import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
+import { ReportSection } from '@/components/ReportSection';
 
 // 広告系ハッシュタグのフィルター（フロントエンド用）
 const AD_HASHTAG_PATTERNS = [
@@ -287,6 +289,28 @@ export default function AnalysisDetail() {
   }, []);
 
   // === Early returns AFTER all hooks ===
+  // マークダウンレポートセクション
+  const renderMarkdownReport = () => {
+    if (!data || !data.report?.keyInsights) {
+      return null;
+    }
+
+    // keyInsights がマークダウン形式のレポートを含むと仮定
+    // 実際のレポートが別フィールドに保存されている場合は調整が必要
+    return (
+      <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
+        <h2 className="text-2xl font-bold mb-6">📊 詳細分析レポート</h2>
+        <div className="prose prose-sm max-w-none">
+          {typeof data.report.keyInsights === 'string' ? (
+            <Streamdown>{data.report.keyInsights}</Streamdown>
+          ) : (
+            <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -540,16 +564,12 @@ export default function AnalysisDetail() {
           {/* Report Section */}
           {reportStats && job.status === "completed" && (
             <Card>
-              <CardContent className="p-0">
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="report">
-                    <AccordionTrigger className="px-6 py-4 hover:no-underline">
-                      <CardTitle className="text-2xl">📊 分析レポート</CardTitle>
-                    </AccordionTrigger>
-                    <AccordionContent className="px-6 pb-6">
-                      <div className="space-y-8">
-                        {/* サマリー情報 */}
-                        <div>
+              <CardHeader>
+                <CardTitle className="text-2xl">📊 分析レポート</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-8">
+                {/* サマリー情報 */}
+                <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -696,15 +716,25 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 側面分析 */}
-                {data.report?.facets && (data.report.facets as any[]).length > 0 && (
-                  <div>
-                    <FacetAnalysis facets={data.report.facets as Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>} />
-                  </div>
-                )}
-                {(!data.report?.facets || (data.report.facets as any[]).length === 0) && (
-                  <div className="text-center text-gray-500 py-4">
-                    側面分析データが利用可能です
-                  </div>
+                {data && data.report && (
+                  <ReportSection
+                    keyword={data.job?.keyword || ""}
+                    date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
+                    videoCount={data.videos?.length || 0}
+                    platform="TikTok"
+                    aspects={(data.report?.facets || []).map((f: any) => ({
+                      name: f.aspect || f.name || "",
+                      pos: f.positive_percentage || f.pos || 0,
+                      neg: f.negative_percentage || f.neg || 0,
+                      desc: f.description || f.desc || ""
+                    }))}
+                    proposals={[]}
+                    sentimentData={{
+                      positive: reportStats.sentimentCounts.positive || 0,
+                      negative: reportStats.sentimentCounts.negative || 0,
+                      neutral: reportStats.sentimentCounts.neutral || 0,
+                    }}
+                  />
                 )}
 
                 {/* 頻出ワード分析 */}
@@ -770,10 +800,6 @@ export default function AnalysisDetail() {
                     </div>
                   </div>
                 )}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
               </CardContent>
             </Card>
           )}
