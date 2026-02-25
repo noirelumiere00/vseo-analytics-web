@@ -288,8 +288,6 @@ export default function AnalysisDetail() {
   }, []);
 
   // === Early returns AFTER all hooks ===
-  if (isLoading) {
-  
   // マークダウンレポートセクション
   const renderMarkdownReport = () => {
     if (!data || !data.report?.keyInsights) {
@@ -302,13 +300,18 @@ export default function AnalysisDetail() {
       <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
         <h2 className="text-2xl font-bold mb-6">📊 詳細分析レポート</h2>
         <div className="prose prose-sm max-w-none">
-          <Streamdown>{data.report.keyInsights}</Streamdown>
+          {typeof data.report.keyInsights === 'string' ? (
+            <Streamdown>{data.report.keyInsights}</Streamdown>
+          ) : (
+            <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
+          )}
         </div>
       </div>
     );
   };
 
-  return (
+  if (isLoading) {
+    return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="animate-spin h-8 w-8 text-primary" />
       </div>
