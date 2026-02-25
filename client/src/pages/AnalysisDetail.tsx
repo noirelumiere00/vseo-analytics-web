@@ -540,12 +540,16 @@ export default function AnalysisDetail() {
           {/* Report Section */}
           {reportStats && job.status === "completed" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">📊 分析レポート</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* サマリー情報 */}
-                <div>
+              <CardContent className="p-0">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="report">
+                    <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                      <CardTitle className="text-2xl">📊 分析レポート</CardTitle>
+                    </AccordionTrigger>
+                    <AccordionContent className="px-6 pb-6">
+                      <div className="space-y-8">
+                        {/* サマリー情報 */}
+                        <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="text-center p-4 bg-purple-50 rounded-lg">
@@ -772,6 +776,10 @@ export default function AnalysisDetail() {
                     </div>
                   </div>
                 )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </CardContent>
             </Card>
           )}
