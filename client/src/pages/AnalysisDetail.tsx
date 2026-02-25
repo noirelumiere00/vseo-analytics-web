@@ -147,6 +147,98 @@ export default function AnalysisDetail() {
     }
   }, [data?.job.status, jobId]);
 
+  // マーケティング提案を生成 - MUST be before reportStats useMemo
+  const generateMarketingProposals = useCallback((stats: any) => {
+    if (!stats) return [];
+    
+    const proposals = [];
+    const posRatio = Number(stats.posNegRatio.positive);
+    const totalEngagement = stats.totalEngagement || 0;
+    const totalViews = stats.totalViews || 0;
+    const avgEngagementRate = totalViews > 0 ? ((totalEngagement / totalViews) * 100).toFixed(2) : "0";
+    
+    if (posRatio >= 70) {
+      proposals.push({
+        area: "ポジティブ感情の強化",
+        action: "高いポジティブ率を活かし、ユーザーの満足度を高める要素（レビュー、事例紹介、成功事例）をさらに増加",
+        priority: "高" as const,
+        icon: "🎯"
+      });
+    } else if (posRatio < 40) {
+      proposals.push({
+        area: "ネガティブ要素の改善",
+        action: "ネガティブ感情が高いため、ユーザーの懸念点を解決するコンテンツ（FAQ、トラブルシューティング、改善事例）を追加",
+        priority: "高" as const,
+        icon: "⚠️"
+      });
+    } else {
+      proposals.push({
+        area: "バランスの取れたコンテンツ戦略",
+        action: "ポジティブとネガティブが混在しているため、両方の要素を活かしたストーリーテリングで信頼性を向上",
+        priority: "中" as const,
+        icon: "⚖️"
+      });
+    }
+    
+    if (Number(avgEngagementRate) > 5) {
+      proposals.push({
+        area: "高エンゲージメント層への集中",
+        action: "エンゲージメント率が高いため、このコンテンツスタイルを分析し、類似コンテンツの制作を増加",
+        priority: "高" as const,
+        icon: "📈"
+      });
+    } else {
+      proposals.push({
+        area: "エンゲージメント向上施策",
+        action: "エンゲージメント率が低いため、CTA（行動喚起）の明確化、インタラクティブ要素の追加、視聴者への問いかけを増加",
+        priority: "中" as const,
+        icon: "💬"
+      });
+    }
+    
+    if (stats.totalVideos >= 10) {
+      proposals.push({
+        area: "コンテンツの多様化",
+        action: "十分な動画数があるため、異なるフォーマット（チュートリアル、インタビュー、ビハインドザシーンズ）を試験的に導入",
+        priority: "中" as const,
+        icon: "🎬"
+      });
+    } else {
+      proposals.push({
+        area: "コンテンツ量の拡大",
+        action: "動画数が少ないため、定期的な投稿スケジュールを設定し、コンテンツ量を段階的に増加",
+        priority: "高" as const,
+        icon: "📹"
+      });
+    }
+    
+    const posViewShare = Number(stats.viewsShare.positive);
+    if (posViewShare > 60) {
+      proposals.push({
+        area: "ポジティブコンテンツの拡大",
+        action: "ポジティブ感情の動画が多くの再生数を獲得しているため、このテーマの掘り下げと関連キーワードでの展開を推奨",
+        priority: "高" as const,
+        icon: "⭐"
+      });
+    } else if (posViewShare < 40) {
+      proposals.push({
+        area: "ネガティブ要素の対策と差別化",
+        action: "ネガティブ感情の動画が多く再生されているため、その原因を分析し、対抗メッセージやポジティブな代替案を提示",
+        priority: "高" as const,
+        icon: "🔄"
+      });
+    } else {
+      proposals.push({
+        area: "感情バランスの最適化",
+        action: "ポジティブとネガティブの再生数がバランスしているため、両方の視点を統合した包括的なコンテンツ戦略を構築",
+        priority: "中" as const,
+        icon: "🎨"
+      });
+    }
+    
+    return proposals.slice(0, 4);
+  }, []);
+
   // レポート統計を計算 - MUST be before any early returns
   const reportStats = useMemo(() => {
     if (!data?.videos || data.videos.length === 0) return null;
@@ -251,104 +343,6 @@ export default function AnalysisDetail() {
       proposals,
     };
   }, [data]);
-
-  // マーケティング提案を生成
-  const generateMarketingProposals = useCallback((stats: any) => {
-    if (!stats) return [];
-    
-    const proposals = [];
-    const posRatio = Number(stats.posNegRatio.positive);
-    const negRatio = Number(stats.posNegRatio.negative);
-    const totalEngagement = stats.totalEngagement || 0;
-    const totalViews = stats.totalViews || 0;
-    const avgEngagementRate = totalViews > 0 ? ((totalEngagement / totalViews) * 100).toFixed(2) : "0";
-    
-    // 提案 1: ポジティブ率が高い場合
-    if (posRatio >= 70) {
-      proposals.push({
-        area: "ポジティブ感情の強化",
-        action: "高いポジティブ率を活かし、ユーザーの満足度を高める要素（レビュー、事例紹介、成功事例）をさらに増加させる",
-        priority: "高" as const,
-        icon: "🎯"
-      });
-    } else if (posRatio < 40) {
-      // 提案 1 (代替): ネガティブ率が高い場合
-      proposals.push({
-        area: "ネガティブ要素の改善",
-        action: "ネガティブ感情が高いため、ユーザーの懸念点を解決するコンテンツ（FAQ、トラブルシューティング、改善事例）を追加",
-        priority: "高" as const,
-        icon: "⚠️"
-      });
-    } else {
-      proposals.push({
-        area: "バランスの取れたコンテンツ戦略",
-        action: "ポジティブとネガティブが混在しているため、両方の要素を活かしたストーリーテリングで信頼性を向上",
-        priority: "中" as const,
-        icon: "⚖️"
-      });
-    }
-    
-    // 提案 2: エンゲージメント率に基づく提案
-    if (Number(avgEngagementRate) > 5) {
-      proposals.push({
-        area: "高エンゲージメント層への集中",
-        action: "エンゲージメント率が高いため、このコンテンツスタイルを分析し、類似コンテンツの制作を増加させる",
-        priority: "高" as const,
-        icon: "📈"
-      });
-    } else {
-      proposals.push({
-        area: "エンゲージメント向上施策",
-        action: "エンゲージメント率が低いため、CTA（行動喚起）の明確化、インタラクティブ要素の追加、視聴者への問いかけを増加",
-        priority: "中" as const,
-        icon: "💬"
-      });
-    }
-    
-    // 提案 3: 動画数に基づく提案
-    if (stats.totalVideos >= 10) {
-      proposals.push({
-        area: "コンテンツの多様化",
-        action: "十分な動画数があるため、異なるフォーマット（チュートリアル、インタビュー、ビハインドザシーンズ）を試験的に導入",
-        priority: "中" as const,
-        icon: "🎬"
-      });
-    } else {
-      proposals.push({
-        area: "コンテンツ量の拡大",
-        action: "動画数が少ないため、定期的な投稿スケジュールを設定し、コンテンツ量を段階的に増加",
-        priority: "高" as const,
-        icon: "📹"
-      });
-    }
-    
-    // 提案 4: 再生数シェアに基づく提案
-    const posViewShare = Number(stats.viewsShare.positive);
-    if (posViewShare > 60) {
-      proposals.push({
-        area: "ポジティブコンテンツの拡大",
-        action: "ポジティブ感情の動画が多くの再生数を獲得しているため、このテーマの掘り下げと関連キーワードでの展開を推奨",
-        priority: "高" as const,
-        icon: "⭐"
-      });
-    } else if (posViewShare < 40) {
-      proposals.push({
-        area: "ネガティブ要素の対策と差別化",
-        action: "ネガティブ感情の動画が多く再生されているため、その原因を分析し、対抗メッセージやポジティブな代替案を提示",
-        priority: "高" as const,
-        icon: "🔄"
-      });
-    } else {
-      proposals.push({
-        area: "感情バランスの最適化",
-        action: "ポジティブとネガティブの再生数がバランスしているため、両方の視点を統合した包括的なコンテンツ戦略を構築",
-        priority: "中" as const,
-        icon: "🎨"
-      });
-    }
-    
-    return proposals.slice(0, 4); // 最大 4 件の提案を返す
-  }, []);
 
   // 動画をカテゴリ別に分類 - MUST be before any early returns
   const categorizedVideos = useMemo(() => {
