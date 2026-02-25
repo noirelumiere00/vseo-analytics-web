@@ -702,14 +702,8 @@ export default function AnalysisDetail() {
                   </div>
                 )}
                 {(!data.report?.facets || (data.report.facets as any[]).length === 0) && (
-                  <div>
-                    <FacetAnalysis facets={[
-                      { aspect: "体験・アトラクション", positive_percentage: 85, negative_percentage: 15 },
-                      { aspect: "施設・環境", positive_percentage: 80, negative_percentage: 20 },
-                      { aspect: "価格・チケット", positive_percentage: 60, negative_percentage: 40 },
-                      { aspect: "集客・混雑", positive_percentage: 45, negative_percentage: 55 },
-                      { aspect: "食事・飲食", positive_percentage: 75, negative_percentage: 25 },
-                    ]} />
+                  <div className="text-center text-gray-500 py-4">
+                    側面分析データが利用可能です
                   </div>
                 )}
 
