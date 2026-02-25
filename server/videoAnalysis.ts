@@ -1,6 +1,5 @@
 import { invokeLLM } from "./_core/llm";
 import { analyzeFacetsImproved } from "./videoAnalysis_facet_analysis_improved";
-import { generateFacetAnalysisReport } from "./reportGenerator";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
@@ -414,13 +413,6 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   const videosData = await db.getVideosByJobId(jobId);
   if (videosData.length === 0) return;
-  
-  // ジョブ情報を取得
-  const job = await db.getAnalysisJobById(jobId);
-  if (!job) {
-    console.error(`[Analysis] Job ${jobId} not found`);
-    return;
-  }
 
   // 基本統計
   const totalVideos = videosData.length;
@@ -710,22 +702,6 @@ JSON形式で返してください。
   // videosData に jobId を追加してから analyzeFacetsImproved に渡す
   const videosDataWithJobId = videosData.map(v => ({ ...v, jobId }));
   const facets = await analyzeFacetsImproved(videosDataWithJobId, jobId);  // レポートをDBに保存
-  
-  // マークダウン形式のレポートを生成
-  const markdownReport = generateFacetAnalysisReport({
-    keyword: job.keyword || 'Unknown',
-    facets: facets || [],
-    positiveWords,
-    negativeWords,
-    totalVideos,
-    totalViews,
-    totalEngagement,
-    positivePercentage,
-    negativePercentage,
-  });
-  
-  console.log(`[Analysis] Markdown report generated (${markdownReport.length} characters)`);
-  
   await db.createAnalysisReport({
     jobId,
     totalVideos,
