@@ -307,6 +307,8 @@ export default function AnalysisDetail() {
   }
 
   const { job, videos, tripleSearch } = data;
+  
+
 
   return (
     <div className="min-h-screen bg-background">

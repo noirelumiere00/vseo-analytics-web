@@ -699,7 +699,9 @@ JSON形式で返してください。
   }
 
   // 側面分析（ビジネス視点）
-  const facets = await analyzeFacetsImproved(videosData, jobId);  // レポートをDBに保存
+  // videosData に jobId を追加してから analyzeFacetsImproved に渡す
+  const videosDataWithJobId = videosData.map(v => ({ ...v, jobId }));
+  const facets = await analyzeFacetsImproved(videosDataWithJobId, jobId);  // レポートをDBに保存
   await db.createAnalysisReport({
     jobId,
     totalVideos,
