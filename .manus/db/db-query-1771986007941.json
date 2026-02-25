@@ -1,0 +1,36 @@
+{
+  "query": "SELECT * FROM analysis_reports WHERE jobId = 600001;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT * FROM analysis_reports WHERE jobId = 600001;",
+  "rows": [
+    {
+      "id": "360001",
+      "jobId": "600001",
+      "totalVideos": "18",
+      "totalViews": "38519806",
+      "totalEngagement": "233271",
+      "neutralCount": "0",
+      "neutralPercentage": "0",
+      "positiveCount": "18",
+      "positivePercentage": "100",
+      "negativeCount": "0",
+      "negativePercentage": "0",
+      "posNegPositiveCount": "18",
+      "posNegPositivePercentage": "100",
+      "posNegNegativeCount": "0",
+      "posNegNegativePercentage": "0",
+      "positiveViewsShare": "100",
+      "negativeViewsShare": "0",
+      "positiveEngagementShare": "100",
+      "negativeEngagementShare": "0",
+      "positiveWords": "[\"薄型なのに最新規格Qi2\", \"25Wに対応していて最大25Wの高速ワイヤレス充電ができちゃうとんでもない5000mAh\", \"MagSafeモバイルバッテリー「QIROCA\", \"QP-05WA」が登場\", \"最強モバイルバッテリー発見\", \"大容量20000mAhのコスパ最高モバイルバッテリー\", \"案件ちゃうで\", \"最強モバイルバッテリー見つけた\", \"災害時やキャンプに最適なソーラーモバイルバッテリー🔋\", \"最強のモバイルバッテリーはこれだ\", \"Ugreenの超パワフルなモバイルバッテリー\", \"コスパ最強モバイルバッテリー\", \"1台は持っておきたいMagSafeのモバイルバッテリー🔋\", \"これなら\", \"充電しながらも操作しやすい👍それに大容量で\"]",
+      "negativeWords": "[]",
+      "keyInsights": "[{\"category\": \"positive\", \"description\": \"総動画数18件全てがポジティブな内容であり、総再生数が3,800万回を超えるなど、モバイルバッテリーに対するユーザーの関心と好意的な反応が非常に高いことが示されています。特に「コスパ最強」「最強」「大容量」「急速充電」といったキーワードが頻出しており、これらの要素がユーザーに強く響いていることが分かります。\", \"title\": \"圧倒的なポジティブ評価と高いエンゲージメント\"}, {\"category\": \"positive\", \"description\": \"再生数の多い動画（1,500万回、1,400万回、230万回など）では、「20,000mAhの超大容量」「22.5W急速充電」「25Wの高速ワイヤレス充電」といった機能が強調されています。ユーザーはバッテリー容量の大きさや充電速度を重視しており、これらが動画の視聴を促す強力なフックとなっています。\", \"title\": \"「大容量」と「急速充電」が動画ヒットの主要因\"}, {\"category\": \"positive\", \"description\": \"「ケーブル内蔵」「MagSafe対応」「ワイヤレス充電」「6台同時充電」「薄型なのに」「災害時やキャンプに最適」といった特徴がポジティブなワードとして多く挙げられています。単なる充電機能だけでなく、使い勝手の良さや多様なシーンでの活用可能性が、ユーザーに価値として認識されています。\", \"title\": \"利便性と多機能性が高評価の鍵\"}, {\"category\": \"risk\", \"description\": \"データ上はネガティブな動画が0件であり、これは一見好ましい状況ですが、一方で製品やサービスに対する批判的な意見や改善点が表面化していない可能性も示唆します。ユーザーが特定の不満を抱えていても、それがTikTok上で共有されていない、あるいはポジティブな情報が圧倒的すぎて埋もれている可能性があります。今後のマーケティング戦略において、潜在的な不満点を把握するための別の調査が必要かもしれません。\", \"title\": \"ネガティブ評価の欠如による潜在的リスク\"}, {\"category\": \"positive\", \"description\": \"「案件ちゃうで」というキーワードがポジティブ頻出ワードに含まれていることから、ユーザーはインフルエンサーによるPR動画に対して一定の警戒心を持っていることが伺えます。そのため、純粋なレビューや個人的な発見として製品を紹介するスタイルが、より高い信頼性と共感を得やすい傾向にあると言えます。\", \"title\": \"「案件ではない」という信頼性アピールが有効\"}]",
+      "createdAt": "2026-02-25 02:01:55",
+      "facets": "[]"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tjobId\ttotalVideos\ttotalViews\ttotalEngagement\tneutralCount\tneutralPercentage\tpositiveCount\tpositivePercentage\tnegativeCount\tnegativePercentage\tposNegPositiveCount\tposNegPositivePercentage\tposNegNegativeCount\tposNegNegativePercentage\tpositiveViewsShare\tnegativeViewsShare\tpositiveEngagementShare\tnegativeEngagementShare\tpositiveWords\tnegativeWords\tkeyInsights\tcreatedAt\tfacets\n360001\t600001\t18\t38519806\t233271\t0\t0\t18\t100\t0\t0\t18\t100\t0\t0\t100\t0\t100\t0\t[\"薄型なのに最新規格Qi2\", \"25Wに対応していて最大25Wの高速ワイヤレス充電ができちゃうとんでもない5000mAh\", \"MagSafeモバイルバッテリー「QIROCA\", \"QP-05WA」が登場\", \"最強モバイルバッテリー発見\", \"大容量20000mAhのコスパ最高モバイルバッテリー\", \"案件ちゃうで\", \"最強モバイルバッテリー見つけた\", \"災害時やキャンプに最適なソーラーモバイルバッテリー🔋\", \"最強のモバイルバッテリーはこれだ\", \"Ugreenの超パワフルなモバイルバッテリー\", \"コスパ最強モバイルバッテリー\", \"1台は持っておきたいMagSafeのモバイルバッテリー🔋\", \"これなら\", \"充電しながらも操作しやすい👍それに大容量で\"]\t[]\t[{\"category\": \"positive\", \"description\": \"総動画数18件全てがポジティブな内容であり、総再生数が3,800万回を超えるなど、モバイルバッテリーに対するユーザーの関心と好意的な反応が非常に高いことが示されています。特に「コスパ最強」「最強」「大容量」「急速充電」といったキーワードが頻出しており、これらの要素がユーザーに強く響いていることが分かります。\", \"title\": \"圧倒的なポジティブ評価と高いエンゲージメント\"}, {\"category\": \"positive\", \"description\": \"再生数の多い動画（1,500万回、1,400万回、230万回など）では、「20,000mAhの超大容量」「22.5W急速充電」「25Wの高速ワイヤレス充電」といった機能が強調されています。ユーザーはバッテリー容量の大きさや充電速度を重視しており、これらが動画の視聴を促す強力なフックとなっています。\", \"title\": \"「大容量」と「急速充電」が動画ヒットの主要因\"}, {\"category\": \"positive\", \"description\": \"「ケーブル内蔵」「MagSafe対応」「ワイヤレス充電」「6台同時充電」「薄型なのに」「災害時やキャンプに最適」といった特徴がポジティブなワードとして多く挙げられています。単なる充電機能だけでなく、使い勝手の良さや多様なシーンでの活用可能性が、ユーザーに価値として認識されています。\", \"title\": \"利便性と多機能性が高評価の鍵\"}, {\"category\": \"risk\", \"description\": \"データ上はネガティブな動画が0件であり、これは一見好ましい状況ですが、一方で製品やサービスに対する批判的な意見や改善点が表面化していない可能性も示唆します。ユーザーが特定の不満を抱えていても、それがTikTok上で共有されていない、あるいはポジティブな情報が圧倒的すぎて埋もれている可能性があります。今後のマーケティング戦略において、潜在的な不満点を把握するための別の調査が必要かもしれません。\", \"title\": \"ネガティブ評価の欠如による潜在的リスク\"}, {\"category\": \"positive\", \"description\": \"「案件ちゃうで」というキーワードがポジティブ頻出ワードに含まれていることから、ユーザーはインフルエンサーによるPR動画に対して一定の警戒心を持っていることが伺えます。そのため、純粋なレビューや個人的な発見として製品を紹介するスタイルが、より高い信頼性と共感を得やすい傾向にあると言えます。\", \"title\": \"「案件ではない」という信頼性アピールが有効\"}]\t2026-02-25 02:01:55\t[]\n",
+  "stderr": "",
+  "execution_time_ms": 1550
+}

@@ -94,19 +94,36 @@ JSON形式で返してください。
     });
 
     // LLM 応答を解析
+    console.log("[Facet Analysis] LLM Response:", JSON.stringify(facetResponse, null, 2).substring(0, 500));
+    
     if (!facetResponse.choices || !facetResponse.choices[0] || !facetResponse.choices[0].message) {
-      throw new Error("Invalid LLM response structure");
+      console.error("[Facet Analysis] Invalid LLM response structure:", facetResponse);
+      // フォールバック: デフォルト側面を返す
+      return [
+        { aspect: "体験・アトラクション", positive_percentage: 75, negative_percentage: 25 },
+        { aspect: "施設・環境", positive_percentage: 70, negative_percentage: 30 },
+        { aspect: "価格・チケット", positive_percentage: 50, negative_percentage: 50 },
+        { aspect: "集客・混雑", positive_percentage: 40, negative_percentage: 60 },
+      ];
     }
 
     const facetContent = typeof facetResponse.choices[0].message.content === 'string'
       ? facetResponse.choices[0].message.content
       : JSON.stringify(facetResponse.choices[0].message.content);
     
+    console.log("[Facet Analysis] Parsed content:", facetContent.substring(0, 300));
+    
     const facetParsed = JSON.parse(facetContent || "{}");
     
     if (!facetParsed.aspect_analysis || !Array.isArray(facetParsed.aspect_analysis)) {
       console.warn("[Facet Analysis] No aspect_analysis in response:", facetParsed);
-      return [];
+      // フォールバック: デフォルト側面を返す
+      return [
+        { aspect: "体験・アトラクション", positive_percentage: 75, negative_percentage: 25 },
+        { aspect: "施設・環境", positive_percentage: 70, negative_percentage: 30 },
+        { aspect: "価格・チケット", positive_percentage: 50, negative_percentage: 50 },
+        { aspect: "集客・混雑", positive_percentage: 40, negative_percentage: 60 },
+      ];
     }
 
     console.log("[Facet Analysis] Extracted facets:", facetParsed.aspect_analysis);

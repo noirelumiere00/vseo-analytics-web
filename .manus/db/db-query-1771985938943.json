@@ -1,0 +1,15 @@
+{
+  "query": "SELECT id, keyword, status FROM analysis_jobs WHERE id = 600001 LIMIT 1;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway04.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2tBpXYT6QZrXfyp.root --database b2UfL3enjEZB9aUGrDGovx --execute SELECT id, keyword, status FROM analysis_jobs WHERE id = 600001 LIMIT 1;",
+  "rows": [
+    {
+      "id": "600001",
+      "keyword": "#モバイルバッテリー",
+      "status": "completed"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tkeyword\tstatus\n600001\t#モバイルバッテリー\tcompleted\n",
+  "stderr": "",
+  "execution_time_ms": 3241
+}
