@@ -1,12 +1,12 @@
 /**
  * 側面分析の改善版実装
- * 参考資料に基づいた実装
+ * 実データに基づいて動的に側面を抽出し、ポジティブ/ネガティブ比率を計算
  */
 
 import { invokeLLM } from "./_core/llm";
 
 export async function analyzeFacetsImproved(
-  videosData: Array<{ accountName: string | null; description: string | null; jobId?: number }>,
+  videosData: Array<{ accountName: string | null; description: string | null; sentiment?: string | null; jobId?: number }>,
   jobId?: number
 ): Promise<Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>> {
   try {
@@ -20,120 +20,173 @@ export async function analyzeFacetsImproved(
       return [];
     }
 
-    // 複数動画のテキストを統合
+    // 複数動画のテキストを統合（センチメント情報も含める）
     const allTexts = filteredVideos
-      .map(v => `@${v.accountName}: ${v.description || ""}`)
+      .map(v => `@${v.accountName} [${v.sentiment || 'neutral'}]: ${v.description || ""}`)
       .join("\n\n");
 
     console.log("[Facet Analysis] Analyzing facets for jobId:", jobId);
     console.log("[Facet Analysis] Total videos:", filteredVideos.length);
 
-    // LLM プロンプト生成
-    const facetAnalysisPrompt = `
+    // ステップ 1: 動画テキストから側面を動的に抽出
+    const facetExtractionPrompt = `
 あなたはビジネス視点の動画コンテンツ分析専門家です。
-以下の複数動画のテキストから、ビジネス上重要な「側面」を4-6個抽出してください。
+以下の複数動画のテキストから、実際に言及されている「ビジネス上重要な側面」を自動抽出してください。
 
-【抽出すべき側面の例】
-- 価格・チケット（料金、チケット代、コスパ等）
-- 集客・混雑（来客数、混雑度、待ち時間等）
-- 施設・環境（施設の質、清潔さ、設備等）
-- 体験・アトラクション（体験の質、楽しさ、満足度等）
-- 食事・飲食（食事の質、価格、メニュー等）
-- スタッフ・サービス（接客、対応、サービス品質等）
-
-【重要な注意事項】
+【抽出のルール】
+- 動画テキストに実際に言及されている側面のみを抽出してください
 - 固有名詞（地名、施設名、製品名、ブランド名）は側面として抽出しないでください
-- 例: 「沖縄」「ジャングリア」「シャウエッセン」などは側面ではありません
-- 感情を表す言葉のみを側面として抽出してください
-
-各側面について、複数動画での言及頻度に基づいて、ポジティブ・ネガティブ率を計算してください。
+- 例: 「沖縄」「ハリアー」「シャウエッセン」などは側面ではありません
+- 感情や評価を表す言葉（良い、悪い、楽しい、つまらない等）ではなく、「何について」言及されているかを抽出してください
+- 4-6個の側面を抽出してください
 
 【動画テキスト】
 ${allTexts}
 
-JSON形式で返してください。
+JSON形式で返してください。以下の形式で、抽出した側面のリストを返してください：
+{
+  "extracted_aspects": [
+    "側面1",
+    "側面2",
+    ...
+  ]
+}
 `;
 
-    const facetResponse = await invokeLLM({
+    const extractionResponse = await invokeLLM({
       messages: [
         {
           role: "system",
-          content: "You are a business-focused video content analysis expert. Extract 4-6 main aspects from the given texts. Do NOT include proper nouns (place names, facility names, product names, brand names) as aspects. Always respond in valid JSON format.",
+          content: "You are a business-focused video content analysis expert. Extract 4-6 main aspects that are actually mentioned in the given texts. Do NOT include proper nouns. Focus on what is being discussed, not emotional words. Always respond in valid JSON format.",
         },
-        { role: "user", content: facetAnalysisPrompt },
+        { role: "user", content: facetExtractionPrompt },
       ],
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "facet_analysis",
+          name: "aspect_extraction",
           strict: true,
           schema: {
             type: "object",
             properties: {
-              aspect_analysis: {
+              extracted_aspects: {
                 type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    aspect: { type: "string" },
-                    positive_percentage: { type: "number", minimum: 0, maximum: 100 },
-                    negative_percentage: { type: "number", minimum: 0, maximum: 100 },
-                  },
-                  required: ["aspect", "positive_percentage", "negative_percentage"],
-                  additionalProperties: false,
-                },
+                items: { type: "string" },
                 minItems: 4,
                 maxItems: 6,
               },
             },
-            required: ["aspect_analysis"],
+            required: ["extracted_aspects"],
             additionalProperties: false,
           },
         },
       },
     });
 
-    // LLM 応答を解析
-    console.log("[Facet Analysis] LLM Response:", JSON.stringify(facetResponse, null, 2).substring(0, 500));
-    
-    if (!facetResponse.choices || !facetResponse.choices[0] || !facetResponse.choices[0].message) {
-      console.error("[Facet Analysis] Invalid LLM response structure:", facetResponse);
-      // フォールバック: デフォルト側面を返す
-      return [
-        { aspect: "体験・アトラクション", positive_percentage: 75, negative_percentage: 25 },
-        { aspect: "施設・環境", positive_percentage: 70, negative_percentage: 30 },
-        { aspect: "価格・チケット", positive_percentage: 50, negative_percentage: 50 },
-        { aspect: "集客・混雑", positive_percentage: 40, negative_percentage: 60 },
-      ];
+    let extractedAspects: string[] = [];
+    try {
+      const extractionContent = typeof extractionResponse.choices[0]?.message?.content === 'string'
+        ? extractionResponse.choices[0].message.content
+        : JSON.stringify(extractionResponse.choices[0]?.message?.content);
+      
+      const extractionParsed = JSON.parse(extractionContent || "{}");
+      extractedAspects = extractionParsed.extracted_aspects || [];
+      
+      console.log("[Facet Analysis] Extracted aspects:", extractedAspects);
+    } catch (error) {
+      console.error("[Facet Analysis] Error extracting aspects:", error);
+      return [];
     }
 
-    const facetContent = typeof facetResponse.choices[0].message.content === 'string'
-      ? facetResponse.choices[0].message.content
-      : JSON.stringify(facetResponse.choices[0].message.content);
-    
-    console.log("[Facet Analysis] Parsed content:", facetContent.substring(0, 300));
-    
-    const facetParsed = JSON.parse(facetContent || "{}");
-    
-    if (!facetParsed.aspect_analysis || !Array.isArray(facetParsed.aspect_analysis)) {
-      console.warn("[Facet Analysis] No aspect_analysis in response:", facetParsed);
-      // フォールバック: デフォルト側面を返す
-      return [
-        { aspect: "体験・アトラクション", positive_percentage: 75, negative_percentage: 25 },
-        { aspect: "施設・環境", positive_percentage: 70, negative_percentage: 30 },
-        { aspect: "価格・チケット", positive_percentage: 50, negative_percentage: 50 },
-        { aspect: "集客・混雑", positive_percentage: 40, negative_percentage: 60 },
-      ];
+    if (extractedAspects.length === 0) {
+      console.warn("[Facet Analysis] No aspects extracted");
+      return [];
     }
 
-    console.log("[Facet Analysis] Extracted facets:", facetParsed.aspect_analysis);
+    // ステップ 2: 各側面について、ポジティブ/ネガティブ比率を計算
+    const aspectsWithSentiment = await Promise.all(
+      extractedAspects.map(async (aspect) => {
+        const sentimentAnalysisPrompt = `
+以下の動画テキストから、「${aspect}」に関する言及を抽出し、ポジティブ/ネガティブ/ニュートラルの比率を計算してください。
 
-    // 出力形式に変換（参考資料に合わせる）
-    return facetParsed.aspect_analysis.map((a: any) => ({
-      aspect: a.aspect,
-      positive_percentage: a.positive_percentage,
-      negative_percentage: a.negative_percentage,
-    }));
+【動画テキスト】
+${allTexts}
+
+【分析方法】
+1. 「${aspect}」に言及している箇所を抽出
+2. 各言及がポジティブ（肯定的、好評）か、ネガティブ（否定的、批判的）か、ニュートラルか判定
+3. 比率を計算（ポジティブ + ネガティブ = 100%、ニュートラルは除外）
+
+JSON形式で返してください：
+{
+  "aspect": "${aspect}",
+  "positive_count": 数値,
+  "negative_count": 数値,
+  "neutral_count": 数値,
+  "positive_percentage": 0-100の数値,
+  "negative_percentage": 0-100の数値
+}
+`;
+
+        try {
+          const sentimentResponse = await invokeLLM({
+            messages: [
+              {
+                role: "system",
+                content: "You are a sentiment analysis expert. Analyze the sentiment of mentions about a specific aspect in the given texts. Classify each mention as positive, negative, or neutral. Calculate percentages based on positive and negative mentions only (excluding neutral). Always respond in valid JSON format.",
+              },
+              { role: "user", content: sentimentAnalysisPrompt },
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "aspect_sentiment",
+                strict: true,
+                schema: {
+                  type: "object",
+                  properties: {
+                    aspect: { type: "string" },
+                    positive_count: { type: "number", minimum: 0 },
+                    negative_count: { type: "number", minimum: 0 },
+                    neutral_count: { type: "number", minimum: 0 },
+                    positive_percentage: { type: "number", minimum: 0, maximum: 100 },
+                    negative_percentage: { type: "number", minimum: 0, maximum: 100 },
+                  },
+                  required: ["aspect", "positive_count", "negative_count", "neutral_count", "positive_percentage", "negative_percentage"],
+                  additionalProperties: false,
+                },
+              },
+            },
+          });
+
+          const sentimentContent = typeof sentimentResponse.choices[0]?.message?.content === 'string'
+            ? sentimentResponse.choices[0].message.content
+            : JSON.stringify(sentimentResponse.choices[0]?.message?.content);
+          
+          const sentimentParsed = JSON.parse(sentimentContent || "{}");
+          
+          console.log(`[Facet Analysis] Sentiment for "${aspect}":`, sentimentParsed);
+          
+          return {
+            aspect: sentimentParsed.aspect || aspect,
+            positive_percentage: sentimentParsed.positive_percentage || 50,
+            negative_percentage: sentimentParsed.negative_percentage || 50,
+          };
+        } catch (error) {
+          console.error(`[Facet Analysis] Error analyzing sentiment for "${aspect}":`, error);
+          // フォールバック: 50/50 に設定
+          return {
+            aspect,
+            positive_percentage: 50,
+            negative_percentage: 50,
+          };
+        }
+      })
+    );
+
+    console.log("[Facet Analysis] Final aspects with sentiment:", aspectsWithSentiment);
+
+    return aspectsWithSentiment;
 
   } catch (error) {
     console.error("[Facet Analysis] Error:", error);

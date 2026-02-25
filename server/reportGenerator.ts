@@ -81,9 +81,7 @@ export function generateFacetAnalysisReport(data: AnalysisReportData): string {
   if (strengths.length > 0) {
     report += `### 強み（ポジティブ率が高い側面）\n`;
     strengths.forEach((strength, index) => {
-      report += `${index + 1}. **${strength.aspect}** (${strength.positive_percentage.toFixed(1)}%) - `;
-      report += getStrengthDescription(strength.aspect);
-      report += `\n`;
+      report += `${index + 1}. **${strength.aspect}** (${strength.positive_percentage.toFixed(1)}%) - ユーザーから高い評価を得ている側面です。\n`;
     });
     report += `\n`;
   }
@@ -91,18 +89,18 @@ export function generateFacetAnalysisReport(data: AnalysisReportData): string {
   if (weaknesses.length > 0) {
     report += `### 弱み（ネガティブ率が高い側面）\n`;
     weaknesses.forEach((weakness, index) => {
-      report += `${index + 1}. **${weakness.aspect}** (${weakness.negative_percentage.toFixed(1)}% ネガティブ) - `;
-      report += getWeaknessDescription(weakness.aspect);
-      report += `\n`;
+      report += `${index + 1}. **${weakness.aspect}** (${weakness.negative_percentage.toFixed(1)}% ネガティブ) - 改善の余地がある側面です。\n`;
     });
     report += `\n`;
   }
 
-  report += `### 改善機会\n`;
-  weaknesses.forEach((weakness) => {
-    report += `- **${weakness.aspect}**: ${getImprovementSuggestion(weakness.aspect)}\n`;
-  });
-  report += `\n`;
+  if (weaknesses.length > 0) {
+    report += `### 改善機会\n`;
+    weaknesses.forEach((weakness) => {
+      report += `- **${weakness.aspect}**: ユーザーフィードバックに基づいた改善が推奨されます。\n`;
+    });
+    report += `\n`;
+  }
 
   // 頻出ワード分析
   report += `## 💬 頻出ワード分析\n\n`;
@@ -140,7 +138,7 @@ export function generateFacetAnalysisReport(data: AnalysisReportData): string {
     report += `1. **強みの強調** - ${strengths.map((s) => s.aspect).join("、")}についてのキャンペーン\n`;
   }
   if (weaknesses.length > 0) {
-    report += `2. **弱み対策** - ${weaknesses.map((w) => getMarketingSolution(w.aspect)).join("、")}\n`;
+    report += `2. **弱み対策** - ${weaknesses.map((w) => w.aspect).join("、")}に関する改善施策\n`;
   }
   report += `3. **ユーザー体験の共有** - ポジティブな口コミを増幅\n`;
   report += `4. **継続的な改善** - ネガティブフィードバックへの対応\n\n`;
@@ -175,72 +173,4 @@ function formatNumber(num: number): string {
     return (num / 1000).toFixed(1) + "K";
   }
   return num.toString();
-}
-
-/**
- * 強みの説明を取得
- */
-function getStrengthDescription(aspect: string): string {
-  const descriptions: Record<string, string> = {
-    "外観・デザイン": "ビジュアルアピール力が強く、ユーザーの注目を集めている",
-    "走行性能・乗り心地": "パフォーマンスに対する満足度が高い",
-    "室内空間・快適性": "ファミリー層への訴求力がある",
-    "安全性・信頼性": "最も評価が高く、ユーザーの信頼を獲得している",
-    "燃費・経済性": "ランニングコストに対する評価が良好",
-    "価格・コストパフォーマンス": "価格に対する満足度が高い",
-    "機能・装備": "豊富な機能が好評",
-    "ブランド力": "ブランドイメージが良好",
-  };
-  return descriptions[aspect] || "ユーザーから高い評価を得ている";
-}
-
-/**
- * 弱みの説明を取得
- */
-function getWeaknessDescription(aspect: string): string {
-  const descriptions: Record<string, string> = {
-    "外観・デザイン": "デザインに対する懸念がある",
-    "走行性能・乗り心地": "パフォーマンスに対する不満がある",
-    "室内空間・快適性": "快適性に対する懸念がある",
-    "安全性・信頼性": "信頼性に対する懸念がある",
-    "燃費・経済性": "ランニングコストへの懸念がある",
-    "価格・コストパフォーマンス": "価格に対する抵抗感がある",
-    "機能・装備": "機能や装備に対する不満がある",
-    "ブランド力": "ブランドイメージに課題がある",
-  };
-  return descriptions[aspect] || "改善の余地がある";
-}
-
-/**
- * 改善提案を取得
- */
-function getImprovementSuggestion(aspect: string): string {
-  const suggestions: Record<string, string> = {
-    "外観・デザイン": "デザイン改善やリフレッシュを検討",
-    "走行性能・乗り心地": "パフォーマンス向上の新技術を導入・アピール",
-    "室内空間・快適性": "快適性向上の新機能を追加・強調",
-    "安全性・信頼性": "安全装備の強化と信頼性の実績をアピール",
-    "燃費・経済性": "燃費改善技術の導入と経済性をアピール",
-    "価格・コストパフォーマンス": "価格戦略の見直しやキャンペーン実施",
-    "機能・装備": "ユーザーが求める機能の追加",
-    "ブランド力": "ブランドイメージの改善キャンペーン",
-  };
-  return suggestions[aspect] || "ユーザーフィードバックに基づく改善";
-}
-
-/**
- * マーケティング解決策を取得
- */
-function getMarketingSolution(aspect: string): string {
-  const solutions: Record<string, string> = {
-    "外観・デザイン": "デザイン面でのポジティブメッセージング",
-    "走行性能・乗り心地": "パフォーマンスの優位性を強調",
-    "室内空間・快適性": "快適性の実績をアピール",
-    "安全性・信頼性": "安全性の信頼性向上キャンペーン",
-    "燃費・経済性": "燃費改善と経済性の訴求",
-    "価格・コストパフォーマンス": "価格訴求の工夫と長期的価値の提示",
-    "機能・装備": "機能の充実性をアピール",
-    "ブランド力": "ブランドイメージ向上施策",
-  };
-  return solutions[aspect] || "ユーザー懸念への対応";
 }
