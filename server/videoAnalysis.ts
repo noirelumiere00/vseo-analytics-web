@@ -522,115 +522,16 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30);
 
-  // LLMを使った感情ワード抽出
-  let positiveWords: string[] = [];
-  let negativeWords: string[] = [];
-
-  try {
-    // ステップ 1: ネガティブ感情ワードを抽出
-    const negativeEmotionPrompt = `
-Below are TikTok video descriptions. Please extract ONLY negative emotion words and phrases that express dissatisfaction, criticism, or negative feelings.
-
-CRITICAL RULES FOR NEGATIVE WORDS:
-- Extract ONLY words that express negative emotions or dissatisfaction
-- ABSOLUTELY DO NOT include: proper nouns, place names, facility names, brand names
-- ABSOLUTELY DO NOT include: the keyword "${job.keyword}" or related proper nouns, location names, dates, numbers
-- ABSOLUTELY DO NOT include: neutral nouns or neutral verbs
-- Examples of NEGATIVE words: "ゴミ", "最悪", "つまらない", "不快", "混雑", "退屈", "失望", "ひどい"
-- Examples of words to EXCLUDE: "${job.keyword}", location names, dates like "2024年", prices like "100円", neutral verbs like "訪問", "体験"
-
-Texts:
-${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
-
-Return as JSON with 'negative_words' array containing up to 15 words/phrases. Only include true negative emotion words. NEVER include proper nouns or place names.
-`;
-
-    const negativeResponse = await invokeLLM({
-      messages: [
-        { role: "system", content: "You are a sentiment analysis expert. Extract negative emotion words from the text. Always respond in valid JSON format." },
-        { role: "user", content: negativeEmotionPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "negative_emotion_words",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              negative_words: {
-                type: "array",
-                items: { type: "string" },
-                maxItems: 15,
-              },
-            },
-            required: ["negative_words"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const negativeContent = typeof negativeResponse.choices[0].message.content === 'string'
-      ? negativeResponse.choices[0].message.content
-      : JSON.stringify(negativeResponse.choices[0].message.content);
-    const negativeParsed = JSON.parse(negativeContent || "{}");
-    negativeWords = negativeParsed.negative_words || [];
-
-    // ステップ 2: ポジティブ感情ワードを抽出
-    const positiveEmotionPrompt = `
-Below are TikTok video descriptions. Please extract ONLY positive emotion words and phrases that express satisfaction, praise, or positive feelings.
-
-IMPORTANT CLASSIFICATION RULES:
-- Extract ONLY words that express positive emotions or satisfaction
-- DO NOT include: proper nouns (place names, facility names), dates, numbers, neutral nouns, or neutral verbs
-- DO NOT include: the keyword "${job.keyword}" or related proper nouns
-- Examples of POSITIVE words: "楽しい", "最高", "素晴らしい", "安い", "快適", "美しい", "感動", "おすすめ"
-- Examples of words to EXCLUDE: "${job.keyword}", location names, dates like "2024年", prices like "100円", neutral verbs like "訪問", "体験"
-
-Texts:
-${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
-
-Return as JSON with 'positive_words' array containing up to 15 words/phrases. Only include true positive emotion words.
-`;
-
-    const positiveResponse = await invokeLLM({
-      messages: [
-        { role: "system", content: "You are a sentiment analysis expert. Extract positive emotion words from the text. Always respond in valid JSON format." },
-        { role: "user", content: positiveEmotionPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "positive_emotion_words",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              positive_words: {
-                type: "array",
-                items: { type: "string" },
-                maxItems: 15,
-              },
-            },
-            required: ["positive_words"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const positiveContent = typeof positiveResponse.choices[0].message.content === 'string'
-      ? positiveResponse.choices[0].message.content
-      : JSON.stringify(positiveResponse.choices[0].message.content);
-    const positiveParsed = JSON.parse(positiveContent || "{}");
-    positiveWords = positiveParsed.positive_words || [];
-  } catch (error) {
-    console.error("[Report] Error extracting emotion words with LLM:", error);
-    // Fallback: use top keywords
-    positiveWords = getTopWords(allKeywords, ocrAndAudioKeywords, 15);
-    negativeWords = [];
+  // per-video の sentiment + keywords から感情ワードを集計（LLMなし）
+  const positiveVideoKeywords: string[] = [];
+  const negativeVideoKeywords: string[] = [];
+  for (const video of videosData) {
+    const keywords = video.keywords as string[] || [];
+    if (video.sentiment === "positive") positiveVideoKeywords.push(...keywords);
+    if (video.sentiment === "negative") negativeVideoKeywords.push(...keywords);
   }
+  const positiveWords = getTopWords(positiveVideoKeywords, [], 15);
+  const negativeWords = getTopWords(negativeVideoKeywords, [], 15);
 
   // LLMで主要示唆を生成
   let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
