@@ -20,21 +20,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection } from '@/components/ReportSection';
 import { FrequentWordsCloud } from '@/components/FrequentWordsCloud';
-
-// 広告系ハッシュタグのフィルター（フロントエンド用）
-const AD_HASHTAG_PATTERNS = [
-  /^pr$/i, /^ad$/i, /^ads$/i, /^sponsored$/i,
-  /^提供$/, /^タイアップ$/, /^プロモーション$/,
-  /^promotion$/i, /^gifted$/i, /^supplied$/i,
-  /^ambassador$/i, /^アンバサダー$/, /^案件$/, /^企業案件$/,
-];
-
-function filterAdHashtags(hashtags: string[]): string[] {
-  return hashtags.filter(tag => {
-    const cleanTag = tag.replace(/^#/, '').trim();
-    return !AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
-  });
-}
+import { filterAdHashtags } from "@shared/const";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -147,97 +133,6 @@ export default function AnalysisDetail() {
     }
   }, [data?.job.status, jobId]);
 
-  // マーケティング提案を生成 - MUST be before reportStats useMemo
-  const generateMarketingProposals = useCallback((stats: any) => {
-    if (!stats) return [];
-    
-    const proposals = [];
-    const posRatio = Number(stats.posNegRatio.positive);
-    const totalEngagement = stats.totalEngagement || 0;
-    const totalViews = stats.totalViews || 0;
-    const avgEngagementRate = totalViews > 0 ? ((totalEngagement / totalViews) * 100).toFixed(2) : "0";
-    
-    if (posRatio >= 70) {
-      proposals.push({
-        area: "ポジティブ感情の強化",
-        action: "高いポジティブ率を活かし、ユーザーの満足度を高める要素（レビュー、事例紹介、成功事例）をさらに増加",
-        priority: "高" as const,
-        icon: "🎯"
-      });
-    } else if (posRatio < 40) {
-      proposals.push({
-        area: "ネガティブ要素の改善",
-        action: "ネガティブ感情が高いため、ユーザーの懸念点を解決するコンテンツ（FAQ、トラブルシューティング、改善事例）を追加",
-        priority: "高" as const,
-        icon: "⚠️"
-      });
-    } else {
-      proposals.push({
-        area: "バランスの取れたコンテンツ戦略",
-        action: "ポジティブとネガティブが混在しているため、両方の要素を活かしたストーリーテリングで信頼性を向上",
-        priority: "中" as const,
-        icon: "⚖️"
-      });
-    }
-    
-    if (Number(avgEngagementRate) > 5) {
-      proposals.push({
-        area: "高エンゲージメント層への集中",
-        action: "エンゲージメント率が高いため、このコンテンツスタイルを分析し、類似コンテンツの制作を増加",
-        priority: "高" as const,
-        icon: "📈"
-      });
-    } else {
-      proposals.push({
-        area: "エンゲージメント向上施策",
-        action: "エンゲージメント率が低いため、CTA（行動喚起）の明確化、インタラクティブ要素の追加、視聴者への問いかけを増加",
-        priority: "中" as const,
-        icon: "💬"
-      });
-    }
-    
-    if (stats.totalVideos >= 10) {
-      proposals.push({
-        area: "コンテンツの多様化",
-        action: "十分な動画数があるため、異なるフォーマット（チュートリアル、インタビュー、ビハインドザシーンズ）を試験的に導入",
-        priority: "中" as const,
-        icon: "🎬"
-      });
-    } else {
-      proposals.push({
-        area: "コンテンツ量の拡大",
-        action: "動画数が少ないため、定期的な投稿スケジュールを設定し、コンテンツ量を段階的に増加",
-        priority: "高" as const,
-        icon: "📹"
-      });
-    }
-    
-    const posViewShare = Number(stats.viewsShare.positive);
-    if (posViewShare > 60) {
-      proposals.push({
-        area: "ポジティブコンテンツの拡大",
-        action: "ポジティブ感情の動画が多くの再生数を獲得しているため、このテーマの掘り下げと関連キーワードでの展開を推奨",
-        priority: "高" as const,
-        icon: "⭐"
-      });
-    } else if (posViewShare < 40) {
-      proposals.push({
-        area: "ネガティブ要素の対策と差別化",
-        action: "ネガティブ感情の動画が多く再生されているため、その原因を分析し、対抗メッセージやポジティブな代替案を提示",
-        priority: "高" as const,
-        icon: "🔄"
-      });
-    } else {
-      proposals.push({
-        area: "感情バランスの最適化",
-        action: "ポジティブとネガティブの再生数がバランスしているため、両方の視点を統合した包括的なコンテンツ戦略を構築",
-        priority: "中" as const,
-        icon: "🎨"
-      });
-    }
-    
-    return proposals.slice(0, 4);
-  }, []);
 
   // レポート統計を計算 - MUST be before any early returns
   const reportStats = useMemo(() => {
@@ -320,14 +215,6 @@ export default function AnalysisDetail() {
         .map(([word, count]) => ({ word, count }));
     };
 
-    const proposals = generateMarketingProposals({
-      totalVideos,
-      totalViews,
-      totalEngagement,
-      posNegRatio,
-      viewsShare,
-    });
-
     return {
       totalVideos,
       totalViews,
@@ -340,7 +227,6 @@ export default function AnalysisDetail() {
       positiveWords: getTopWords(positiveKeywords, 12),
       negativeWords: getTopWords(negativeKeywords, 12),
       posNegTotal,
-      proposals,
     };
   }, [data]);
 
@@ -830,7 +716,12 @@ export default function AnalysisDetail() {
                       neg: f.negative_percentage || f.neg || 0,
                       desc: f.description || f.desc || ""
                     }))}
-                    proposals={reportStats?.proposals || []}
+                    proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
+                      area: insight.title,
+                      action: insight.description,
+                      priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
+                      icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
+                    }))}
                     sentimentData={{
                       positive: reportStats.sentimentCounts.positive || 0,
                       negative: reportStats.sentimentCounts.negative || 0,
@@ -850,30 +741,6 @@ export default function AnalysisDetail() {
                   </div>
                 )}
 
-                {/* 主要示唆（LLMレポートから） */}
-                {data.report?.keyInsights && (data.report.keyInsights as any[]).length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">主要示唆</h3>
-                    <div className="space-y-4">
-                      {(data.report.keyInsights as Array<{ category: string; title: string; description: string }>).map((insight, i) => (
-                        <div key={i} className={`border-l-4 pl-4 py-2 rounded-r ${
-                          insight.category === "risk" ? "border-red-500 bg-red-50" :
-                          insight.category === "urgent" ? "border-orange-500 bg-orange-50" :
-                          "border-green-500 bg-green-50"
-                        }`}>
-                          <div className={`font-semibold mb-1 ${
-                            insight.category === "risk" ? "text-red-700" :
-                            insight.category === "urgent" ? "text-orange-700" :
-                            "text-green-700"
-                          }`}>
-                            {insight.category === "risk" ? "⚠️ RISK" : insight.category === "urgent" ? "🚨 URGENT" : "✨ POSITIVE"}: {insight.title}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{insight.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           )}

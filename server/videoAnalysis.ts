@@ -4,6 +4,7 @@ import { generateFacetAnalysisReport } from "./reportGenerator";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
+import { filterAdHashtags } from "@shared/const";
 // import { scrapeTikTokComments } from "./tiktokScraper"; // TODO: Implement comment scraping if needed
 
 /**
@@ -533,10 +534,10 @@ Below are TikTok video descriptions. Please extract ONLY negative emotion words 
 CRITICAL RULES FOR NEGATIVE WORDS:
 - Extract ONLY words that express negative emotions or dissatisfaction
 - ABSOLUTELY DO NOT include: proper nouns, place names, facility names, brand names
-- ABSOLUTELY DO NOT include: "沖縄", "ジャングリア", "テーマパーク", location names, dates, numbers
+- ABSOLUTELY DO NOT include: the keyword "${job.keyword}" or related proper nouns, location names, dates, numbers
 - ABSOLUTELY DO NOT include: neutral nouns or neutral verbs
 - Examples of NEGATIVE words: "ゴミ", "最悪", "つまらない", "不快", "混雑", "退屈", "失望", "ひどい"
-- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "ジャングリア沖縄", "2024年", "100円", "訪問", "体験"
+- Examples of words to EXCLUDE: "${job.keyword}", location names, dates like "2024年", prices like "100円", neutral verbs like "訪問", "体験"
 
 Texts:
 ${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
@@ -583,8 +584,9 @@ Below are TikTok video descriptions. Please extract ONLY positive emotion words 
 IMPORTANT CLASSIFICATION RULES:
 - Extract ONLY words that express positive emotions or satisfaction
 - DO NOT include: proper nouns (place names, facility names), dates, numbers, neutral nouns, or neutral verbs
+- DO NOT include: the keyword "${job.keyword}" or related proper nouns
 - Examples of POSITIVE words: "楽しい", "最高", "素晴らしい", "安い", "快適", "美しい", "感動", "おすすめ"
-- Examples of words to EXCLUDE: "テーマパーク", "沖縄", "2024年", "100円", "訪問", "体験"
+- Examples of words to EXCLUDE: "${job.keyword}", location names, dates like "2024年", prices like "100円", neutral verbs like "訪問", "体験"
 
 Texts:
 ${videosData.slice(0, 20).map(v => v.description || "").join("\n")}
@@ -755,33 +757,6 @@ JSON形式で返してください。
 }
 
 
-/**
- * 広告系ハッシュタグのフィルター
- * #PR, #ad, #sponsored 等の広告を示すハッシュタグを除外
- */
-const AD_HASHTAG_PATTERNS = [
-  /^pr$/i,
-  /^ad$/i,
-  /^ads$/i,
-  /^sponsored$/i,
-  /^提供$/,
-  /^タイアップ$/,
-  /^プロモーション$/,
-  /^promotion$/i,
-  /^gifted$/i,
-  /^supplied$/i,
-  /^ambassador$/i,
-  /^アンバサダー$/,
-  /^案件$/,
-  /^企業案件$/,
-];
-
-export function filterAdHashtags(hashtags: string[]): string[] {
-  return hashtags.filter(tag => {
-    const cleanTag = tag.replace(/^#/, '').trim();
-    return !AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
-  });
-}
 
 /**
  * 重複動画（勝ちパターン）の共通点をLLMで分析
