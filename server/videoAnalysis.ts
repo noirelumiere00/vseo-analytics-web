@@ -379,9 +379,9 @@ JSON形式で返してください。
       : 0;
     const baseScore = Math.min(95, Math.max(30, Math.floor(engagementRate * 10 + 40)));
     return {
-      thumbnailScore: baseScore + Math.floor(Math.random() * 10 - 5),
-      textScore: baseScore + Math.floor(Math.random() * 10 - 5),
-      audioScore: baseScore + Math.floor(Math.random() * 10 - 5),
+      thumbnailScore: baseScore,
+      textScore: baseScore,
+      audioScore: baseScore,
       overallScore: baseScore,
     };
   }
@@ -636,7 +636,6 @@ Return as JSON with 'positive_words' array containing up to 15 words/phrases. On
   let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
 
   try {
-    const job = await db.getAnalysisJobById(jobId);
     const insightPrompt = `
 あなたはTikTok動画のマーケティング分析の専門家です。
 以下のデータに基づいて、主要な示唆を3-5個生成してください。
