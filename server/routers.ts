@@ -17,8 +17,6 @@ import { logBuffer } from "./logBuffer";
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 const progressStore = new Map<number, { message: string; percent: number }>();
 
-// LLM 呼び出しキャッシュ（同じテキストの分析結果を再利用）
-const llmCache = new Map<string, any>();
 
 export const appRouter = router({
   system: systemRouter,

@@ -289,11 +289,7 @@ export default function AnalysisDetail() {
       <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
         <h2 className="text-2xl font-bold mb-6">📊 詳細分析レポート</h2>
         <div className="prose prose-sm max-w-none">
-          {typeof data.report.keyInsights === 'string' ? (
-            <Streamdown>{data.report.keyInsights}</Streamdown>
-          ) : (
-            <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
-          )}
+          <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
         </div>
       </div>
     );
