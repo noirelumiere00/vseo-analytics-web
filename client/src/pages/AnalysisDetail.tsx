@@ -312,6 +312,19 @@ export default function AnalysisDetail() {
     const sentimentLabel = { positive: "Positive（ポジティブ）", negative: "Negative（ネガティブ）", neutral: "Neutral（中立）" }[dominantSentiment];
     const dominantPct = sentimentPercentages[dominantSentiment];
 
+    // Pos/Neg別 ハッシュタグ Top5 (先に計算)
+    const positiveHashtags: string[] = [];
+    const negativeHashtags: string[] = [];
+    videos.forEach(v => {
+      if (v.hashtags && Array.isArray(v.hashtags)) {
+        if (v.sentiment === "positive") positiveHashtags.push(...filterAdHashtags(v.hashtags));
+        if (v.sentiment === "negative") negativeHashtags.push(...filterAdHashtags(v.hashtags));
+      }
+    });
+    const topHashtagsPos = getTopWords(positiveHashtags, 5);
+    const topHashtagsNeg = getTopWords(negativeHashtags, 5);
+
+    // 自動インサイト文
     let insightLines: string[] = [];
     insightLines.push(
       `全${totalVideos}本中、${sentimentLabel} が ${dominantPct}% と最多を占めています。`
@@ -338,18 +351,6 @@ export default function AnalysisDetail() {
     }
 
     const autoInsight = insightLines.join(" ");
-
-    // Pos/Neg別 ハッシュタグ Top5
-    const positiveHashtags: string[] = [];
-    const negativeHashtags: string[] = [];
-    videos.forEach(v => {
-      if (v.hashtags && Array.isArray(v.hashtags)) {
-        if (v.sentiment === "positive") positiveHashtags.push(...filterAdHashtags(v.hashtags));
-        if (v.sentiment === "negative") negativeHashtags.push(...filterAdHashtags(v.hashtags));
-      }
-    });
-    const topHashtagsPos = getTopWords(positiveHashtags, 5);
-    const topHashtagsNeg = getTopWords(negativeHashtags, 5);
 
     return {
       totalVideos,
