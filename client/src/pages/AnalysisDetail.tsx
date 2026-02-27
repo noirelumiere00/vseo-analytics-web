@@ -793,14 +793,6 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
 
-                {/* 自動インサイト */}
-                <div className="p-4 rounded-lg bg-indigo-50 border border-indigo-200">
-                  <h3 className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
-                    <Star className="h-4 w-4" /> 自動インサイト
-                  </h3>
-                  <p className="text-sm text-indigo-900 leading-relaxed">{reportStats.autoInsight}</p>
-                </div>
-
                 {/* センチメント構成比 ― ドーナツ + 統計カード */}
                 <div>
                   <h3 className="text-lg font-semibold mb-4">センチメント構成比</h3>
@@ -885,6 +877,14 @@ export default function AnalysisDetail() {
                       ))}
                     </div>
                   </div>
+                </div>
+
+                {/* 自動インサイト */}
+                <div className="p-4 rounded-lg bg-indigo-50 border border-indigo-200">
+                  <h3 className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
+                    <Star className="h-4 w-4" /> 自動インサイト
+                  </h3>
+                  <p className="text-sm text-indigo-900 leading-relaxed">{reportStats.autoInsight}</p>
                 </div>
 
                 {/* インパクト分析（常時表示） */}
