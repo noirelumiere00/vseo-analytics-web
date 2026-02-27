@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Accordion,
   AccordionContent,
@@ -27,6 +28,12 @@ export default function AnalysisDetail() {
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
   const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate">("dominance");
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
+
+  const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
+    enabled: user !== undefined,
+  });
 
   // user が undefined の場合は query を無効化
   const { data, isLoading, refetch } = trpc.analysis.getById.useQuery(
@@ -504,11 +511,11 @@ export default function AnalysisDetail() {
               {job.status === "completed" && (
                 <Button
                   variant="outline"
-                  onClick={() => setLocation(`/history?compareWith=${jobId}`)}
+                  onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
                   className="border-primary/50 text-primary hover:bg-primary/10"
                 >
                   <GitCompare className="h-4 w-4 mr-2" />
-                  他の分析と比較
+                  比較
                 </Button>
               )}
               <Button variant="outline" onClick={() => setLocation("/")}>
@@ -517,6 +524,72 @@ export default function AnalysisDetail() {
               </Button>
             </div>
           </div>
+
+          {/* 比較レポート選択 Dialog */}
+          <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <GitCompare className="h-5 w-5 text-primary" />
+                  比較するレポートを選択
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {(jobList ?? [])
+                  .filter((j) => j.id !== jobId && j.status === "completed")
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((j) => {
+                    const isSelected = selectedCompareId === j.id;
+                    const date = new Date(j.createdAt);
+                    const dateStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                    return (
+                      <button
+                        key={j.id}
+                        onClick={() => setSelectedCompareId(isSelected ? null : j.id)}
+                        className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/40 hover:bg-muted/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm truncate">
+                            {j.keyword ? `#${j.keyword}` : "手動URL分析"}
+                          </span>
+                          {isSelected && (
+                            <Badge className="bg-primary text-white text-[10px] shrink-0">選択中</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{dateStr}</div>
+                      </button>
+                    );
+                  })}
+                {(jobList ?? []).filter((j) => j.id !== jobId && j.status === "completed").length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    比較できる完了済みレポートがありません
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setCompareDialogOpen(false)}>
+                  キャンセル
+                </Button>
+                <Button
+                  disabled={!selectedCompareId}
+                  onClick={() => {
+                    if (selectedCompareId) {
+                      setCompareDialogOpen(false);
+                      setLocation(`/compare?a=${jobId}&b=${selectedCompareId}`);
+                    }
+                  }}
+                  className="gradient-primary text-white"
+                >
+                  <GitCompare className="h-4 w-4 mr-2" />
+                  比較する
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Status Card */}
           <Card>
@@ -625,7 +698,7 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
                   {tripleSearch.searches.map((search: any, i: number) => (
                     <div key={i} className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-sm font-medium mb-1">アカウント {i + 1}</div>
@@ -763,29 +836,29 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{reportStats.totalVideos}</div>
-                      <div className="text-xs text-muted-foreground mt-2">総動画数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{reportStats.totalVideos}</div>
+                      <div className="text-xs text-black mt-2">総動画数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(reportStats.totalViews)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">総再生数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(reportStats.totalViews)}</div>
+                      <div className="text-xs text-black mt-2">総再生数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">いいね数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">いいね数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">コメント数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">コメント数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">シェア数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">シェア数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">保存数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">保存数</div>
                     </div>
                   </div>
                 </div>
@@ -1004,12 +1077,27 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 pt-2">
                         <MicroAnalysisSection
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
-                            area: insight.title,
-                            action: insight.description,
-                            priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
-                            icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
-                          }))}
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => {
+                            // 新カテゴリ (avoid/caution/leverage) + 旧カテゴリ後方互換 (risk/urgent/positive)
+                            const cat = insight.category;
+                            const priority =
+                              cat === "avoid" || cat === "risk" ? "回避" :
+                              cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                            const icon =
+                              cat === "avoid" || cat === "risk" ? "🚫" :
+                              cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                            return {
+                              area: insight.title,
+                              action: insight.description,
+                              priority: priority as "回避" | "注意" | "活用",
+                              icon,
+                            };
+                          })}
+                          videos={(data.videos || [])
+                            .slice()
+                            .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
+                            .slice(0, 15)
+                            .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
                         />
                       </AccordionContent>
                     </AccordionItem>

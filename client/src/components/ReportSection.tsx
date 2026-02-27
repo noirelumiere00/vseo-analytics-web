@@ -10,7 +10,7 @@ interface Aspect {
 interface Proposal {
   area: string;
   action: string;
-  priority: "高" | "中" | "低";
+  priority: "回避" | "注意" | "活用";
   icon: string;
 }
 
@@ -64,11 +64,11 @@ function AspectRow({ aspect }: { aspect: Aspect }) {
   );
 }
 
-function PriorityBadge({ priority }: { priority: "高" | "中" | "低" }) {
+function PriorityBadge({ priority }: { priority: "回避" | "注意" | "活用" }) {
   const cls = {
-    高: "bg-red-50 text-red-600 border-red-200",
-    中: "bg-blue-50 text-blue-600 border-blue-200",
-    低: "bg-gray-50 text-gray-500 border-gray-200",
+    回避: "bg-red-50 text-red-600 border-red-200",
+    注意: "bg-orange-50 text-orange-600 border-orange-200",
+    活用: "bg-green-50 text-green-600 border-green-200",
   }[priority];
   return (
     <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${cls}`}>
@@ -159,8 +159,14 @@ export function ReportSection({
   );
 }
 
+interface VideoRef {
+  videoId: string;
+  accountId: string;
+  title?: string | null;
+}
+
 // 動画ミクロ分析（施策提案）を独立コンポーネントとしてエクスポート
-export function MicroAnalysisSection({ proposals }: { proposals: Proposal[] }) {
+export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposal[]; videos?: VideoRef[] }) {
   return (
     <div className="space-y-2">
       {proposals.map((p, i) => (
@@ -182,6 +188,25 @@ export function MicroAnalysisSection({ proposals }: { proposals: Proposal[] }) {
         <p className="text-xs text-muted-foreground text-center py-4">
           分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
         </p>
+      )}
+      {videos && videos.length > 0 && (
+        <div className="pt-3 mt-1 border-t">
+          <p className="text-xs text-muted-foreground mb-1.5">参照動画:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {videos.slice(0, 15).map((v, i) => (
+              <a
+                key={v.videoId}
+                href={`https://www.tiktok.com/@${v.accountId}/video/${v.videoId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={v.title || `@${v.accountId}`}
+                className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+              >
+                [参照{i + 1}]
+              </a>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

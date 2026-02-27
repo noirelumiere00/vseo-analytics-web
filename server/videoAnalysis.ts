@@ -545,7 +545,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   let emotionWords: EmotionWord[] = [];
   let autoInsight: string = "";
-  let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
+  let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string }> = [];
 
   try {
     const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 30);
@@ -581,8 +581,12 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 データ: ${totalVideos}本 / 総再生${totalViews.toLocaleString()} / Positive ${positiveCount}本(${positivePercentage}%) Negative ${negativeCount}本(${negativePercentage}%) / 平均ER: P=${positiveAvgER}% N=${negativeAvgER}%
 Positive頻出ワード: ${positiveWords.slice(0, 5).join(", ")} / Negative頻出ワード: ${negativeWords.slice(0, 5).join(", ")}
 
-## タスク3: 主要示唆（3〜5個）
-上記データに基づきマーケティング示唆を生成してください。各示唆のカテゴリ: risk/urgent/positive
+## タスク3: VSEO主要示唆（3〜5個）
+上記データに基づき、VSEO（動画SEO）視点でコンテンツ戦略の示唆を生成してください。
+カテゴリ定義（必ずこの3種から選択）:
+- avoid: ネガティブ文脈で伸びている・ブランドリスクがある → 避けるべきパターン
+- caution: 競合が多い・注意が必要な傾向 → 慎重に扱うべきパターン
+- leverage: 再生数・ERが高い勝ちパターン → 積極的に活用すべきパターン
 動画サンプル:
 ${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment})`).join("\n")}`,
         },
@@ -614,7 +618,7 @@ ${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "")
                 items: {
                   type: "object",
                   properties: {
-                    category: { type: "string", enum: ["risk", "urgent", "positive"] },
+                    category: { type: "string", enum: ["avoid", "caution", "leverage"] },
                     title: { type: "string" },
                     description: { type: "string" },
                   },
@@ -653,7 +657,7 @@ ${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "")
     emotionWords = [];
     autoInsight = "";
     keyInsights = [
-      { category: "positive", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。` },
+      { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。` },
     ];
   }
 

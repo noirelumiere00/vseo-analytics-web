@@ -175,7 +175,7 @@ export const analysisReports = mysqlTable("analysis_reports", {
 
   // 主要示唇
   keyInsights: json("keyInsights").$type<Array<{
-    category: "risk" | "urgent" | "positive";
+    category: "avoid" | "caution" | "leverage";
     title: string;
     description: string;
    }>>(),
