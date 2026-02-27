@@ -27,6 +27,7 @@ export default function AnalysisDetail() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
+  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate">("dominance");
 
   // user が undefined の場合は query を無効化
   const { data, isLoading, refetch } = trpc.analysis.getById.useQuery(
@@ -240,6 +241,42 @@ export default function AnalysisDetail() {
       in1: data.videos.filter(v => appearedIn1OnlyIds.includes(v.videoId)),
     };
   }, [data]);
+
+  // エンゲージメント率（いいね+コメント+シェア+保存 / 再生数）
+  const getEngagementRate = useCallback((video: any) => {
+    const views = video.viewCount || 0;
+    if (views === 0) return 0;
+    return ((video.likeCount || 0) + (video.commentCount || 0) + (video.shareCount || 0) + (video.saveCount || 0)) / views * 100;
+  }, []);
+
+  // グループ別統計（3回出現 vs 2回出現 vs 1回のみ）
+  const groupStats = useMemo(() => {
+    if (!categorizedVideos) return null;
+    const calc = (vids: any[]) => {
+      if (vids.length === 0) return { count: 0, avgViews: 0, avgEngagementRate: 0, avgScore: 0 };
+      const avgViews = vids.reduce((s: number, v: any) => s + (v.viewCount || 0), 0) / vids.length;
+      const avgEngagementRate = vids.reduce((s: number, v: any) => s + getEngagementRate(v), 0) / vids.length;
+      const scoredVids = vids.filter((v: any) => v.score);
+      const avgScore = scoredVids.length > 0
+        ? scoredVids.reduce((s: number, v: any) => s + (v.score?.overallScore || 0), 0) / scoredVids.length
+        : 0;
+      return { count: vids.length, avgViews, avgEngagementRate, avgScore };
+    };
+    return { all3: calc(categorizedVideos.all3), in2: calc(categorizedVideos.in2), in1: calc(categorizedVideos.in1) };
+  }, [categorizedVideos, getEngagementRate]);
+
+  // ソート済み動画リスト
+  const sortedCategorizedVideos = useMemo(() => {
+    if (!categorizedVideos) return null;
+    const rankInfo = (data?.tripleSearch as any)?.rankInfo ?? {};
+    const sort = (arr: any[]) => [...arr].sort((a, b) => {
+      if (videoSortKey === "views") return (b.viewCount || 0) - (a.viewCount || 0);
+      if (videoSortKey === "engagementRate") return getEngagementRate(b) - getEngagementRate(a);
+      // dominance: 順位重み付きスコア（高いほど安定して上位表示）
+      return (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0);
+    });
+    return { all3: sort(categorizedVideos.all3), in2: sort(categorizedVideos.in2), in1: sort(categorizedVideos.in1) };
+  }, [categorizedVideos, videoSortKey, data?.tripleSearch, getEngagementRate]);
 
   // Helper functions as callbacks - MUST be before any early returns
   const getSentimentBadge = useCallback((sentiment: string | null) => {
@@ -478,6 +515,38 @@ export default function AnalysisDetail() {
                     <div className="text-xs text-muted-foreground mt-1">重複率</div>
                   </div>
                 </div>
+
+                {/* グループ別統計比較 */}
+                {groupStats && (
+                  <div>
+                    <h4 className="text-sm font-semibold text-muted-foreground mb-3">グループ別統計比較</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "3回出現", stats: groupStats.all3, color: "yellow", bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-700" },
+                        { label: "2回出現", stats: groupStats.in2, color: "blue", bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
+                        { label: "1回のみ", stats: groupStats.in1, color: "gray", bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600" },
+                      ].map(({ label, stats, bg, border, text }) => (
+                        <div key={label} className={`p-3 rounded-lg border ${bg} ${border}`}>
+                          <div className={`text-xs font-bold mb-2 ${text}`}>{label}（{stats.count}件）</div>
+                          <div className="space-y-1.5 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">平均再生数</span>
+                              <span className="font-semibold">{formatNumber(Math.round(stats.avgViews))}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">平均ER%</span>
+                              <span className="font-semibold">{stats.avgEngagementRate.toFixed(2)}%</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">平均スコア</span>
+                              <span className="font-semibold">{stats.avgScore.toFixed(0)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* 重複率サマリー + LLM共通点分析 */}
                 <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded space-y-3">
@@ -755,19 +824,39 @@ export default function AnalysisDetail() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {categorizedVideos && tripleSearch ? (
+                {/* ソートコントロール */}
+                <div className="flex items-center gap-2 mb-4 pb-4 border-b">
+                  <span className="text-xs text-muted-foreground font-medium">並び順:</span>
+                  {[
+                    { key: "dominance", label: "安定順位順" },
+                    { key: "views", label: "再生数順" },
+                    { key: "engagementRate", label: "エンゲージメント率順" },
+                  ].map(({ key, label }) => (
+                    <Button
+                      key={key}
+                      size="sm"
+                      variant={videoSortKey === key ? "default" : "outline"}
+                      className="text-xs h-7"
+                      onClick={() => setVideoSortKey(key as typeof videoSortKey)}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+
+                {sortedCategorizedVideos && tripleSearch ? (
                   <Tabs defaultValue="all3" className="w-full">
                     <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="all3" className="text-xs sm:text-sm">
                         <Star className="h-3 w-3 mr-1 text-yellow-500" />
-                        勝ちパターン ({categorizedVideos.all3.length})
+                        勝ちパターン ({sortedCategorizedVideos.all3.length})
                       </TabsTrigger>
                       <TabsTrigger value="in2" className="text-xs sm:text-sm">
                         <Repeat className="h-3 w-3 mr-1 text-blue-500" />
-                        準勝ち ({categorizedVideos.in2.length})
+                        準勝ち ({sortedCategorizedVideos.in2.length})
                       </TabsTrigger>
                       <TabsTrigger value="in1" className="text-xs sm:text-sm">
-                        1回のみ ({categorizedVideos.in1.length})
+                        1回のみ ({sortedCategorizedVideos.in1.length})
                       </TabsTrigger>
                       <TabsTrigger value="all" className="text-xs sm:text-sm">
                         全件 ({videos.length})
@@ -775,20 +864,20 @@ export default function AnalysisDetail() {
                     </TabsList>
 
                     <TabsContent value="all3">
-                      <VideoList videos={categorizedVideos.all3} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                      <VideoList videos={sortedCategorizedVideos.all3} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                     <TabsContent value="in2">
-                      <VideoList videos={categorizedVideos.in2} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                      <VideoList videos={sortedCategorizedVideos.in2} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                     <TabsContent value="in1">
-                      <VideoList videos={categorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                      <VideoList videos={sortedCategorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                     <TabsContent value="all">
-                      <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                      <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} />
+                  <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                 )}
               </CardContent>
             </Card>
@@ -812,11 +901,13 @@ export default function AnalysisDetail() {
 }
 
 // 動画リストコンポーネント
-function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber }: {
+function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber, getEngagementRate, rankInfo }: {
   videos: any[];
   getSentimentBadge: (sentiment: string | null) => React.ReactNode;
   getAppearanceBadge: (videoId: string) => React.ReactNode;
   formatNumber: (num: number | bigint | null | undefined) => string;
+  getEngagementRate: (video: any) => number;
+  rankInfo?: Record<string, { ranks: (number | null)[]; avgRank: number; dominanceScore: number }>;
 }) {
   if (videos.length === 0) {
     return (
@@ -850,6 +941,15 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                     <Heart className="h-3 w-3" />
                     {formatNumber(video.likeCount)}
                   </span>
+                  <span className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                    <TrendingUp className="h-3 w-3" />
+                    ER {getEngagementRate(video).toFixed(2)}%
+                  </span>
+                  {rankInfo?.[video.videoId] && (
+                    <span className="text-xs text-purple-600 font-medium">
+                      平均{rankInfo[video.videoId].avgRank.toFixed(1)}位
+                    </span>
+                  )}
                   <span className="text-xs">@{video.accountId}</span>
                   {getSentimentBadge(video.sentiment)}
                   {getAppearanceBadge(video.videoId)}
@@ -934,6 +1034,28 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                       <div className="font-semibold">{formatNumber(video.saveCount)}</div>
                     </div>
                   </div>
+                </div>
+                {/* エンゲージメント率サマリー */}
+                <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
+                  <div className="p-2 bg-emerald-50 rounded text-center">
+                    <div className="text-muted-foreground">エンゲージメント率</div>
+                    <div className="font-bold text-emerald-700 text-sm">{getEngagementRate(video).toFixed(2)}%</div>
+                  </div>
+                  <div className="p-2 bg-red-50 rounded text-center">
+                    <div className="text-muted-foreground">いいね率</div>
+                    <div className="font-bold text-red-600 text-sm">
+                      {video.viewCount ? ((video.likeCount || 0) / video.viewCount * 100).toFixed(2) : "0"}%
+                    </div>
+                  </div>
+                  {rankInfo?.[video.videoId] && (
+                    <div className="p-2 bg-purple-50 rounded text-center">
+                      <div className="text-muted-foreground">平均検索順位</div>
+                      <div className="font-bold text-purple-700 text-sm">{rankInfo[video.videoId].avgRank.toFixed(1)}位</div>
+                      <div className="text-muted-foreground mt-0.5">
+                        {rankInfo[video.videoId].ranks.map((r, i) => r != null ? `S${i + 1}:${r}位` : null).filter(Boolean).join(" / ")}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
