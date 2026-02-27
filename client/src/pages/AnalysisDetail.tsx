@@ -636,7 +636,7 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 重複度分析結果 */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
                   <div className="text-center p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
                     <Star className="h-6 w-6 text-yellow-500 mx-auto mb-2" />
                     <div className="text-3xl font-bold text-yellow-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
