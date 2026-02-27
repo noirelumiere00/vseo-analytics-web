@@ -1,7 +1,5 @@
-import { useState, useEffect } from "react";
 import { FrequentWordsCloud } from "./FrequentWordsCloud";
 
-// Types
 interface Aspect {
   name: string;
   pos: number;
@@ -37,342 +35,44 @@ interface ReportSectionProps {
   negativeWords?: WordData[];
 }
 
-// Components
-function ChevronIcon({ open }: { open: boolean }) {
+function AspectRow({ aspect }: { aspect: Aspect }) {
   return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 20 20"
-      fill="none"
-      style={{
-        transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-        transform: open ? "rotate(180deg)" : "rotate(0deg)",
-        flexShrink: 0,
-      }}
-    >
-      <path
-        d="M5 7.5L10 12.5L15 7.5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function Accordion({
-  title,
-  number,
-  badge,
-  defaultOpen,
-  children,
-}: {
-  title: string;
-  number: string;
-  badge?: { text: string; color: string; bg: string };
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen || false);
-
-  return (
-    <div
-      style={{
-        background: "#fff",
-        borderRadius: 16,
-        marginBottom: 16,
-        border: "1px solid rgba(30,60,90,0.08)",
-        boxShadow: open ? "0 8px 32px rgba(30,60,90,0.08)" : "0 2px 8px rgba(30,60,90,0.03)",
-        transition: "box-shadow 0.35s ease",
-        overflow: "hidden",
-      }}
-    >
-      <button
-        onClick={() => setOpen(!open)}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          padding: "20px 24px",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          textAlign: "left",
-          fontFamily: "'Noto Sans JP', sans-serif",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            background: "linear-gradient(135deg, #1a3a5c, #2e75b6)",
-            color: "#fff",
-            fontSize: 14,
-            fontWeight: 700,
-            flexShrink: 0,
-            fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          {number}
-        </span>
-        <span
-          style={{
-            flex: 1,
-            fontSize: 17,
-            fontWeight: 700,
-            color: "#1a2a3a",
-            letterSpacing: "0.01em",
-          }}
-        >
-          {title}
-        </span>
-        {badge && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: badge.color,
-              background: badge.bg,
-              padding: "3px 10px",
-              borderRadius: 20,
-              letterSpacing: "0.02em",
-            }}
-          >
-            {badge.text}
-          </span>
-        )}
-        <ChevronIcon open={open} />
-      </button>
-      <div
-        style={{
-          maxHeight: open ? 2000 : 0,
-          opacity: open ? 1 : 0,
-          overflow: "hidden",
-          transition: "max-height 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.35s ease",
-        }}
-      >
-        <div style={{ padding: "0 24px 24px 24px" }}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function AspectRow({ aspect, index }: { aspect: Aspect; index: number }) {
-  const [animated, setAnimated] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 100 + index * 80);
-    return () => clearTimeout(t);
-  }, [index]);
-
-  return (
-    <div
-      style={{
-        padding: "16px 0",
-        borderBottom: index < 5 ? "1px solid #f0f2f5" : "none",
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 8,
-        }}
-      >
-        <span style={{ fontWeight: 600, color: "#1a2a3a", fontSize: 15 }}>
-          {aspect.name}
-        </span>
-      </div>
-
-      {/* Stacked bar with labels */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        {/* Positive label */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            minWidth: 62,
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "#0d9255",
-              flexShrink: 0,
-            }}
-          />
-          <span
-            style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: "#0d9255",
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            {aspect.pos}%
-          </span>
-        </div>
-
-        {/* Stacked bar */}
-        <div
-          style={{
-            flex: 1,
-            height: 12,
-            borderRadius: 6,
-            overflow: "hidden",
-            display: "flex",
-            background: "#e8ecf0",
-          }}
-        >
+    <div className="py-3 border-b last:border-b-0">
+      <span className="font-semibold text-sm">{aspect.name}</span>
+      <div className="flex items-center gap-2 mt-2">
+        <span className="text-green-600 font-bold text-xs w-10 text-right shrink-0">{aspect.pos}%</span>
+        <div className="flex-1 h-2.5 rounded-full overflow-hidden bg-muted flex">
           <div
-            style={{
-              height: "100%",
-              width: animated ? `${aspect.pos}%` : "0%",
-              background: "linear-gradient(90deg, #0d9255, #34c77b)",
-              borderRadius: "6px 0 0 6px",
-              transition: `width 1s cubic-bezier(0.4,0,0.2,1) ${index * 80}ms`,
-            }}
+            className="h-full bg-green-500 transition-all duration-700"
+            style={{ width: `${aspect.pos}%` }}
           />
           <div
-            style={{
-              height: "100%",
-              width: animated ? `${aspect.neg}%` : "0%",
-              background: "linear-gradient(90deg, #e8737a, #c0392b)",
-              borderRadius: "0 6px 6px 0",
-              transition: `width 1s cubic-bezier(0.4,0,0.2,1) ${index * 80 + 200}ms`,
-            }}
+            className="h-full bg-red-400 transition-all duration-700"
+            style={{ width: `${aspect.neg}%` }}
           />
         </div>
-
-        {/* Negative label */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            minWidth: 62,
-            justifyContent: "flex-end",
-          }}
-        >
-          <span
-            style={{
-              fontSize: 16,
-              fontWeight: 800,
-              color: "#c0392b",
-              fontFamily: "'DM Sans', sans-serif",
-            }}
-          >
-            {aspect.neg}%
-          </span>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              background: "#c0392b",
-              flexShrink: 0,
-            }}
-          />
-        </div>
+        <span className="text-red-500 font-bold text-xs w-10 shrink-0">{aspect.neg}%</span>
       </div>
-
-      {/* Legend description */}
-      <p
-        style={{
-          margin: "8px 0 0",
-          fontSize: 13,
-          color: "#6b7a8d",
-          lineHeight: 1.6,
-        }}
-      >
-        {aspect.desc}
-      </p>
-    </div>
-  );
-}
-
-function PriorityBadge({ priority }: { priority: "高" | "中" | "低" }) {
-  const map = {
-    高: { bg: "#fef2f2", color: "#c0392b", border: "#fecaca" },
-    中: { bg: "#e8f0fa", color: "#2e75b6", border: "#bfdbfe" },
-    低: { bg: "#f0f9ff", color: "#2563eb", border: "#bfdbfe" },
-  };
-  const s = map[priority];
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 700,
-        padding: "3px 10px",
-        borderRadius: 6,
-        background: s.bg,
-        color: s.color,
-        border: `1px solid ${s.border}`,
-        fontFamily: "'DM Sans', sans-serif",
-      }}
-    >
-      {priority}
-    </span>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  sub,
-  color,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        flex: "1 1 140px",
-        padding: "20px 16px",
-        borderRadius: 14,
-        background: `linear-gradient(135deg, ${color}08, ${color}14)`,
-        border: `1px solid ${color}20`,
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 32,
-          fontWeight: 800,
-          color,
-          fontFamily: "'DM Sans', sans-serif",
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#1a2a3a", marginTop: 6 }}>
-        {label}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 11, color: "#8896a6", marginTop: 2 }}>
-          {sub}
-        </div>
+      {aspect.desc && (
+        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{aspect.desc}</p>
       )}
     </div>
   );
 }
 
-// Main Component
+function PriorityBadge({ priority }: { priority: "高" | "中" | "低" }) {
+  const cls = {
+    高: "bg-red-50 text-red-600 border-red-200",
+    中: "bg-blue-50 text-blue-600 border-blue-200",
+    低: "bg-gray-50 text-gray-500 border-gray-200",
+  }[priority];
+  return (
+    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${cls}`}>
+      {priority}
+    </span>
+  );
+}
+
 export function ReportSection({
   keyword,
   date,
@@ -380,240 +80,114 @@ export function ReportSection({
   platform,
   aspects,
   proposals,
-  sentimentData,
   positiveWords = [],
   negativeWords = [],
 }: ReportSectionProps) {
-  const avgPositive = Math.round(
-    aspects.reduce((sum, a) => sum + a.pos, 0) / aspects.length
-  );
-
-  const hasWords = positiveWords.length > 0 || negativeWords.length > 0;
+  const strengths = aspects.filter((a) => a.pos >= 75);
+  const improvements = aspects.filter((a) => a.pos < 75);
 
   return (
-    <div
-      style={{
-        fontFamily: "'Noto Sans JP', sans-serif",
-      }}
-    >
-      {/* Content */}
-      <div style={{ padding: "0 24px" }}>
+    <div className="space-y-4 pt-2">
 
-        {/* ① 側面分析・強み弱みサマリー */}
-        <Accordion
-          number="1"
-          title="側面分析・強み弱みサマリー"
-          badge={{ text: `${aspects.length} ASPECTS`, color: "#2e75b6", bg: "#e8f0fa" }}
-          defaultOpen={true}
-        >
-          <p
-            style={{
-              margin: "0 0 12px",
-              fontSize: 13,
-              color: "#6b7a8d",
-              lineHeight: 1.7,
-            }}
-          >
-            {platform}上の #{keyword} 関連動画{videoCount}本を分析し、各側面のポジティブ/ネガティブ比率を算出しました。
-          </p>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 16,
-              marginBottom: 4,
-              padding: "8px 12px",
-              borderRadius: 8,
-              background: "#f8f9fb",
-              fontSize: 12,
-              color: "#6b7a8d",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  background: "linear-gradient(90deg, #0d9255, #34c77b)",
-                }}
-              />
-              <span style={{ fontWeight: 600 }}>ポジティブ</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 3,
-                  background: "linear-gradient(90deg, #e8737a, #c0392b)",
-                }}
-              />
-              <span style={{ fontWeight: 600 }}>ネガティブ</span>
-            </div>
-          </div>
+      {/* ① 側面分析・強み弱みサマリー */}
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
+            側面分析・強み弱みサマリー
+          </h4>
+          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
+            {aspects.length} Aspects
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          {platform}上の #{keyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
+        </p>
+        <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
+          </span>
+        </div>
 
-          {/* Strengths group */}
-          <div style={{ marginTop: 16 }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 12px",
-                borderRadius: 6,
-                background: "#ecfdf5",
-                border: "1px solid #d1fae5",
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#0d9255",
-                letterSpacing: "0.06em",
-                fontFamily: "'DM Sans', sans-serif",
-                marginBottom: 8,
-              }}
-            >
+        {strengths.length > 0 && (
+          <div className="mb-3">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
               ● STRENGTHS — 強み
-            </div>
-            {aspects
-              .filter((a) => a.pos >= 75)
-              .map((a, i) => (
-                <AspectRow key={a.name} aspect={a} index={i} />
-              ))}
-          </div>
-
-          {/* Divider */}
-          <div style={{ height: 1, background: "#e8ecf0", margin: "12px 0" }} />
-
-          {/* Weaknesses group */}
-          <div>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 12px",
-                borderRadius: 6,
-                background: "#fef7f7",
-                border: "1px solid #fecaca",
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#c0392b",
-                letterSpacing: "0.06em",
-                fontFamily: "'DM Sans', sans-serif",
-                marginBottom: 8,
-              }}
-            >
-              ▲ NEEDS IMPROVEMENT — 要改善
-            </div>
-            {aspects
-              .filter((a) => a.pos < 75)
-              .map((a, i) => (
-                <AspectRow key={a.name} aspect={a} index={i + 4} />
-              ))}
-          </div>
-        </Accordion>
-
-        {/* ② 頻出ワード分析 */}
-        {hasWords && (
-          <Accordion
-            number="2"
-            title="頻出ワード分析"
-            badge={{ text: `${positiveWords.length + negativeWords.length} WORDS`, color: "#2e75b6", bg: "#e8f0fa" }}
-          >
-            <FrequentWordsCloud
-              positiveWords={positiveWords}
-              negativeWords={negativeWords}
-            />
-          </Accordion>
-        )}
-
-        {/* ③ マーケティング施策提案 */}
-        <Accordion
-          number={hasWords ? "3" : "2"}
-          title="マーケティング施策提案"
-          badge={{ text: `${proposals.length} ACTIONS`, color: "#2e75b6", bg: "#e8f0fa" }}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {proposals.map((p, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 14,
-                  padding: "14px 16px",
-                  borderRadius: 12,
-                  background: "#fafbfc",
-                  border: "1px solid #edf0f4",
-                  transition: "border-color 0.2s ease",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.borderColor = "#c8d4e0")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.borderColor = "#edf0f4")
-                }
-              >
-                <span
-                  style={{
-                    fontSize: 22,
-                    lineHeight: 1,
-                    flexShrink: 0,
-                    marginTop: 2,
-                  }}
-                >
-                  {p.icon}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 4,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        color: "#1a2a3a",
-                      }}
-                    >
-                      {p.area}
-                    </span>
-                    <PriorityBadge priority={p.priority} />
-                  </div>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 13,
-                      color: "#6b7a8d",
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {p.action}
-                  </p>
-                </div>
-              </div>
+            </span>
+            {strengths.map((a) => (
+              <AspectRow key={a.name} aspect={a} />
             ))}
           </div>
-        </Accordion>
+        )}
 
-        {/* Footer */}
-        <div
-          style={{
-            marginTop: 24,
-            textAlign: "center",
-            fontSize: 11,
-            color: "#a0aab4",
-            letterSpacing: "0.04em",
-            paddingBottom: 24,
-          }}
-        >
-          VSEO Analytics · Confidential · {new Date().getFullYear()}年{new Date().getMonth() + 1}月
+        {improvements.length > 0 && (
+          <div>
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
+              ▲ NEEDS IMPROVEMENT — 要改善
+            </span>
+            {improvements.map((a) => (
+              <AspectRow key={a.name} aspect={a} />
+            ))}
+          </div>
+        )}
+
+        {aspects.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-4">データなし</p>
+        )}
+      </div>
+
+      {/* ② 頻出ワード分析（常時表示） */}
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
+            頻出ワード分析
+          </h4>
+          {(positiveWords.length > 0 || negativeWords.length > 0) && (
+            <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
+              {positiveWords.length + negativeWords.length} Words
+            </span>
+          )}
+        </div>
+        <FrequentWordsCloud
+          positiveWords={positiveWords}
+          negativeWords={negativeWords}
+        />
+      </div>
+
+      {/* ③ マーケティング施策提案 */}
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
+            マーケティング施策提案
+          </h4>
+          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
+            {proposals.length} Actions
+          </span>
+        </div>
+        <div className="space-y-2">
+          {proposals.map((p, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
+            >
+              <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-semibold">{p.area}</span>
+                  <PriorityBadge priority={p.priority} />
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
+              </div>
+            </div>
+          ))}
+          {proposals.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">データなし</p>
+          )}
         </div>
       </div>
+
     </div>
   );
 }
