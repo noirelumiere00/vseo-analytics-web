@@ -103,9 +103,9 @@ export async function analyzeVideoFromTikTok(
     keywords: sentimentResult.keywords,
   });
 
-  // 5. スコアリング
+  // 5. スコアリング（ルールベース・LLM不使用）
   console.log(`[Analysis] Calculating scores for video ${tiktokVideo.id}...`);
-  const scores = await calculateScoresFromData({
+  const scores = calculateScoresFromData({
     desc: tiktokVideo.desc,
     duration: tiktokVideo.duration,
     stats: tiktokVideo.stats,
@@ -298,93 +298,84 @@ JSON形式で返してください。
 }
 
 /**
- * 実データベースのスコアリング
+ * ルールベースのスコアリング（LLM不使用）
+ * エンゲージメント率・説明文・ハッシュタグ・動画尺などから算出
  */
-async function calculateScoresFromData(input: {
+function calculateScoresFromData(input: {
   desc: string;
   duration: number;
   stats: { playCount: number; diggCount: number; commentCount: number; shareCount: number; collectCount: number };
   hashtags: string[];
   ocrTexts: string[];
   transcriptionText: string;
-}): Promise<{
+}): {
   thumbnailScore: number;
   textScore: number;
   audioScore: number;
   overallScore: number;
-}> {
-  const prompt = `
-あなたはTikTok動画のVSEO（Video SEO）分析の専門家です。
-以下の動画データを分析し、各要素のスコア（0-100）を算出してください。
+} {
+  const { desc, duration, stats, hashtags, ocrTexts } = input;
+  const cleanDesc = desc.replace(/[#＃][^\s]+/g, "").trim();
+  const descLength = cleanDesc.length;
 
-【動画情報】
-説明文: ${input.desc.substring(0, 300)}
-尺: ${input.duration}秒
-ハッシュタグ: ${input.hashtags.join(", ")}
+  // エンゲージメント率（再生数に対するいいね+コメント+シェア+保存）
+  const totalEngagement = stats.diggCount + stats.commentCount + stats.shareCount + stats.collectCount;
+  const engagementRate = stats.playCount > 0 ? (totalEngagement / stats.playCount) * 100 : 0;
+  const likeRate = stats.playCount > 0 ? (stats.diggCount / stats.playCount) * 100 : 0;
+  const commentRate = stats.playCount > 0 ? (stats.commentCount / stats.playCount) * 100 : 0;
+  const saveShareRate = stats.playCount > 0 ? ((stats.shareCount + stats.collectCount) / stats.playCount) * 100 : 0;
 
-【エンゲージメント】
-再生数: ${input.stats.playCount.toLocaleString()}
-いいね数: ${input.stats.diggCount.toLocaleString()}
-コメント数: ${input.stats.commentCount.toLocaleString()}
-シェア数: ${input.stats.shareCount.toLocaleString()}
-保存数: ${input.stats.collectCount.toLocaleString()}
+  // --- thumbnailScore: 説明文の質・フック要素 ---
+  let thumbnailScore = 30;
+  // 説明文の長さ（50-200文字がベスト）
+  if (descLength >= 50 && descLength <= 200) thumbnailScore += 25;
+  else if (descLength >= 20) thumbnailScore += 10;
+  // 疑問形・感嘆形（フック要素）
+  if (/[？！?!]/.test(cleanDesc)) thumbnailScore += 10;
+  // 数字を含む（具体性）
+  if (/\d+/.test(cleanDesc)) thumbnailScore += 10;
+  // エンゲージメント率ボーナス（上限25pt）
+  thumbnailScore += Math.min(25, Math.floor(engagementRate * 5));
 
-【テキスト情報】
-${input.ocrTexts.filter(t => t).join("\n").substring(0, 200)}
+  // --- textScore: ハッシュタグ数・テロップ・説明文の充実度 ---
+  let textScore = 20;
+  // ハッシュタグ数（3-10個がベスト）
+  const hashtagCount = hashtags.length;
+  if (hashtagCount >= 3 && hashtagCount <= 10) textScore += 30;
+  else if (hashtagCount >= 1) textScore += 15;
+  // OCRテキストの充実度
+  const ocrTextLength = ocrTexts.filter(t => t).join("").length;
+  if (ocrTextLength > 100) textScore += 25;
+  else if (ocrTextLength > 30) textScore += 10;
+  // 説明文の充実度
+  if (descLength > 100) textScore += 15;
+  else if (descLength > 30) textScore += 8;
+  // エンゲージメント率ボーナス（上限10pt）
+  textScore += Math.min(10, Math.floor(engagementRate * 2));
 
-【評価基準】
-- thumbnailScore: サムネイル/タイトルの魅力度（説明文の質、キーワードの適切性）
-- textScore: テキスト要素の質（テロップ、説明文の充実度）
-- audioScore: 音声/コンテンツの質（内容の充実度、エンゲージメント率から推定）
-- overallScore: 総合スコア
+  // --- audioScore: コンテンツ質（エンゲージメント率・動画尺から推定）---
+  let audioScore = 20;
+  // 動画尺（15-60秒がTikTokのベスト）
+  if (duration >= 15 && duration <= 60) audioScore += 25;
+  else if (duration >= 8 && duration <= 120) audioScore += 15;
+  // いいね率
+  if (likeRate >= 5) audioScore += 30;
+  else if (likeRate >= 2) audioScore += 20;
+  else if (likeRate >= 0.5) audioScore += 10;
+  // コメント率（議論を生む良コンテンツ）
+  if (commentRate >= 1) audioScore += 15;
+  else if (commentRate >= 0.3) audioScore += 8;
+  // シェア・保存率
+  if (saveShareRate >= 1) audioScore += 10;
 
-JSON形式で返してください。
-`;
+  // --- overallScore: 加重平均 ---
+  const clamp = (v: number) => Math.min(100, Math.max(0, Math.round(v)));
+  const ts = clamp(thumbnailScore);
+  const xs = clamp(textScore);
+  const as_ = clamp(audioScore);
+  const overallScore = clamp(ts * 0.3 + xs * 0.3 + as_ * 0.4);
 
-  try {
-    const response = await invokeLLM({
-      messages: [
-        { role: "system", content: "You are a VSEO analysis expert. Always respond in valid JSON format." },
-        { role: "user", content: prompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "video_scores",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              thumbnailScore: { type: "integer" },
-              textScore: { type: "integer" },
-              audioScore: { type: "integer" },
-              overallScore: { type: "integer" },
-            },
-            required: ["thumbnailScore", "textScore", "audioScore", "overallScore"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const content = typeof response.choices[0].message.content === 'string'
-      ? response.choices[0].message.content
-      : JSON.stringify(response.choices[0].message.content);
-    return JSON.parse(content || "{}");
-  } catch (error) {
-    console.error("[Scoring] Error:", error);
-    // エンゲージメント率ベースのフォールバック
-    const engagementRate = input.stats.playCount > 0
-      ? ((input.stats.diggCount + input.stats.commentCount + input.stats.shareCount) / input.stats.playCount) * 100
-      : 0;
-    const baseScore = Math.min(95, Math.max(30, Math.floor(engagementRate * 10 + 40)));
-    return {
-      thumbnailScore: baseScore,
-      textScore: baseScore,
-      audioScore: baseScore,
-      overallScore: baseScore,
-    };
-  }
+  return { thumbnailScore: ts, textScore: xs, audioScore: as_, overallScore };
 }
 
 /**
