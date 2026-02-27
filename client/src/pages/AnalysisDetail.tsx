@@ -914,19 +914,69 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
 
-                {/* 詳細分析アコーディオン */}
+                {/* 詳細分析アコーディオン（4項目） */}
                 <Accordion type="multiple" className="space-y-2">
 
-                  {/* ① インパクト分析 */}
+                  {/* 1: 側面分析・強み弱み */}
+                  {data && data.report && (
+                    <AccordionItem value="aspects" className="border rounded-xl overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        🔍 側面分析・強み弱み
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <ReportSection
+                          keyword={data.job?.keyword || ""}
+                          date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
+                          videoCount={data.videos?.length || 0}
+                          platform="TikTok"
+                          aspects={(data.report?.facets || []).map((f: any) => ({
+                            name: f.aspect || f.name || "",
+                            pos: f.positive_percentage || f.pos || 0,
+                            neg: f.negative_percentage || f.neg || 0,
+                            desc: f.description || f.desc || ""
+                          }))}
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
+                            area: insight.title,
+                            action: insight.description,
+                            priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
+                            icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
+                          }))}
+                          sentimentData={{
+                            positive: reportStats.sentimentCounts.positive || 0,
+                            negative: reportStats.sentimentCounts.negative || 0,
+                            neutral: reportStats.sentimentCounts.neutral || 0,
+                          }}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* 2: 頻出ワード分析 */}
+                  {reportStats && (reportStats.positiveWords.length > 0 || reportStats.negativeWords.length > 0) && (
+                    <AccordionItem value="words" className="border rounded-xl overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        🔤 頻出ワード分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4 pt-2">
+                        <FrequentWordsCloud
+                          positiveWords={reportStats.positiveWords}
+                          negativeWords={reportStats.negativeWords}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* 3: インパクト分析（投稿数・再生数・エンゲージメント + 平均指標） */}
                   <AccordionItem value="impact" className="border rounded-xl overflow-hidden">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      📊 インパクト分析（投稿数 / 再生数 / エンゲージメント）
+                      📊 インパクト分析（投稿数 / 再生数 / エンゲージメント / 平均指標）
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
+                      {/* 3way シェア */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                         {([
-                          { title: "投稿数シェア",         data: reportStats.threeWay.posts       },
-                          { title: "総再生数シェア",       data: reportStats.threeWay.views       },
+                          { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
+                          { title: "総再生数シェア",           data: reportStats.threeWay.views       },
                           { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
                         ] as const).map(({ title, data }) => (
                           <div key={title} className="p-4 border rounded-lg">
@@ -949,17 +999,8 @@ export default function AnalysisDetail() {
                           </div>
                         ))}
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* ② 平均指標比較 */}
-                  <AccordionItem value="avg-metrics" className="border rounded-xl overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      📈 平均指標比較（再生数 / ER% / 動画時間）
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                        {/* 平均再生数 */}
+                      {/* 平均指標 */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                         <div className="p-4 border rounded-lg">
                           <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均再生数（1本あたり）</h4>
                           <div className="space-y-3">
@@ -981,7 +1022,6 @@ export default function AnalysisDetail() {
                             ))}
                           </div>
                         </div>
-                        {/* 平均ER% */}
                         <div className="p-4 border rounded-lg">
                           <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均ER%（1本あたり）</h4>
                           <div className="space-y-3">
@@ -1033,12 +1073,13 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* ③ エンゲージメント内訳 */}
-                  <AccordionItem value="eng-breakdown" className="border rounded-xl overflow-hidden">
+                  {/* 4: エンゲージメント内訳・スコア・ハッシュタグ */}
+                  <AccordionItem value="engagement-detail" className="border rounded-xl overflow-hidden">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      ❤️ エンゲージメント内訳（いいね / コメント / シェア / 保存）
+                      ❤️ エンゲージメント詳細（内訳 / スコア / ハッシュタグ）
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
+                      {/* エンゲージメント内訳 */}
                       <div className="space-y-3 pt-2">
                         {([
                           { label: "いいね",   icon: "❤️", key: "likes"    },
@@ -1066,31 +1107,24 @@ export default function AnalysisDetail() {
                           );
                         })}
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* ④ スコア別センチメント傾向 */}
-                  {(reportStats.scoresByPos || reportStats.scoresByNeg) && (
-                    <AccordionItem value="scores" className="border rounded-xl overflow-hidden">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        ⭐ スコア別センチメント傾向
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        {(() => {
-                          const scoreItems = [
-                            { label: "総合",       key: "overall"   as const, color: "text-purple-600" },
-                            { label: "サムネイル", key: "thumbnail" as const, color: "text-blue-600"   },
-                            { label: "テキスト",   key: "text"      as const, color: "text-cyan-600"   },
-                            { label: "音声",       key: "audio"     as const, color: "text-green-600"  },
-                            { label: "尺",         key: "duration"  as const, color: "text-orange-500" },
-                          ];
-                          const groups = [
-                            { label: "Positive", data: reportStats.scoresByPos, textCls: "text-green-600", bgCls: "bg-green-500" },
-                            { label: "Neutral",  data: reportStats.scoresByNeu, textCls: "text-gray-500",  bgCls: "bg-gray-400"  },
-                            { label: "Negative", data: reportStats.scoresByNeg, textCls: "text-red-500",   bgCls: "bg-red-400"   },
-                          ];
-                          return (
-                            <div className="overflow-x-auto pt-2">
+                      {/* スコア別センチメント傾向 */}
+                      {(reportStats.scoresByPos || reportStats.scoresByNeg) && (() => {
+                        const scoreItems = [
+                          { label: "総合",       key: "overall"   as const, color: "text-purple-600" },
+                          { label: "サムネイル", key: "thumbnail" as const, color: "text-blue-600"   },
+                          { label: "テキスト",   key: "text"      as const, color: "text-cyan-600"   },
+                          { label: "音声",       key: "audio"     as const, color: "text-green-600"  },
+                          { label: "尺",         key: "duration"  as const, color: "text-orange-500" },
+                        ];
+                        const groups = [
+                          { label: "Positive", data: reportStats.scoresByPos, textCls: "text-green-600", bgCls: "bg-green-500" },
+                          { label: "Neutral",  data: reportStats.scoresByNeu, textCls: "text-gray-500",  bgCls: "bg-gray-400"  },
+                          { label: "Negative", data: reportStats.scoresByNeg, textCls: "text-red-500",   bgCls: "bg-red-400"   },
+                        ];
+                        return (
+                          <div className="mt-4">
+                            <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">⭐ スコア別センチメント傾向</h4>
+                            <div className="overflow-x-auto">
                               <table className="w-full text-sm">
                                 <thead>
                                   <tr className="border-b">
@@ -1121,92 +1155,49 @@ export default function AnalysisDetail() {
                                 </tbody>
                               </table>
                             </div>
-                          );
-                        })()}
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* ⑤ ハッシュタグ分析 */}
-                  {(reportStats.topHashtagsPos.length > 0 || reportStats.topHashtagsNeg.length > 0) && (
-                    <AccordionItem value="hashtags" className="border rounded-xl overflow-hidden">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        # ハッシュタグ分析（Positive / Negative Top5）
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                          <div className="p-3 border rounded-lg border-green-200 bg-green-50/50">
-                            <p className="text-xs font-semibold text-green-700 mb-2">Positive</p>
-                            <ol className="space-y-1.5">
-                              {reportStats.topHashtagsPos.map((item, i) => (
-                                <li key={item.word} className="flex items-center justify-between text-sm">
-                                  <span className="flex items-center gap-1">
-                                    <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                                    <span className="font-medium text-green-800">#{item.word}</span>
-                                  </span>
-                                  <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">{item.count}</Badge>
-                                </li>
-                              ))}
-                            </ol>
                           </div>
-                          <div className="p-3 border rounded-lg border-red-200 bg-red-50/50">
-                            <p className="text-xs font-semibold text-red-700 mb-2">Negative</p>
-                            <ol className="space-y-1.5">
-                              {reportStats.topHashtagsNeg.map((item, i) => (
-                                <li key={item.word} className="flex items-center justify-between text-sm">
-                                  <span className="flex items-center gap-1">
-                                    <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
-                                    <span className="font-medium text-red-800">#{item.word}</span>
-                                  </span>
-                                  <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">{item.count}</Badge>
-                                </li>
-                              ))}
-                            </ol>
+                        );
+                      })()}
+                      {/* ハッシュタグ Top5 */}
+                      {(reportStats.topHashtagsPos.length > 0 || reportStats.topHashtagsNeg.length > 0) && (
+                        <div className="mt-4">
+                          <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide"># ハッシュタグ Top5（Positive / Negative）</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-3 border rounded-lg border-green-200 bg-green-50/50">
+                              <p className="text-xs font-semibold text-green-700 mb-2">Positive</p>
+                              <ol className="space-y-1.5">
+                                {reportStats.topHashtagsPos.map((item, i) => (
+                                  <li key={item.word} className="flex items-center justify-between text-sm">
+                                    <span className="flex items-center gap-1">
+                                      <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                                      <span className="font-medium text-green-800">#{item.word}</span>
+                                    </span>
+                                    <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">{item.count}</Badge>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
+                            <div className="p-3 border rounded-lg border-red-200 bg-red-50/50">
+                              <p className="text-xs font-semibold text-red-700 mb-2">Negative</p>
+                              <ol className="space-y-1.5">
+                                {reportStats.topHashtagsNeg.map((item, i) => (
+                                  <li key={item.word} className="flex items-center justify-between text-sm">
+                                    <span className="flex items-center gap-1">
+                                      <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                                      <span className="font-medium text-red-800">#{item.word}</span>
+                                    </span>
+                                    <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">{item.count}</Badge>
+                                  </li>
+                                ))}
+                              </ol>
+                            </div>
                           </div>
                         </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
 
                 </Accordion>
-
-                {/* 側面分析 */}
-                {data && data.report && (
-                  <ReportSection
-                    keyword={data.job?.keyword || ""}
-                    date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
-                    videoCount={data.videos?.length || 0}
-                    platform="TikTok"
-                    aspects={(data.report?.facets || []).map((f: any) => ({
-                      name: f.aspect || f.name || "",
-                      pos: f.positive_percentage || f.pos || 0,
-                      neg: f.negative_percentage || f.neg || 0,
-                      desc: f.description || f.desc || ""
-                    }))}
-                    proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
-                      area: insight.title,
-                      action: insight.description,
-                      priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
-                      icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
-                    }))}
-                    sentimentData={{
-                      positive: reportStats.sentimentCounts.positive || 0,
-                      negative: reportStats.sentimentCounts.negative || 0,
-                      neutral: reportStats.sentimentCounts.neutral || 0,
-                    }}
-                  />
-                )}
-
-                {/* 頻出ワード分析 - ワードクラウド風 */}
-                {reportStats && (reportStats.positiveWords.length > 0 || reportStats.negativeWords.length > 0) && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-6">頻出ワード分析</h3>
-                    <FrequentWordsCloud
-                      positiveWords={reportStats.positiveWords}
-                      negativeWords={reportStats.negativeWords}
-                    />
-                  </div>
-                )}
 
               </CardContent>
             </Card>
