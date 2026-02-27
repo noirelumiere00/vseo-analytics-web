@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality } from "./videoAnalysis";
+import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
@@ -230,20 +230,34 @@ export const appRouter = router({
               });
 
               // 各動画を分析（重複度情報も含めてDB保存）
-              // 並列化：5本ずつ同時に分析
+              // 5本ずつバッチ処理: Phase1=並列OCR+DB登録, Phase2=センチメント1回LLM, Phase3=DB更新
               const BATCH_SIZE = 5;
               for (let i = 0; i < allUniqueVideos.length; i += BATCH_SIZE) {
                 const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
                 const percent = 42 + Math.floor(((i + BATCH_SIZE) / allUniqueVideos.length) * 40);
-                
+
                 setProgress(input.jobId, {
                   message: `動画分析中... (${Math.min(i + BATCH_SIZE, allUniqueVideos.length)}/${allUniqueVideos.length})`,
                   percent,
                 });
 
-                // バッチ内の動画を並列分析
+                // Phase1: 並列でOCR・DB登録（センチメントLLMはスキップ）
+                const batchResults = await Promise.all(
+                  batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo, { skipSentiment: true }))
+                );
+
+                // Phase2: 5本まとめて1回のLLM呼び出しでセンチメント分析
+                const sentimentResults = await analyzeSentimentAndKeywordsBatch(
+                  batchResults.map(r => r.sentimentInput)
+                );
+
+                // Phase3: 各動画のセンチメントをDBに更新
                 await Promise.all(
-                  batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo))
+                  batchResults.map((r, j) => db.updateVideo(r.dbVideoId, {
+                    sentiment: sentimentResults[j].sentiment,
+                    keyHook: sentimentResults[j].keyHook,
+                    keywords: sentimentResults[j].keywords,
+                  }))
                 );
               }
 
