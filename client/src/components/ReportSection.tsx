@@ -36,6 +36,9 @@ interface ReportSectionProps {
 }
 
 function AspectRow({ aspect }: { aspect: Aspect }) {
+  const total = aspect.pos + aspect.neg;
+  const posWidth = total > 0 ? (aspect.pos / total) * 100 : 50;
+  const negWidth = total > 0 ? (aspect.neg / total) * 100 : 50;
   return (
     <div className="py-3 border-b last:border-b-0">
       <span className="font-semibold text-sm">{aspect.name}</span>
@@ -44,11 +47,11 @@ function AspectRow({ aspect }: { aspect: Aspect }) {
         <div className="flex-1 h-2.5 rounded-full overflow-hidden bg-muted flex">
           <div
             className="h-full bg-green-500 transition-all duration-700"
-            style={{ width: `${aspect.pos}%` }}
+            style={{ width: `${posWidth}%` }}
           />
           <div
             className="h-full bg-red-400 transition-all duration-700"
-            style={{ width: `${aspect.neg}%` }}
+            style={{ width: `${negWidth}%` }}
           />
         </div>
         <span className="text-red-500 font-bold text-xs w-10 shrink-0">{aspect.neg}%</span>
@@ -111,7 +114,7 @@ export function ReportSection({
         {strengths.length > 0 && (
           <div className="mb-3">
             <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
-              ● STRENGTHS — 強み
+              ● 強み
             </span>
             {strengths.map((a) => (
               <AspectRow key={a.name} aspect={a} />
@@ -122,7 +125,7 @@ export function ReportSection({
         {improvements.length > 0 && (
           <div>
             <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
-              ▲ NEEDS IMPROVEMENT — 要改善
+              ● 要改善
             </span>
             {improvements.map((a) => (
               <AspectRow key={a.name} aspect={a} />
@@ -131,7 +134,9 @@ export function ReportSection({
         )}
 
         {aspects.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">データなし</p>
+          <p className="text-xs text-muted-foreground text-center py-4">
+            分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+          </p>
         )}
       </div>
 
@@ -172,7 +177,9 @@ export function ReportSection({
             </div>
           ))}
           {proposals.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">データなし</p>
+            <p className="text-xs text-muted-foreground text-center py-4">
+              分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+            </p>
           )}
         </div>
       </div>
