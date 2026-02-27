@@ -258,11 +258,14 @@ export async function generateAnalysisReportDocx(data: PDFGenerationData): Promi
       );
 
       for (const insight of data.report.keyInsights) {
-        const categoryLabel = {
-          risk: "⚠️ リスク",
-          urgent: "🔴 緊急",
+        const categoryLabel = ({
+          avoid:    "🚫 回避",
+          caution:  "⚠️ 注意",
+          leverage: "✅ 活用",
+          risk:     "⚠️ リスク",
+          urgent:   "🔴 緊急",
           positive: "✅ ポジティブ",
-        }[insight.category];
+        } as Record<string, string>)[insight.category] ?? insight.category;
 
         sections.push(
           new Paragraph({
