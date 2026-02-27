@@ -89,11 +89,11 @@ export function ReportSection({
   return (
     <div className="space-y-4 pt-2">
 
-      {/* ① 側面分析・強み弱みサマリー */}
+      {/* ① 側面分析・強み弱み分析 */}
       <div className="p-4 border rounded-lg">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-            側面分析・強み弱みサマリー
+            側面分析・強み弱み分析
           </h4>
           <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
             {aspects.length} Aspects
