@@ -89,15 +89,12 @@ export function ReportSection({
   return (
     <div className="space-y-4 pt-2">
 
-      {/* ① 側面分析・強み弱み分析 */}
+      {/* 側面分析・強み弱み分析 */}
       <div className="p-4 border rounded-lg">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             側面分析・強み弱み分析
           </h4>
-          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-            {aspects.length} Aspects
-          </span>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
           {platform}上の #{keyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
@@ -138,17 +135,12 @@ export function ReportSection({
         )}
       </div>
 
-      {/* ② 頻出ワード分析（常時表示） */}
+      {/* 頻出ワード分析 */}
       <div className="p-4 border rounded-lg">
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             頻出ワード分析
           </h4>
-          {(positiveWords.length > 0 || negativeWords.length > 0) && (
-            <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-              {positiveWords.length + negativeWords.length} Words
-            </span>
-          )}
         </div>
         <FrequentWordsCloud
           positiveWords={positiveWords}
@@ -156,15 +148,12 @@ export function ReportSection({
         />
       </div>
 
-      {/* ③ マーケティング施策提案 */}
+      {/* マーケティング施策提案 */}
       <div className="p-4 border rounded-lg">
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             マーケティング施策提案
           </h4>
-          <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-0.5 rounded">
-            {proposals.length} Actions
-          </span>
         </div>
         <div className="space-y-2">
           {proposals.map((p, i) => (
