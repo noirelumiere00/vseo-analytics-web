@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
-import { ReportSection } from '@/components/ReportSection';
+import { ReportSection, MicroAnalysisSection } from '@/components/ReportSection';
 import { filterAdHashtags } from "@shared/const";
 
 export default function AnalysisDetail() {
@@ -966,10 +966,10 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
 
-                {/* 詳細分析アコーディオン（3項目） */}
+                {/* 詳細分析アコーディオン */}
                 <Accordion type="multiple" className="space-y-2">
 
-                  {/* 動画マクロ分析（側面分析・頻出ワード・マーケティング施策） */}
+                  {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
                   {data && data.report && (
                     <AccordionItem value="aspects" className="border rounded-xl overflow-hidden">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
@@ -987,12 +987,7 @@ export default function AnalysisDetail() {
                             neg: f.negative_percentage || f.neg || 0,
                             desc: f.description || f.desc || ""
                           }))}
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
-                            area: insight.title,
-                            action: insight.description,
-                            priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
-                            icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
-                          }))}
+                          proposals={[]}
                           sentimentData={{
                             positive: reportStats.sentimentCounts.positive || 0,
                             negative: reportStats.sentimentCounts.negative || 0,
@@ -1000,12 +995,32 @@ export default function AnalysisDetail() {
                           }}
                           positiveWords={reportStats.positiveWords}
                           negativeWords={reportStats.negativeWords}
+                          emotionWords={(data.report as any)?.emotionWords ?? undefined}
                         />
                       </AccordionContent>
                     </AccordionItem>
                   )}
 
-                  {/* 3: エンゲージメント内訳・平均動画時間・ハッシュタグ */}
+                  {/* 動画ミクロ分析（マーケティング施策提案） */}
+                  {data && data.report && (
+                    <AccordionItem value="micro-analysis" className="border rounded-xl overflow-hidden">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        動画ミクロ分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4 pt-2">
+                        <MicroAnalysisSection
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
+                            area: insight.title,
+                            action: insight.description,
+                            priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
+                            icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
+                          }))}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* エンゲージメント詳細 */}
                   <AccordionItem value="engagement-detail" className="border rounded-xl overflow-hidden">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                       ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / ハッシュタグ）

@@ -154,9 +154,21 @@ export const analysisReports = mysqlTable("analysis_reports", {
   positiveEngagementShare: int("positiveEngagementShare").default(0), // %
   negativeEngagementShare: int("negativeEngagementShare").default(0), // %
   
-  // 頻出ワード
+  // 頻出ワード（後方互換のため残存）
   positiveWords: json("positiveWords").$type<string[]>(),
   negativeWords: json("negativeWords").$type<string[]>(),
+
+  // 感情ワードマップ（LLMアノテーション済み 2D感情座標）
+  // valence: Y軸 -1(悲/怒) → +1(喜/楽)
+  // arousal: X軸 -1(穏/受動) → +1(興奮/能動)
+  // sources: ワードの語源（将来的にOCR/音声/モーダル分析にも対応）
+  emotionWords: json("emotionWords").$type<Array<{
+    word: string;
+    count: number;
+    valence: number;
+    arousal: number;
+    sources: Array<"keyword" | "ocr" | "transcription" | "modal">;
+  }>>(),
   
   // 自動インサイト（LLM生成）
   autoInsight: text("autoInsight"),
