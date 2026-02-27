@@ -178,6 +178,7 @@ export const analysisReports = mysqlTable("analysis_reports", {
     category: "avoid" | "caution" | "leverage";
     title: string;
     description: string;
+    sourceVideoIds?: string[];
    }>>(),
   
   // 側面分析（ビジネス視点）

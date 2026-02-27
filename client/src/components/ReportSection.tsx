@@ -12,6 +12,7 @@ interface Proposal {
   action: string;
   priority: "回避" | "注意" | "活用";
   icon: string;
+  sourceVideoIds?: string[];
 }
 
 interface WordData {
@@ -167,46 +168,50 @@ interface VideoRef {
 
 // 動画ミクロ分析（施策提案）を独立コンポーネントとしてエクスポート
 export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposal[]; videos?: VideoRef[] }) {
+  // videoId → 参照番号マップ
+  const refMap = new Map<string, number>((videos ?? []).map((v, i) => [v.videoId, i + 1]));
   return (
     <div className="space-y-2">
-      {proposals.map((p, i) => (
-        <div
-          key={i}
-          className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
-        >
-          <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-semibold">{p.area}</span>
-              <PriorityBadge priority={p.priority} />
+      {proposals.map((p, i) => {
+        const refs = (p.sourceVideoIds ?? [])
+          .map(id => ({ id, num: refMap.get(id), video: (videos ?? []).find(v => v.videoId === id) }))
+          .filter(r => r.num !== undefined);
+        return (
+          <div
+            key={i}
+            className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
+          >
+            <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold">{p.area}</span>
+                <PriorityBadge priority={p.priority} />
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
+              {refs.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {refs.map(r => (
+                    <a
+                      key={r.id}
+                      href={`https://www.tiktok.com/@${r.video?.accountId}/video/${r.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={r.video?.title || r.id}
+                      className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                    >
+                      [参照{r.num}]
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {proposals.length === 0 && (
         <p className="text-xs text-muted-foreground text-center py-4">
           分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
         </p>
-      )}
-      {videos && videos.length > 0 && (
-        <div className="pt-3 mt-1 border-t">
-          <p className="text-xs text-muted-foreground mb-1.5">参照動画:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {videos.slice(0, 15).map((v, i) => (
-              <a
-                key={v.videoId}
-                href={`https://www.tiktok.com/@${v.accountId}/video/${v.videoId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={v.title || `@${v.accountId}`}
-                className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
-              >
-                [参照{i + 1}]
-              </a>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
