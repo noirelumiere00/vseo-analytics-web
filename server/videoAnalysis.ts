@@ -545,7 +545,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   let emotionWords: EmotionWord[] = [];
   let autoInsight: string = "";
-  let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string }> = [];
+  let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string; sourceVideoIds: string[] }> = [];
 
   try {
     const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 30);
@@ -587,8 +587,9 @@ Positive頻出ワード: ${positiveWords.slice(0, 5).join(", ")} / Negative頻�
 - avoid: ネガティブ文脈で伸びている・ブランドリスクがある → 避けるべきパターン
 - caution: 競合が多い・注意が必要な傾向 → 慎重に扱うべきパターン
 - leverage: 再生数・ERが高い勝ちパターン → 積極的に活用すべきパターン
+各示唆には、根拠となった動画のvideoIdを1〜3個 sourceVideoIds に含めてください。
 動画サンプル:
-${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment})`).join("\n")}`,
+${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment})`).join("\n")}`,
         },
       ],
       response_format: {
@@ -621,8 +622,9 @@ ${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "")
                     category: { type: "string", enum: ["avoid", "caution", "leverage"] },
                     title: { type: "string" },
                     description: { type: "string" },
+                    sourceVideoIds: { type: "array", items: { type: "string" } },
                   },
-                  required: ["category", "title", "description"],
+                  required: ["category", "title", "description", "sourceVideoIds"],
                   additionalProperties: false,
                 },
               },
@@ -657,7 +659,7 @@ ${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "")
     emotionWords = [];
     autoInsight = "";
     keyInsights = [
-      { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。` },
+      { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。`, sourceVideoIds: [] },
     ];
   }
 
