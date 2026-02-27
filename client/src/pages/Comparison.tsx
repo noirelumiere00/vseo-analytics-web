@@ -367,6 +367,15 @@ export default function Comparison() {
               <p className="font-bold text-xl text-blue-800 dark:text-blue-200">{labelA}</p>
               <p className="text-sm text-muted-foreground">{dateA}</p>
               <p className="text-sm text-muted-foreground">{mA.totalVideos} 本の動画</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation(`/analysis/${idA}`)}
+                className="mt-1 border-blue-400/60 text-blue-700 hover:bg-blue-100 text-xs h-7 w-fit"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                詳細を見る
+              </Button>
             </div>
 
             {/* VS */}
@@ -383,6 +392,15 @@ export default function Comparison() {
               <p className="font-bold text-xl text-amber-800 dark:text-amber-200">{labelB}</p>
               <p className="text-sm text-muted-foreground">{dateB}</p>
               <p className="text-sm text-muted-foreground">{mB.totalVideos} 本の動画</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation(`/analysis/${idB}`)}
+                className="mt-1 border-amber-400/60 text-amber-700 hover:bg-amber-100 text-xs h-7 w-fit"
+              >
+                <Eye className="h-3 w-3 mr-1" />
+                詳細を見る
+              </Button>
             </div>
           </div>
 
@@ -1085,25 +1103,6 @@ export default function Comparison() {
             );
           })()}
 
-          {/* ---- 各分析へのリンク ---- */}
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              variant="outline"
-              onClick={() => setLocation(`/analysis/${idA}`)}
-              className="border-blue-400/60 text-blue-700 hover:bg-blue-50"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              分析 A の詳細を見る
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setLocation(`/analysis/${idB}`)}
-              className="border-amber-400/60 text-amber-700 hover:bg-amber-50"
-            >
-              <Eye className="h-4 w-4 mr-2" />
-              分析 B の詳細を見る
-            </Button>
-          </div>
 
         </div>
       </div>
