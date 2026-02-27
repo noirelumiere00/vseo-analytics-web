@@ -10,7 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
@@ -369,10 +369,22 @@ export default function AnalysisDetail() {
                 {job.keyword ? `キーワード: ${job.keyword}` : "手動URL分析"}
               </p>
             </div>
-            <Button variant="outline" onClick={() => setLocation("/")}>
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              履歴に戻る
-            </Button>
+            <div className="flex items-center gap-2">
+              {job.status === "completed" && (
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/history?compareWith=${jobId}`)}
+                  className="border-primary/50 text-primary hover:bg-primary/10"
+                >
+                  <GitCompare className="h-4 w-4 mr-2" />
+                  他の分析と比較
+                </Button>
+              )}
+              <Button variant="outline" onClick={() => setLocation("/")}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                履歴に戻る
+              </Button>
+            </div>
           </div>
 
           {/* Status Card */}
