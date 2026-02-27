@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Accordion,
   AccordionContent,
@@ -27,6 +28,12 @@ export default function AnalysisDetail() {
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
   const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate">("dominance");
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
+
+  const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
+    enabled: user !== undefined,
+  });
 
   // user が undefined の場合は query を無効化
   const { data, isLoading, refetch } = trpc.analysis.getById.useQuery(
@@ -504,11 +511,11 @@ export default function AnalysisDetail() {
               {job.status === "completed" && (
                 <Button
                   variant="outline"
-                  onClick={() => setLocation(`/history?compareWith=${jobId}`)}
+                  onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
                   className="border-primary/50 text-primary hover:bg-primary/10"
                 >
                   <GitCompare className="h-4 w-4 mr-2" />
-                  他の分析と比較
+                  比較
                 </Button>
               )}
               <Button variant="outline" onClick={() => setLocation("/")}>
@@ -517,6 +524,72 @@ export default function AnalysisDetail() {
               </Button>
             </div>
           </div>
+
+          {/* 比較レポート選択 Dialog */}
+          <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <GitCompare className="h-5 w-5 text-primary" />
+                  比較するレポートを選択
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {(jobList ?? [])
+                  .filter((j) => j.id !== jobId && j.status === "completed")
+                  .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                  .map((j) => {
+                    const isSelected = selectedCompareId === j.id;
+                    const date = new Date(j.createdAt);
+                    const dateStr = `${date.getFullYear()}/${String(date.getMonth()+1).padStart(2,'0')}/${String(date.getDate()).padStart(2,'0')} ${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+                    return (
+                      <button
+                        key={j.id}
+                        onClick={() => setSelectedCompareId(isSelected ? null : j.id)}
+                        className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/40 hover:bg-muted/40"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-sm truncate">
+                            {j.keyword ? `#${j.keyword}` : "手動URL分析"}
+                          </span>
+                          {isSelected && (
+                            <Badge className="bg-primary text-white text-[10px] shrink-0">選択中</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">{dateStr}</div>
+                      </button>
+                    );
+                  })}
+                {(jobList ?? []).filter((j) => j.id !== jobId && j.status === "completed").length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">
+                    比較できる完了済みレポートがありません
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setCompareDialogOpen(false)}>
+                  キャンセル
+                </Button>
+                <Button
+                  disabled={!selectedCompareId}
+                  onClick={() => {
+                    if (selectedCompareId) {
+                      setCompareDialogOpen(false);
+                      setLocation(`/compare?a=${jobId}&b=${selectedCompareId}`);
+                    }
+                  }}
+                  className="gradient-primary text-white"
+                >
+                  <GitCompare className="h-4 w-4 mr-2" />
+                  比較する
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Status Card */}
           <Card>

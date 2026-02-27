@@ -19,6 +19,13 @@ import {
   Share2,
   Bookmark,
   MessageCircle,
+  Layers,
+  Lightbulb,
+  Video,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
+  Ghost,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
@@ -615,6 +622,288 @@ export default function Comparison() {
               </CardContent>
             </Card>
           )}
+
+          {/* ---- インパクト分析（facets）比較 ---- */}
+          {(dataA.report?.facets?.length > 0 || dataB.report?.facets?.length > 0) && (() => {
+            const facetsA: any[] = (dataA.report as any)?.facets ?? [];
+            const facetsB: any[] = (dataB.report as any)?.facets ?? [];
+            // 両方のfacetを全取得してaspect名でマージ
+            const allAspects = Array.from(new Set([
+              ...facetsA.map((f: any) => f.aspect || f.name || ""),
+              ...facetsB.map((f: any) => f.aspect || f.name || ""),
+            ])).filter(Boolean);
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Layers className="h-4 w-4 text-primary" />
+                    インパクト分析（側面別）
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {allAspects.map((aspect) => {
+                      const fA = facetsA.find((f: any) => (f.aspect || f.name) === aspect);
+                      const fB = facetsB.find((f: any) => (f.aspect || f.name) === aspect);
+                      const posA = fA?.positive_percentage ?? fA?.pos ?? null;
+                      const negA = fA?.negative_percentage ?? fA?.neg ?? null;
+                      const posB = fB?.positive_percentage ?? fB?.pos ?? null;
+                      const negB = fB?.negative_percentage ?? fB?.neg ?? null;
+                      return (
+                        <div key={aspect} className="space-y-1.5 pb-3 border-b last:border-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-foreground">{aspect}</span>
+                            {posA !== null && posB !== null && (
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                                posA > posB ? "bg-blue-100 text-blue-700" : posB > posA ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
+                              }`}>
+                                {posA > posB ? "A優勢" : posB > posA ? "B優勢" : "同値"}
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            {/* A */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[11px]">
+                                <span className="text-blue-700 font-medium">分析A</span>
+                                {posA !== null ? (
+                                  <span className="text-muted-foreground">
+                                    <span className="text-green-600 font-semibold">+{posA}%</span>
+                                    {" / "}
+                                    <span className="text-red-500 font-semibold">-{negA}%</span>
+                                  </span>
+                                ) : <span className="text-muted-foreground">データなし</span>}
+                              </div>
+                              {posA !== null && (
+                                <div className="flex h-2 rounded-full overflow-hidden gap-px">
+                                  <div className="bg-green-500 rounded-l-full" style={{ width: `${posA}%` }} />
+                                  <div className="bg-red-400 rounded-r-full" style={{ width: `${negA}%` }} />
+                                </div>
+                              )}
+                            </div>
+                            {/* B */}
+                            <div className="space-y-1">
+                              <div className="flex justify-between text-[11px]">
+                                <span className="text-amber-600 font-medium">分析B</span>
+                                {posB !== null ? (
+                                  <span className="text-muted-foreground">
+                                    <span className="text-green-600 font-semibold">+{posB}%</span>
+                                    {" / "}
+                                    <span className="text-red-500 font-semibold">-{negB}%</span>
+                                  </span>
+                                ) : <span className="text-muted-foreground">データなし</span>}
+                              </div>
+                              {posB !== null && (
+                                <div className="flex h-2 rounded-full overflow-hidden gap-px">
+                                  <div className="bg-green-500 rounded-l-full" style={{ width: `${posB}%` }} />
+                                  <div className="bg-red-400 rounded-r-full" style={{ width: `${negB}%` }} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 動画ミクロ分析（keyInsights）比較 ---- */}
+          {(dataA.report?.keyInsights?.length > 0 || dataB.report?.keyInsights?.length > 0) && (() => {
+            const insightsA: any[] = (dataA.report as any)?.keyInsights ?? [];
+            const insightsB: any[] = (dataB.report as any)?.keyInsights ?? [];
+            const maxLen = Math.max(insightsA.length, insightsB.length);
+            const catBadge = (cat: string) => {
+              const map: Record<string, { label: string; cls: string }> = {
+                avoid: { label: "🚫 回避", cls: "bg-red-50 text-red-600 border-red-200" },
+                risk: { label: "🚫 回避", cls: "bg-red-50 text-red-600 border-red-200" },
+                caution: { label: "⚠️ 注意", cls: "bg-orange-50 text-orange-600 border-orange-200" },
+                urgent: { label: "⚠️ 注意", cls: "bg-orange-50 text-orange-600 border-orange-200" },
+                leverage: { label: "✅ 活用", cls: "bg-green-50 text-green-600 border-green-200" },
+                positive: { label: "✅ 活用", cls: "bg-green-50 text-green-600 border-green-200" },
+              };
+              const entry = map[cat] ?? { label: cat, cls: "bg-muted text-muted-foreground border-border" };
+              return (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${entry.cls}`}>
+                  {entry.label}
+                </span>
+              );
+            };
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    動画ミクロ分析
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div className="text-xs font-semibold text-blue-700 px-1">分析 A</div>
+                    <div className="text-xs font-semibold text-amber-600 px-1">分析 B</div>
+                  </div>
+                  <div className="space-y-2">
+                    {Array.from({ length: maxLen }).map((_, i) => {
+                      const iA = insightsA[i];
+                      const iB = insightsB[i];
+                      return (
+                        <div key={i} className="grid grid-cols-2 gap-3">
+                          {iA ? (
+                            <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/60 space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {catBadge(iA.category)}
+                              </div>
+                              <p className="text-xs font-semibold leading-snug">{iA.title}</p>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{iA.description}</p>
+                            </div>
+                          ) : <div />}
+                          {iB ? (
+                            <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {catBadge(iB.category)}
+                              </div>
+                              <p className="text-xs font-semibold leading-snug">{iB.title}</p>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{iB.description}</p>
+                            </div>
+                          ) : <div />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 分析対象動画 比較（継続・新規・消えた）---- */}
+          {(() => {
+            const videosA = dataA.videos ?? [];
+            const videosB = dataB.videos ?? [];
+            const idsA = new Set(videosA.map((v: any) => v.videoId));
+            const idsB = new Set(videosB.map((v: any) => v.videoId));
+
+            const continued = videosA
+              .filter((v: any) => idsB.has(v.videoId))
+              .map((vA: any) => {
+                const rankA = videosA.findIndex((v: any) => v.videoId === vA.videoId) + 1;
+                const rankB = videosB.findIndex((v: any) => v.videoId === vA.videoId) + 1;
+                return { ...vA, rankA, rankB, diff: rankA - rankB };
+              })
+              .sort((a: any, b: any) => a.rankB - b.rankB);
+
+            const newlyIn = videosB
+              .filter((v: any) => !idsA.has(v.videoId))
+              .map((v: any, i: number) => ({ ...v, rankB: i + 1 }));
+
+            const disappeared = videosA
+              .filter((v: any) => !idsB.has(v.videoId))
+              .map((v: any, i: number) => ({ ...v, rankA: i + 1 }));
+
+            const VideoRow = ({ v, rankA, rankB, diff, side }: any) => (
+              <div className={`flex items-center gap-3 p-2.5 rounded-lg border ${
+                side === "new" ? "bg-green-50/50 border-green-200/60" :
+                side === "gone" ? "bg-gray-50/50 border-gray-200/60 opacity-70" :
+                "bg-muted/30 border-border/60"
+              }`}>
+                <img
+                  src={v.thumbnailUrl || "https://placehold.co/48x32/8A2BE2/white?text=No"}
+                  alt=""
+                  className="w-16 h-10 object-cover rounded shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://placehold.co/48x32/8A2BE2/white?text=No"; }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium line-clamp-1">{v.title || "タイトルなし"}</p>
+                  <p className="text-[10px] text-muted-foreground">@{v.accountId}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  {side === "continued" && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-muted-foreground">A:{rankA}位</span>
+                      <span className="text-[11px]">→</span>
+                      <span className="text-[11px] font-bold">B:{rankB}位</span>
+                      {diff > 0 && <span className="text-[10px] text-green-600 font-bold flex items-center gap-0.5"><ArrowUp className="h-2.5 w-2.5" />{diff}</span>}
+                      {diff < 0 && <span className="text-[10px] text-red-500 font-bold flex items-center gap-0.5"><ArrowDown className="h-2.5 w-2.5" />{Math.abs(diff)}</span>}
+                      {diff === 0 && <span className="text-[10px] text-muted-foreground">—</span>}
+                    </div>
+                  )}
+                  {side === "new" && <span className="text-[11px] font-bold text-green-600">B:{rankB}位 NEW</span>}
+                  {side === "gone" && <span className="text-[11px] text-muted-foreground">A:{rankA}位 消</span>}
+                </div>
+              </div>
+            );
+
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Video className="h-4 w-4 text-primary" />
+                    分析対象動画
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      A:{videosA.length}本 / B:{videosB.length}本
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {/* 継続出現 */}
+                  {continued.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold text-foreground">🔁 継続出現</span>
+                        <span className="text-[10px] text-muted-foreground">{continued.length}本 — 両方の分析に登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {continued.slice(0, 10).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankA={v.rankA} rankB={v.rankB} diff={v.diff} side="continued" />
+                        ))}
+                        {continued.length > 10 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {continued.length - 10} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 新規出現 */}
+                  {newlyIn.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-xs font-semibold text-green-700">B で新規出現</span>
+                        <span className="text-[10px] text-muted-foreground">{newlyIn.length}本 — A には未登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {newlyIn.slice(0, 8).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankB={v.rankB} side="new" />
+                        ))}
+                        {newlyIn.length > 8 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {newlyIn.length - 8} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 消えた動画 */}
+                  {disappeared.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Ghost className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs font-semibold text-muted-foreground">A から消えた</span>
+                        <span className="text-[10px] text-muted-foreground">{disappeared.length}本 — B に未登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {disappeared.slice(0, 8).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankA={v.rankA} side="gone" />
+                        ))}
+                        {disappeared.length > 8 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {disappeared.length - 8} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ---- 各分析へのリンク ---- */}
           <div className="grid grid-cols-2 gap-4">
