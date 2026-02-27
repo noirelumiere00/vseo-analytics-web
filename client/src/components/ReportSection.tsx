@@ -1,4 +1,4 @@
-import { FrequentWordsCloud } from "./FrequentWordsCloud";
+import { FrequentWordsCloud, type EmotionWord } from "./FrequentWordsCloud";
 
 interface Aspect {
   name: string;
@@ -33,6 +33,7 @@ interface ReportSectionProps {
   };
   positiveWords?: WordData[];
   negativeWords?: WordData[];
+  emotionWords?: EmotionWord[];
 }
 
 function AspectRow({ aspect }: { aspect: Aspect }) {
@@ -85,15 +86,16 @@ export function ReportSection({
   proposals,
   positiveWords = [],
   negativeWords = [],
+  emotionWords,
 }: ReportSectionProps) {
   const strengths = aspects.filter((a) => a.pos >= 75);
   const improvements = aspects.filter((a) => a.pos < 75);
 
   return (
-    <div className="space-y-4 pt-2">
+    <div className="space-y-0 pt-2">
 
       {/* 側面分析・強み弱み分析 */}
-      <div className="p-4 border rounded-lg">
+      <div className="pb-4">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             側面分析・強み弱み分析
@@ -140,50 +142,47 @@ export function ReportSection({
         )}
       </div>
 
-      {/* 頻出ワード分析 */}
-      <div className="p-4 border rounded-lg">
+      <div className="border-t pt-4">
         <div className="mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             頻出ワード分析
           </h4>
         </div>
         <FrequentWordsCloud
+          emotionWords={emotionWords}
           positiveWords={positiveWords}
           negativeWords={negativeWords}
         />
       </div>
 
-      {/* マーケティング施策提案 */}
-      <div className="p-4 border rounded-lg">
-        <div className="mb-3">
-          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-            マーケティング施策提案
-          </h4>
-        </div>
-        <div className="space-y-2">
-          {proposals.map((p, i) => (
-            <div
-              key={i}
-              className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
-            >
-              <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold">{p.area}</span>
-                  <PriorityBadge priority={p.priority} />
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
-              </div>
-            </div>
-          ))}
-          {proposals.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
-            </p>
-          )}
-        </div>
-      </div>
+    </div>
+  );
+}
 
+// 動画ミクロ分析（施策提案）を独立コンポーネントとしてエクスポート
+export function MicroAnalysisSection({ proposals }: { proposals: Proposal[] }) {
+  return (
+    <div className="space-y-2">
+      {proposals.map((p, i) => (
+        <div
+          key={i}
+          className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
+        >
+          <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-semibold">{p.area}</span>
+              <PriorityBadge priority={p.priority} />
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
+          </div>
+        </div>
+      ))}
+      {proposals.length === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+        </p>
+      )}
     </div>
   );
 }
