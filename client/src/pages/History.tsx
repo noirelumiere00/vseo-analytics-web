@@ -5,22 +5,35 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function History() {
   const { user, loading: authLoading } = useAuth();
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const utils = trpc.useUtils();
   const { data: jobs, isLoading } = trpc.analysis.list.useQuery(undefined, {
     enabled: !!user,
   });
 
-  const [compareMode, setCompareMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const compareWithId = parseInt(new URLSearchParams(search).get("compareWith") ?? "0");
+  const [compareMode, setCompareMode] = useState(compareWithId > 0);
+  const [selectedIds, setSelectedIds] = useState<number[]>(compareWithId > 0 ? [compareWithId] : []);
+
+  // URLパラメータで指定されたIDが完了済みかどうかを確認し、比較モードを有効化
+  useEffect(() => {
+    if (compareWithId > 0 && jobs) {
+      const target = jobs.find((j) => j.id === compareWithId && j.status === "completed");
+      if (target) {
+        setCompareMode(true);
+        setSelectedIds([compareWithId]);
+      }
+    }
+  }, [jobs, compareWithId]);
 
   const deleteJob = trpc.analysis.delete.useMutation({
     onSuccess: () => {
@@ -135,11 +148,23 @@ export default function History() {
           {/* Compare action bar */}
           {compareMode && (
             <div className="flex items-center justify-between p-4 rounded-lg border border-primary/30 bg-primary/5">
-              <p className="text-sm text-muted-foreground">
-                {selectedIds.length === 0 && "比較したい分析を2件選択してください"}
-                {selectedIds.length === 1 && "あと1件選択してください"}
-                {selectedIds.length === 2 && "2件選択済み — 比較を開始できます"}
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1.5">
+                  {[0, 1].map((i) => (
+                    <div
+                      key={i}
+                      className={`h-2.5 w-2.5 rounded-full transition-colors ${
+                        i < selectedIds.length ? "bg-primary" : "bg-muted-foreground/30"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {selectedIds.length === 0 && "比較したい分析を2件選択してください"}
+                  {selectedIds.length === 1 && (compareWithId > 0 ? "比較先をもう1件選択してください" : "あと1件選択してください")}
+                  {selectedIds.length === 2 && "2件選択済み — 比較を開始できます"}
+                </p>
+              </div>
               <Button
                 disabled={selectedIds.length !== 2}
                 onClick={handleCompare}
