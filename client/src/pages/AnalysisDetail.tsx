@@ -324,9 +324,11 @@ export default function AnalysisDetail() {
       }
     }
 
-    if (topHashtagsPos.length > 0) {
+    const keyword = (data?.job?.keyword || "").toLowerCase();
+    const meaningfulHashtags = topHashtagsPos.filter(h => h.word.toLowerCase() !== keyword).slice(0, 3);
+    if (meaningfulHashtags.length > 0) {
       insightLines.push(
-        `Positive 動画で頻出のハッシュタグは「#${topHashtagsPos[0].word}」など。積極的に活用することで肯定的な露出拡大が見込めます。`
+        `Positive 動画で頻出のハッシュタグは「#${meaningfulHashtags.map(h => h.word).join("」「#")}」など。併用することで露出拡大が見込めます。`
       );
     }
 
@@ -884,7 +886,7 @@ export default function AnalysisDetail() {
                   <h3 className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
                     <Star className="h-4 w-4" /> 自動インサイト
                   </h3>
-                  <p className="text-sm text-indigo-900 leading-relaxed">{reportStats.autoInsight}</p>
+                  <p className="text-sm text-indigo-900 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
                 </div>
 
                 {/* インパクト分析（常時表示） */}
