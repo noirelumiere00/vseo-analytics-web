@@ -50,6 +50,13 @@
       "when": 1772160892348,
       "tag": "0006_confused_champions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1772180090163,
+      "tag": "0007_ancient_swordsman",
+      "breakpoints": true
     }
   ]
 }
