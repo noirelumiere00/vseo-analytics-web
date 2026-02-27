@@ -116,6 +116,12 @@ function CompareBar({ valueA, valueB }: { valueA: number; valueB: number }) {
 // ==============================
 // Helper: 単一指標行（リッチ版）
 // ==============================
+function ImproveBadge({ improved }: { improved: "up" | "down" | "same" }) {
+  if (improved === "up")   return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✅ 改善</span>;
+  if (improved === "down") return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">❌ 低下</span>;
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">→ 維持</span>;
+}
+
 function MetricRow({
   label,
   valueA,
@@ -141,9 +147,15 @@ function MetricRow({
   const winnerRaw: "A" | "B" | "tie" =
     valueA === valueB ? "tie" : invertColor ? (valueA < valueB ? "A" : "B") : (valueA > valueB ? "A" : "B");
 
+  // B が A より良いか（改善チェック）
+  const improved: "up" | "down" | "same" =
+    valueA === valueB ? "same"
+    : invertColor ? (valueB < valueA ? "up" : "down")
+    : (valueB > valueA ? "up" : "down");
+
   return (
     <div className="py-3 border-b last:border-0 space-y-2">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
         {/* A側 */}
         <div className="flex items-center justify-end gap-2">
           {winnerRaw === "A" && <WinnerBadge side="A" />}
@@ -151,7 +163,7 @@ function MetricRow({
         </div>
 
         {/* 中央ラベル */}
-        <div className="flex flex-col items-center gap-0.5 min-w-[120px]">
+        <div className="flex flex-col items-center gap-0.5 min-w-[110px]">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {icon}
             <span>{label}</span>
@@ -164,6 +176,9 @@ function MetricRow({
           <span className="font-bold text-xl text-amber-600">{fmt(valueB)}</span>
           {winnerRaw === "B" && <WinnerBadge side="B" />}
         </div>
+
+        {/* 改善バッジ */}
+        <ImproveBadge improved={improved} />
       </div>
 
       {/* 相対バー */}
@@ -623,84 +638,131 @@ export default function Comparison() {
             </Card>
           )}
 
-          {/* ---- インパクト分析（facets）比較 ---- */}
+          {/* ---- インパクト分析（facets）改善チェック ---- */}
           {(dataA.report?.facets?.length > 0 || dataB.report?.facets?.length > 0) && (() => {
             const facetsA: any[] = (dataA.report as any)?.facets ?? [];
             const facetsB: any[] = (dataB.report as any)?.facets ?? [];
-            // 両方のfacetを全取得してaspect名でマージ
             const allAspects = Array.from(new Set([
               ...facetsA.map((f: any) => f.aspect || f.name || ""),
               ...facetsB.map((f: any) => f.aspect || f.name || ""),
             ])).filter(Boolean);
+
+            type Verdict = "full" | "pos_only" | "neg_only" | "none" | "unknown";
+            const rows = allAspects.map((aspect) => {
+              const fA = facetsA.find((f: any) => (f.aspect || f.name) === aspect);
+              const fB = facetsB.find((f: any) => (f.aspect || f.name) === aspect);
+              const posA: number | null = fA?.positive_percentage ?? fA?.pos ?? null;
+              const negA: number | null = fA?.negative_percentage ?? fA?.neg ?? null;
+              const posB: number | null = fB?.positive_percentage ?? fB?.pos ?? null;
+              const negB: number | null = fB?.negative_percentage ?? fB?.neg ?? null;
+              const posDiff = posA !== null && posB !== null ? posB - posA : null;
+              const negDiff = negA !== null && negB !== null ? negB - negA : null;
+              const posImproved = posDiff !== null ? posDiff > 0 : null;
+              const negImproved = negDiff !== null ? negDiff < 0 : null;
+              const verdict: Verdict =
+                posImproved === null && negImproved === null ? "unknown"
+                : posImproved && negImproved ? "full"
+                : posImproved ? "pos_only"
+                : negImproved ? "neg_only"
+                : "none";
+              return { aspect, posA, negA, posB, negB, posDiff, negDiff, verdict };
+            });
+
+            const fullCount = rows.filter(r => r.verdict === "full").length;
+            const noneCount = rows.filter(r => r.verdict === "none").length;
+
+            const verdictUI = (v: Verdict) => ({
+              full:     { label: "✅ 改善", cls: "bg-green-100 text-green-700" },
+              pos_only: { label: "△ ポジ↑", cls: "bg-green-50 text-green-600" },
+              neg_only: { label: "△ ネガ↓", cls: "bg-blue-50 text-blue-600" },
+              none:     { label: "❌ 悪化", cls: "bg-red-100 text-red-600" },
+              unknown:  { label: "— データなし", cls: "bg-muted text-muted-foreground" },
+            }[v]);
+
             return (
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Layers className="h-4 w-4 text-primary" />
-                    インパクト分析（側面別）
+                    マクロ分析（改善チェック）
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      {fullCount > 0 && <span className="text-green-600 font-semibold">{fullCount}側面が改善　</span>}
+                      {noneCount > 0 && <span className="text-red-500 font-semibold">{noneCount}側面が悪化</span>}
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    {allAspects.map((aspect) => {
-                      const fA = facetsA.find((f: any) => (f.aspect || f.name) === aspect);
-                      const fB = facetsB.find((f: any) => (f.aspect || f.name) === aspect);
-                      const posA = fA?.positive_percentage ?? fA?.pos ?? null;
-                      const negA = fA?.negative_percentage ?? fA?.neg ?? null;
-                      const posB = fB?.positive_percentage ?? fB?.pos ?? null;
-                      const negB = fB?.negative_percentage ?? fB?.neg ?? null;
+                  {/* 列ヘッダー */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-0 text-[10px] font-semibold text-muted-foreground pb-1.5 border-b mb-1">
+                    <span>側面</span>
+                    <span className="w-32 text-center">ポジ A→B</span>
+                    <span className="w-32 text-center">ネガ A→B</span>
+                    <span className="w-16 text-center">判定</span>
+                  </div>
+                  <div className="space-y-0">
+                    {rows.map(({ aspect, posA, negA, posB, negB, posDiff, negDiff, verdict }) => {
+                      const ui = verdictUI(verdict);
                       return (
-                        <div key={aspect} className="space-y-1.5 pb-3 border-b last:border-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-foreground">{aspect}</span>
-                            {posA !== null && posB !== null && (
-                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                                posA > posB ? "bg-blue-100 text-blue-700" : posB > posA ? "bg-amber-100 text-amber-700" : "bg-muted text-muted-foreground"
-                              }`}>
-                                {posA > posB ? "A優勢" : posB > posA ? "B優勢" : "同値"}
+                        <div key={aspect} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center py-2.5 border-b last:border-0">
+                          {/* 側面名 */}
+                          <span className="text-xs font-medium">{aspect}</span>
+
+                          {/* ポジ A→B */}
+                          <div className="w-32 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-blue-600">{posA !== null ? `${posA}%` : "—"}</span>
+                              <span className="text-muted-foreground mx-1">→</span>
+                              <span className={`font-semibold ${posA !== null && posB !== null ? (posB > posA ? "text-green-600" : posB < posA ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground"}`}>
+                                {posB !== null ? `${posB}%` : "—"}
                               </span>
+                              {posDiff !== null && posDiff !== 0 && (
+                                <span className={`ml-1 text-[10px] font-bold ${posDiff > 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {posDiff > 0 ? `+${posDiff}` : posDiff}
+                                </span>
+                              )}
+                            </div>
+                            {posA !== null && posB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="bg-blue-400 transition-all" style={{ width: `${posA}%` }} />
+                              </div>
+                            )}
+                            {posB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className={`transition-all ${(posB ?? 0) >= (posA ?? 0) ? "bg-green-500" : "bg-orange-400"}`} style={{ width: `${posB}%` }} />
+                              </div>
                             )}
                           </div>
-                          <div className="grid grid-cols-2 gap-3 text-xs">
-                            {/* A */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-blue-700 font-medium">分析A</span>
-                                {posA !== null ? (
-                                  <span className="text-muted-foreground">
-                                    <span className="text-green-600 font-semibold">+{posA}%</span>
-                                    {" / "}
-                                    <span className="text-red-500 font-semibold">-{negA}%</span>
-                                  </span>
-                                ) : <span className="text-muted-foreground">データなし</span>}
-                              </div>
-                              {posA !== null && (
-                                <div className="flex h-2 rounded-full overflow-hidden gap-px">
-                                  <div className="bg-green-500 rounded-l-full" style={{ width: `${posA}%` }} />
-                                  <div className="bg-red-400 rounded-r-full" style={{ width: `${negA}%` }} />
-                                </div>
+
+                          {/* ネガ A→B */}
+                          <div className="w-32 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-red-400">{negA !== null ? `${negA}%` : "—"}</span>
+                              <span className="text-muted-foreground mx-1">→</span>
+                              <span className={`font-semibold ${negA !== null && negB !== null ? (negB < negA ? "text-green-600" : negB > negA ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground"}`}>
+                                {negB !== null ? `${negB}%` : "—"}
+                              </span>
+                              {negDiff !== null && negDiff !== 0 && (
+                                <span className={`ml-1 text-[10px] font-bold ${negDiff < 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {negDiff > 0 ? `+${negDiff}` : negDiff}
+                                </span>
                               )}
                             </div>
-                            {/* B */}
-                            <div className="space-y-1">
-                              <div className="flex justify-between text-[11px]">
-                                <span className="text-amber-600 font-medium">分析B</span>
-                                {posB !== null ? (
-                                  <span className="text-muted-foreground">
-                                    <span className="text-green-600 font-semibold">+{posB}%</span>
-                                    {" / "}
-                                    <span className="text-red-500 font-semibold">-{negB}%</span>
-                                  </span>
-                                ) : <span className="text-muted-foreground">データなし</span>}
+                            {negA !== null && negB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="bg-red-300 transition-all" style={{ width: `${negA}%` }} />
                               </div>
-                              {posB !== null && (
-                                <div className="flex h-2 rounded-full overflow-hidden gap-px">
-                                  <div className="bg-green-500 rounded-l-full" style={{ width: `${posB}%` }} />
-                                  <div className="bg-red-400 rounded-r-full" style={{ width: `${negB}%` }} />
-                                </div>
-                              )}
-                            </div>
+                            )}
+                            {negB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className={`transition-all ${(negB ?? 0) <= (negA ?? 0) ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${negB}%` }} />
+                              </div>
+                            )}
                           </div>
+
+                          {/* 判定 */}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full w-16 text-center ${ui.cls}`}>
+                            {ui.label}
+                          </span>
                         </div>
                       );
                     })}
