@@ -636,7 +636,7 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 重複度分析結果 */}
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
                     <Star className="h-6 w-6 text-yellow-500 mx-auto mb-2" />
                     <div className="text-3xl font-bold text-yellow-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
@@ -651,11 +651,6 @@ export default function AnalysisDetail() {
                     <Search className="h-6 w-6 text-gray-400 mx-auto mb-2" />
                     <div className="text-3xl font-bold text-gray-500">{tripleSearch.duplicateAnalysis.appearedIn1OnlyCount}</div>
                     <div className="text-xs text-muted-foreground mt-1">1回のみ<br/>(パーソナライズ)</div>
-                  </div>
-                  <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-purple-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-purple-600">{tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</div>
-                    <div className="text-xs text-muted-foreground mt-1">重複率</div>
                   </div>
                 </div>
 
