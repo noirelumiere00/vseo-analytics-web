@@ -92,10 +92,10 @@ export function ReportSection({
   const improvements = aspects.filter((a) => a.pos < 75);
 
   return (
-    <div className="space-y-4 pt-2">
+    <div className="space-y-0 pt-2">
 
       {/* 側面分析・強み弱み分析 */}
-      <div className="p-4 border rounded-lg">
+      <div className="pb-4">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             側面分析・強み弱み分析
@@ -142,8 +142,7 @@ export function ReportSection({
         )}
       </div>
 
-      {/* 頻出ワード分析 */}
-      <div className="p-4 border rounded-lg">
+      <div className="border-t pt-4">
         <div className="mb-3">
           <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
             頻出ワード分析
