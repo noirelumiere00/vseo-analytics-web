@@ -15,7 +15,22 @@ import * as path from "path";
 import { logBuffer } from "./logBuffer";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
-const progressStore = new Map<number, { message: string; percent: number }>();
+const progressStore = new Map<number, { message: string; percent: number; updatedAt: number }>();
+
+// メモリ管理: 10分以上更新のないエントリを定期的に削除
+setInterval(() => {
+  const staleThreshold = Date.now() - 10 * 60 * 1000;
+  for (const [jobId, entry] of progressStore) {
+    if (entry.updatedAt < staleThreshold) {
+      progressStore.delete(jobId);
+      console.log(`[ProgressStore] Evicted stale entry for job ${jobId}`);
+    }
+  }
+}, 5 * 60 * 1000).unref(); // .unref() でプロセス終了をブロックしない
+
+function setProgress(jobId: number, progress: { message: string; percent: number }) {
+  progressStore.set(jobId, { ...progress, updatedAt: Date.now() });
+}
 
 
 export const appRouter = router({
@@ -96,6 +111,35 @@ export const appRouter = router({
         // 3シークレットブラウザ検索結果をDBから取得
         const tripleSearchData = await db.getTripleSearchResultByJobId(input.jobId);
 
+        // 各動画の順位情報を searchData から計算（重複率分析の高度化）
+        // dominanceScore: 各セッションでの順位の逆数の平均 × 100（高いほど上位に安定して表示される）
+        const rankInfo: Record<string, {
+          ranks: (number | null)[];   // [セッション0での順位, 1での順位, 2での順位] (null=未出現)
+          avgRank: number;            // 出現セッションでの平均順位
+          dominanceScore: number;     // 0-100、高いほど安定して上位に表示
+        }> = {};
+        if (tripleSearchData?.searchData) {
+          const allVideoIds = [
+            ...(tripleSearchData.appearedInAll3Ids ?? []),
+            ...(tripleSearchData.appearedIn2Ids ?? []),
+            ...(tripleSearchData.appearedIn1OnlyIds ?? []),
+          ];
+          for (const videoId of allVideoIds) {
+            const ranks: (number | null)[] = [null, null, null];
+            for (const session of tripleSearchData.searchData) {
+              const idx = session.videoIds.indexOf(videoId);
+              if (idx !== -1) ranks[session.sessionIndex] = idx + 1; // 1-indexed
+            }
+            const presentRanks = ranks.filter((r): r is number => r !== null);
+            const avgRank = presentRanks.length > 0
+              ? presentRanks.reduce((a, b) => a + b, 0) / presentRanks.length
+              : 999;
+            // (1/r1 + 1/r2 + 1/r3) / 3 * 100: rank#1 in all 3 = 100, rank#10 in 1 only = ~3.3
+            const dominanceScore = presentRanks.reduce((sum, r) => sum + (1 / r), 0) / 3 * 100;
+            rankInfo[videoId] = { ranks, avgRank, dominanceScore };
+          }
+        }
+
         return {
           job,
           videos: videosWithDetails,
@@ -112,6 +156,7 @@ export const appRouter = router({
               appearedIn1OnlyIds: tripleSearchData.appearedIn1OnlyIds ?? [],
             },
             commonalityAnalysis: tripleSearchData.commonalityAnalysis ?? null,
+            rankInfo,
           } : null,
         };
         } catch (error) {
@@ -137,7 +182,7 @@ export const appRouter = router({
 
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
-        progressStore.set(input.jobId, { message: "分析を開始しています...", percent: 0 });
+        setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
 
         // 非同期で分析を実行
         setImmediate(async () => {
@@ -145,13 +190,13 @@ export const appRouter = router({
             if (job.keyword) {
               // === 3シークレットブラウザでTikTok検索 ===
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
-              progressStore.set(input.jobId, { message: "3つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
+              setProgress(input.jobId, { message: "3つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
 
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
                 15, // 各セッション15件
                 (msg: string) => {
-                  progressStore.set(input.jobId, { message: msg, percent: 40 });
+                  setProgress(input.jobId, { message: msg, percent: 40 });
                 }
               );
 
@@ -179,7 +224,7 @@ export const appRouter = router({
               // 全ユニーク動画を分析対象にする（重複度情報付き）
               const allUniqueVideos = tripleResult.duplicateAnalysis.allUniqueVideos;
               
-              progressStore.set(input.jobId, {
+              setProgress(input.jobId, {
                 message: `${allUniqueVideos.length}件のユニーク動画を分析中...`,
                 percent: 42,
               });
@@ -191,7 +236,7 @@ export const appRouter = router({
                 const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
                 const percent = 42 + Math.floor(((i + BATCH_SIZE) / allUniqueVideos.length) * 40);
                 
-                progressStore.set(input.jobId, {
+                setProgress(input.jobId, {
                   message: `動画分析中... (${Math.min(i + BATCH_SIZE, allUniqueVideos.length)}/${allUniqueVideos.length})`,
                   percent,
                 });
@@ -207,7 +252,7 @@ export const appRouter = router({
               for (let i = 0; i < job.manualUrls.length; i++) {
                 const url = job.manualUrls[i];
                 const percent = Math.floor(((i + 1) / job.manualUrls.length) * 85);
-                progressStore.set(input.jobId, {
+                setProgress(input.jobId, {
                   message: `動画分析中... (${i + 1}/${job.manualUrls.length})`,
                   percent,
                 });
@@ -216,18 +261,18 @@ export const appRouter = router({
             }
 
             // レポート生成
-            progressStore.set(input.jobId, { message: "分析レポート生成中...", percent: 85 });
+            setProgress(input.jobId, { message: "分析レポート生成中...", percent: 85 });
             await generateAnalysisReport(input.jobId);
 
             // 勝ちパターン動画の共通点をLLMで分析
-            progressStore.set(input.jobId, { message: "勝ちパターン動画の共通点を分析中...", percent: 92 });
+            setProgress(input.jobId, { message: "勝ちパターン動画の共通点を分析中...", percent: 92 });
             if (job.keyword) {
               await analyzeWinPatternCommonality(input.jobId, job.keyword);
             }
 
             // ステータスを完了に更新
             await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
-            progressStore.set(input.jobId, { message: "分析完了", percent: 100 });
+            setProgress(input.jobId, { message: "分析完了", percent: 100 });
             // メモリリーク対策: 完了後に進捗情報を削除
             setTimeout(() => {
               progressStore.delete(input.jobId);
@@ -257,7 +302,7 @@ export const appRouter = router({
               userMessage = "ブラウザの起動に失敗しました。サーバーリソースが不足している可能性があります。";
             }
             
-            progressStore.set(input.jobId, {
+            setProgress(input.jobId, {
               message: `分析失敗: ${userMessage}`,
               percent: -1,
             });
