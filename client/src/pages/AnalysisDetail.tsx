@@ -1227,6 +1227,11 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                 src={video.thumbnailUrl || "https://placehold.co/120x80/8A2BE2/white?text=No+Image"}
                 alt={video.title || "動画サムネイル"}
                 className="w-32 h-20 object-cover rounded flex-shrink-0"
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src =
+                    "https://placehold.co/120x80/8A2BE2/white?text=No+Image";
+                }}
               />
               <div className="flex-1 text-left min-w-0">
                 <div className="font-medium line-clamp-1">
