@@ -927,7 +927,84 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
 
-                {/* 詳細分析アコーディオン（4項目） */}
+                {/* インパクト分析（常時表示） */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">📊 インパクト分析</h3>
+                  {/* 3way シェア */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {([
+                      { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
+                      { title: "総再生数シェア",           data: reportStats.threeWay.views       },
+                      { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
+                    ] as const).map(({ title, data }) => (
+                      <div key={title} className="p-4 border rounded-lg">
+                        <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
+                        <div className="space-y-3">
+                          {([
+                            { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
+                            { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
+                            { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
+                          ] as const).map(row => (
+                            <div key={row.label}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
+                                <span className="font-bold text-xs">{row.pct}%</span>
+                              </div>
+                              <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 平均指標 */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均再生数（1本あたり）</h4>
+                      <div className="space-y-3">
+                        {([
+                          { label: "Positive", val: reportStats.avgViewsPos, icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" />, cls: "bg-green-500", bgCls: "bg-green-100" },
+                          { label: "Negative", val: reportStats.avgViewsNeg, icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" />, cls: "bg-red-500",   bgCls: "bg-red-100"   },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold text-xs">{formatNumber(Math.round(row.val))}</span>
+                            </div>
+                            <Progress
+                              value={(reportStats.avgViewsPos + reportStats.avgViewsNeg) > 0
+                                ? (row.val / (reportStats.avgViewsPos + reportStats.avgViewsNeg)) * 100 : 0}
+                              className={`h-1.5 ${row.bgCls} [&>div]:${row.cls}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均ER%（1本あたり）</h4>
+                      <div className="space-y-3">
+                        {([
+                          { label: "Positive", val: reportStats.avgERPos, icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" />, cls: "bg-green-500", bgCls: "bg-green-100" },
+                          { label: "Negative", val: reportStats.avgERNeg, icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" />, cls: "bg-red-500",   bgCls: "bg-red-100"   },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold text-xs">{row.val.toFixed(2)}%</span>
+                            </div>
+                            <Progress
+                              value={(reportStats.avgERPos + reportStats.avgERNeg) > 0
+                                ? (row.val / (reportStats.avgERPos + reportStats.avgERNeg)) * 100 : 0}
+                              className={`h-1.5 ${row.bgCls} [&>div]:${row.cls}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 詳細分析アコーディオン（3項目） */}
                 <Accordion type="multiple" className="space-y-2">
 
                   {/* 1: 側面分析・強み弱み */}
@@ -979,117 +1056,10 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 3: インパクト分析（投稿数・再生数・エンゲージメント + 平均指標） */}
-                  <AccordionItem value="impact" className="border rounded-xl overflow-hidden">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      📊 インパクト分析（投稿数 / 再生数 / エンゲージメント / 平均指標）
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
-                      {/* 3way シェア */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                        {([
-                          { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
-                          { title: "総再生数シェア",           data: reportStats.threeWay.views       },
-                          { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
-                        ] as const).map(({ title, data }) => (
-                          <div key={title} className="p-4 border rounded-lg">
-                            <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
-                            <div className="space-y-3">
-                              {([
-                                { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
-                                { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
-                                { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
-                              ] as const).map(row => (
-                                <div key={row.label}>
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                    <span className="font-bold text-xs">{row.pct}%</span>
-                                  </div>
-                                  <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {/* 平均指標 */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                        <div className="p-4 border rounded-lg">
-                          <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均再生数（1本あたり）</h4>
-                          <div className="space-y-3">
-                            {([
-                              { label: "Positive", val: reportStats.avgViewsPos, icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" />, cls: "bg-green-500", bgCls: "bg-green-100" },
-                              { label: "Negative", val: reportStats.avgViewsNeg, icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" />, cls: "bg-red-500",   bgCls: "bg-red-100"   },
-                            ] as const).map(row => (
-                              <div key={row.label}>
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                  <span className="font-bold text-xs">{formatNumber(Math.round(row.val))}</span>
-                                </div>
-                                <Progress
-                                  value={(reportStats.avgViewsPos + reportStats.avgViewsNeg) > 0
-                                    ? (row.val / (reportStats.avgViewsPos + reportStats.avgViewsNeg)) * 100 : 0}
-                                  className={`h-1.5 ${row.bgCls} [&>div]:${row.cls}`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="p-4 border rounded-lg">
-                          <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均ER%（1本あたり）</h4>
-                          <div className="space-y-3">
-                            {([
-                              { label: "Positive", val: reportStats.avgERPos, icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" />, cls: "bg-green-500", bgCls: "bg-green-100" },
-                              { label: "Negative", val: reportStats.avgERNeg, icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" />, cls: "bg-red-500",   bgCls: "bg-red-100"   },
-                            ] as const).map(row => (
-                              <div key={row.label}>
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                  <span className="font-bold text-xs">{row.val.toFixed(2)}%</span>
-                                </div>
-                                <Progress
-                                  value={(reportStats.avgERPos + reportStats.avgERNeg) > 0
-                                    ? (row.val / (reportStats.avgERPos + reportStats.avgERNeg)) * 100 : 0}
-                                  className={`h-1.5 ${row.bgCls} [&>div]:${row.cls}`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      {/* 平均動画時間 */}
-                      <div className="p-4 border rounded-lg mt-4">
-                        <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均動画時間（秒）</h4>
-                        {(() => {
-                          const maxDur = Math.max(reportStats.avgDurationPos, reportStats.avgDurationNeg, reportStats.avgDurationNeu, 1);
-                          return (
-                            <div className="space-y-3">
-                              {([
-                                { label: "Positive", val: reportStats.avgDurationPos, color: "bg-green-500" },
-                                { label: "Neutral",  val: reportStats.avgDurationNeu, color: "bg-gray-400"  },
-                                { label: "Negative", val: reportStats.avgDurationNeg, color: "bg-red-400"   },
-                              ] as const).map(({ label, val, color }) => (
-                                <div key={label}>
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs">{label}</span>
-                                    <span className="font-bold text-xs">{val > 0 ? `${Math.round(val)}秒` : "—"}</span>
-                                  </div>
-                                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                    <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${(val / maxDur) * 100}%` }} />
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  {/* 4: エンゲージメント内訳・スコア・ハッシュタグ */}
+                  {/* 3: エンゲージメント内訳・平均動画時間・スコア・ハッシュタグ */}
                   <AccordionItem value="engagement-detail" className="border rounded-xl overflow-hidden">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      ❤️ エンゲージメント詳細（内訳 / スコア / ハッシュタグ）
+                      ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / スコア / ハッシュタグ）
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
                       {/* エンゲージメント内訳 */}
@@ -1119,6 +1089,32 @@ export default function AnalysisDetail() {
                             </div>
                           );
                         })}
+                      </div>
+                      {/* 平均動画時間 */}
+                      <div className="p-4 border rounded-lg mt-4">
+                        <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">平均動画時間（秒）</h4>
+                        {(() => {
+                          const maxDur = Math.max(reportStats.avgDurationPos, reportStats.avgDurationNeg, reportStats.avgDurationNeu, 1);
+                          return (
+                            <div className="space-y-3">
+                              {([
+                                { label: "Positive", val: reportStats.avgDurationPos, color: "bg-green-500" },
+                                { label: "Neutral",  val: reportStats.avgDurationNeu, color: "bg-gray-400"  },
+                                { label: "Negative", val: reportStats.avgDurationNeg, color: "bg-red-400"   },
+                              ] as const).map(({ label, val, color }) => (
+                                <div key={label}>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs">{label}</span>
+                                    <span className="font-bold text-xs">{val > 0 ? `${Math.round(val)}秒` : "—"}</span>
+                                  </div>
+                                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                                    <div className={`h-full ${color} rounded-full transition-all duration-700`} style={{ width: `${(val / maxDur) * 100}%` }} />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                       {/* スコア別センチメント傾向 */}
                       {(reportStats.scoresByPos || reportStats.scoresByNeg) && (() => {
