@@ -1,3 +1,4 @@
+import React from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,18 +173,18 @@ export default function Comparison() {
     const videos = d.videos ?? [];
     const totalVideos = videos.length;
 
-    const totalViews = videos.reduce((s, v) => s + (v.views ?? 0), 0);
-    const totalLikes = videos.reduce((s, v) => s + (v.likes ?? 0), 0);
-    const totalComments = videos.reduce((s, v) => s + (v.comments ?? 0), 0);
-    const totalShares = videos.reduce((s, v) => s + (v.shares ?? 0), 0);
-    const totalSaves = videos.reduce((s, v) => s + (v.saves ?? 0), 0);
+    const totalViews = videos.reduce((s, v) => s + (v.viewCount ?? 0), 0);
+    const totalLikes = videos.reduce((s, v) => s + (v.likeCount ?? 0), 0);
+    const totalComments = videos.reduce((s, v) => s + (v.commentCount ?? 0), 0);
+    const totalShares = videos.reduce((s, v) => s + (v.shareCount ?? 0), 0);
+    const totalSaves = videos.reduce((s, v) => s + (v.saveCount ?? 0), 0);
     const avgViews = totalVideos > 0 ? totalViews / totalVideos : 0;
 
     const erList = videos
-      .filter((v) => (v.views ?? 0) > 0)
+      .filter((v) => (v.viewCount ?? 0) > 0)
       .map((v) => {
-        const eng = (v.likes ?? 0) + (v.comments ?? 0) + (v.shares ?? 0) + (v.saves ?? 0);
-        return (eng / (v.views ?? 1)) * 100;
+        const eng = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0) + (v.saveCount ?? 0);
+        return (eng / (v.viewCount ?? 1)) * 100;
       });
     const avgER = erList.length > 0 ? erList.reduce((a, b) => a + b, 0) / erList.length : 0;
 
@@ -201,9 +202,9 @@ export default function Comparison() {
     const semi2Count = triple?.appearedIn2Count ?? 0;
 
     const report = d.report;
-    const sentPos = report?.sentimentBreakdown?.positive ?? 0;
-    const sentNeu = report?.sentimentBreakdown?.neutral ?? 0;
-    const sentNeg = report?.sentimentBreakdown?.negative ?? 0;
+    const sentPos = report?.positiveCount ?? 0;
+    const sentNeu = report?.neutralCount ?? 0;
+    const sentNeg = report?.negativeCount ?? 0;
     const sentTotal = sentPos + sentNeu + sentNeg;
     const sentPosPct = sentTotal > 0 ? (sentPos / sentTotal) * 100 : 0;
     const sentNeuPct = sentTotal > 0 ? (sentNeu / sentTotal) * 100 : 0;
