@@ -1004,12 +1004,22 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 pt-2">
                         <MicroAnalysisSection
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => ({
-                            area: insight.title,
-                            action: insight.description,
-                            priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
-                            icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
-                          }))}
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => {
+                            // 新カテゴリ (avoid/caution/leverage) + 旧カテゴリ後方互換 (risk/urgent/positive)
+                            const cat = insight.category;
+                            const priority =
+                              cat === "avoid" || cat === "risk" ? "回避" :
+                              cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                            const icon =
+                              cat === "avoid" || cat === "risk" ? "🚫" :
+                              cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                            return {
+                              area: insight.title,
+                              action: insight.description,
+                              priority: priority as "回避" | "注意" | "活用",
+                              icon,
+                            };
+                          })}
                           videos={(data.videos || [])
                             .slice()
                             .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
