@@ -43,6 +43,13 @@
       "when": 1771923132256,
       "tag": "0005_loving_doctor_faustus",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1772160892348,
+      "tag": "0006_confused_champions",
+      "breakpoints": true
     }
   ]
 }
