@@ -1077,7 +1077,7 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 pt-2">
                         <MicroAnalysisSection
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string }> || []).map(insight => {
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; sourceVideoIds?: string[] }> || []).map(insight => {
                             // 新カテゴリ (avoid/caution/leverage) + 旧カテゴリ後方互換 (risk/urgent/positive)
                             const cat = insight.category;
                             const priority =
@@ -1091,6 +1091,7 @@ export default function AnalysisDetail() {
                               action: insight.description,
                               priority: priority as "回避" | "注意" | "活用",
                               icon,
+                              sourceVideoIds: insight.sourceVideoIds,
                             };
                           })}
                           videos={(data.videos || [])
