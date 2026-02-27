@@ -528,7 +528,18 @@ export default function Comparison() {
           </Card>
 
           {/* ---- 3重検索・ウィンパターン ---- */}
-          {(dataA.tripleSearch || dataB.tripleSearch) && (
+          {(dataA.tripleSearch || dataB.tripleSearch) && (() => {
+            const winDiff = mB.winCount - mA.winCount;
+            const overlapDiff = mB.overlapRate - mA.overlapRate;
+            const semi2Diff = mB.semi2Count - mA.semi2Count;
+            // 判定コメント生成
+            const comments: { text: string; color: string }[] = [];
+            if (winDiff > 0) comments.push({ text: `Winパターンが${winDiff}本増加 → 検索安定性が向上`, color: "text-green-600" });
+            else if (winDiff < 0) comments.push({ text: `Winパターンが${Math.abs(winDiff)}本減少 → 検索安定性が低下`, color: "text-red-500" });
+            if (overlapDiff > 1) comments.push({ text: `重複率が+${overlapDiff.toFixed(1)}% → 市場での定番化が進行`, color: "text-green-600" });
+            else if (overlapDiff < -1) comments.push({ text: `重複率が${overlapDiff.toFixed(1)}% → 競合構成に変化あり`, color: "text-amber-600" });
+            if (winDiff === 0 && overlapDiff === 0 && semi2Diff === 0) comments.push({ text: "重複構成に変化なし → 市場は安定", color: "text-muted-foreground" });
+            return (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -556,17 +567,42 @@ export default function Comparison() {
                   valueB={mB.semi2Count}
                   unit="本"
                 />
+                {comments.length > 0 && (
+                  <div className="pt-3 space-y-1">
+                    {comments.map((c, i) => (
+                      <p key={i} className={`text-xs font-medium ${c.color}`}>
+                        {c.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           {/* ---- センチメント ---- */}
-          {dataA.report && dataB.report && (
+          {dataA.report && dataB.report && (() => {
+            const sentImproved =
+              mB.sentPosPct > mA.sentPosPct && mB.sentNegPct < mA.sentNegPct ? "full"
+              : mB.sentPosPct > mA.sentPosPct ? "pos_only"
+              : mB.sentNegPct < mA.sentNegPct ? "neg_only"
+              : mA.sentPosPct === mB.sentPosPct && mA.sentNegPct === mB.sentNegPct ? "same"
+              : "none";
+            const sentBadge = {
+              full:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">✅ ポジ↑ ネガ↓ 改善</span>,
+              pos_only: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">△ ポジのみ増加</span>,
+              neg_only: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">△ ネガのみ減少</span>,
+              none:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">❌ 悪化</span>,
+              same:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">→ 変化なし</span>,
+            }[sentImproved];
+            return (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <MessageSquare className="h-4 w-4 text-primary" />
                   センチメント分布
+                  <span className="ml-auto">{sentBadge}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -636,7 +672,8 @@ export default function Comparison() {
                 </div>
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           {/* ---- インパクト分析（facets）改善チェック ---- */}
           {(dataA.report?.facets?.length > 0 || dataB.report?.facets?.length > 0) && (() => {
@@ -769,6 +806,87 @@ export default function Comparison() {
                   </div>
                 </CardContent>
               </Card>
+            );
+          })()}
+
+          {/* ---- ポジ/ネガ頻出ワード比較 ---- */}
+          {(dataA.report?.positiveWords?.length > 0 || dataA.report?.negativeWords?.length > 0 ||
+            dataB.report?.positiveWords?.length > 0 || dataB.report?.negativeWords?.length > 0) && (() => {
+            const posA: string[] = (dataA.report as any)?.positiveWords ?? [];
+            const posB: string[] = (dataB.report as any)?.positiveWords ?? [];
+            const negA: string[] = (dataA.report as any)?.negativeWords ?? [];
+            const negB: string[] = (dataB.report as any)?.negativeWords ?? [];
+            const posSetA = new Set(posA);
+            const posSetB = new Set(posB);
+            const negSetA = new Set(negA);
+            const negSetB = new Set(negB);
+            // ポジ: 新登場(B only) / 継続(both) / 消えた(A only)
+            const posNew      = posB.filter(w => !posSetA.has(w));
+            const posContinue = posB.filter(w => posSetA.has(w));
+            const posGone     = posA.filter(w => !posSetB.has(w));
+            // ネガ: 新登場(B only) / 継続(both) / 消えた(A only)
+            const negNew      = negB.filter(w => !negSetA.has(w));
+            const negGone     = negA.filter(w => !negSetB.has(w));
+            const negContinue = negB.filter(w => negSetA.has(w));
+            const WordTag = ({ word, variant }: { word: string; variant: "new" | "gone" | "cont" }) => (
+              <span className={`inline-flex items-center text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                variant === "new"  ? "bg-green-100 text-green-700" :
+                variant === "gone" ? "bg-red-50 text-red-400 line-through" :
+                "bg-muted text-muted-foreground"
+              }`}>{word}</span>
+            );
+            return (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  頻出ワード変化（A→B）
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* ポジ */}
+                {(posA.length > 0 || posB.length > 0) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-green-700">ポジティブワード</span>
+                      {posNew.length > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">✨ +{posNew.length}語 新登場</span>}
+                      {posGone.length > 0 && <span className="text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full font-bold">👻 {posGone.length}語 消えた</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {posNew.map(w => <WordTag key={`pn-${w}`} word={w} variant="new" />)}
+                      {posContinue.map(w => <WordTag key={`pc-${w}`} word={w} variant="cont" />)}
+                      {posGone.map(w => <WordTag key={`pg-${w}`} word={w} variant="gone" />)}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-100 inline-block" />✨ 新登場</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-muted inline-block" />継続</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-50 inline-block" />👻 消えた</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ネガ */}
+                {(negA.length > 0 || negB.length > 0) && (
+                  <div className="space-y-2 pt-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-red-600">ネガティブワード</span>
+                      {negGone.length > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">✅ {negGone.length}語 消えた（改善）</span>}
+                      {negNew.length > 0 && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">⚠️ {negNew.length}語 新登場</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {negGone.map(w => <WordTag key={`ng-${w}`} word={w} variant="gone" />)}
+                      {negContinue.map(w => <WordTag key={`nc-${w}`} word={w} variant="cont" />)}
+                      {negNew.map(w => <WordTag key={`nn-${w}`} word={w} variant="new" />)}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-50 inline-block" />👻 消えた（改善）</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-muted inline-block" />継続中</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-100 inline-block" />⚠️ 新登場</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
             );
           })()}
 
