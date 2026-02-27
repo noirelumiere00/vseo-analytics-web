@@ -524,6 +524,52 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   const positiveWords = getTopWords(positiveVideoKeywords, [], 15);
   const negativeWords = getTopWords(negativeVideoKeywords, [], 15);
 
+  // LLMで自動インサイト（1段落サマリー）を生成
+  let autoInsight: string = "";
+
+  try {
+    const autoInsightPrompt = `
+あなたはTikTok VSEOの専門家です。以下の分析データを元に、このキーワードの動画トレンドを日本語で2〜3文の自然な文章にまとめてください。数字を含め具体的に、マーケター視点で実用的な内容にしてください。
+
+【キーワード】${job?.keyword || "不明"}
+【動画数】${totalVideos}本 / 総再生数: ${totalViews.toLocaleString()}
+【センチメント】Positive ${positiveCount}本(${positivePercentage}%) / Neutral ${neutralCount}本(${neutralPercentage}%) / Negative ${negativeCount}本(${negativePercentage}%)
+【平均ER】Positive ${positiveVideos.length > 0 ? (positiveVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / positiveVideos.length).toFixed(2) : 0}% / Negative ${negativeVideos.length > 0 ? (negativeVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / negativeVideos.length).toFixed(2) : 0}%
+【Positive頻出ワード】${positiveWords.slice(0, 5).join(", ")}
+【Negative頻出ワード】${negativeWords.slice(0, 5).join(", ")}
+`;
+
+    const insightRes = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a TikTok VSEO expert. Always respond in Japanese. Return valid JSON." },
+        { role: "user", content: autoInsightPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "auto_insight",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              insight: { type: "string", description: "2〜3文の自然な日本語サマリー" },
+            },
+            required: ["insight"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const insightContent = typeof insightRes.choices[0].message.content === "string"
+      ? insightRes.choices[0].message.content
+      : JSON.stringify(insightRes.choices[0].message.content);
+    autoInsight = JSON.parse(insightContent || "{}").insight || "";
+  } catch (error) {
+    console.error("[Report] Error generating auto insight:", error);
+    autoInsight = "";
+  }
+
   // LLMで主要示唆を生成
   let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
 
@@ -640,6 +686,7 @@ JSON形式で返してください。
     negativeEngagementShare,
     positiveWords,
     negativeWords,
+    autoInsight,
     keyInsights,
     facets,
   });

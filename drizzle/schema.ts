@@ -158,6 +158,9 @@ export const analysisReports = mysqlTable("analysis_reports", {
   positiveWords: json("positiveWords").$type<string[]>(),
   negativeWords: json("negativeWords").$type<string[]>(),
   
+  // 自動インサイト（LLM生成）
+  autoInsight: text("autoInsight"),
+
   // 主要示唇
   keyInsights: json("keyInsights").$type<Array<{
     category: "risk" | "urgent" | "positive";
