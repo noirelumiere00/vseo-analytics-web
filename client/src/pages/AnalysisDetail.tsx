@@ -1005,10 +1005,10 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 3: エンゲージメント内訳・平均動画時間・スコア・ハッシュタグ */}
+                  {/* 3: エンゲージメント内訳・平均動画時間・ハッシュタグ */}
                   <AccordionItem value="engagement-detail" className="border rounded-xl overflow-hidden">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / スコア / ハッシュタグ）
+                      ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / ハッシュタグ）
                     </AccordionTrigger>
                     <AccordionContent className="px-4 pb-4">
                       {/* エンゲージメント内訳 */}
