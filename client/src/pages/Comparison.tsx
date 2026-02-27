@@ -810,8 +810,8 @@ export default function Comparison() {
           })()}
 
           {/* ---- ポジ/ネガ頻出ワード比較 ---- */}
-          {(dataA.report?.positiveWords?.length > 0 || dataA.report?.negativeWords?.length > 0 ||
-            dataB.report?.positiveWords?.length > 0 || dataB.report?.negativeWords?.length > 0) && (() => {
+          {((dataA.report?.positiveWords?.length ?? 0) > 0 || (dataA.report?.negativeWords?.length ?? 0) > 0 ||
+            (dataB.report?.positiveWords?.length ?? 0) > 0 || (dataB.report?.negativeWords?.length ?? 0) > 0) && (() => {
             const posA: string[] = (dataA.report as any)?.positiveWords ?? [];
             const posB: string[] = (dataB.report as any)?.positiveWords ?? [];
             const negA: string[] = (dataA.report as any)?.negativeWords ?? [];
