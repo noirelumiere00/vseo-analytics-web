@@ -9,6 +9,7 @@ import History from "./pages/History";
 import AnalysisDetail from "./pages/AnalysisDetail";
 import ReportView from "./pages/ReportView";
 import { AdminLogs } from "./pages/AdminLogs";
+import Comparison from "./pages/Comparison";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -17,6 +18,7 @@ function Router() {
       <Route path={"/"} component={Home} />
       <Route path="/history" component={History} />
       <Route path="/analysis/:id" component={AnalysisDetail} />
+      <Route path="/compare" component={Comparison} />
       <Route path="/report/view/:jobId" component={ReportView} />
       <Route path="/admin/logs" component={AdminLogs} />
       <Route path={"/404"} component={NotFound} />
