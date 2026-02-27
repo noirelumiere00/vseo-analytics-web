@@ -299,6 +299,18 @@ export default function AnalysisDetail() {
       },
     };
 
+    // Pos/Neg別 ハッシュタグ Top5
+    const positiveHashtags: string[] = [];
+    const negativeHashtags: string[] = [];
+    videos.forEach(v => {
+      if (v.hashtags && Array.isArray(v.hashtags)) {
+        if (v.sentiment === "positive") positiveHashtags.push(...filterAdHashtags(v.hashtags));
+        if (v.sentiment === "negative") negativeHashtags.push(...filterAdHashtags(v.hashtags));
+      }
+    });
+    const topHashtagsPos = getTopWords(positiveHashtags, 5);
+    const topHashtagsNeg = getTopWords(negativeHashtags, 5);
+
     // 自動インサイト文
     const dominantSentiment =
       sentimentCounts.positive >= sentimentCounts.negative &&
@@ -338,18 +350,6 @@ export default function AnalysisDetail() {
     }
 
     const autoInsight = insightLines.join(" ");
-
-    // Pos/Neg別 ハッシュタグ Top5
-    const positiveHashtags: string[] = [];
-    const negativeHashtags: string[] = [];
-    videos.forEach(v => {
-      if (v.hashtags && Array.isArray(v.hashtags)) {
-        if (v.sentiment === "positive") positiveHashtags.push(...filterAdHashtags(v.hashtags));
-        if (v.sentiment === "negative") negativeHashtags.push(...filterAdHashtags(v.hashtags));
-      }
-    });
-    const topHashtagsPos = getTopWords(positiveHashtags, 5);
-    const topHashtagsNeg = getTopWords(negativeHashtags, 5);
 
     return {
       totalVideos,
