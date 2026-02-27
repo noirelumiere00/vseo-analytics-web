@@ -276,6 +276,29 @@ export default function AnalysisDetail() {
         .map(([word, count]) => ({ word, count }));
     };
 
+    // 3way比率（Neutral込み・全体ベース）
+    const neuViews = neuVideos.reduce((sum, v) => sum + (Number(v.viewCount) || 0), 0);
+    const neuEngagement = neuVideos.reduce((sum, v) =>
+      sum + (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0), 0
+    );
+    const threeWay = {
+      posts: {
+        positive: totalVideos > 0 ? ((sentimentCounts.positive / totalVideos) * 100).toFixed(1) : "0",
+        neutral:  totalVideos > 0 ? ((sentimentCounts.neutral  / totalVideos) * 100).toFixed(1) : "0",
+        negative: totalVideos > 0 ? ((sentimentCounts.negative / totalVideos) * 100).toFixed(1) : "0",
+      },
+      views: {
+        positive: totalViews > 0 ? ((posViews    / totalViews) * 100).toFixed(1) : "0",
+        neutral:  totalViews > 0 ? ((neuViews    / totalViews) * 100).toFixed(1) : "0",
+        negative: totalViews > 0 ? ((negViews    / totalViews) * 100).toFixed(1) : "0",
+      },
+      engagement: {
+        positive: totalEngagement > 0 ? ((posEngagement / totalEngagement) * 100).toFixed(1) : "0",
+        neutral:  totalEngagement > 0 ? ((neuEngagement / totalEngagement) * 100).toFixed(1) : "0",
+        negative: totalEngagement > 0 ? ((negEngagement / totalEngagement) * 100).toFixed(1) : "0",
+      },
+    };
+
     // Pos/Neg別 ハッシュタグ Top5
     const positiveHashtags: string[] = [];
     const negativeHashtags: string[] = [];
@@ -313,6 +336,7 @@ export default function AnalysisDetail() {
       scoresByNeu,
       topHashtagsPos,
       topHashtagsNeg,
+      threeWay,
     };
   }, [data]);
 
@@ -794,78 +818,63 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">Positive/Negativeインパクト分析</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* 投稿数比率 */}
+                    {/* 投稿数比率（3way） */}
                     <div className="p-4 border rounded-lg">
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">投稿数比率</h4>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">投稿数比率（全体）</h4>
                       <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
-                            </span>
-                            <span className="font-bold">{reportStats.posNegRatio.positive}%</span>
+                        {([
+                          { label: "Positive", pct: reportStats.threeWay.posts.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-4 w-4 text-green-500" /> },
+                          { label: "Neutral",  pct: reportStats.threeWay.posts.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-4 w-4 text-gray-400" /> },
+                          { label: "Negative", pct: reportStats.threeWay.posts.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-4 w-4 text-red-500" /> },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold">{row.pct}%</span>
+                            </div>
+                            <Progress value={Number(row.pct)} className={`h-2 ${row.bgCls} [&>div]:${row.barCls}`} />
                           </div>
-                          <Progress value={Number(reportStats.posNegRatio.positive)} className="h-2 bg-green-100 [&>div]:bg-green-500" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
-                            </span>
-                            <span className="font-bold">{reportStats.posNegRatio.negative}%</span>
-                          </div>
-                          <Progress value={Number(reportStats.posNegRatio.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
-                        </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* 総再生数シェア */}
+                    {/* 総再生数シェア（3way） */}
                     <div className="p-4 border rounded-lg">
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">総再生数シェア</h4>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">総再生数シェア（全体）</h4>
                       <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
-                            </span>
-                            <span className="font-bold">{reportStats.viewsShare.positive}%</span>
+                        {([
+                          { label: "Positive", pct: reportStats.threeWay.views.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-4 w-4 text-green-500" /> },
+                          { label: "Neutral",  pct: reportStats.threeWay.views.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-4 w-4 text-gray-400" /> },
+                          { label: "Negative", pct: reportStats.threeWay.views.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-4 w-4 text-red-500" /> },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold">{row.pct}%</span>
+                            </div>
+                            <Progress value={Number(row.pct)} className={`h-2 ${row.bgCls} [&>div]:${row.barCls}`} />
                           </div>
-                          <Progress value={Number(reportStats.viewsShare.positive)} className="h-2 bg-green-100 [&>div]:bg-green-500" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
-                            </span>
-                            <span className="font-bold">{reportStats.viewsShare.negative}%</span>
-                          </div>
-                          <Progress value={Number(reportStats.viewsShare.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
-                        </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* 総エンゲージメントシェア */}
+                    {/* 総エンゲージメントシェア（3way） */}
                     <div className="p-4 border rounded-lg">
-                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">総エンゲージメントシェア</h4>
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">総エンゲージメントシェア（全体）</h4>
                       <div className="space-y-3">
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
-                            </span>
-                            <span className="font-bold">{reportStats.engagementShare.positive}%</span>
+                        {([
+                          { label: "Positive", pct: reportStats.threeWay.engagement.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-4 w-4 text-green-500" /> },
+                          { label: "Neutral",  pct: reportStats.threeWay.engagement.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-4 w-4 text-gray-400" /> },
+                          { label: "Negative", pct: reportStats.threeWay.engagement.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-4 w-4 text-red-500" /> },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-sm flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold">{row.pct}%</span>
+                            </div>
+                            <Progress value={Number(row.pct)} className={`h-2 ${row.bgCls} [&>div]:${row.barCls}`} />
                           </div>
-                          <Progress value={Number(reportStats.engagementShare.positive)} className="h-2 bg-green-100 [&>div]:bg-green-500" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm flex items-center gap-1">
-                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
-                            </span>
-                            <span className="font-bold">{reportStats.engagementShare.negative}%</span>
-                          </div>
-                          <Progress value={Number(reportStats.engagementShare.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
-                        </div>
+                        ))}
                       </div>
                     </div>
                   </div>
