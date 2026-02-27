@@ -213,6 +213,18 @@ export default function AnalysisDetail() {
       saves:    { pos: posSaves,    neg: negSaves,    total: posSaves    + negSaves    },
     };
 
+    // 平均動画時間（Pos/Neg/Neutral別）
+    const neuVideos = videos.filter(v => v.sentiment === "neutral");
+    const calcAvgDuration = (vids: typeof videos) => {
+      const valid = vids.filter(v => v.duration != null && (v.duration as number) > 0);
+      return valid.length > 0
+        ? valid.reduce((s, v) => s + (v.duration as number), 0) / valid.length
+        : 0;
+    };
+    const avgDurationPos = calcAvgDuration(posVideos);
+    const avgDurationNeg = calcAvgDuration(negVideos);
+    const avgDurationNeu = calcAvgDuration(neuVideos);
+
     // 1本あたりの平均再生数（Pos/Neg）
     const avgViewsPos = posVideos.length > 0 ? posViews / posVideos.length : 0;
     const avgViewsNeg = negVideos.length > 0 ? negViews / negVideos.length : 0;
@@ -262,6 +274,9 @@ export default function AnalysisDetail() {
       avgERPos,
       avgERNeg,
       engBreakdown,
+      avgDurationPos,
+      avgDurationNeg,
+      avgDurationNeu,
     };
   }, [data]);
 
@@ -930,6 +945,37 @@ export default function AnalysisDetail() {
                         );
                       })}
                     </div>
+                  </div>
+
+                  {/* 平均動画時間 比較 */}
+                  <div className="mt-6">
+                    <h4 className="font-semibold mb-3 text-sm text-muted-foreground">平均動画時間（Pos / Neg / Neutral 別）</h4>
+                    {(() => {
+                      const maxDur = Math.max(reportStats.avgDurationPos, reportStats.avgDurationNeg, reportStats.avgDurationNeu, 1);
+                      const rows = [
+                        { label: "Positive", val: reportStats.avgDurationPos, color: "bg-green-500" },
+                        { label: "Neutral",  val: reportStats.avgDurationNeu, color: "bg-gray-400"  },
+                        { label: "Negative", val: reportStats.avgDurationNeg, color: "bg-red-400"   },
+                      ];
+                      return (
+                        <div className="space-y-3">
+                          {rows.map(({ label, val, color }) => (
+                            <div key={label}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-sm">{label}</span>
+                                <span className="font-bold text-sm">{val > 0 ? `${Math.round(val)}秒` : "—"}</span>
+                              </div>
+                              <div className="h-3 bg-muted rounded overflow-hidden">
+                                <div
+                                  className={`h-full ${color} transition-all`}
+                                  style={{ width: `${(val / maxDur) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
