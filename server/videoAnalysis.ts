@@ -531,10 +531,9 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   const positiveWords = getTopWords(positiveVideoKeywords, [], 15);
   const negativeWords = getTopWords(negativeVideoKeywords, [], 15);
 
-  // LLMで頻出ワードに感情座標をアノテーション
+  // LLMで感情アノテーション・autoInsight・keyInsightsを1回のコールで生成
   // valence: Y軸 -1(悲/怒) → +1(喜/楽)
   // arousal: X軸 -1(穏/受動) → +1(興奮/能動)
-  // sources: 将来的にOCR/音声/モーダル分析ソースを記録できるよう拡張可能
   type EmotionWordSource = "keyword" | "ocr" | "transcription" | "modal";
   type EmotionWord = {
     word: string;
@@ -545,173 +544,72 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   };
 
   let emotionWords: EmotionWord[] = [];
-  try {
-    const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 30);
-    if (wordsWithCount.length > 0) {
-      const wordList = wordsWithCount.map(w => w.word).join("、");
-      const annotationRes = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: "あなたはTikTok日本語コンテンツの感情分析専門家です。必ずJSONで返答してください。",
-          },
-          {
-            role: "user",
-            content: `以下のワードリストに対して、TikTok日本語コンテキストに基づき感情座標を付与してください。
-
-座標定義:
-- valence: -1.0〜1.0（感情価：+1=喜び・楽しさ・嬉しさ、-1=悲しみ・怒り・不快）
-- arousal: -1.0〜1.0（感情強度：+1=興奮・激しい・熱量高い、-1=穏やか・落ち着き・静的）
-
-象限の目安:
-- 右上（喜興奮）: 「最高」「神」「ワクワク」→ valence:+0.9 arousal:+0.8
-- 左上（楽穏）:  「癒し」「好き」「ありがとう」→ valence:+0.8 arousal:-0.6
-- 右下（怒活性）: 「ムカつく」「なんで」「ひどい」→ valence:-0.8 arousal:+0.7
-- 左下（哀沈静）: 「悲しい」「寂しい」「残念」→ valence:-0.7 arousal:-0.4
-- 中央（中立）:  「動画」「紹介」「情報」→ valence:0.0 arousal:0.0
-
-対象ワード: ${wordList}`,
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "emotion_annotation",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                annotations: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      word: { type: "string" },
-                      valence: { type: "number" },
-                      arousal: { type: "number" },
-                    },
-                    required: ["word", "valence", "arousal"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["annotations"],
-              additionalProperties: false,
-            },
-          },
-        },
-      });
-
-      const annotationContent = typeof annotationRes.choices[0].message.content === "string"
-        ? annotationRes.choices[0].message.content
-        : JSON.stringify(annotationRes.choices[0].message.content);
-      const parsed = JSON.parse(annotationContent || "{}");
-      const annotationMap = new Map<string, { valence: number; arousal: number }>(
-        (parsed.annotations || []).map((a: any) => [a.word, { valence: a.valence, arousal: a.arousal }])
-      );
-
-      emotionWords = wordsWithCount.map(({ word, count }) => {
-        const annotation = annotationMap.get(word) ?? { valence: 0, arousal: 0 };
-        // ソースはキーワード由来。将来OCR/音声/モーダルも追加可能
-        const sources: EmotionWordSource[] = ["keyword"];
-        if (ocrAndAudioKeywords.includes(word)) sources.push("ocr");
-        return { word, count, ...annotation, sources };
-      });
-    }
-  } catch (error) {
-    console.error("[Report] Error annotating emotion words:", error);
-    emotionWords = [];
-  }
-
-  // LLMで自動インサイト（1段落サマリー）を生成
   let autoInsight: string = "";
-
-  try {
-    const autoInsightPrompt = `
-あなたはTikTok VSEOの専門家です。以下の分析データを元に、このキーワードの動画トレンドを日本語で2〜3文の自然な文章にまとめてください。数字を含め具体的に、マーケター視点で実用的な内容にしてください。
-
-【キーワード】${job?.keyword || "不明"}
-【動画数】${totalVideos}本 / 総再生数: ${totalViews.toLocaleString()}
-【センチメント】Positive ${positiveCount}本(${positivePercentage}%) / Neutral ${neutralCount}本(${neutralPercentage}%) / Negative ${negativeCount}本(${negativePercentage}%)
-【平均ER】Positive ${positiveVideos.length > 0 ? (positiveVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / positiveVideos.length).toFixed(2) : 0}% / Negative ${negativeVideos.length > 0 ? (negativeVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / negativeVideos.length).toFixed(2) : 0}%
-【Positive頻出ワード】${positiveWords.slice(0, 5).join(", ")}
-【Negative頻出ワード】${negativeWords.slice(0, 5).join(", ")}
-`;
-
-    const insightRes = await invokeLLM({
-      messages: [
-        { role: "system", content: "You are a TikTok VSEO expert. Always respond in Japanese. Return valid JSON." },
-        { role: "user", content: autoInsightPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "auto_insight",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              insight: { type: "string", description: "2〜3文の自然な日本語サマリー" },
-            },
-            required: ["insight"],
-            additionalProperties: false,
-          },
-        },
-      },
-    });
-
-    const insightContent = typeof insightRes.choices[0].message.content === "string"
-      ? insightRes.choices[0].message.content
-      : JSON.stringify(insightRes.choices[0].message.content);
-    autoInsight = JSON.parse(insightContent || "{}").insight || "";
-  } catch (error) {
-    console.error("[Report] Error generating auto insight:", error);
-    autoInsight = "";
-  }
-
-  // LLMで主要示唆を生成
   let keyInsights: Array<{ category: "risk" | "urgent" | "positive"; title: string; description: string }> = [];
 
   try {
-    const insightPrompt = `
-あなたはTikTok動画のマーケティング分析の専門家です。
-以下のデータに基づいて、主要な示唆を3-5個生成してください。
+    const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 30);
+    const wordList = wordsWithCount.map(w => w.word).join("、");
 
-【キーワード】${job?.keyword || "不明"}
+    const positiveAvgER = positiveVideos.length > 0
+      ? (positiveVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / positiveVideos.length).toFixed(2)
+      : 0;
+    const negativeAvgER = negativeVideos.length > 0
+      ? (negativeVideos.reduce((s, v) => { const vw = v.viewCount||0; return vw > 0 ? s + ((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100 : s; }, 0) / negativeVideos.length).toFixed(2)
+      : 0;
 
-【データ概要】
-- 総動画数: ${totalVideos}
-- 総再生数: ${totalViews.toLocaleString()}
-- ポジティブ: ${positiveCount}件 (${positivePercentage}%)
-- ネガティブ: ${negativeCount}件 (${negativePercentage}%)
-- ポジティブ頻出ワード: ${positiveWords.join(", ")}
-- ネガティブ頻出ワード: ${negativeWords.join(", ")}
-
-【各動画の概要】
-${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "").substring(0, 100)} (${v.sentiment}, 再生${v.viewCount?.toLocaleString()})`).join("\n")}
-
-各示唆は以下のカテゴリに分類してください:
-- risk: リスク要因（ネガティブ要素、改善が必要な点）
-- urgent: 緊急対応が必要な事項
-- positive: ポジティブ要因（強み、活用すべき点）
-
-JSON形式で返してください。
-`;
-
-    const response = await invokeLLM({
+    const combinedRes = await invokeLLM({
       messages: [
-        { role: "system", content: "You are a marketing analysis expert. Always respond in valid JSON format." },
-        { role: "user", content: insightPrompt },
+        {
+          role: "system",
+          content: "あなたはTikTok VSEOおよび日本語コンテンツ感情分析の専門家です。必ずJSONで返答してください。",
+        },
+        {
+          role: "user",
+          content: `以下の3つのタスクを同時に実行し、単一のJSONで返してください。
+
+## タスク1: 感情座標アノテーション
+以下のワードリストに感情座標を付与してください。
+座標定義:
+- valence: -1.0〜1.0（+1=喜び・楽しさ、-1=悲しみ・怒り）
+- arousal: -1.0〜1.0（+1=興奮・激しい、-1=穏やか・静的）
+象限の目安: 右上(喜興奮)「最高」→v:+0.9,a:+0.8 / 左上(楽穏)「癒し」→v:+0.8,a:-0.6 / 右下(怒活性)「ひどい」→v:-0.8,a:+0.7 / 左下(哀沈静)「悲しい」→v:-0.7,a:-0.4 / 中央(中立)「動画」→v:0,a:0
+対象ワード: ${wordList || "（なし）"}
+
+## タスク2: 自動インサイト（2〜3文サマリー）
+キーワード「${job?.keyword || "不明"}」の動画トレンドを日本語2〜3文で、マーケター視点で実用的にまとめてください。
+データ: ${totalVideos}本 / 総再生${totalViews.toLocaleString()} / Positive ${positiveCount}本(${positivePercentage}%) Negative ${negativeCount}本(${negativePercentage}%) / 平均ER: P=${positiveAvgER}% N=${negativeAvgER}%
+Positive頻出ワード: ${positiveWords.slice(0, 5).join(", ")} / Negative頻出ワード: ${negativeWords.slice(0, 5).join(", ")}
+
+## タスク3: 主要示唆（3〜5個）
+上記データに基づきマーケティング示唆を生成してください。各示唆のカテゴリ: risk/urgent/positive
+動画サンプル:
+${videosData.slice(0, 10).map(v => `- @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment})`).join("\n")}`,
+        },
       ],
       response_format: {
         type: "json_schema",
         json_schema: {
-          name: "key_insights",
+          name: "combined_report_analysis",
           strict: true,
           schema: {
             type: "object",
             properties: {
-              insights: {
+              annotations: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    word: { type: "string" },
+                    valence: { type: "number" },
+                    arousal: { type: "number" },
+                  },
+                  required: ["word", "valence", "arousal"],
+                  additionalProperties: false,
+                },
+              },
+              autoInsight: { type: "string" },
+              keyInsights: {
                 type: "array",
                 items: {
                   type: "object",
@@ -725,20 +623,35 @@ JSON形式で返してください。
                 },
               },
             },
-            required: ["insights"],
+            required: ["annotations", "autoInsight", "keyInsights"],
             additionalProperties: false,
           },
         },
       },
     });
 
-    const content = typeof response.choices[0].message.content === 'string'
-      ? response.choices[0].message.content
-      : JSON.stringify(response.choices[0].message.content);
-    const parsed = JSON.parse(content || "{}");
-    keyInsights = parsed.insights || [];
+    const combinedContent = typeof combinedRes.choices[0].message.content === "string"
+      ? combinedRes.choices[0].message.content
+      : JSON.stringify(combinedRes.choices[0].message.content);
+    const combinedParsed = JSON.parse(combinedContent || "{}");
+
+    // 感情座標マップを構築
+    const annotationMap = new Map<string, { valence: number; arousal: number }>(
+      (combinedParsed.annotations || []).map((a: any) => [a.word, { valence: a.valence, arousal: a.arousal }])
+    );
+    emotionWords = wordsWithCount.map(({ word, count }) => {
+      const annotation = annotationMap.get(word) ?? { valence: 0, arousal: 0 };
+      const sources: EmotionWordSource[] = ["keyword"];
+      if (ocrAndAudioKeywords.includes(word)) sources.push("ocr");
+      return { word, count, ...annotation, sources };
+    });
+
+    autoInsight = combinedParsed.autoInsight || "";
+    keyInsights = combinedParsed.keyInsights || [];
   } catch (error) {
-    console.error("[Report] Error generating insights:", error);
+    console.error("[Report] Error in combined LLM analysis:", error);
+    emotionWords = [];
+    autoInsight = "";
     keyInsights = [
       { category: "positive", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。` },
     ];
