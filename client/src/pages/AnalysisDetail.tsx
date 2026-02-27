@@ -276,6 +276,18 @@ export default function AnalysisDetail() {
         .map(([word, count]) => ({ word, count }));
     };
 
+    // Pos/Neg別 ハッシュタグ Top5
+    const positiveHashtags: string[] = [];
+    const negativeHashtags: string[] = [];
+    videos.forEach(v => {
+      if (v.hashtags && Array.isArray(v.hashtags)) {
+        if (v.sentiment === "positive") positiveHashtags.push(...filterAdHashtags(v.hashtags));
+        if (v.sentiment === "negative") negativeHashtags.push(...filterAdHashtags(v.hashtags));
+      }
+    });
+    const topHashtagsPos = getTopWords(positiveHashtags, 5);
+    const topHashtagsNeg = getTopWords(negativeHashtags, 5);
+
     return {
       totalVideos,
       totalViews,
@@ -299,6 +311,8 @@ export default function AnalysisDetail() {
       scoresByPos,
       scoresByNeg,
       scoresByNeu,
+      topHashtagsPos,
+      topHashtagsNeg,
     };
   }, [data]);
 
@@ -1054,6 +1068,45 @@ export default function AnalysisDetail() {
                       </div>
                     );
                   })()}
+
+                  {/* Pos/Neg 別ハッシュタグ Top5 */}
+                  {(reportStats.topHashtagsPos.length > 0 || reportStats.topHashtagsNeg.length > 0) && (
+                    <div className="mt-6">
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">Positive / Negative 別ハッシュタグ Top5</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-3 border rounded-lg border-green-200 bg-green-50/50">
+                          <p className="text-xs font-semibold text-green-700 mb-2">Positive</p>
+                          <ol className="space-y-1">
+                            {reportStats.topHashtagsPos.map((item, i) => (
+                              <li key={item.word} className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-1">
+                                  <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                                  <span className="font-medium text-green-800">#{item.word}</span>
+                                </span>
+                                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700">{item.count}</Badge>
+                              </li>
+                            ))}
+                            {reportStats.topHashtagsPos.length === 0 && <li className="text-xs text-muted-foreground">データなし</li>}
+                          </ol>
+                        </div>
+                        <div className="p-3 border rounded-lg border-red-200 bg-red-50/50">
+                          <p className="text-xs font-semibold text-red-700 mb-2">Negative</p>
+                          <ol className="space-y-1">
+                            {reportStats.topHashtagsNeg.map((item, i) => (
+                              <li key={item.word} className="flex items-center justify-between text-sm">
+                                <span className="flex items-center gap-1">
+                                  <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                                  <span className="font-medium text-red-800">#{item.word}</span>
+                                </span>
+                                <Badge variant="secondary" className="text-xs bg-red-100 text-red-700">{item.count}</Badge>
+                              </li>
+                            ))}
+                            {reportStats.topHashtagsNeg.length === 0 && <li className="text-xs text-muted-foreground">データなし</li>}
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 側面分析 */}
