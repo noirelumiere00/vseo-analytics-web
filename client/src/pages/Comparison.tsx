@@ -676,7 +676,7 @@ export default function Comparison() {
           })()}
 
           {/* ---- インパクト分析（facets）改善チェック ---- */}
-          {(dataA.report?.facets?.length > 0 || dataB.report?.facets?.length > 0) && (() => {
+          {((dataA.report?.facets?.length ?? 0) > 0 || (dataB.report?.facets?.length ?? 0) > 0) && (() => {
             const facetsA: any[] = (dataA.report as any)?.facets ?? [];
             const facetsB: any[] = (dataB.report as any)?.facets ?? [];
             const allAspects = Array.from(new Set([
