@@ -518,34 +518,40 @@ export default function AnalysisDetail() {
 
                 {/* グループ別統計比較 */}
                 {groupStats && (
-                  <div>
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-3">グループ別統計比較</h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "3回出現", stats: groupStats.all3, color: "yellow", bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-700" },
-                        { label: "2回出現", stats: groupStats.in2, color: "blue", bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
-                        { label: "1回のみ", stats: groupStats.in1, color: "gray", bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600" },
-                      ].map(({ label, stats, bg, border, text }) => (
-                        <div key={label} className={`p-3 rounded-lg border ${bg} ${border}`}>
-                          <div className={`text-xs font-bold mb-2 ${text}`}>{label}（{stats.count}件）</div>
-                          <div className="space-y-1.5 text-xs">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均再生数</span>
-                              <span className="font-semibold">{formatNumber(Math.round(stats.avgViews))}</span>
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="groupStats" className="border-0">
+                      <AccordionTrigger className="text-sm font-semibold text-muted-foreground hover:no-underline py-2">
+                        グループ別統計比較
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="grid grid-cols-3 gap-3 pt-1">
+                          {[
+                            { label: "3回出現", stats: groupStats.all3, bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-700" },
+                            { label: "2回出現", stats: groupStats.in2, bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
+                            { label: "1回のみ", stats: groupStats.in1, bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600" },
+                          ].map(({ label, stats, bg, border, text }) => (
+                            <div key={label} className={`p-3 rounded-lg border ${bg} ${border}`}>
+                              <div className={`text-xs font-bold mb-2 ${text}`}>{label}（{stats.count}件）</div>
+                              <div className="space-y-1.5 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">平均再生数</span>
+                                  <span className="font-semibold">{formatNumber(Math.round(stats.avgViews))}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">平均ER%</span>
+                                  <span className="font-semibold">{stats.avgEngagementRate.toFixed(2)}%</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">平均スコア</span>
+                                  <span className="font-semibold">{stats.avgScore.toFixed(0)}</span>
+                                </div>
+                              </div>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均ER%</span>
-                              <span className="font-semibold">{stats.avgEngagementRate.toFixed(2)}%</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均スコア</span>
-                              <span className="font-semibold">{stats.avgScore.toFixed(0)}</span>
-                            </div>
-                          </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
                 )}
 
                 {/* 重複率サマリー + LLM共通点分析 */}
