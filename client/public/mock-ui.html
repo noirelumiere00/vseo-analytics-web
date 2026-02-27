@@ -264,42 +264,32 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
       <div class="ss-chip c4"><div class="num">12</div><div class="lbl">1回のみ</div></div>
     </div>
 
-    <!-- アコーディオン: 重複率 -->
-    <div class="accordion">
-      <div class="acc open" id="acc-overlap">
-        <button class="acc-btn" onclick="toggle('acc-overlap')">
-          📊 重複率サマリー &amp; VSEO共通分析
-          <span class="chevron">▾</span>
-        </button>
-        <div class="acc-body">
-          <div style="padding-top:10px;">
-            <div class="overlap-row">
-              <span class="overlap-label">3回重複率</span>
-              <div class="overlap-bar-wrap">
-                <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:28.6%;background:#7c3aed;"></div></div>
-              </div>
-              <span class="overlap-val" style="color:#7c3aed;">28.6%</span>
-            </div>
-            <div class="overlap-row">
-              <span class="overlap-label">2回重複率</span>
-              <div class="overlap-bar-wrap">
-                <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:42.8%;background:#0891b2;"></div></div>
-              </div>
-              <span class="overlap-val" style="color:#0891b2;">42.8%</span>
-            </div>
-            <div class="overlap-row">
-              <span class="overlap-label">1回のみ</span>
-              <div class="overlap-bar-wrap">
-                <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:28.6%;background:#9ca3af;"></div></div>
-              </div>
-              <span class="overlap-val" style="color:#9ca3af;">28.6%</span>
-            </div>
-            <div class="llm-insight">
-              <strong>🤖 VSEO共通分析（AI）</strong>
-              3回すべての検索で出現した12本は「時短」「簡単」「節約」をテーマにした45秒前後の動画に集中。サムネイルに完成品の画像を大きく使い、冒頭3秒で手順数を示す構成が共通している。アルゴリズムに評価されやすいフォーマットとして横展開が有効。
-            </div>
-          </div>
+    <!-- 重複率サマリー & VSEO共通分析（常時表示） -->
+    <div>
+      <div class="overlap-row">
+        <span class="overlap-label">3回重複率</span>
+        <div class="overlap-bar-wrap">
+          <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:28.6%;background:#7c3aed;"></div></div>
         </div>
+        <span class="overlap-val" style="color:#7c3aed;">28.6%</span>
+      </div>
+      <div class="overlap-row">
+        <span class="overlap-label">2回重複率</span>
+        <div class="overlap-bar-wrap">
+          <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:42.8%;background:#0891b2;"></div></div>
+        </div>
+        <span class="overlap-val" style="color:#0891b2;">42.8%</span>
+      </div>
+      <div class="overlap-row">
+        <span class="overlap-label">1回のみ</span>
+        <div class="overlap-bar-wrap">
+          <div class="overlap-bar-track"><div class="overlap-bar-fill" style="width:28.6%;background:#9ca3af;"></div></div>
+        </div>
+        <span class="overlap-val" style="color:#9ca3af;">28.6%</span>
+      </div>
+      <div class="llm-insight">
+        <strong>🤖 VSEO共通分析（AI）</strong>
+        3回すべての検索で出現した12本は「時短」「簡単」「節約」をテーマにした45秒前後の動画に集中。サムネイルに完成品の画像を大きく使い、冒頭3秒で手順数を示す構成が共通している。アルゴリズムに評価されやすいフォーマットとして横展開が有効。
       </div>
     </div>
     <!-- グループ統計比較 → 削除済み -->
