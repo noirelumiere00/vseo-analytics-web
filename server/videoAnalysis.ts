@@ -486,34 +486,41 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   }
 
   // 頻出ワードを抽出（出現回数でソート、OCR・音声データを優先）
-  const getTopWords = (words: string[], ocrAudioWords: string[], limit: number = 30): string[] => {
+  // countMap を返すユーティリティ
+  const buildWordCountMap = (words: string[], ocrAudioWords: string[]): Map<string, number> => {
     const counts = new Map<string, number>();
-    const ocrAudioCounts = new Map<string, number>();
-    
-    // OCR・音声データのカウント（重要度2倍）
     for (const w of ocrAudioWords) {
-      ocrAudioCounts.set(w, (ocrAudioCounts.get(w) || 0) + 2);
+      counts.set(w, (counts.get(w) || 0) + 2); // OCR/音声は重要度2倍
     }
-    
-    // 通常のキーワードのカウント
     for (const w of words) {
       counts.set(w, (counts.get(w) || 0) + 1);
     }
-    
-    // マージ（OCR・音声データの重要度を優先）
-    ocrAudioCounts.forEach((count, word) => {
-      counts.set(word, (counts.get(word) || 0) + count);
-    });
-    
+    return counts;
+  };
+
+  const getTopWords = (words: string[], ocrAudioWords: string[], limit: number = 30): string[] => {
+    const counts = buildWordCountMap(words, ocrAudioWords);
     return Array.from(counts.entries())
-      .sort((a: any, b: any) => b[1] - a[1])
+      .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
-      .map((entry: any) => entry[0]);
+      .map(([word]) => word);
+  };
+
+  const getTopWordsWithCount = (
+    words: string[],
+    ocrAudioWords: string[],
+    limit: number = 30
+  ): Array<{ word: string; count: number }> => {
+    const counts = buildWordCountMap(words, ocrAudioWords);
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([word, count]) => ({ word, count }));
   };
 
   const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30);
 
-  // per-video の sentiment + keywords から感情ワードを集計（LLMなし）
+  // per-video の sentiment + keywords から感情ワードを集計（後方互換）
   const positiveVideoKeywords: string[] = [];
   const negativeVideoKeywords: string[] = [];
   for (const video of videosData) {
@@ -523,6 +530,98 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   }
   const positiveWords = getTopWords(positiveVideoKeywords, [], 15);
   const negativeWords = getTopWords(negativeVideoKeywords, [], 15);
+
+  // LLMで頻出ワードに感情座標をアノテーション
+  // valence: Y軸 -1(悲/怒) → +1(喜/楽)
+  // arousal: X軸 -1(穏/受動) → +1(興奮/能動)
+  // sources: 将来的にOCR/音声/モーダル分析ソースを記録できるよう拡張可能
+  type EmotionWordSource = "keyword" | "ocr" | "transcription" | "modal";
+  type EmotionWord = {
+    word: string;
+    count: number;
+    valence: number;
+    arousal: number;
+    sources: EmotionWordSource[];
+  };
+
+  let emotionWords: EmotionWord[] = [];
+  try {
+    const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 30);
+    if (wordsWithCount.length > 0) {
+      const wordList = wordsWithCount.map(w => w.word).join("、");
+      const annotationRes = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: "あなたはTikTok日本語コンテンツの感情分析専門家です。必ずJSONで返答してください。",
+          },
+          {
+            role: "user",
+            content: `以下のワードリストに対して、TikTok日本語コンテキストに基づき感情座標を付与してください。
+
+座標定義:
+- valence: -1.0〜1.0（感情価：+1=喜び・楽しさ・嬉しさ、-1=悲しみ・怒り・不快）
+- arousal: -1.0〜1.0（感情強度：+1=興奮・激しい・熱量高い、-1=穏やか・落ち着き・静的）
+
+象限の目安:
+- 右上（喜興奮）: 「最高」「神」「ワクワク」→ valence:+0.9 arousal:+0.8
+- 左上（楽穏）:  「癒し」「好き」「ありがとう」→ valence:+0.8 arousal:-0.6
+- 右下（怒活性）: 「ムカつく」「なんで」「ひどい」→ valence:-0.8 arousal:+0.7
+- 左下（哀沈静）: 「悲しい」「寂しい」「残念」→ valence:-0.7 arousal:-0.4
+- 中央（中立）:  「動画」「紹介」「情報」→ valence:0.0 arousal:0.0
+
+対象ワード: ${wordList}`,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "emotion_annotation",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                annotations: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      word: { type: "string" },
+                      valence: { type: "number" },
+                      arousal: { type: "number" },
+                    },
+                    required: ["word", "valence", "arousal"],
+                    additionalProperties: false,
+                  },
+                },
+              },
+              required: ["annotations"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const annotationContent = typeof annotationRes.choices[0].message.content === "string"
+        ? annotationRes.choices[0].message.content
+        : JSON.stringify(annotationRes.choices[0].message.content);
+      const parsed = JSON.parse(annotationContent || "{}");
+      const annotationMap = new Map<string, { valence: number; arousal: number }>(
+        (parsed.annotations || []).map((a: any) => [a.word, { valence: a.valence, arousal: a.arousal }])
+      );
+
+      emotionWords = wordsWithCount.map(({ word, count }) => {
+        const annotation = annotationMap.get(word) ?? { valence: 0, arousal: 0 };
+        // ソースはキーワード由来。将来OCR/音声/モーダルも追加可能
+        const sources: EmotionWordSource[] = ["keyword"];
+        if (ocrAndAudioKeywords.includes(word)) sources.push("ocr");
+        return { word, count, ...annotation, sources };
+      });
+    }
+  } catch (error) {
+    console.error("[Report] Error annotating emotion words:", error);
+    emotionWords = [];
+  }
 
   // LLMで自動インサイト（1段落サマリー）を生成
   let autoInsight: string = "";
@@ -686,6 +785,7 @@ JSON形式で返してください。
     negativeEngagementShare,
     positiveWords,
     negativeWords,
+    emotionWords,
     autoInsight,
     keyInsights,
     facets,
