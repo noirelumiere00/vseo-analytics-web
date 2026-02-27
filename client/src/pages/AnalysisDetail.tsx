@@ -182,20 +182,33 @@ export default function AnalysisDetail() {
     };
 
     // エンゲージメントシェア
-    const posEngagement = posVideos.reduce((sum, v) => 
+    const posEngagement = posVideos.reduce((sum, v) =>
       sum + (Number(v.likeCount) || 0) + (Number(v.commentCount) || 0) + (Number(v.shareCount) || 0), 0
     );
-    const negEngagement = negVideos.reduce((sum, v) => 
+    const negEngagement = negVideos.reduce((sum, v) =>
       sum + (Number(v.likeCount) || 0) + (Number(v.commentCount) || 0) + (Number(v.shareCount) || 0), 0
     );
     const posNegEngagementTotal = posEngagement + negEngagement;
-    
+
     const engagementShare = {
       positive: posNegEngagementTotal > 0 ? ((posEngagement / posNegEngagementTotal) * 100).toFixed(1) : "0",
       negative: posNegEngagementTotal > 0 ? ((negEngagement / posNegEngagementTotal) * 100).toFixed(1) : "0",
       positiveTotal: posEngagement,
       negativeTotal: negEngagement,
     };
+
+    // 1本あたりの平均再生数（Pos/Neg）
+    const avgViewsPos = posVideos.length > 0 ? posViews / posVideos.length : 0;
+    const avgViewsNeg = negVideos.length > 0 ? negViews / negVideos.length : 0;
+
+    // 1本あたりの平均ER%（Pos/Neg）
+    const calcER = (v: any) => {
+      const views = Number(v.viewCount) || 0;
+      if (views === 0) return 0;
+      return ((Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0)) / views * 100;
+    };
+    const avgERPos = posVideos.length > 0 ? posVideos.reduce((s, v) => s + calcER(v), 0) / posVideos.length : 0;
+    const avgERNeg = negVideos.length > 0 ? negVideos.reduce((s, v) => s + calcER(v), 0) / negVideos.length : 0;
 
     // 頻出キーワード（Positive/Negative別）
     const positiveKeywords: string[] = [];
@@ -228,6 +241,10 @@ export default function AnalysisDetail() {
       positiveWords: getTopWords(positiveKeywords, 12),
       negativeWords: getTopWords(negativeKeywords, 12),
       posNegTotal,
+      avgViewsPos,
+      avgViewsNeg,
+      avgERPos,
+      avgERNeg,
     };
   }, [data]);
 
@@ -780,6 +797,79 @@ export default function AnalysisDetail() {
                             <span className="font-bold">{reportStats.engagementShare.negative}%</span>
                           </div>
                           <Progress value={Number(reportStats.engagementShare.negative)} className="h-2 bg-red-100 [&>div]:bg-red-500" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 平均指標比較（1本あたり）*/}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    {/* 平均再生数 */}
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">平均再生数（1本あたり）</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm flex items-center gap-1">
+                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
+                            </span>
+                            <span className="font-bold">{formatNumber(Math.round(reportStats.avgViewsPos))}</span>
+                          </div>
+                          <Progress
+                            value={reportStats.avgViewsPos + reportStats.avgViewsNeg > 0
+                              ? (reportStats.avgViewsPos / (reportStats.avgViewsPos + reportStats.avgViewsNeg)) * 100
+                              : 0}
+                            className="h-2 bg-green-100 [&>div]:bg-green-500"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm flex items-center gap-1">
+                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
+                            </span>
+                            <span className="font-bold">{formatNumber(Math.round(reportStats.avgViewsNeg))}</span>
+                          </div>
+                          <Progress
+                            value={reportStats.avgViewsPos + reportStats.avgViewsNeg > 0
+                              ? (reportStats.avgViewsNeg / (reportStats.avgViewsPos + reportStats.avgViewsNeg)) * 100
+                              : 0}
+                            className="h-2 bg-red-100 [&>div]:bg-red-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 平均ER% */}
+                    <div className="p-4 border rounded-lg">
+                      <h4 className="font-semibold mb-3 text-sm text-muted-foreground">平均エンゲージメント率（1本あたり）</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm flex items-center gap-1">
+                              <TrendingUp className="h-4 w-4 text-green-500" />Positive
+                            </span>
+                            <span className="font-bold">{reportStats.avgERPos.toFixed(2)}%</span>
+                          </div>
+                          <Progress
+                            value={reportStats.avgERPos + reportStats.avgERNeg > 0
+                              ? (reportStats.avgERPos / (reportStats.avgERPos + reportStats.avgERNeg)) * 100
+                              : 0}
+                            className="h-2 bg-green-100 [&>div]:bg-green-500"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm flex items-center gap-1">
+                              <TrendingDown className="h-4 w-4 text-red-500" />Negative
+                            </span>
+                            <span className="font-bold">{reportStats.avgERNeg.toFixed(2)}%</span>
+                          </div>
+                          <Progress
+                            value={reportStats.avgERPos + reportStats.avgERNeg > 0
+                              ? (reportStats.avgERNeg / (reportStats.avgERPos + reportStats.avgERNeg)) * 100
+                              : 0}
+                            className="h-2 bg-red-100 [&>div]:bg-red-500"
+                          />
                         </div>
                       </div>
                     </div>
