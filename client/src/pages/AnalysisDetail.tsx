@@ -197,6 +197,22 @@ export default function AnalysisDetail() {
       negativeTotal: negEngagement,
     };
 
+    // エンゲージメント内訳（Pos/Neg別、いいね/コメント/シェア/保存）
+    const posLikes    = posVideos.reduce((s, v) => s + (Number(v.likeCount)    || 0), 0);
+    const negLikes    = negVideos.reduce((s, v) => s + (Number(v.likeCount)    || 0), 0);
+    const posComments = posVideos.reduce((s, v) => s + (Number(v.commentCount) || 0), 0);
+    const negComments = negVideos.reduce((s, v) => s + (Number(v.commentCount) || 0), 0);
+    const posShares   = posVideos.reduce((s, v) => s + (Number(v.shareCount)   || 0), 0);
+    const negShares   = negVideos.reduce((s, v) => s + (Number(v.shareCount)   || 0), 0);
+    const posSaves    = posVideos.reduce((s, v) => s + (Number(v.saveCount)    || 0), 0);
+    const negSaves    = negVideos.reduce((s, v) => s + (Number(v.saveCount)    || 0), 0);
+    const engBreakdown = {
+      likes:    { pos: posLikes,    neg: negLikes,    total: posLikes    + negLikes    },
+      comments: { pos: posComments, neg: negComments, total: posComments + negComments },
+      shares:   { pos: posShares,   neg: negShares,   total: posShares   + negShares   },
+      saves:    { pos: posSaves,    neg: negSaves,    total: posSaves    + negSaves    },
+    };
+
     // 1本あたりの平均再生数（Pos/Neg）
     const avgViewsPos = posVideos.length > 0 ? posViews / posVideos.length : 0;
     const avgViewsNeg = negVideos.length > 0 ? negViews / negVideos.length : 0;
@@ -245,6 +261,7 @@ export default function AnalysisDetail() {
       avgViewsNeg,
       avgERPos,
       avgERNeg,
+      engBreakdown,
     };
   }, [data]);
 
@@ -872,6 +889,46 @@ export default function AnalysisDetail() {
                           />
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* エンゲージメント内訳 */}
+                  <div className="mt-6">
+                    <h4 className="font-semibold mb-3 text-sm text-muted-foreground">エンゲージメント内訳（Pos / Neg 別）</h4>
+                    <div className="space-y-3">
+                      {([
+                        { label: "いいね",   icon: "❤️", key: "likes"    },
+                        { label: "コメント", icon: "💬", key: "comments" },
+                        { label: "シェア",   icon: "🔁", key: "shares"   },
+                        { label: "保存",     icon: "🔖", key: "saves"    },
+                      ] as const).map(({ label, icon, key }) => {
+                        const d = reportStats.engBreakdown[key];
+                        const posShare = d.total > 0 ? (d.pos / d.total) * 100 : 0;
+                        return (
+                          <div key={key} className="p-3 border rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">{icon} {label}</span>
+                              <span className="text-xs text-muted-foreground">合計 {formatNumber(d.total)}</span>
+                            </div>
+                            <div className="flex gap-1 h-3 rounded overflow-hidden">
+                              <div
+                                style={{ width: `${posShare}%` }}
+                                className="bg-green-500 transition-all"
+                                title={`Positive: ${formatNumber(d.pos)}`}
+                              />
+                              <div
+                                style={{ width: `${100 - posShare}%` }}
+                                className="bg-red-400 transition-all"
+                                title={`Negative: ${formatNumber(d.neg)}`}
+                              />
+                            </div>
+                            <div className="flex justify-between text-xs mt-1 text-muted-foreground">
+                              <span className="text-green-600">Pos: {formatNumber(d.pos)}</span>
+                              <span className="text-red-500">Neg: {formatNumber(d.neg)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
