@@ -299,6 +299,46 @@ export default function AnalysisDetail() {
       },
     };
 
+    // 自動インサイト文
+    const dominantSentiment =
+      sentimentCounts.positive >= sentimentCounts.negative &&
+      sentimentCounts.positive >= sentimentCounts.neutral
+        ? "positive"
+        : sentimentCounts.negative >= sentimentCounts.positive &&
+          sentimentCounts.negative >= sentimentCounts.neutral
+        ? "negative"
+        : "neutral";
+
+    const sentimentLabel = { positive: "Positive（ポジティブ）", negative: "Negative（ネガティブ）", neutral: "Neutral（中立）" }[dominantSentiment];
+    const dominantPct = sentimentPercentages[dominantSentiment];
+
+    let insightLines: string[] = [];
+    insightLines.push(
+      `全${totalVideos}本中、${sentimentLabel} が ${dominantPct}% と最多を占めています。`
+    );
+
+    if (avgERPos > 0 && avgERNeg > 0) {
+      const erDiff = Math.abs(avgERPos - avgERNeg);
+      if (erDiff > 0.1) {
+        const higherLabel = avgERPos > avgERNeg ? "Positive" : "Negative";
+        const higherVal   = avgERPos > avgERNeg ? avgERPos   : avgERNeg;
+        const lowerVal    = avgERPos > avgERNeg ? avgERNeg   : avgERPos;
+        insightLines.push(
+          `エンゲージメント率は ${higherLabel} 動画が ${higherVal.toFixed(2)}% と、${avgERPos > avgERNeg ? "Negative" : "Positive"} (${lowerVal.toFixed(2)}%) より高く、コンテンツの質と反応が連動しています。`
+        );
+      } else {
+        insightLines.push("Positive・Negative 間でエンゲージメント率に大きな差はありません。");
+      }
+    }
+
+    if (topHashtagsPos.length > 0) {
+      insightLines.push(
+        `Positive 動画で頻出のハッシュタグは「#${topHashtagsPos[0].word}」など。積極的に活用することで肯定的な露出拡大が見込めます。`
+      );
+    }
+
+    const autoInsight = insightLines.join(" ");
+
     // Pos/Neg別 ハッシュタグ Top5
     const positiveHashtags: string[] = [];
     const negativeHashtags: string[] = [];
@@ -337,6 +377,7 @@ export default function AnalysisDetail() {
       topHashtagsPos,
       topHashtagsNeg,
       threeWay,
+      autoInsight,
     };
   }, [data]);
 
@@ -777,6 +818,14 @@ export default function AnalysisDetail() {
                       <div className="text-xs text-muted-foreground mt-2">保存数</div>
                     </div>
                   </div>
+                </div>
+
+                {/* 自動インサイト */}
+                <div className="p-4 rounded-lg bg-indigo-50 border border-indigo-200">
+                  <h3 className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
+                    <Star className="h-4 w-4" /> 自動インサイト
+                  </h3>
+                  <p className="text-sm text-indigo-900 leading-relaxed">{reportStats.autoInsight}</p>
                 </div>
 
                 {/* センチメント構成比（円グラフ） */}
