@@ -616,10 +616,10 @@ export default function AnalysisDetail() {
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
-            <Card className="border-2 border-yellow-400">
+            <Card className="border-2 border-blue-300">
               <CardHeader>
                 <CardTitle className="text-2xl flex items-center gap-2">
-                  <Search className="h-6 w-6 text-yellow-500" />
+                  <Search className="h-6 w-6 text-blue-500" />
                   重複度分析
                 </CardTitle>
               </CardHeader>
@@ -636,10 +636,10 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 重複度分析結果 */}
-                <div className="grid grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
-                    <Star className="h-6 w-6 text-yellow-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-yellow-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
+                  <div className="text-center p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+                    <Star className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                    <div className="text-3xl font-bold text-blue-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
                     <div className="text-xs text-muted-foreground mt-1">3回全出現<br/>(勝ちパターン)</div>
                   </div>
                   <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -652,11 +652,6 @@ export default function AnalysisDetail() {
                     <div className="text-3xl font-bold text-gray-500">{tripleSearch.duplicateAnalysis.appearedIn1OnlyCount}</div>
                     <div className="text-xs text-muted-foreground mt-1">1回のみ<br/>(パーソナライズ)</div>
                   </div>
-                  <div className="text-center p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-purple-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-purple-600">{tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</div>
-                    <div className="text-xs text-muted-foreground mt-1">重複率</div>
-                  </div>
                 </div>
 
                 {/* グループ別統計比較 */}
@@ -665,7 +660,7 @@ export default function AnalysisDetail() {
                     <div className="text-sm font-semibold text-muted-foreground py-2">グループ別統計比較</div>
                     <div className="grid grid-cols-3 gap-3">
                       {[
-                        { label: "3回出現", stats: groupStats.all3, bg: "bg-yellow-50", border: "border-yellow-300", text: "text-yellow-700" },
+                        { label: "3回出現", stats: groupStats.all3, bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
                         { label: "2回出現", stats: groupStats.in2, bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
                         { label: "1回のみ", stats: groupStats.in1, bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600" },
                       ].map(({ label, stats, bg, border, text }) => (
@@ -692,7 +687,7 @@ export default function AnalysisDetail() {
                 )}
 
                 {/* 重複率サマリー + LLM共通点分析 */}
-                <div className="p-4 bg-amber-50 border-l-4 border-amber-500 rounded space-y-3">
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 rounded space-y-3">
                   <p className="text-sm">
                     <strong>重複率 {tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</strong> - 
                     {tripleSearch.duplicateAnalysis.overlapRate >= 80 
@@ -706,46 +701,46 @@ export default function AnalysisDetail() {
                   {/* LLM共通点分析 - アコーディオン */}
                   {tripleSearch.commonalityAnalysis && (
                     <Accordion type="single" collapsible className="w-full">
-                      <AccordionItem value="commonality" className="border-amber-300">
-                        <AccordionTrigger className="text-sm font-semibold text-amber-800 hover:no-underline py-2">
+                      <AccordionItem value="commonality" className="border-blue-200">
+                        <AccordionTrigger className="text-sm font-semibold text-blue-800 hover:no-underline py-2">
                           <span className="flex items-center gap-2">
-                            <Star className="h-4 w-4 text-amber-600" />
+                            <Star className="h-4 w-4 text-blue-500" />
                             勝ちパターン動画の共通点分析
                           </span>
                         </AccordionTrigger>
                         <AccordionContent>
                           <div className="space-y-4 pt-2">
                             {/* 総括 */}
-                            <div className="p-3 bg-white/70 rounded-lg border border-amber-200">
-                              <p className="text-sm font-medium text-amber-900">
+                            <div className="p-3 bg-white rounded-lg border border-blue-100">
+                              <p className="text-sm font-medium text-slate-800">
                                 {tripleSearch.commonalityAnalysis.summary}
                               </p>
                             </div>
 
                             {/* 分析項目 */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div className="p-3 bg-white/50 rounded-lg">
-                                <div className="text-xs font-semibold text-amber-700 mb-1">🎣 共通キーフック</div>
+                              <div className="p-3 bg-slate-50 rounded-lg">
+                                <div className="text-xs font-semibold text-blue-700 mb-1">🎣 共通キーフック</div>
                                 <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.keyHook}</p>
                               </div>
-                              <div className="p-3 bg-white/50 rounded-lg">
-                                <div className="text-xs font-semibold text-amber-700 mb-1">📋 コンテンツ傾向</div>
+                              <div className="p-3 bg-slate-50 rounded-lg">
+                                <div className="text-xs font-semibold text-blue-700 mb-1">📋 コンテンツ傾向</div>
                                 <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.contentTrend}</p>
                               </div>
-                              <div className="p-3 bg-white/50 rounded-lg">
-                                <div className="text-xs font-semibold text-amber-700 mb-1">🎬 フォーマット特徴</div>
+                              <div className="p-3 bg-slate-50 rounded-lg">
+                                <div className="text-xs font-semibold text-blue-700 mb-1">🎬 フォーマット特徴</div>
                                 <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.formatFeatures}</p>
                               </div>
-                              <div className="p-3 bg-white/50 rounded-lg">
-                                <div className="text-xs font-semibold text-amber-700 mb-1"># ハッシュタグ戦略</div>
+                              <div className="p-3 bg-slate-50 rounded-lg">
+                                <div className="text-xs font-semibold text-blue-700 mb-1"># ハッシュタグ戦略</div>
                                 <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.hashtagStrategy}</p>
                               </div>
                             </div>
 
                             {/* VSEO攻略ポイント */}
-                            <div className="p-3 bg-gradient-to-r from-amber-100 to-yellow-100 rounded-lg border border-amber-300">
-                              <div className="text-xs font-semibold text-amber-800 mb-1">💡 VSEO攻略ポイント</div>
-                              <p className="text-sm text-amber-900 font-medium">{tripleSearch.commonalityAnalysis.vseoTips}</p>
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="text-xs font-semibold text-blue-700 mb-1">💡 VSEO攻略ポイント</div>
+                              <p className="text-sm text-blue-900 font-medium">{tripleSearch.commonalityAnalysis.vseoTips}</p>
                             </div>
                           </div>
                         </AccordionContent>
@@ -768,28 +763,28 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-purple-50 rounded-lg">
-                      <div className="text-3xl font-bold text-purple-600">{reportStats.totalVideos}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{reportStats.totalVideos}</div>
                       <div className="text-xs text-muted-foreground mt-2">総動画数</div>
                     </div>
-                    <div className="text-center p-4 bg-blue-50 rounded-lg">
-                      <div className="text-3xl font-bold text-blue-600">{formatNumber(reportStats.totalViews)}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{formatNumber(reportStats.totalViews)}</div>
                       <div className="text-xs text-muted-foreground mt-2">総再生数</div>
                     </div>
-                    <div className="text-center p-4 bg-red-50 rounded-lg">
-                      <div className="text-3xl font-bold text-red-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
                       <div className="text-xs text-muted-foreground mt-2">いいね数</div>
                     </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                      <div className="text-3xl font-bold text-green-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
                       <div className="text-xs text-muted-foreground mt-2">コメント数</div>
                     </div>
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                      <div className="text-3xl font-bold text-yellow-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
                       <div className="text-xs text-muted-foreground mt-2">シェア数</div>
                     </div>
-                    <div className="text-center p-4 bg-indigo-50 rounded-lg">
-                      <div className="text-3xl font-bold text-indigo-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
+                    <div className="text-center p-4 bg-slate-50 rounded-lg">
+                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
                       <div className="text-xs text-muted-foreground mt-2">保存数</div>
                     </div>
                   </div>
@@ -882,11 +877,11 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 自動インサイト */}
-                <div className="p-4 rounded-lg bg-indigo-50 border border-indigo-200">
-                  <h3 className="text-sm font-semibold text-indigo-700 mb-1 flex items-center gap-1">
+                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                  <h3 className="text-sm font-semibold text-blue-700 mb-1 flex items-center gap-1">
                     <Star className="h-4 w-4" /> 自動インサイト
                   </h3>
-                  <p className="text-sm text-indigo-900 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+                  <p className="text-sm text-blue-900 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
                 </div>
 
                 {/* インパクト分析（常時表示） */}
@@ -971,7 +966,7 @@ export default function AnalysisDetail() {
 
                   {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
                   {data && data.report && (
-                    <AccordionItem value="aspects" className="border rounded-xl overflow-hidden">
+                    <AccordionItem value="aspects" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                         動画マクロ分析
                       </AccordionTrigger>
@@ -1003,7 +998,7 @@ export default function AnalysisDetail() {
 
                   {/* 動画ミクロ分析（マーケティング施策提案） */}
                   {data && data.report && (
-                    <AccordionItem value="micro-analysis" className="border rounded-xl overflow-hidden">
+                    <AccordionItem value="micro-analysis" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                         動画ミクロ分析
                       </AccordionTrigger>
@@ -1021,7 +1016,7 @@ export default function AnalysisDetail() {
                   )}
 
                   {/* エンゲージメント詳細 */}
-                  <AccordionItem value="engagement-detail" className="border rounded-xl overflow-hidden">
+                  <AccordionItem value="engagement-detail" className="border rounded-xl">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                       ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / ハッシュタグ）
                     </AccordionTrigger>
