@@ -36,10 +36,19 @@ export interface VideoMetadata {
 /**
  * TikTokスクレイピングデータから動画を分析（実データ）
  */
+export type SentimentInput = {
+  title: string;
+  description: string;
+  hashtags: string[];
+  ocrTexts: string[];
+  transcriptionText: string;
+};
+
 export async function analyzeVideoFromTikTok(
   jobId: number,
-  tiktokVideo: TikTokVideo
-): Promise<void> {
+  tiktokVideo: TikTokVideo,
+  options?: { skipSentiment?: boolean }
+): Promise<{ dbVideoId: number; sentimentInput: SentimentInput }> {
   console.log(`[Analysis] Analyzing TikTok video: ${tiktokVideo.id} by @${tiktokVideo.author.uniqueId}`);
 
   const videoUrl = `https://www.tiktok.com/@${tiktokVideo.author.uniqueId}/video/${tiktokVideo.id}`;
@@ -78,7 +87,7 @@ export async function analyzeVideoFromTikTok(
     });
   }
 
-  // 3. 音声文字起こし - 説明文をベースにLLMで推定
+  // 3. 音声文字起こし - 説明文をベースに推定
   console.log(`[Analysis] Performing transcription for video ${tiktokVideo.id}...`);
   const transcription = await performTranscriptionFromDesc(tiktokVideo.desc);
   await db.createTranscription({
@@ -87,21 +96,24 @@ export async function analyzeVideoFromTikTok(
     language: transcription.language,
   });
 
-  // 4. センチメント分析とキーワード抽出（実データベース）
-  console.log(`[Analysis] Analyzing sentiment for video ${tiktokVideo.id}...`);
-  const sentimentResult = await analyzeSentimentAndKeywords({
+  const sentimentInput: SentimentInput = {
     title: tiktokVideo.desc.substring(0, 200),
     description: tiktokVideo.desc,
     hashtags: tiktokVideo.hashtags,
     ocrTexts: ocrResults.map(r => r.extractedText),
     transcriptionText: transcription.fullText,
-  });
+  };
 
-  await db.updateVideo(videoId, {
-    sentiment: sentimentResult.sentiment,
-    keyHook: sentimentResult.keyHook,
-    keywords: sentimentResult.keywords,
-  });
+  // 4. センチメント分析（skipSentiment=trueの場合はバッチ処理側で行う）
+  if (!options?.skipSentiment) {
+    console.log(`[Analysis] Analyzing sentiment for video ${tiktokVideo.id}...`);
+    const sentimentResult = await analyzeSentimentAndKeywords(sentimentInput);
+    await db.updateVideo(videoId, {
+      sentiment: sentimentResult.sentiment,
+      keyHook: sentimentResult.keyHook,
+      keywords: sentimentResult.keywords,
+    });
+  }
 
   // 5. スコアリング（ルールベース・LLM不使用）
   console.log(`[Analysis] Calculating scores for video ${tiktokVideo.id}...`);
@@ -123,6 +135,7 @@ export async function analyzeVideoFromTikTok(
   });
 
   console.log(`[Analysis] Completed analysis for TikTok video: ${tiktokVideo.id}`);
+  return { dbVideoId: videoId, sentimentInput };
 }
 
 /**
@@ -294,6 +307,77 @@ JSON形式で返してください。
   } catch (error) {
     console.error("[Sentiment Analysis] Error:", error);
     return { sentiment: "neutral", keyHook: "", keywords: [] };
+  }
+}
+
+/**
+ * センチメント分析バッチ版（最大5本を1回のLLM呼び出しで処理）
+ */
+export async function analyzeSentimentAndKeywordsBatch(
+  inputs: Array<{
+    title: string;
+    description: string;
+    hashtags: string[];
+    ocrTexts: string[];
+    transcriptionText: string;
+  }>
+): Promise<Array<{ sentiment: "positive" | "neutral" | "negative"; keyHook: string; keywords: string[] }>> {
+  if (inputs.length === 0) return [];
+
+  const videoList = inputs.map((v, i) =>
+    `[動画${i}] 説明: ${v.description.substring(0, 150)} ハッシュタグ: ${v.hashtags.slice(0, 5).join(" ")}`
+  ).join("\n");
+
+  try {
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a sentiment analysis expert for TikTok videos. Always respond in valid JSON format." },
+        {
+          role: "user",
+          content: `以下の${inputs.length}本のTikTok動画それぞれについて、sentiment・keyHook・keywordsを分析してください。\n\n${videoList}\n\n各動画のindexに対応する結果をresults配列で返してください。`,
+        },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "sentiment_batch",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              results: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    index: { type: "number" },
+                    sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
+                    keyHook: { type: "string" },
+                    keywords: { type: "array", items: { type: "string" } },
+                  },
+                  required: ["index", "sentiment", "keyHook", "keywords"],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ["results"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === "string"
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = JSON.parse(content || "{}");
+    const resultMap = new Map<number, { sentiment: "positive"|"neutral"|"negative"; keyHook: string; keywords: string[] }>(
+      (parsed.results || []).map((r: any) => [r.index, { sentiment: r.sentiment || "neutral", keyHook: r.keyHook || "", keywords: r.keywords || [] }])
+    );
+    return inputs.map((_, i) => resultMap.get(i) ?? { sentiment: "neutral", keyHook: "", keywords: [] });
+  } catch (error) {
+    console.error("[Sentiment Batch] Error:", error);
+    return inputs.map(() => ({ sentiment: "neutral", keyHook: "", keywords: [] }));
   }
 }
 
