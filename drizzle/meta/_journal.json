@@ -57,6 +57,13 @@
       "when": 1772180090163,
       "tag": "0007_ancient_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1772182073267,
+      "tag": "0008_sharp_killer_shrike",
+      "breakpoints": true
     }
   ]
 }
