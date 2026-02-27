@@ -19,7 +19,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection } from '@/components/ReportSection';
-import { FrequentWordsCloud } from '@/components/FrequentWordsCloud';
 import { filterAdHashtags } from "@shared/const";
 
 export default function AnalysisDetail() {
@@ -994,11 +993,11 @@ export default function AnalysisDetail() {
                 {/* 詳細分析アコーディオン（3項目） */}
                 <Accordion type="multiple" className="space-y-2">
 
-                  {/* 1: 側面分析・強み弱み */}
+                  {/* 動画マクロ分析（側面分析・頻出ワード・マーケティング施策） */}
                   {data && data.report && (
                     <AccordionItem value="aspects" className="border rounded-xl overflow-hidden">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        🔍 側面分析・強み弱み
+                        動画マクロ分析
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <ReportSection
@@ -1023,19 +1022,6 @@ export default function AnalysisDetail() {
                             negative: reportStats.sentimentCounts.negative || 0,
                             neutral: reportStats.sentimentCounts.neutral || 0,
                           }}
-                        />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* 2: 頻出ワード分析 */}
-                  {reportStats && (reportStats.positiveWords.length > 0 || reportStats.negativeWords.length > 0) && (
-                    <AccordionItem value="words" className="border rounded-xl overflow-hidden">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        🔤 頻出ワード分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 pt-2">
-                        <FrequentWordsCloud
                           positiveWords={reportStats.positiveWords}
                           negativeWords={reportStats.negativeWords}
                         />

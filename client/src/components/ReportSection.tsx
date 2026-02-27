@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { FrequentWordsCloud } from "./FrequentWordsCloud";
 
 // Types
 interface Aspect {
@@ -15,6 +16,11 @@ interface Proposal {
   icon: string;
 }
 
+interface WordData {
+  word: string;
+  count: number;
+}
+
 interface ReportSectionProps {
   keyword: string;
   date: string;
@@ -27,6 +33,8 @@ interface ReportSectionProps {
     negative: number;
     neutral: number;
   };
+  positiveWords?: WordData[];
+  negativeWords?: WordData[];
 }
 
 // Components
@@ -297,7 +305,7 @@ function AspectRow({ aspect, index }: { aspect: Aspect; index: number }) {
 function PriorityBadge({ priority }: { priority: "高" | "中" | "低" }) {
   const map = {
     高: { bg: "#fef2f2", color: "#c0392b", border: "#fecaca" },
-    中: { bg: "#fffbeb", color: "#b45309", border: "#fde68a" },
+    中: { bg: "#e8f0fa", color: "#2e75b6", border: "#bfdbfe" },
     低: { bg: "#f0f9ff", color: "#2563eb", border: "#bfdbfe" },
   };
   const s = map[priority];
@@ -373,10 +381,14 @@ export function ReportSection({
   aspects,
   proposals,
   sentimentData,
+  positiveWords = [],
+  negativeWords = [],
 }: ReportSectionProps) {
   const avgPositive = Math.round(
     aspects.reduce((sum, a) => sum + a.pos, 0) / aspects.length
   );
+
+  const hasWords = positiveWords.length > 0 || negativeWords.length > 0;
 
   return (
     <div
@@ -387,7 +399,7 @@ export function ReportSection({
       {/* Content */}
       <div style={{ padding: "0 24px" }}>
 
-        {/* Keyword Display Section */}
+        {/* ① 側面分析・強み弱みサマリー */}
         <Accordion
           number="1"
           title="側面分析・強み弱みサマリー"
@@ -501,10 +513,25 @@ export function ReportSection({
           </div>
         </Accordion>
 
+        {/* ② 頻出ワード分析 */}
+        {hasWords && (
+          <Accordion
+            number="2"
+            title="頻出ワード分析"
+            badge={{ text: `${positiveWords.length + negativeWords.length} WORDS`, color: "#2e75b6", bg: "#e8f0fa" }}
+          >
+            <FrequentWordsCloud
+              positiveWords={positiveWords}
+              negativeWords={negativeWords}
+            />
+          </Accordion>
+        )}
+
+        {/* ③ マーケティング施策提案 */}
         <Accordion
-          number="2"
+          number={hasWords ? "3" : "2"}
           title="マーケティング施策提案"
-          badge={{ text: `${proposals.length} ACTIONS`, color: "#b45309", bg: "#fffbeb" }}
+          badge={{ text: `${proposals.length} ACTIONS`, color: "#2e75b6", bg: "#e8f0fa" }}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {proposals.map((p, i) => (
@@ -570,30 +597,6 @@ export function ReportSection({
                 </div>
               </div>
             ))}
-          </div>
-        </Accordion>
-
-        <Accordion number="3" title="データソースと留意事項">
-          <div
-            style={{
-              padding: 16,
-              borderRadius: 12,
-              background: "#f8f9fb",
-              border: "1px solid #edf0f4",
-              fontSize: 13,
-              color: "#6b7a8d",
-              lineHeight: 1.8,
-            }}
-          >
-            <p style={{ margin: "0 0 8px" }}>
-              本レポートは、{platform}の <strong style={{ color: "#1a2a3a" }}>#{keyword}</strong>{" "}
-              ハッシュタグにおける上位表示動画{videoCount}本のテキストデータを基に、LLMによる側面抽出・感情分析を行った結果です。
-            </p>
-            <p style={{ margin: 0 }}>
-              サンプルサイズが限定的であるため、信頼度は
-              <strong style={{ color: "#b45309" }}>「中程度」</strong>
-              としています。より正確な分析のためには、対象動画数の拡大やYouTube・Instagram等の他プラットフォームのデータを併用することを推奨します。
-            </p>
           </div>
         </Accordion>
 
