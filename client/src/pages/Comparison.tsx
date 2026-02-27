@@ -8,7 +8,6 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
-import { useAuth as useAuthHook } from "@/_core/hooks/useAuth";
 
 // ==============================
 // Helper: 数値デルタ表示
