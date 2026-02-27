@@ -212,25 +212,7 @@ export default function AnalysisDetail() {
       saves:    { pos: posSaves,    neg: negSaves,    total: posSaves    + negSaves    },
     };
 
-    // スコア平均（Pos/Neg/Neutral別）
-    const calcAvgScores = (vids: typeof videos) => {
-      const scored = vids.filter(v => v.score != null);
-      if (scored.length === 0) return null;
-      const avg = (fn: (v: typeof vids[0]) => number) =>
-        scored.reduce((s, v) => s + fn(v), 0) / scored.length;
-      return {
-        overall:   avg(v => v.score?.overallScore   ?? 0),
-        thumbnail: avg(v => v.score?.thumbnailScore ?? 0),
-        text:      avg(v => v.score?.textScore      ?? 0),
-        audio:     avg(v => v.score?.audioScore     ?? 0),
-        duration:  avg(v => v.score?.durationScore  ?? 0),
-        count: scored.length,
-      };
-    };
     const neuVideos = videos.filter(v => v.sentiment === "neutral");
-    const scoresByPos = calcAvgScores(posVideos);
-    const scoresByNeg = calcAvgScores(negVideos);
-    const scoresByNeu = calcAvgScores(neuVideos);
 
     // 平均動画時間（Pos/Neg/Neutral別）
     const calcAvgDuration = (vids: typeof videos) => {
@@ -370,9 +352,7 @@ export default function AnalysisDetail() {
       avgDurationPos,
       avgDurationNeg,
       avgDurationNeu,
-      scoresByPos,
-      scoresByNeg,
-      scoresByNeu,
+
       topHashtagsPos,
       topHashtagsNeg,
       threeWay,
@@ -1089,57 +1069,6 @@ export default function AnalysisDetail() {
                           );
                         })()}
                       </div>
-                      {/* スコア別センチメント傾向 */}
-                      {(reportStats.scoresByPos || reportStats.scoresByNeg) && (() => {
-                        const scoreItems = [
-                          { label: "総合",       key: "overall"   as const, color: "text-purple-600" },
-                          { label: "サムネイル", key: "thumbnail" as const, color: "text-blue-600"   },
-                          { label: "テキスト",   key: "text"      as const, color: "text-cyan-600"   },
-                          { label: "音声",       key: "audio"     as const, color: "text-green-600"  },
-                          { label: "尺",         key: "duration"  as const, color: "text-orange-500" },
-                        ];
-                        const groups = [
-                          { label: "Positive", data: reportStats.scoresByPos, textCls: "text-green-600", bgCls: "bg-green-500" },
-                          { label: "Neutral",  data: reportStats.scoresByNeu, textCls: "text-gray-500",  bgCls: "bg-gray-400"  },
-                          { label: "Negative", data: reportStats.scoresByNeg, textCls: "text-red-500",   bgCls: "bg-red-400"   },
-                        ];
-                        return (
-                          <div className="mt-4">
-                            <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">⭐ スコア別センチメント傾向</h4>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-sm">
-                                <thead>
-                                  <tr className="border-b">
-                                    <th className="text-left py-2 pr-4 text-muted-foreground font-medium text-xs">スコア</th>
-                                    {groups.map(g => (
-                                      <th key={g.label} className={`text-center py-2 px-3 font-semibold text-xs ${g.textCls}`}>{g.label}</th>
-                                    ))}
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {scoreItems.map(item => (
-                                    <tr key={item.key} className="border-b last:border-0">
-                                      <td className={`py-2.5 pr-4 font-medium text-xs ${item.color}`}>{item.label}</td>
-                                      {groups.map(g => (
-                                        <td key={g.label} className="text-center py-2.5 px-3">
-                                          {g.data ? (
-                                            <div className="flex flex-col items-center gap-1">
-                                              <span className="font-bold text-sm">{g.data[item.key].toFixed(1)}</span>
-                                              <div className="w-14 h-1.5 bg-muted rounded-full overflow-hidden">
-                                                <div className={`h-full ${g.bgCls} transition-all duration-700`} style={{ width: `${g.data[item.key]}%` }} />
-                                              </div>
-                                            </div>
-                                          ) : <span className="text-muted-foreground text-xs">—</span>}
-                                        </td>
-                                      ))}
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        );
-                      })()}
                       {/* ハッシュタグ Top5 */}
                       {(reportStats.topHashtagsPos.length > 0 || reportStats.topHashtagsNeg.length > 0) && (
                         <div className="mt-4">
