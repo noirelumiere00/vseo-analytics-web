@@ -891,7 +891,7 @@ export default function Comparison() {
           })()}
 
           {/* ---- 動画ミクロ分析（keyInsights）比較 ---- */}
-          {(dataA.report?.keyInsights?.length > 0 || dataB.report?.keyInsights?.length > 0) && (() => {
+          {((dataA.report?.keyInsights?.length ?? 0) > 0 || (dataB.report?.keyInsights?.length ?? 0) > 0) && (() => {
             const insightsA: any[] = (dataA.report as any)?.keyInsights ?? [];
             const insightsB: any[] = (dataB.report as any)?.keyInsights ?? [];
             const maxLen = Math.max(insightsA.length, insightsB.length);
