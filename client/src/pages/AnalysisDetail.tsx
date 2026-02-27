@@ -625,7 +625,7 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
                   {tripleSearch.searches.map((search: any, i: number) => (
                     <div key={i} className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-sm font-medium mb-1">アカウント {i + 1}</div>
@@ -763,29 +763,29 @@ export default function AnalysisDetail() {
                 <div>
                   <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{reportStats.totalVideos}</div>
-                      <div className="text-xs text-muted-foreground mt-2">総動画数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{reportStats.totalVideos}</div>
+                      <div className="text-xs text-black mt-2">総動画数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(reportStats.totalViews)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">総再生数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(reportStats.totalViews)}</div>
+                      <div className="text-xs text-black mt-2">総再生数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">いいね数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">いいね数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">コメント数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">コメント数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">シェア数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">シェア数</div>
                     </div>
-                    <div className="text-center p-4 bg-slate-50 rounded-lg">
-                      <div className="text-3xl font-bold text-slate-600">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-muted-foreground mt-2">保存数</div>
+                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
+                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
+                      <div className="text-xs text-black mt-2">保存数</div>
                     </div>
                   </div>
                 </div>
@@ -1010,6 +1010,11 @@ export default function AnalysisDetail() {
                             priority: (insight.category === "urgent" || insight.category === "risk" ? "高" : "中") as "高" | "中" | "低",
                             icon: insight.category === "risk" ? "⚠️" : insight.category === "urgent" ? "🚨" : "✨",
                           }))}
+                          videos={(data.videos || [])
+                            .slice()
+                            .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
+                            .slice(0, 15)
+                            .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
                         />
                       </AccordionContent>
                     </AccordionItem>
