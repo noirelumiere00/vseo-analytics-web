@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分析詳細ページ - UIモック</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #111; font-size: 14px; }
+  .page { max-width: 900px; margin: 0 auto; padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* カード */
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .card-header { padding: 16px 20px 12px; border-bottom: 1px solid #f0f0f0; }
+  .card-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-desc { font-size: 12px; color: #888; margin-top: 4px; }
+  .card-content { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+  /* バッジ */
+  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  .badge-gray { background: #f3f4f6; color: #374151; }
+
+  /* ジョブ情報カード */
+  .job-meta { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+  .job-keyword { font-size: 20px; font-weight: 800; }
+  .job-info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 12px; }
+  .job-info-item { font-size: 12px; color: #888; }
+  .job-info-item strong { display: block; font-size: 13px; color: #222; font-weight: 600; }
+
+  /* サマリー統計 */
+  .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .stat-card { border-radius: 10px; padding: 14px 12px; text-align: center; }
+  .stat-card .num { font-size: 22px; font-weight: 800; line-height: 1; }
+  .stat-card .label { font-size: 11px; color: #888; margin-top: 6px; }
+  .stat-blue { background: #eff6ff; } .stat-blue .num { color: #2563eb; }
+  .stat-red { background: #fff1f2; } .stat-red .num { color: #dc2626; }
+  .stat-green { background: #f0fdf4; } .stat-green .num { color: #16a34a; }
+  .stat-yellow { background: #fefce8; } .stat-yellow .num { color: #ca8a04; }
+  .stat-indigo { background: #eef2ff; } .stat-indigo .num { color: #4f46e5; }
+
+  /* インサイトバナー */
+  .insight-banner { background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; padding: 14px 16px; }
+  .insight-banner .title { font-size: 12px; font-weight: 700; color: #4338ca; display: flex; align-items: center; gap-4px; margin-bottom: 6px; }
+  .insight-banner p { font-size: 13px; color: #312e81; line-height: 1.6; }
+
+  /* センチメント構成比 */
+  .sentiment-section h3 { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .sentiment-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; }
+  .donut-wrap { position: relative; height: 220px; display: flex; align-items: center; justify-content: center; }
+  .donut-svg { width: 200px; height: 200px; }
+  .donut-center { position: absolute; text-align: center; }
+  .donut-center .big { font-size: 32px; font-weight: 900; line-height: 1; color: #111; }
+  .donut-center .small { font-size: 11px; color: #888; margin-top: 4px; }
+  .sentiment-cards { display: flex; flex-direction: column; gap: 10px; }
+  .sent-card { border-radius: 12px; padding: 14px 16px; border: 1px solid; }
+  .sent-card.pos { background: #f0fdf4; border-color: #bbf7d0; }
+  .sent-card.neu { background: #f9fafb; border-color: #e5e7eb; }
+  .sent-card.neg { background: #fff1f2; border-color: #fecdd3; }
+  .sent-card .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .sent-card .tag { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sent-card.pos .tag { color: #15803d; } .sent-card.neu .tag { color: #6b7280; } .sent-card.neg .tag { color: #dc2626; }
+  .sent-card .pct { font-size: 22px; font-weight: 900; }
+  .sent-card.pos .pct { color: #86efac; } .sent-card.neu .pct { color: #d1d5db; } .sent-card.neg .pct { color: #fca5a5; }
+  .sent-card .bottom { display: flex; align-items: center; gap: 10px; }
+  .sent-card .count { font-size: 18px; font-weight: 700; }
+  .sent-card.pos .count { color: #15803d; } .sent-card.neu .count { color: #6b7280; } .sent-card.neg .count { color: #dc2626; }
+  .bar-track { flex: 1; height: 6px; background: rgba(255,255,255,0.6); border-radius: 9999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 9999px; }
+  .bar-green { background: #22c55e; } .bar-gray { background: #9ca3af; } .bar-red { background: #ef4444; }
+
+  /* アコーディオン */
+  .accordion { display: flex; flex-direction: column; gap: 8px; }
+  .acc-item { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .acc-trigger { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: #fff; cursor: pointer; font-size: 13px; font-weight: 600; text-align: left; transition: background .15s; }
+  .acc-trigger:hover { background: #f9fafb; }
+  .acc-trigger .chevron { transition: transform .25s; color: #9ca3af; font-size: 16px; }
+  .acc-item.open .chevron { transform: rotate(180deg); }
+  .acc-content { display: none; padding: 0 16px 16px; background: #fff; animation: slideDown .2s ease; }
+  .acc-item.open .acc-content { display: block; }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* アコーディオン内コンテンツ */
+  .acc-inner { padding-top: 12px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* 側面分析 内部 */
+  .aspects-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .aspect-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+  .aspect-name { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+  .aspect-bars { display: flex; flex-direction: column; gap: 4px; }
+  .aspect-bar-row { display: flex; align-items: center; gap-6px; font-size: 10px; gap: 6px; }
+  .aspect-bar-row .lbl { width: 36px; color: #888; }
+  .aspect-bar-track { flex: 1; height: 4px; background: #f0f0f0; border-radius: 9999px; overflow: hidden; }
+  .aspect-bar-fill { height: 100%; border-radius: 9999px; }
+  .aspect-bar-row .val { width: 28px; text-align: right; font-weight: 600; }
+  .proposals { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+  .proposal-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 12px; }
+  .proposal-item .icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .proposal-item .area { font-weight: 700; margin-bottom: 2px; }
+  .proposal-item .action { color: #555; }
+  .priority-hi { background: #fff1f2; border-color: #fecdd3; }
+  .priority-mid { background: #fffbeb; border-color: #fde68a; }
+
+  /* 頻出ワード */
+  .word-cloud-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .word-cloud-box { border-radius: 10px; padding: 14px; }
+  .word-cloud-box.pos-box { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .word-cloud-box.neg-box { background: #fff1f2; border: 1px solid #fecdd3; }
+  .word-cloud-title { font-size: 11px; font-weight: 700; margin-bottom: 10px; }
+  .pos-box .word-cloud-title { color: #15803d; }
+  .neg-box .word-cloud-title { color: #dc2626; }
+  .word-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .word-tag { padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; cursor: default; }
+  .word-tag.pos { background: #22c55e; color: #fff; }
+  .word-tag.pos.sm { background: #86efac; color: #14532d; font-size: 11px; }
+  .word-tag.pos.xs { background: #dcfce7; color: #166534; font-size: 10px; }
+  .word-tag.neg { background: #ef4444; color: #fff; }
+  .word-tag.neg.sm { background: #fca5a5; color: #7f1d1d; font-size: 11px; }
+  .word-tag.neg.xs { background: #fee2e2; color: #991b1b; font-size: 10px; }
+
+  /* インパクト分析 */
+  .impact-3way { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .impact-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+  .impact-card h4 { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .impact-row { margin-bottom: 8px; }
+  .impact-row .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 11px; }
+  .impact-row .top-row .lbl { display: flex; align-items: center; gap: 4px; }
+  .impact-row .top-row .val { font-weight: 700; }
+  .progress-track { height: 5px; background: #f0f0f0; border-radius: 9999px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 9999px; }
+  .progress-green { background: #22c55e; }
+  .progress-gray { background: #9ca3af; }
+  .progress-red { background: #ef4444; }
+  .avg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .avg-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+  .avg-card h4 { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .dur-card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-top: 10px; }
+  .dur-card h4 { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .dur-row { margin-bottom: 8px; }
+  .dur-row .top { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+
+  /* エンゲージメント詳細 */
+  .eng-list { display: flex; flex-direction: column; gap: 8px; }
+  .eng-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+  .eng-item .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; font-weight: 600; }
+  .eng-item .top .total { font-size: 11px; color: #888; font-weight: 400; }
+  .eng-bar { display: flex; height: 8px; border-radius: 9999px; overflow: hidden; }
+  .eng-bar .pos-fill { background: #22c55e; }
+  .eng-bar .neg-fill { background: #f87171; }
+  .eng-nums { display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; }
+  .eng-nums .p { color: #16a34a; font-weight: 600; }
+  .eng-nums .n { color: #dc2626; font-weight: 600; }
+
+  /* スコアテーブル */
+  .score-section h4 { font-size: 10px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; margin-top: 16px; }
+  .score-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .score-table th { padding: 6px 12px; font-size: 11px; text-align: center; font-weight: 600; border-bottom: 1px solid #e5e7eb; }
+  .score-table th:first-child { text-align: left; color: #888; }
+  .score-table td { padding: 8px 12px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+  .score-table td:first-child { text-align: left; font-weight: 600; }
+  .score-table .mini-bar { width: 48px; height: 4px; background: #f0f0f0; border-radius: 9999px; overflow: hidden; margin: 3px auto 0; }
+
+  /* ハッシュタグ */
+  .hashtag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+  .hashtag-box { border-radius: 8px; padding: 12px; }
+  .hashtag-box.pos-ht { background: rgba(240,253,244,.6); border: 1px solid #bbf7d0; }
+  .hashtag-box.neg-ht { background: rgba(255,241,242,.6); border: 1px solid #fecdd3; }
+  .hashtag-box .ht-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  .hashtag-box.pos-ht .ht-title { color: #15803d; }
+  .hashtag-box.neg-ht .ht-title { color: #dc2626; }
+  .ht-list { display: flex; flex-direction: column; gap: 6px; }
+  .ht-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+  .ht-row .rank { color: #888; font-size: 10px; width: 14px; }
+  .ht-row .word { font-weight: 600; margin-left: 4px; }
+  .ht-row .cnt { font-size: 11px; padding: 1px 7px; border-radius: 9999px; font-weight: 600; }
+  .pos-ht .word { color: #166534; } .pos-ht .cnt { background: #d1fae5; color: #065f46; }
+  .neg-ht .word { color: #991b1b; } .neg-ht .cnt { background: #fee2e2; color: #991b1b; }
+
+  /* 矢印アイコン代替 */
+  .arrow-up { color: #22c55e; }
+  .arrow-down { color: #ef4444; }
+  .dash { color: #9ca3af; }
+
+  /* 動画カード */
+  .video-tabs { display: flex; gap: 4px; padding: 4px; background: #f3f4f6; border-radius: 8px; margin-bottom: 16px; }
+  .video-tab { flex: 1; padding: 7px 6px; text-align: center; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; color: #6b7280; }
+  .video-tab.active { background: #fff; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .video-item { display: flex; gap: 12px; padding: 14px 0; border-bottom: 1px solid #f0f0f0; align-items: flex-start; }
+  .video-item:last-child { border-bottom: none; }
+  .video-thumb { width: 80px; height: 56px; background: #e5e7eb; border-radius: 6px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 20px; }
+  .video-info { flex: 1; min-width: 0; }
+  .video-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .video-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #888; }
+  .video-badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .sort-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f0f0f0; }
+  .sort-bar span { font-size: 11px; color: #888; font-weight: 600; }
+  .sort-btn { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; color: #555; }
+  .sort-btn.active { background: #111; color: #fff; border-color: #111; }
+
+  /* ページナビ */
+  .page-nav { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #888; padding-bottom: 4px; }
+  .page-nav a { color: #888; text-decoration: none; }
+  .page-nav .sep { color: #ccc; }
+  .page-nav .current { color: #111; font-weight: 600; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- パンくず -->
+  <div class="page-nav">
+    <a href="#">ホーム</a>
+    <span class="sep">›</span>
+    <span class="current">分析詳細</span>
+  </div>
+
+  <!-- ① ジョブ情報カード -->
+  <div class="card">
+    <div class="card-content">
+      <div class="job-meta">
+        <div>
+          <div class="job-keyword">料理 レシピ</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+            <span class="badge badge-green"><span class="status-dot" style="margin-right:5px;"></span>完了</span>
+            <span class="badge badge-blue">TikTok</span>
+            <span class="badge badge-purple">3×検索</span>
+          </div>
+        </div>
+      </div>
+      <div class="job-info-grid">
+        <div class="job-info-item"><strong>2025年12月</strong>分析月</div>
+        <div class="job-info-item"><strong>42本</strong>収集動画数</div>
+        <div class="job-info-item"><strong>2025/12/15</strong>実行日</div>
+        <div class="job-info-item"><strong>料理, レシピ, 簡単</strong>関連キーワード</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② センチメント分析カード -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">📊 センチメント分析レポート</div>
+      <div class="card-desc">42本の動画を分析した結果</div>
+    </div>
+    <div class="card-content">
+
+      <!-- 総合統計 -->
+      <div class="stats-grid">
+        <div class="stat-card stat-blue">
+          <div class="num">2.4M</div>
+          <div class="label">総再生数</div>
+        </div>
+        <div class="stat-card stat-red">
+          <div class="num">184K</div>
+          <div class="label">いいね数</div>
+        </div>
+        <div class="stat-card stat-green">
+          <div class="num">9.2K</div>
+          <div class="label">コメント数</div>
+        </div>
+        <div class="stat-card stat-yellow">
+          <div class="num">4.1K</div>
+          <div class="label">シェア数</div>
+        </div>
+        <div class="stat-card stat-indigo">
+          <div class="num">22K</div>
+          <div class="label">保存数</div>
+        </div>
+      </div>
+
+      <!-- 自動インサイト -->
+      <div class="insight-banner">
+        <div class="title">⭐ 自動インサイト</div>
+        <p>「料理 レシピ」カテゴリではPositiveコンテンツが約71%を占め、平均再生数・ERともにPositiveが大幅に優位。短尺（45秒前後）で完結する手順動画が高パフォーマンスを示す傾向があります。</p>
+      </div>
+
+      <!-- センチメント構成比 -->
+      <div class="sentiment-section">
+        <h3>センチメント構成比</h3>
+        <div class="sentiment-layout">
+          <!-- ドーナツチャート（SVG） -->
+          <div class="donut-wrap">
+            <svg class="donut-svg" viewBox="0 0 200 200">
+              <!-- Background circle -->
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#f3f4f6" stroke-width="32"/>
+              <!-- Positive 71% = 0.71 * 502.65 = 356.88, start at top (-90deg = -157.08 offset) -->
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#10b981" stroke-width="32"
+                stroke-dasharray="356.88 502.65"
+                stroke-dashoffset="-125.66"
+                style="transition:stroke-dasharray .9s ease"/>
+              <!-- Neutral 18% = 90.47 -->
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#9ca3af" stroke-width="32"
+                stroke-dasharray="90.47 502.65"
+                stroke-dashoffset="-482.54"
+                style="transition:stroke-dasharray .9s ease"/>
+              <!-- Negative 11% = 55.29 -->
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#ef4444" stroke-width="32"
+                stroke-dasharray="55.29 502.65"
+                stroke-dashoffset="-573.01"
+                style="transition:stroke-dasharray .9s ease"/>
+            </svg>
+            <div class="donut-center">
+              <div class="big">71%</div>
+              <div class="small">Positive</div>
+            </div>
+          </div>
+          <!-- 統計カード -->
+          <div class="sentiment-cards">
+            <div class="sent-card pos">
+              <div class="top">
+                <span class="tag">Positive</span>
+                <span class="pct">71%</span>
+              </div>
+              <div class="bottom">
+                <span class="count">30<span style="font-size:12px;font-weight:400;margin-left:2px;">本</span></span>
+                <div class="bar-track"><div class="bar-fill bar-green" style="width:71%"></div></div>
+              </div>
+            </div>
+            <div class="sent-card neu">
+              <div class="top">
+                <span class="tag">Neutral</span>
+                <span class="pct">18%</span>
+              </div>
+              <div class="bottom">
+                <span class="count">8<span style="font-size:12px;font-weight:400;margin-left:2px;">本</span></span>
+                <div class="bar-track"><div class="bar-fill bar-gray" style="width:18%"></div></div>
+              </div>
+            </div>
+            <div class="sent-card neg">
+              <div class="top">
+                <span class="tag">Negative</span>
+                <span class="pct">11%</span>
+              </div>
+              <div class="bottom">
+                <span class="count">4<span style="font-size:12px;font-weight:400;margin-left:2px;">本</span></span>
+                <div class="bar-track"><div class="bar-fill bar-red" style="width:11%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4項目アコーディオン -->
+      <div class="accordion">
+
+        <!-- 1: 側面分析 -->
+        <div class="acc-item open" id="acc1">
+          <button class="acc-trigger" onclick="toggle('acc1')">
+            🔍 側面分析・強み弱み
+            <span class="chevron">▾</span>
+          </button>
+          <div class="acc-content">
+            <div class="acc-inner">
+              <div class="aspects-grid">
+                <div class="aspect-card">
+                  <div class="aspect-name">🎬 動画クオリティ</div>
+                  <div class="aspect-bars">
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#16a34a;">Pos</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:78%;background:#22c55e;"></div></div>
+                      <span class="val" style="color:#16a34a;">78%</span>
+                    </div>
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#dc2626;">Neg</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:22%;background:#ef4444;"></div></div>
+                      <span class="val" style="color:#dc2626;">22%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="aspect-card">
+                  <div class="aspect-name">🎵 音声・BGM</div>
+                  <div class="aspect-bars">
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#16a34a;">Pos</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:65%;background:#22c55e;"></div></div>
+                      <span class="val" style="color:#16a34a;">65%</span>
+                    </div>
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#dc2626;">Neg</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:35%;background:#ef4444;"></div></div>
+                      <span class="val" style="color:#dc2626;">35%</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="aspect-card">
+                  <div class="aspect-name">📝 テキスト・字幕</div>
+                  <div class="aspect-bars">
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#16a34a;">Pos</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:82%;background:#22c55e;"></div></div>
+                      <span class="val" style="color:#16a34a;">82%</span>
+                    </div>
+                    <div class="aspect-bar-row">
+                      <span class="lbl" style="color:#dc2626;">Neg</span>
+                      <div class="aspect-bar-track"><div class="aspect-bar-fill" style="width:18%;background:#ef4444;"></div></div>
+                      <span class="val" style="color:#dc2626;">18%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="proposals">
+                <div class="proposal-item priority-hi">
+                  <span class="icon">🚨</span>
+                  <div>
+                    <div class="area">BGM選定の改善</div>
+                    <div class="action">Negative動画ではBGMへの言及が多い。人気BGMを活用したA/Bテストを推奨。</div>
+                  </div>
+                </div>
+                <div class="proposal-item priority-mid">
+                  <span class="icon">✨</span>
+                  <div>
+                    <div class="area">字幕テンプレートの横展開</div>
+                    <div class="action">テキスト評価が高い動画のフォーマットを他に展開することで品質底上げが期待できる。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2: 頻出ワード -->
+        <div class="acc-item" id="acc2">
+          <button class="acc-trigger" onclick="toggle('acc2')">
+            🔤 頻出ワード分析
+            <span class="chevron">▾</span>
+          </button>
+          <div class="acc-content">
+            <div class="acc-inner">
+              <div class="word-cloud-grid">
+                <div class="word-cloud-box pos-box">
+                  <div class="word-cloud-title">Positive ワード</div>
+                  <div class="word-tags">
+                    <span class="word-tag pos">簡単</span>
+                    <span class="word-tag pos">美味しい</span>
+                    <span class="word-tag pos sm">時短</span>
+                    <span class="word-tag pos sm">試した</span>
+                    <span class="word-tag pos xs">節約</span>
+                    <span class="word-tag pos">作り置き</span>
+                    <span class="word-tag pos xs">ヘルシー</span>
+                    <span class="word-tag pos sm">毎日</span>
+                    <span class="word-tag pos xs">リピート</span>
+                    <span class="word-tag pos xs">映える</span>
+                  </div>
+                </div>
+                <div class="word-cloud-box neg-box">
+                  <div class="word-cloud-title">Negative ワード</div>
+                  <div class="word-tags">
+                    <span class="word-tag neg">難しい</span>
+                    <span class="word-tag neg sm">高い</span>
+                    <span class="word-tag neg xs">失敗</span>
+                    <span class="word-tag neg sm">手間</span>
+                    <span class="word-tag neg xs">めんどう</span>
+                    <span class="word-tag neg">材料</span>
+                    <span class="word-tag neg xs">時間かかる</span>
+                    <span class="word-tag neg xs">わかりにくい</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3: インパクト分析 -->
+        <div class="acc-item" id="acc3">
+          <button class="acc-trigger" onclick="toggle('acc3')">
+            📊 インパクト分析（投稿数 / 再生数 / エンゲージメント / 平均指標）
+            <span class="chevron">▾</span>
+          </button>
+          <div class="acc-content">
+            <div class="acc-inner">
+              <div class="impact-3way">
+                <div class="impact-card">
+                  <h4>投稿数シェア</h4>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-up">▲</span> Positive</span><span class="val">71%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-green" style="width:71%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="dash">—</span> Neutral</span><span class="val">18%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-gray" style="width:18%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-down">▼</span> Negative</span><span class="val">11%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-red" style="width:11%"></div></div>
+                  </div>
+                </div>
+                <div class="impact-card">
+                  <h4>総再生数シェア</h4>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-up">▲</span> Positive</span><span class="val">84%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-green" style="width:84%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="dash">—</span> Neutral</span><span class="val">10%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-gray" style="width:10%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-down">▼</span> Negative</span><span class="val">6%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-red" style="width:6%"></div></div>
+                  </div>
+                </div>
+                <div class="impact-card">
+                  <h4>総エンゲージメントシェア</h4>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-up">▲</span> Positive</span><span class="val">79%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-green" style="width:79%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="dash">—</span> Neutral</span><span class="val">13%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-gray" style="width:13%"></div></div>
+                  </div>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-down">▼</span> Negative</span><span class="val">8%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-red" style="width:8%"></div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="avg-grid">
+                <div class="avg-card">
+                  <h4>平均再生数（1本あたり）</h4>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-up">▲</span> Positive</span><span class="val">67.4K</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-green" style="width:75%"></div></div>
+                  </div>
+                  <div class="impact-row" style="margin-top:8px;">
+                    <div class="top-row"><span class="lbl"><span class="arrow-down">▼</span> Negative</span><span class="val">22.1K</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-red" style="width:25%"></div></div>
+                  </div>
+                </div>
+                <div class="avg-card">
+                  <h4>平均ER%（1本あたり）</h4>
+                  <div class="impact-row">
+                    <div class="top-row"><span class="lbl"><span class="arrow-up">▲</span> Positive</span><span class="val">8.42%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-green" style="width:70%"></div></div>
+                  </div>
+                  <div class="impact-row" style="margin-top:8px;">
+                    <div class="top-row"><span class="lbl"><span class="arrow-down">▼</span> Negative</span><span class="val">3.67%</span></div>
+                    <div class="progress-track"><div class="progress-fill progress-red" style="width:30%"></div></div>
+                  </div>
+                </div>
+              </div>
+              <div class="dur-card">
+                <h4>平均動画時間（秒）</h4>
+                <div class="dur-row">
+                  <div class="top"><span>Positive</span><span style="font-weight:700;">46秒</span></div>
+                  <div class="progress-track"><div class="progress-fill progress-green" style="width:77%"></div></div>
+                </div>
+                <div class="dur-row" style="margin-top:8px;">
+                  <div class="top"><span>Neutral</span><span style="font-weight:700;">38秒</span></div>
+                  <div class="progress-track"><div class="progress-fill progress-gray" style="width:63%"></div></div>
+                </div>
+                <div class="dur-row" style="margin-top:8px;">
+                  <div class="top"><span>Negative</span><span style="font-weight:700;">60秒</span></div>
+                  <div class="progress-track"><div class="progress-fill progress-red" style="width:100%"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4: エンゲージメント詳細 -->
+        <div class="acc-item" id="acc4">
+          <button class="acc-trigger" onclick="toggle('acc4')">
+            ❤️ エンゲージメント詳細（内訳 / スコア / ハッシュタグ）
+            <span class="chevron">▾</span>
+          </button>
+          <div class="acc-content">
+            <div class="acc-inner">
+              <div class="eng-list">
+                <div class="eng-item">
+                  <div class="top"><span>❤️ いいね</span><span class="total">合計 184,200</span></div>
+                  <div class="eng-bar"><div class="pos-fill" style="width:81%;"></div><div class="neg-fill" style="width:19%;"></div></div>
+                  <div class="eng-nums"><span class="p">Pos 149.2K</span><span class="n">Neg 35.0K</span></div>
+                </div>
+                <div class="eng-item">
+                  <div class="top"><span>💬 コメント</span><span class="total">合計 9,200</span></div>
+                  <div class="eng-bar"><div class="pos-fill" style="width:74%;"></div><div class="neg-fill" style="width:26%;"></div></div>
+                  <div class="eng-nums"><span class="p">Pos 6.8K</span><span class="n">Neg 2.4K</span></div>
+                </div>
+                <div class="eng-item">
+                  <div class="top"><span>🔁 シェア</span><span class="total">合計 4,100</span></div>
+                  <div class="eng-bar"><div class="pos-fill" style="width:88%;"></div><div class="neg-fill" style="width:12%;"></div></div>
+                  <div class="eng-nums"><span class="p">Pos 3.6K</span><span class="n">Neg 0.5K</span></div>
+                </div>
+                <div class="eng-item">
+                  <div class="top"><span>🔖 保存</span><span class="total">合計 22,000</span></div>
+                  <div class="eng-bar"><div class="pos-fill" style="width:85%;"></div><div class="neg-fill" style="width:15%;"></div></div>
+                  <div class="eng-nums"><span class="p">Pos 18.7K</span><span class="n">Neg 3.3K</span></div>
+                </div>
+              </div>
+              <div class="score-section">
+                <h4>⭐ スコア別センチメント傾向</h4>
+                <table class="score-table">
+                  <thead>
+                    <tr>
+                      <th>スコア</th>
+                      <th style="color:#16a34a;">Positive</th>
+                      <th style="color:#6b7280;">Neutral</th>
+                      <th style="color:#dc2626;">Negative</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="color:#7c3aed;">総合</td>
+                      <td><strong>78.2</strong><div class="mini-bar"><div style="width:78%;height:100%;background:#22c55e;border-radius:9999px;"></div></div></td>
+                      <td><strong>61.4</strong><div class="mini-bar"><div style="width:61%;height:100%;background:#9ca3af;border-radius:9999px;"></div></div></td>
+                      <td><strong>42.1</strong><div class="mini-bar"><div style="width:42%;height:100%;background:#ef4444;border-radius:9999px;"></div></div></td>
+                    </tr>
+                    <tr>
+                      <td style="color:#2563eb;">サムネイル</td>
+                      <td><strong>82.0</strong><div class="mini-bar"><div style="width:82%;height:100%;background:#22c55e;border-radius:9999px;"></div></div></td>
+                      <td><strong>64.5</strong><div class="mini-bar"><div style="width:64%;height:100%;background:#9ca3af;border-radius:9999px;"></div></div></td>
+                      <td><strong>38.7</strong><div class="mini-bar"><div style="width:38%;height:100%;background:#ef4444;border-radius:9999px;"></div></div></td>
+                    </tr>
+                    <tr>
+                      <td style="color:#0891b2;">テキスト</td>
+                      <td><strong>76.8</strong><div class="mini-bar"><div style="width:76%;height:100%;background:#22c55e;border-radius:9999px;"></div></div></td>
+                      <td><strong>58.2</strong><div class="mini-bar"><div style="width:58%;height:100%;background:#9ca3af;border-radius:9999px;"></div></div></td>
+                      <td><strong>44.9</strong><div class="mini-bar"><div style="width:44%;height:100%;background:#ef4444;border-radius:9999px;"></div></div></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="hashtag-grid">
+                <div class="hashtag-box pos-ht">
+                  <div class="ht-title">Positive ハッシュタグ Top5</div>
+                  <div class="ht-list">
+                    <div class="ht-row"><span class="rank">1.</span><span class="word">#簡単レシピ</span><span class="cnt">18</span></div>
+                    <div class="ht-row"><span class="rank">2.</span><span class="word">#時短料理</span><span class="cnt">14</span></div>
+                    <div class="ht-row"><span class="rank">3.</span><span class="word">#作り置き</span><span class="cnt">11</span></div>
+                    <div class="ht-row"><span class="rank">4.</span><span class="word">#節約レシピ</span><span class="cnt">9</span></div>
+                    <div class="ht-row"><span class="rank">5.</span><span class="word">#ヘルシー</span><span class="cnt">7</span></div>
+                  </div>
+                </div>
+                <div class="hashtag-box neg-ht">
+                  <div class="ht-title">Negative ハッシュタグ Top5</div>
+                  <div class="ht-list">
+                    <div class="ht-row"><span class="rank">1.</span><span class="word">#本格料理</span><span class="cnt">4</span></div>
+                    <div class="ht-row"><span class="rank">2.</span><span class="word">#プロ直伝</span><span class="cnt">3</span></div>
+                    <div class="ht-row"><span class="rank">3.</span><span class="word">#高級食材</span><span class="cnt">2</span></div>
+                    <div class="ht-row"><span class="rank">4.</span><span class="word">#難しい</span><span class="cnt">2</span></div>
+                    <div class="ht-row"><span class="rank">5.</span><span class="word">#手間かかる</span><span class="cnt">1</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /accordion -->
+    </div><!-- /card-content -->
+  </div><!-- /card -->
+
+  <!-- ③ 動画一覧カード -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">🎬 分析対象動画（42件）</div>
+      <div class="card-desc">3シークレットブラウザ検索での出現回数別に分類</div>
+    </div>
+    <div class="card-content">
+      <div class="sort-bar">
+        <span>並び順:</span>
+        <button class="sort-btn active">安定順位順</button>
+        <button class="sort-btn">再生数順</button>
+        <button class="sort-btn">エンゲージメント率順</button>
+      </div>
+      <div class="video-tabs">
+        <div class="video-tab active">⭐ 勝ちパターン (12)</div>
+        <div class="video-tab">🔄 準勝ち (18)</div>
+        <div class="video-tab">1回のみ (12)</div>
+        <div class="video-tab">全件 (42)</div>
+      </div>
+      <div class="video-item">
+        <div class="video-thumb">🎥</div>
+        <div class="video-info">
+          <div class="video-title">【5分で完成】超簡単！鶏むね肉でしっとりチキン南蛮の作り方</div>
+          <div class="video-meta">
+            <span>👁 892K再生</span>
+            <span>❤️ 67.2K</span>
+            <span>ER 9.8%</span>
+            <span>45秒</span>
+          </div>
+          <div class="video-badges">
+            <span class="badge badge-green">Positive</span>
+            <span class="badge badge-purple">3回出現</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;">スコア 88.4</span>
+          </div>
+        </div>
+      </div>
+      <div class="video-item">
+        <div class="video-thumb">🎥</div>
+        <div class="video-info">
+          <div class="video-title">節約飯！もやしと卵だけで作る絶品チャーハン🍳</div>
+          <div class="video-meta">
+            <span>👁 654K再生</span>
+            <span>❤️ 48.1K</span>
+            <span>ER 8.4%</span>
+            <span>38秒</span>
+          </div>
+          <div class="video-badges">
+            <span class="badge badge-green">Positive</span>
+            <span class="badge badge-purple">3回出現</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;">スコア 82.1</span>
+          </div>
+        </div>
+      </div>
+      <div class="video-item">
+        <div class="video-thumb">🎥</div>
+        <div class="video-info">
+          <div class="video-title">本格フレンチ！ビーフブルギニヨンの作り方【難しい】</div>
+          <div class="video-meta">
+            <span>👁 89K再生</span>
+            <span>❤️ 4.2K</span>
+            <span>ER 2.1%</span>
+            <span>4分12秒</span>
+          </div>
+          <div class="video-badges">
+            <span class="badge" style="background:#fee2e2;color:#991b1b;">Negative</span>
+            <span class="badge badge-purple">3回出現</span>
+            <span class="badge" style="background:#fef3c7;color:#92400e;">スコア 41.6</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggle(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('open');
+}
+// ドーナツアニメーション
+window.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('circle[stroke-dasharray]').forEach(c => {
+    c.style.transition = 'stroke-dasharray .9s ease, stroke-dashoffset .9s ease';
+  });
+});
+</script>
+</body>
+</html>
