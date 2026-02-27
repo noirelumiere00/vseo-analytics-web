@@ -19,6 +19,13 @@ import {
   Share2,
   Bookmark,
   MessageCircle,
+  Layers,
+  Lightbulb,
+  Video,
+  ArrowUp,
+  ArrowDown,
+  Sparkles,
+  Ghost,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
@@ -109,6 +116,12 @@ function CompareBar({ valueA, valueB }: { valueA: number; valueB: number }) {
 // ==============================
 // Helper: 単一指標行（リッチ版）
 // ==============================
+function ImproveBadge({ improved }: { improved: "up" | "down" | "same" }) {
+  if (improved === "up")   return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">✅ 改善</span>;
+  if (improved === "down") return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">❌ 低下</span>;
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">→ 維持</span>;
+}
+
 function MetricRow({
   label,
   valueA,
@@ -134,9 +147,15 @@ function MetricRow({
   const winnerRaw: "A" | "B" | "tie" =
     valueA === valueB ? "tie" : invertColor ? (valueA < valueB ? "A" : "B") : (valueA > valueB ? "A" : "B");
 
+  // B が A より良いか（改善チェック）
+  const improved: "up" | "down" | "same" =
+    valueA === valueB ? "same"
+    : invertColor ? (valueB < valueA ? "up" : "down")
+    : (valueB > valueA ? "up" : "down");
+
   return (
     <div className="py-3 border-b last:border-0 space-y-2">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
         {/* A側 */}
         <div className="flex items-center justify-end gap-2">
           {winnerRaw === "A" && <WinnerBadge side="A" />}
@@ -144,7 +163,7 @@ function MetricRow({
         </div>
 
         {/* 中央ラベル */}
-        <div className="flex flex-col items-center gap-0.5 min-w-[120px]">
+        <div className="flex flex-col items-center gap-0.5 min-w-[110px]">
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             {icon}
             <span>{label}</span>
@@ -157,6 +176,9 @@ function MetricRow({
           <span className="font-bold text-xl text-amber-600">{fmt(valueB)}</span>
           {winnerRaw === "B" && <WinnerBadge side="B" />}
         </div>
+
+        {/* 改善バッジ */}
+        <ImproveBadge improved={improved} />
       </div>
 
       {/* 相対バー */}
@@ -506,7 +528,18 @@ export default function Comparison() {
           </Card>
 
           {/* ---- 3重検索・ウィンパターン ---- */}
-          {(dataA.tripleSearch || dataB.tripleSearch) && (
+          {(dataA.tripleSearch || dataB.tripleSearch) && (() => {
+            const winDiff = mB.winCount - mA.winCount;
+            const overlapDiff = mB.overlapRate - mA.overlapRate;
+            const semi2Diff = mB.semi2Count - mA.semi2Count;
+            // 判定コメント生成
+            const comments: { text: string; color: string }[] = [];
+            if (winDiff > 0) comments.push({ text: `Winパターンが${winDiff}本増加 → 検索安定性が向上`, color: "text-green-600" });
+            else if (winDiff < 0) comments.push({ text: `Winパターンが${Math.abs(winDiff)}本減少 → 検索安定性が低下`, color: "text-red-500" });
+            if (overlapDiff > 1) comments.push({ text: `重複率が+${overlapDiff.toFixed(1)}% → 市場での定番化が進行`, color: "text-green-600" });
+            else if (overlapDiff < -1) comments.push({ text: `重複率が${overlapDiff.toFixed(1)}% → 競合構成に変化あり`, color: "text-amber-600" });
+            if (winDiff === 0 && overlapDiff === 0 && semi2Diff === 0) comments.push({ text: "重複構成に変化なし → 市場は安定", color: "text-muted-foreground" });
+            return (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -534,17 +567,42 @@ export default function Comparison() {
                   valueB={mB.semi2Count}
                   unit="本"
                 />
+                {comments.length > 0 && (
+                  <div className="pt-3 space-y-1">
+                    {comments.map((c, i) => (
+                      <p key={i} className={`text-xs font-medium ${c.color}`}>
+                        {c.text}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
 
           {/* ---- センチメント ---- */}
-          {dataA.report && dataB.report && (
+          {dataA.report && dataB.report && (() => {
+            const sentImproved =
+              mB.sentPosPct > mA.sentPosPct && mB.sentNegPct < mA.sentNegPct ? "full"
+              : mB.sentPosPct > mA.sentPosPct ? "pos_only"
+              : mB.sentNegPct < mA.sentNegPct ? "neg_only"
+              : mA.sentPosPct === mB.sentPosPct && mA.sentNegPct === mB.sentNegPct ? "same"
+              : "none";
+            const sentBadge = {
+              full:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">✅ ポジ↑ ネガ↓ 改善</span>,
+              pos_only: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-50 text-green-600">△ ポジのみ増加</span>,
+              neg_only: <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">△ ネガのみ減少</span>,
+              none:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">❌ 悪化</span>,
+              same:     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted text-muted-foreground">→ 変化なし</span>,
+            }[sentImproved];
+            return (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <MessageSquare className="h-4 w-4 text-primary" />
                   センチメント分布
+                  <span className="ml-auto">{sentBadge}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -614,7 +672,418 @@ export default function Comparison() {
                 </div>
               </CardContent>
             </Card>
-          )}
+            );
+          })()}
+
+          {/* ---- インパクト分析（facets）改善チェック ---- */}
+          {(dataA.report?.facets?.length > 0 || dataB.report?.facets?.length > 0) && (() => {
+            const facetsA: any[] = (dataA.report as any)?.facets ?? [];
+            const facetsB: any[] = (dataB.report as any)?.facets ?? [];
+            const allAspects = Array.from(new Set([
+              ...facetsA.map((f: any) => f.aspect || f.name || ""),
+              ...facetsB.map((f: any) => f.aspect || f.name || ""),
+            ])).filter(Boolean);
+
+            type Verdict = "full" | "pos_only" | "neg_only" | "none" | "unknown";
+            const rows = allAspects.map((aspect) => {
+              const fA = facetsA.find((f: any) => (f.aspect || f.name) === aspect);
+              const fB = facetsB.find((f: any) => (f.aspect || f.name) === aspect);
+              const posA: number | null = fA?.positive_percentage ?? fA?.pos ?? null;
+              const negA: number | null = fA?.negative_percentage ?? fA?.neg ?? null;
+              const posB: number | null = fB?.positive_percentage ?? fB?.pos ?? null;
+              const negB: number | null = fB?.negative_percentage ?? fB?.neg ?? null;
+              const posDiff = posA !== null && posB !== null ? posB - posA : null;
+              const negDiff = negA !== null && negB !== null ? negB - negA : null;
+              const posImproved = posDiff !== null ? posDiff > 0 : null;
+              const negImproved = negDiff !== null ? negDiff < 0 : null;
+              const verdict: Verdict =
+                posImproved === null && negImproved === null ? "unknown"
+                : posImproved && negImproved ? "full"
+                : posImproved ? "pos_only"
+                : negImproved ? "neg_only"
+                : "none";
+              return { aspect, posA, negA, posB, negB, posDiff, negDiff, verdict };
+            });
+
+            const fullCount = rows.filter(r => r.verdict === "full").length;
+            const noneCount = rows.filter(r => r.verdict === "none").length;
+
+            const verdictUI = (v: Verdict) => ({
+              full:     { label: "✅ 改善", cls: "bg-green-100 text-green-700" },
+              pos_only: { label: "△ ポジ↑", cls: "bg-green-50 text-green-600" },
+              neg_only: { label: "△ ネガ↓", cls: "bg-blue-50 text-blue-600" },
+              none:     { label: "❌ 悪化", cls: "bg-red-100 text-red-600" },
+              unknown:  { label: "— データなし", cls: "bg-muted text-muted-foreground" },
+            }[v]);
+
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Layers className="h-4 w-4 text-primary" />
+                    マクロ分析（改善チェック）
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      {fullCount > 0 && <span className="text-green-600 font-semibold">{fullCount}側面が改善　</span>}
+                      {noneCount > 0 && <span className="text-red-500 font-semibold">{noneCount}側面が悪化</span>}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* 列ヘッダー */}
+                  <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-0 text-[10px] font-semibold text-muted-foreground pb-1.5 border-b mb-1">
+                    <span>側面</span>
+                    <span className="w-32 text-center">ポジ A→B</span>
+                    <span className="w-32 text-center">ネガ A→B</span>
+                    <span className="w-16 text-center">判定</span>
+                  </div>
+                  <div className="space-y-0">
+                    {rows.map(({ aspect, posA, negA, posB, negB, posDiff, negDiff, verdict }) => {
+                      const ui = verdictUI(verdict);
+                      return (
+                        <div key={aspect} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center py-2.5 border-b last:border-0">
+                          {/* 側面名 */}
+                          <span className="text-xs font-medium">{aspect}</span>
+
+                          {/* ポジ A→B */}
+                          <div className="w-32 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-blue-600">{posA !== null ? `${posA}%` : "—"}</span>
+                              <span className="text-muted-foreground mx-1">→</span>
+                              <span className={`font-semibold ${posA !== null && posB !== null ? (posB > posA ? "text-green-600" : posB < posA ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground"}`}>
+                                {posB !== null ? `${posB}%` : "—"}
+                              </span>
+                              {posDiff !== null && posDiff !== 0 && (
+                                <span className={`ml-1 text-[10px] font-bold ${posDiff > 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {posDiff > 0 ? `+${posDiff}` : posDiff}
+                                </span>
+                              )}
+                            </div>
+                            {posA !== null && posB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="bg-blue-400 transition-all" style={{ width: `${posA}%` }} />
+                              </div>
+                            )}
+                            {posB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className={`transition-all ${(posB ?? 0) >= (posA ?? 0) ? "bg-green-500" : "bg-orange-400"}`} style={{ width: `${posB}%` }} />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* ネガ A→B */}
+                          <div className="w-32 space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-red-400">{negA !== null ? `${negA}%` : "—"}</span>
+                              <span className="text-muted-foreground mx-1">→</span>
+                              <span className={`font-semibold ${negA !== null && negB !== null ? (negB < negA ? "text-green-600" : negB > negA ? "text-red-500" : "text-muted-foreground") : "text-muted-foreground"}`}>
+                                {negB !== null ? `${negB}%` : "—"}
+                              </span>
+                              {negDiff !== null && negDiff !== 0 && (
+                                <span className={`ml-1 text-[10px] font-bold ${negDiff < 0 ? "text-green-600" : "text-red-500"}`}>
+                                  {negDiff > 0 ? `+${negDiff}` : negDiff}
+                                </span>
+                              )}
+                            </div>
+                            {negA !== null && negB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className="bg-red-300 transition-all" style={{ width: `${negA}%` }} />
+                              </div>
+                            )}
+                            {negB !== null && (
+                              <div className="flex h-1.5 rounded-full bg-muted overflow-hidden">
+                                <div className={`transition-all ${(negB ?? 0) <= (negA ?? 0) ? "bg-green-500" : "bg-red-500"}`} style={{ width: `${negB}%` }} />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 判定 */}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full w-16 text-center ${ui.cls}`}>
+                            {ui.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- ポジ/ネガ頻出ワード比較 ---- */}
+          {(dataA.report?.positiveWords?.length > 0 || dataA.report?.negativeWords?.length > 0 ||
+            dataB.report?.positiveWords?.length > 0 || dataB.report?.negativeWords?.length > 0) && (() => {
+            const posA: string[] = (dataA.report as any)?.positiveWords ?? [];
+            const posB: string[] = (dataB.report as any)?.positiveWords ?? [];
+            const negA: string[] = (dataA.report as any)?.negativeWords ?? [];
+            const negB: string[] = (dataB.report as any)?.negativeWords ?? [];
+            const posSetA = new Set(posA);
+            const posSetB = new Set(posB);
+            const negSetA = new Set(negA);
+            const negSetB = new Set(negB);
+            // ポジ: 新登場(B only) / 継続(both) / 消えた(A only)
+            const posNew      = posB.filter(w => !posSetA.has(w));
+            const posContinue = posB.filter(w => posSetA.has(w));
+            const posGone     = posA.filter(w => !posSetB.has(w));
+            // ネガ: 新登場(B only) / 継続(both) / 消えた(A only)
+            const negNew      = negB.filter(w => !negSetA.has(w));
+            const negGone     = negA.filter(w => !negSetB.has(w));
+            const negContinue = negB.filter(w => negSetA.has(w));
+            const WordTag = ({ word, variant }: { word: string; variant: "new" | "gone" | "cont" }) => (
+              <span className={`inline-flex items-center text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                variant === "new"  ? "bg-green-100 text-green-700" :
+                variant === "gone" ? "bg-red-50 text-red-400 line-through" :
+                "bg-muted text-muted-foreground"
+              }`}>{word}</span>
+            );
+            return (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                  頻出ワード変化（A→B）
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* ポジ */}
+                {(posA.length > 0 || posB.length > 0) && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-green-700">ポジティブワード</span>
+                      {posNew.length > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">✨ +{posNew.length}語 新登場</span>}
+                      {posGone.length > 0 && <span className="text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full font-bold">👻 {posGone.length}語 消えた</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {posNew.map(w => <WordTag key={`pn-${w}`} word={w} variant="new" />)}
+                      {posContinue.map(w => <WordTag key={`pc-${w}`} word={w} variant="cont" />)}
+                      {posGone.map(w => <WordTag key={`pg-${w}`} word={w} variant="gone" />)}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-100 inline-block" />✨ 新登場</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-muted inline-block" />継続</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-50 inline-block" />👻 消えた</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ネガ */}
+                {(negA.length > 0 || negB.length > 0) && (
+                  <div className="space-y-2 pt-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-red-600">ネガティブワード</span>
+                      {negGone.length > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">✅ {negGone.length}語 消えた（改善）</span>}
+                      {negNew.length > 0 && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">⚠️ {negNew.length}語 新登場</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {negGone.map(w => <WordTag key={`ng-${w}`} word={w} variant="gone" />)}
+                      {negContinue.map(w => <WordTag key={`nc-${w}`} word={w} variant="cont" />)}
+                      {negNew.map(w => <WordTag key={`nn-${w}`} word={w} variant="new" />)}
+                    </div>
+                    <div className="flex gap-3 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-red-50 inline-block" />👻 消えた（改善）</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-muted inline-block" />継続中</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded bg-green-100 inline-block" />⚠️ 新登場</span>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            );
+          })()}
+
+          {/* ---- 動画ミクロ分析（keyInsights）比較 ---- */}
+          {(dataA.report?.keyInsights?.length > 0 || dataB.report?.keyInsights?.length > 0) && (() => {
+            const insightsA: any[] = (dataA.report as any)?.keyInsights ?? [];
+            const insightsB: any[] = (dataB.report as any)?.keyInsights ?? [];
+            const maxLen = Math.max(insightsA.length, insightsB.length);
+            const catBadge = (cat: string) => {
+              const map: Record<string, { label: string; cls: string }> = {
+                avoid: { label: "🚫 回避", cls: "bg-red-50 text-red-600 border-red-200" },
+                risk: { label: "🚫 回避", cls: "bg-red-50 text-red-600 border-red-200" },
+                caution: { label: "⚠️ 注意", cls: "bg-orange-50 text-orange-600 border-orange-200" },
+                urgent: { label: "⚠️ 注意", cls: "bg-orange-50 text-orange-600 border-orange-200" },
+                leverage: { label: "✅ 活用", cls: "bg-green-50 text-green-600 border-green-200" },
+                positive: { label: "✅ 活用", cls: "bg-green-50 text-green-600 border-green-200" },
+              };
+              const entry = map[cat] ?? { label: cat, cls: "bg-muted text-muted-foreground border-border" };
+              return (
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${entry.cls}`}>
+                  {entry.label}
+                </span>
+              );
+            };
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    動画ミクロ分析
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div className="text-xs font-semibold text-blue-700 px-1">分析 A</div>
+                    <div className="text-xs font-semibold text-amber-600 px-1">分析 B</div>
+                  </div>
+                  <div className="space-y-2">
+                    {Array.from({ length: maxLen }).map((_, i) => {
+                      const iA = insightsA[i];
+                      const iB = insightsB[i];
+                      return (
+                        <div key={i} className="grid grid-cols-2 gap-3">
+                          {iA ? (
+                            <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/60 space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {catBadge(iA.category)}
+                              </div>
+                              <p className="text-xs font-semibold leading-snug">{iA.title}</p>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{iA.description}</p>
+                            </div>
+                          ) : <div />}
+                          {iB ? (
+                            <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {catBadge(iB.category)}
+                              </div>
+                              <p className="text-xs font-semibold leading-snug">{iB.title}</p>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{iB.description}</p>
+                            </div>
+                          ) : <div />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 分析対象動画 比較（継続・新規・消えた）---- */}
+          {(() => {
+            const videosA = dataA.videos ?? [];
+            const videosB = dataB.videos ?? [];
+            const idsA = new Set(videosA.map((v: any) => v.videoId));
+            const idsB = new Set(videosB.map((v: any) => v.videoId));
+
+            const continued = videosA
+              .filter((v: any) => idsB.has(v.videoId))
+              .map((vA: any) => {
+                const rankA = videosA.findIndex((v: any) => v.videoId === vA.videoId) + 1;
+                const rankB = videosB.findIndex((v: any) => v.videoId === vA.videoId) + 1;
+                return { ...vA, rankA, rankB, diff: rankA - rankB };
+              })
+              .sort((a: any, b: any) => a.rankB - b.rankB);
+
+            const newlyIn = videosB
+              .filter((v: any) => !idsA.has(v.videoId))
+              .map((v: any, i: number) => ({ ...v, rankB: i + 1 }));
+
+            const disappeared = videosA
+              .filter((v: any) => !idsB.has(v.videoId))
+              .map((v: any, i: number) => ({ ...v, rankA: i + 1 }));
+
+            const VideoRow = ({ v, rankA, rankB, diff, side }: any) => (
+              <div className={`flex items-center gap-3 p-2.5 rounded-lg border ${
+                side === "new" ? "bg-green-50/50 border-green-200/60" :
+                side === "gone" ? "bg-gray-50/50 border-gray-200/60 opacity-70" :
+                "bg-muted/30 border-border/60"
+              }`}>
+                <img
+                  src={v.thumbnailUrl || "https://placehold.co/48x32/8A2BE2/white?text=No"}
+                  alt=""
+                  className="w-16 h-10 object-cover rounded shrink-0"
+                  referrerPolicy="no-referrer"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://placehold.co/48x32/8A2BE2/white?text=No"; }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium line-clamp-1">{v.title || "タイトルなし"}</p>
+                  <p className="text-[10px] text-muted-foreground">@{v.accountId}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  {side === "continued" && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-muted-foreground">A:{rankA}位</span>
+                      <span className="text-[11px]">→</span>
+                      <span className="text-[11px] font-bold">B:{rankB}位</span>
+                      {diff > 0 && <span className="text-[10px] text-green-600 font-bold flex items-center gap-0.5"><ArrowUp className="h-2.5 w-2.5" />{diff}</span>}
+                      {diff < 0 && <span className="text-[10px] text-red-500 font-bold flex items-center gap-0.5"><ArrowDown className="h-2.5 w-2.5" />{Math.abs(diff)}</span>}
+                      {diff === 0 && <span className="text-[10px] text-muted-foreground">—</span>}
+                    </div>
+                  )}
+                  {side === "new" && <span className="text-[11px] font-bold text-green-600">B:{rankB}位 NEW</span>}
+                  {side === "gone" && <span className="text-[11px] text-muted-foreground">A:{rankA}位 消</span>}
+                </div>
+              </div>
+            );
+
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Video className="h-4 w-4 text-primary" />
+                    分析対象動画
+                    <span className="text-xs font-normal text-muted-foreground ml-1">
+                      A:{videosA.length}本 / B:{videosB.length}本
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {/* 継続出現 */}
+                  {continued.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xs font-semibold text-foreground">🔁 継続出現</span>
+                        <span className="text-[10px] text-muted-foreground">{continued.length}本 — 両方の分析に登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {continued.slice(0, 10).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankA={v.rankA} rankB={v.rankB} diff={v.diff} side="continued" />
+                        ))}
+                        {continued.length > 10 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {continued.length - 10} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 新規出現 */}
+                  {newlyIn.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-xs font-semibold text-green-700">B で新規出現</span>
+                        <span className="text-[10px] text-muted-foreground">{newlyIn.length}本 — A には未登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {newlyIn.slice(0, 8).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankB={v.rankB} side="new" />
+                        ))}
+                        {newlyIn.length > 8 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {newlyIn.length - 8} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {/* 消えた動画 */}
+                  {disappeared.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Ghost className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs font-semibold text-muted-foreground">A から消えた</span>
+                        <span className="text-[10px] text-muted-foreground">{disappeared.length}本 — B に未登場</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {disappeared.slice(0, 8).map((v: any) => (
+                          <VideoRow key={v.videoId} v={v} rankA={v.rankA} side="gone" />
+                        ))}
+                        {disappeared.length > 8 && (
+                          <p className="text-[11px] text-muted-foreground text-center pt-1">…他 {disappeared.length - 8} 本</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* ---- 各分析へのリンク ---- */}
           <div className="grid grid-cols-2 gap-4">
