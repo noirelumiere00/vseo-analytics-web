@@ -913,6 +913,37 @@ export default function Comparison() {
             const insightsA: any[] = (dataA.report as any)?.keyInsights ?? [];
             const insightsB: any[] = (dataB.report as any)?.keyInsights ?? [];
             const maxLen = Math.max(insightsA.length, insightsB.length);
+            // videoId → 参照番号マップ（再生数降順 top15）
+            const buildRefMap = (videos: any[]) => {
+              const sorted = [...videos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 15);
+              return new Map<string, number>(sorted.map((v, i) => [v.videoId, i + 1]));
+            };
+            const refMapA = buildRefMap(dataA.videos ?? []);
+            const refMapB = buildRefMap(dataB.videos ?? []);
+            const renderRefs = (sourceVideoIds: string[] | undefined, refMap: Map<string, number>, videos: any[], color: "blue" | "amber") => {
+              if (!sourceVideoIds?.length) return null;
+              const refs = sourceVideoIds
+                .map(id => ({ id, num: refMap.get(id), video: videos.find((v: any) => v.videoId === id) }))
+                .filter(r => r.num !== undefined);
+              if (!refs.length) return null;
+              const linkCls = color === "blue" ? "text-blue-600 hover:text-blue-800" : "text-amber-600 hover:text-amber-800";
+              return (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {refs.map(r => (
+                    <a
+                      key={r.id}
+                      href={`https://www.tiktok.com/@${r.video?.accountId}/video/${r.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={r.video?.title || r.id}
+                      className={`text-[10px] font-medium hover:underline ${linkCls}`}
+                    >
+                      [参照{r.num}]
+                    </a>
+                  ))}
+                </div>
+              );
+            };
             const catBadge = (cat: string) => {
               const map: Record<string, { label: string; cls: string }> = {
                 avoid: { label: "🚫 回避", cls: "bg-red-50 text-red-600 border-red-200" },
@@ -955,6 +986,7 @@ export default function Comparison() {
                               </div>
                               <p className="text-xs font-semibold leading-snug">{iA.title}</p>
                               <p className="text-[11px] text-muted-foreground leading-relaxed">{iA.description}</p>
+                              {renderRefs(iA.sourceVideoIds, refMapA, dataA.videos ?? [], "blue")}
                             </div>
                           ) : <div />}
                           {iB ? (
@@ -964,6 +996,7 @@ export default function Comparison() {
                               </div>
                               <p className="text-xs font-semibold leading-snug">{iB.title}</p>
                               <p className="text-[11px] text-muted-foreground leading-relaxed">{iB.description}</p>
+                              {renderRefs(iB.sourceVideoIds, refMapB, dataB.videos ?? [], "amber")}
                             </div>
                           ) : <div />}
                         </div>
