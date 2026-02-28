@@ -325,8 +325,8 @@ export async function analyzeSentimentAndKeywordsBatch(
   if (inputs.length === 0) return [];
 
   const videoList = inputs.map((v, i) =>
-    `[動画${i}] 説明: ${v.description.substring(0, 150)} ハッシュタグ: ${v.hashtags.slice(0, 5).join(" ")}`
-  ).join("\n");
+    `[動画${i}]\n説明: ${v.description.substring(0, 300)}\nハッシュタグ: ${v.hashtags.join(", ")}\nOCRテキスト: ${v.ocrTexts.filter(t => t).join(" ").substring(0, 100)}`
+  ).join("\n\n");
 
   try {
     const response = await invokeLLM({
@@ -334,7 +334,17 @@ export async function analyzeSentimentAndKeywordsBatch(
         { role: "system", content: "You are a sentiment analysis expert for TikTok videos. Always respond in valid JSON format." },
         {
           role: "user",
-          content: `以下の${inputs.length}本のTikTok動画それぞれについて、sentiment・keyHook・keywordsを分析してください。\n\n${videoList}\n\n各動画のindexに対応する結果をresults配列で返してください。`,
+          content: `以下の${inputs.length}本のTikTok動画それぞれについてセンチメント分析を行い、結果をresults配列で返してください。
+
+【分析基準】
+- sentiment: 動画の全体的な感情（positive: ポジティブ/推奨/楽しい、neutral: 中立/情報提供、negative: ネガティブ/批判/不満）
+- keyHook: 動画の主要な訴求ポイント（1文で簡潔に、日本語で）
+- keywords: 動画の主要キーワード（5-10個、日本語で）
+
+【動画一覧】
+${videoList}
+
+各動画のindexフィールドに元の番号を正確に入れてください。`,
         },
       ],
       response_format: {

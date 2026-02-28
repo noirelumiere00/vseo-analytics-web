@@ -62,7 +62,7 @@ vi.mock("./tiktokScraper", () => ({
 
 // videoAnalysis のモック
 vi.mock("./videoAnalysis", () => ({
-  analyzeVideoFromTikTok: vi.fn().mockResolvedValue(undefined),
+  analyzeVideoFromTikTok: vi.fn().mockResolvedValue({ dbVideoId: 1, sentimentInput: {} }),
   analyzeVideoFromUrl: vi.fn().mockResolvedValue(undefined),
   analyzeDuplicates: vi.fn().mockResolvedValue(undefined),
   generateAnalysisReport: vi.fn().mockResolvedValue(undefined),
