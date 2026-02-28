@@ -60,7 +60,6 @@ export default function DurationAnalysis({ videos }: { videos: Video[] }) {
 
   return (
     <div className="space-y-4">
-      <h4 className="text-sm font-semibold">動画尺 x 平均ER%</h4>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
           <XAxis dataKey="range" tick={{ fontSize: 11 }} />
