@@ -1265,7 +1265,7 @@ export default function AnalysisDetail() {
                   {data?.videos && data.videos.length > 0 && (
                     <AccordionItem value="posting-time" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        投稿時間帯分析
+                        投稿件数ヒートマップ（曜日 x 時間帯）
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <PostingTimeHeatmap videos={data.videos as any} />
@@ -1277,7 +1277,7 @@ export default function AnalysisDetail() {
                   {data?.videos && data.videos.length > 0 && (
                     <AccordionItem value="duration-analysis" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画尺 x エンゲージメント分析
+                        動画尺 x 平均ER%
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <DurationAnalysis videos={data.videos as any} />

@@ -1,5 +1,12 @@
 import { ENV } from "./env";
 
+export class LLMQuotaExhaustedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LLMQuotaExhaustedError";
+  }
+}
+
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
 export type TextContent = {
@@ -323,6 +330,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   if (!response.ok) {
     const errorText = await response.text();
+    if (response.status === 412 || errorText.includes("usage exhausted") || errorText.includes("quota")) {
+      throw new LLMQuotaExhaustedError(
+        `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+      );
+    }
     throw new Error(
       `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
     );

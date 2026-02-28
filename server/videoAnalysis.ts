@@ -1,4 +1,4 @@
-import { invokeLLM } from "./_core/llm";
+import { invokeLLM, LLMQuotaExhaustedError } from "./_core/llm";
 import { analyzeFacetsImproved } from "./videoAnalysis_facet_analysis_improved";
 import { generateFacetAnalysisReport } from "./reportGenerator";
 import { transcribeAudio } from "./_core/voiceTranscription";
@@ -387,6 +387,10 @@ ${videoList}
     return inputs.map((_, i) => resultMap.get(i) ?? { sentiment: "neutral", keyHook: "", keywords: [] });
   } catch (error) {
     console.error("[Sentiment Batch] Error:", error);
+    // LLM枠超過エラーは上位に伝搬して明示的に通知する
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
     return inputs.map(() => ({ sentiment: "neutral", keyHook: "", keywords: [] }));
   }
 }
@@ -821,6 +825,10 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
     keyInsights = combinedParsed.keyInsights || [];
   } catch (error) {
     console.error("[Report] Error in combined LLM analysis:", error);
+    // LLM枠超過エラーは上位に伝搬して明示的に通知する
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
     emotionWords = [];
     autoInsight = "";
     keyInsights = [
@@ -1022,5 +1030,9 @@ ${videoSummaries.map((v, i) => `
     console.log(`[Analysis] Win pattern commonality analysis completed for job ${jobId}`);
   } catch (error) {
     console.error("[Analysis] Error analyzing win pattern commonality:", error);
+    // LLM枠超過エラーは上位に伝搬して明示的に通知する
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
   }
 }
