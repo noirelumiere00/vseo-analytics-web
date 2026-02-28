@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch } from "./videoAnalysis";
+import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
@@ -242,12 +242,21 @@ export const appRouter = router({
                 });
 
                 // Phase1: 並列でOCR・DB登録（センチメントLLMはスキップ）
-                const batchResults = await Promise.all(
+                // 1本が失敗しても残りは続行する
+                const batchSettled = await Promise.allSettled(
                   batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo, { skipSentiment: true }))
                 );
+                const batchResults = batchSettled
+                  .filter((r): r is PromiseFulfilledResult<{ dbVideoId: number; sentimentInput: SentimentInput }> => r.status === "fulfilled")
+                  .map(r => r.value);
+                batchSettled
+                  .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+                  .forEach(r => console.error("[Analysis] Video processing failed:", r.reason));
 
-                // Phase2: 5本まとめて1回のLLM呼び出しでセンチメント分析
-                let sentimentResults = await analyzeSentimentAndKeywordsBatch(
+                if (batchResults.length === 0) continue;
+
+                // Phase2: 成功した動画のみ、まとめて1回のLLM呼び出しでセンチメント分析
+                const sentimentResults = await analyzeSentimentAndKeywordsBatch(
                   batchResults.map(r => r.sentimentInput)
                 );
 
