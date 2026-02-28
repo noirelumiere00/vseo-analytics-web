@@ -6,6 +6,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
+import { LLMQuotaExhaustedError } from "./_core/llm";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
@@ -358,18 +359,19 @@ export const appRouter = router({
             console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "不明なエラー";
+            const isLLMQuotaError = error instanceof LLMQuotaExhaustedError
+              || errorMessage.includes("usage exhausted")
+              || errorMessage.includes("412 Precondition Failed")
+              || errorMessage.includes("quota");
             console.error("[Analysis] Error:", errorMessage);
             console.error("[Analysis] Full error:", error);
-            
+
             await db.updateAnalysisJobStatus(input.jobId, "failed");
-            // メモリリーク対策: 失敗後に進捗情報を削除
-            setTimeout(() => {
-              progressStore.delete(input.jobId);
-              console.log(`[Analysis] Progress store cleaned for job ${input.jobId}`);
-            }, 5000);
-            
+
             let userMessage = "分析に失敗しました。";
-            if (errorMessage.includes("empty response")) {
+            if (isLLMQuotaError) {
+              userMessage = "分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。";
+            } else if (errorMessage.includes("empty response")) {
               userMessage = "TikTokがアクセスを制限しています。しばらく待ってから再度お試しください。";
             } else if (errorMessage.includes("CAPTCHA")) {
               userMessage = "TikTokのCAPTCHA認証が必要です。しばらく待ってから再度お試しください。";
@@ -378,16 +380,16 @@ export const appRouter = router({
             } else if (errorMessage.includes("Puppeteer")) {
               userMessage = "ブラウザの起動に失敗しました。サーバーリソースが不足している可能性があります。";
             }
-            
+
             setProgress(input.jobId, {
               message: `分析失敗: ${userMessage}`,
               percent: -1,
             });
-            // メモリリーク対策: エラー時も進捗情報を削除
+            // メモリリーク対策: エラー時は5分後に進捗情報を削除（エラーメッセージを保持するため長めに設定）
             setTimeout(() => {
               progressStore.delete(input.jobId);
               console.log(`[Analysis] Progress store cleaned after error for job ${input.jobId}`);
-            }, 5000);
+            }, 5 * 60 * 1000);
           }
         });
 
@@ -432,7 +434,7 @@ export const appRouter = router({
               : job.status === "completed"
               ? "分析完了"
               : job.status === "failed"
-              ? "分析失敗"
+              ? "分析失敗: 分析に失敗しました。再実行してください。"
               : "待機中"
           ),
           failedVideos: progressInfo?.failedVideos ?? [],

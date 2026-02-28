@@ -3,7 +3,7 @@
  * 実データに基づいて動的に側面を抽出し、ポジティブ/ネガティブ比率を計算
  */
 
-import { invokeLLM } from "./_core/llm";
+import { invokeLLM, LLMQuotaExhaustedError } from "./_core/llm";
 
 export async function analyzeFacetsImproved(
   videosData: Array<{ accountName: string | null; description: string | null; sentiment?: string | null; jobId?: number }>,
@@ -105,6 +105,9 @@ ${allTexts}
 
   } catch (error) {
     console.error("[Facet Analysis] Error:", error);
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
     return [];
   }
 }
