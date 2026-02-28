@@ -247,16 +247,16 @@ export const appRouter = router({
                 );
 
                 // Phase2: 5本まとめて1回のLLM呼び出しでセンチメント分析
-                const sentimentResults = await analyzeSentimentAndKeywordsBatch(
+                let sentimentResults = await analyzeSentimentAndKeywordsBatch(
                   batchResults.map(r => r.sentimentInput)
                 );
 
                 // Phase3: 各動画のセンチメントをDBに更新
                 await Promise.all(
                   batchResults.map((r, j) => db.updateVideo(r.dbVideoId, {
-                    sentiment: sentimentResults[j].sentiment,
-                    keyHook: sentimentResults[j].keyHook,
-                    keywords: sentimentResults[j].keywords,
+                    sentiment: sentimentResults[j]?.sentiment ?? "neutral",
+                    keyHook: sentimentResults[j]?.keyHook ?? "",
+                    keywords: sentimentResults[j]?.keywords ?? [],
                   }))
                 );
               }
