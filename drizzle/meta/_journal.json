@@ -64,6 +64,13 @@
       "when": 1772182073267,
       "tag": "0008_sharp_killer_shrike",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1772289748123,
+      "tag": "0009_thin_norrin_radd",
+      "breakpoints": true
     }
   ]
 }
