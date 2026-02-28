@@ -64,7 +64,6 @@ export default function PostingTimeHeatmap({ videos }: { videos: Video[] }) {
   return (
     <div className="space-y-4">
       <div>
-        <h4 className="text-sm font-semibold mb-2">投稿件数ヒートマップ（曜日 x 時間帯）</h4>
         <div className="overflow-x-auto">
           <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, 28px)` }}>
             <div />
