@@ -181,6 +181,12 @@ export const analysisReports = mysqlTable("analysis_reports", {
     sourceVideoIds?: string[];
    }>>(),
   
+  // ハッシュタグ戦略分析
+  hashtagStrategy: json("hashtagStrategy").$type<{
+    topCombinations: Array<{ tags: string[]; count: number; avgER: number }>;
+    recommendations: string[];
+  }>(),
+
   // 側面分析（ビジネス視点）
   facets: json("facets").$type<Array<{
     aspect: string;
