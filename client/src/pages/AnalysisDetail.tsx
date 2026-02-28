@@ -24,6 +24,7 @@ import { filterAdHashtags } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
+import HashtagStrategy from "@/components/HashtagStrategy";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -1292,6 +1293,18 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <AccountAnalysis videos={data.videos as any} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* ハッシュタグ戦略 */}
+                  {data?.report && (data.report as any).hashtagStrategy && (
+                    <AccordionItem value="hashtag-strategy" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        ハッシュタグ戦略分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <HashtagStrategy data={(data.report as any).hashtagStrategy} />
                       </AccordionContent>
                     </AccordionItem>
                   )}

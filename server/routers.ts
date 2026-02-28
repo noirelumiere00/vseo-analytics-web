@@ -460,6 +460,79 @@ export const appRouter = router({
         return { csv: [header, ...rows].join("\n"), filename: `analysis_${input.jobId}_${job.keyword || "manual"}.csv` };
       }),
 
+    // トレンド推移: 同一キーワードの過去ジョブ+レポートを取得
+    trend: protectedProcedure
+      .input(z.object({ keyword: z.string() }))
+      .query(async ({ ctx, input }) => {
+        const allJobs = await db.getAnalysisJobsByUserId(ctx.user.id);
+        const matchedJobs = allJobs
+          .filter(j => j.keyword === input.keyword && j.status === "completed")
+          .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+        const results = [];
+        for (const job of matchedJobs) {
+          const report = await db.getAnalysisReportByJobId(job.id);
+          if (report) {
+            results.push({
+              jobId: job.id,
+              date: job.createdAt,
+              totalVideos: report.totalVideos,
+              totalViews: Number(report.totalViews),
+              totalEngagement: Number(report.totalEngagement),
+              positivePercentage: report.positivePercentage,
+              neutralPercentage: report.neutralPercentage,
+              negativePercentage: report.negativePercentage,
+              positiveViewsShare: report.positiveViewsShare,
+              negativeViewsShare: report.negativeViewsShare,
+            });
+          }
+        }
+        return { keyword: input.keyword, points: results };
+      }),
+
+    // ダッシュボード: 全ジョブの俯瞰データ
+    dashboard: protectedProcedure
+      .query(async ({ ctx }) => {
+        const allJobs = await db.getAnalysisJobsByUserId(ctx.user.id);
+        const completedJobs = allJobs.filter(j => j.status === "completed");
+
+        // キーワード別集計
+        const keywordMap = new Map<string, number>();
+        for (const job of completedJobs) {
+          if (job.keyword) {
+            keywordMap.set(job.keyword, (keywordMap.get(job.keyword) || 0) + 1);
+          }
+        }
+
+        // 最新5ジョブのレポートサマリ
+        const recentSummaries = [];
+        for (const job of completedJobs.slice(0, 5)) {
+          const report = await db.getAnalysisReportByJobId(job.id);
+          if (report) {
+            recentSummaries.push({
+              jobId: job.id,
+              keyword: job.keyword || "手動URL",
+              date: job.createdAt,
+              totalVideos: report.totalVideos,
+              totalViews: Number(report.totalViews),
+              positivePercentage: report.positivePercentage,
+              negativePercentage: report.negativePercentage,
+            });
+          }
+        }
+
+        return {
+          totalJobs: allJobs.length,
+          completedJobs: completedJobs.length,
+          failedJobs: allJobs.filter(j => j.status === "failed").length,
+          topKeywords: Array.from(keywordMap.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([keyword, count]) => ({ keyword, count })),
+          recentSummaries,
+        };
+      }),
+
     // ジョブを削除
     delete: protectedProcedure
       .input(z.object({ jobId: z.number() }))

@@ -392,6 +392,77 @@ ${videoList}
 }
 
 /**
+ * ハッシュタグ共起パターン分析（ルールベース）
+ */
+function analyzeHashtagCombinations(videosData: Array<{
+  hashtags?: string[] | null;
+  viewCount?: number | bigint | null;
+  likeCount?: number | bigint | null;
+  commentCount?: number | bigint | null;
+  shareCount?: number | bigint | null;
+  saveCount?: number | bigint | null;
+}>): { topCombinations: Array<{ tags: string[]; count: number; avgER: number }>; recommendations: string[] } {
+  // 2タグの組み合わせごとにERを集計
+  const combMap = new Map<string, { tags: string[]; count: number; erSum: number }>();
+  for (const v of videosData) {
+    const tags = (v.hashtags || []).filter(t => t.length > 0).slice(0, 10);
+    const views = Number(v.viewCount) || 0;
+    const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
+    const er = views > 0 ? (eng / views) * 100 : 0;
+    for (let i = 0; i < tags.length; i++) {
+      for (let j = i + 1; j < tags.length; j++) {
+        const key = [tags[i], tags[j]].sort().join("|||");
+        const existing = combMap.get(key);
+        if (existing) {
+          existing.count++;
+          existing.erSum += er;
+        } else {
+          combMap.set(key, { tags: [tags[i], tags[j]].sort(), count: 1, erSum: er });
+        }
+      }
+    }
+  }
+
+  const combinations = Array.from(combMap.values())
+    .filter(c => c.count >= 2)
+    .map(c => ({ tags: c.tags, count: c.count, avgER: Math.round((c.erSum / c.count) * 100) / 100 }))
+    .sort((a, b) => b.avgER - a.avgER)
+    .slice(0, 10);
+
+  // 単体タグのER集計
+  const tagMap = new Map<string, { count: number; erSum: number }>();
+  for (const v of videosData) {
+    const tags = (v.hashtags || []).filter(t => t.length > 0);
+    const views = Number(v.viewCount) || 0;
+    const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
+    const er = views > 0 ? (eng / views) * 100 : 0;
+    for (const tag of tags) {
+      const existing = tagMap.get(tag);
+      if (existing) { existing.count++; existing.erSum += er; }
+      else tagMap.set(tag, { count: 1, erSum: er });
+    }
+  }
+  const topTags = Array.from(tagMap.entries())
+    .filter(([, v]) => v.count >= 2)
+    .map(([tag, v]) => ({ tag, count: v.count, avgER: v.erSum / v.count }))
+    .sort((a, b) => b.avgER - a.avgER);
+
+  const recommendations: string[] = [];
+  if (topTags.length > 0) {
+    recommendations.push(`最も高ERのタグ: #${topTags[0].tag}（平均ER ${topTags[0].avgER.toFixed(1)}%、${topTags[0].count}本）`);
+  }
+  if (combinations.length > 0) {
+    recommendations.push(`最強の組み合わせ: #${combinations[0].tags.join(" + #")}（平均ER ${combinations[0].avgER}%）`);
+  }
+  const lowER = topTags.filter(t => t.count >= 3).sort((a, b) => a.avgER - b.avgER);
+  if (lowER.length > 0 && lowER[0].avgER < topTags[0]?.avgER * 0.5) {
+    recommendations.push(`避けるべきタグ: #${lowER[0].tag}（平均ER ${lowER[0].avgER.toFixed(1)}%、全体平均の半分以下）`);
+  }
+
+  return { topCombinations: combinations, recommendations };
+}
+
+/**
  * ルールベースのスコアリング（LLM不使用）
  * エンゲージメント率・説明文・ハッシュタグ・動画尺などから算出
  */
@@ -777,6 +848,9 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
   
   console.log(`[Analysis] Markdown report generated (${markdownReport.length} characters)`);
   
+  // ハッシュタグ共起分析（ルールベース）
+  const hashtagStrategy = analyzeHashtagCombinations(videosData);
+
   await db.createAnalysisReport({
     jobId,
     totalVideos,
@@ -802,6 +876,7 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
     autoInsight,
     keyInsights,
     facets,
+    hashtagStrategy,
   });
 
   console.log(`[Analysis] Report generated for job ${jobId}`);

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare, BarChart3, TrendingUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -138,6 +138,10 @@ export default function History() {
                   {compareMode ? "キャンセル" : "比較モード"}
                 </Button>
               )}
+              <Button variant="outline" onClick={() => setLocation("/dashboard")}>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                ダッシュボード
+              </Button>
               <Button variant="outline" onClick={() => setLocation("/")}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 戻る
@@ -227,8 +231,19 @@ export default function History() {
                             />
                           )}
                           <div className="space-y-1 flex-1">
-                            <CardTitle>
+                            <CardTitle className="flex items-center gap-2">
                               {job.keyword ? `キーワード: ${job.keyword}` : "手動URL分析"}
+                              {job.keyword && job.status === "completed" && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1.5 text-[10px] text-blue-500 hover:text-blue-700"
+                                  onClick={(e) => { e.stopPropagation(); setLocation(`/trend?keyword=${encodeURIComponent(job.keyword!)}`); }}
+                                  title="トレンド推移を見る"
+                                >
+                                  <TrendingUp className="h-3 w-3" />
+                                </Button>
+                              )}
                             </CardTitle>
                             <CardDescription>
                               {formatDistanceToNow(new Date(job.createdAt), { addSuffix: true, locale: ja })}
