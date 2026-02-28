@@ -15,7 +15,15 @@ import * as path from "path";
 import { logBuffer } from "./logBuffer";
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
-const progressStore = new Map<number, { message: string; percent: number; updatedAt: number }>();
+type ProgressEntry = {
+  message: string;
+  percent: number;
+  updatedAt: number;
+  failedVideos: Array<{ tiktokVideoId: string; error: string }>;
+  totalTarget: number;
+  processedCount: number;
+};
+const progressStore = new Map<number, ProgressEntry>();
 
 // メモリ管理: 10分以上更新のないエントリを定期的に削除
 setInterval(() => {
@@ -29,7 +37,22 @@ setInterval(() => {
 }, 5 * 60 * 1000).unref(); // .unref() でプロセス終了をブロックしない
 
 function setProgress(jobId: number, progress: { message: string; percent: number }) {
-  progressStore.set(jobId, { ...progress, updatedAt: Date.now() });
+  const existing = progressStore.get(jobId);
+  progressStore.set(jobId, {
+    ...progress,
+    updatedAt: Date.now(),
+    failedVideos: existing?.failedVideos ?? [],
+    totalTarget: existing?.totalTarget ?? 0,
+    processedCount: existing?.processedCount ?? 0,
+  });
+}
+
+function addFailedVideo(jobId: number, tiktokVideoId: string, error: string) {
+  const entry = progressStore.get(jobId);
+  if (entry) {
+    entry.failedVideos.push({ tiktokVideoId, error: error.substring(0, 200) });
+    entry.updatedAt = Date.now();
+  }
 }
 
 
@@ -232,35 +255,57 @@ export const appRouter = router({
               // 各動画を分析（重複度情報も含めてDB保存）
               // 5本ずつバッチ処理: Phase1=並列OCR+DB登録, Phase2=センチメント1回LLM, Phase3=DB更新
               const BATCH_SIZE = 5;
-              for (let i = 0; i < allUniqueVideos.length; i += BATCH_SIZE) {
-                const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
-                const percent = 42 + Math.floor(((i + BATCH_SIZE) / allUniqueVideos.length) * 40);
+              const total = allUniqueVideos.length;
+              {
+                const entry = progressStore.get(input.jobId);
+                if (entry) { entry.totalTarget = total; entry.processedCount = 0; }
+              }
 
-                setProgress(input.jobId, {
-                  message: `動画分析中... (${Math.min(i + BATCH_SIZE, allUniqueVideos.length)}/${allUniqueVideos.length})`,
-                  percent,
-                });
+              for (let i = 0; i < total; i += BATCH_SIZE) {
+                const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
+                const done = Math.min(i + BATCH_SIZE, total);
 
                 // Phase1: 並列でOCR・DB登録（センチメントLLMはスキップ）
-                // 1本が失敗しても残りは続行する
+                const p1Pct = 42 + Math.floor((i / total) * 36);
+                setProgress(input.jobId, {
+                  message: `動画登録中... (${done}/${total})`,
+                  percent: p1Pct,
+                });
+
                 const batchSettled = await Promise.allSettled(
                   batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo, { skipSentiment: true }))
                 );
                 const batchResults = batchSettled
                   .filter((r): r is PromiseFulfilledResult<{ dbVideoId: number; sentimentInput: SentimentInput }> => r.status === "fulfilled")
                   .map(r => r.value);
-                batchSettled
-                  .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-                  .forEach(r => console.error("[Analysis] Video processing failed:", r.reason));
+                // 失敗した動画を記録
+                batchSettled.forEach((r, idx) => {
+                  if (r.status === "rejected") {
+                    const vid = batch[idx];
+                    const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+                    console.error(`[Analysis] Video ${vid.id} failed:`, errMsg);
+                    addFailedVideo(input.jobId, vid.id, errMsg);
+                  }
+                });
 
-                if (batchResults.length === 0) continue;
+                if (batchResults.length === 0) {
+                  const entry = progressStore.get(input.jobId);
+                  if (entry) entry.processedCount = done;
+                  continue;
+                }
 
-                // Phase2: 成功した動画のみ、まとめて1回のLLM呼び出しでセンチメント分析
+                // Phase2: センチメント分析（1回のLLM）
+                const p2Pct = 42 + Math.floor(((i + BATCH_SIZE * 0.5) / total) * 36);
+                setProgress(input.jobId, {
+                  message: `センチメント分析中... (${done}/${total})`,
+                  percent: p2Pct,
+                });
+
                 const sentimentResults = await analyzeSentimentAndKeywordsBatch(
                   batchResults.map(r => r.sentimentInput)
                 );
 
-                // Phase3: 各動画のセンチメントをDBに更新
+                // Phase3: DB更新
                 await Promise.all(
                   batchResults.map((r, j) => db.updateVideo(r.dbVideoId, {
                     sentiment: sentimentResults[j]?.sentiment ?? "neutral",
@@ -268,6 +313,15 @@ export const appRouter = router({
                     keywords: sentimentResults[j]?.keywords ?? [],
                   }))
                 );
+
+                const entry = progressStore.get(input.jobId);
+                if (entry) entry.processedCount = done;
+
+                const p3Pct = 42 + Math.floor((done / total) * 36);
+                setProgress(input.jobId, {
+                  message: `動画分析中... (${done}/${total}${entry?.failedVideos.length ? ` / ${entry.failedVideos.length}件失敗` : ""})`,
+                  percent: p3Pct,
+                });
               }
 
             } else if (job.manualUrls && job.manualUrls.length > 0) {
@@ -381,8 +435,31 @@ export const appRouter = router({
               ? "分析失敗"
               : "待機中"
           ),
+          failedVideos: progressInfo?.failedVideos ?? [],
         };
       }),
+    // CSVエクスポート
+    exportCsv: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const videos = await db.getVideosByJobId(input.jobId);
+        const header = "動画ID,アカウント,説明文,再生数,いいね,コメント,シェア,保存,ER%,センチメント,キーフック,ハッシュタグ,動画尺(秒),投稿日時,URL";
+        const rows = videos.map(v => {
+          const views = Number(v.viewCount) || 0;
+          const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
+          const er = views > 0 ? ((eng / views) * 100).toFixed(2) : "0";
+          const desc = (v.description || "").replace(/[\r\n,]/g, " ").substring(0, 100);
+          const hashtags = (v.hashtags as string[] || []).join(" ");
+          const posted = v.postedAt ? new Date(v.postedAt).toISOString() : "";
+          return `${v.videoId},${v.accountName},"${desc}",${v.viewCount},${v.likeCount},${v.commentCount},${v.shareCount},${v.saveCount},${er},${v.sentiment || ""},${(v.keyHook || "").replace(/,/g, "；")},${hashtags},${v.duration || ""},${posted},${v.videoUrl}`;
+        });
+        return { csv: [header, ...rows].join("\n"), filename: `analysis_${input.jobId}_${job.keyword || "manual"}.csv` };
+      }),
+
     // ジョブを削除
     delete: protectedProcedure
       .input(z.object({ jobId: z.number() }))
