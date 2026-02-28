@@ -21,6 +21,10 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection } from '@/components/ReportSection';
 import { filterAdHashtags } from "@shared/const";
+import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
+import DurationAnalysis from "@/components/DurationAnalysis";
+import AccountAnalysis from "@/components/AccountAnalysis";
+import HashtagStrategy from "@/components/HashtagStrategy";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -628,6 +632,37 @@ export default function AnalysisDetail() {
                       )}
                     </Button>
                   )}
+                  {job.status === "completed" && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        const link = document.createElement("a");
+                        link.href = `/api/export-csv?jobId=${jobId}`;
+                        // Use tRPC query to get CSV
+                        fetch(`/api/trpc/analysis.exportCsv?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
+                          .then(r => r.json())
+                          .then(res => {
+                            const csvData = res?.result?.data?.csv;
+                            const filename = res?.result?.data?.filename || `analysis_${jobId}.csv`;
+                            if (csvData) {
+                              const bom = "\uFEFF";
+                              const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = filename;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast.success("CSVをダウンロードしました");
+                            }
+                          })
+                          .catch(() => toast.error("CSVエクスポートに失敗しました"));
+                      }}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      CSV
+                    </Button>
+                  )}
                   {/* PDF機能は仮組環境では停止 */}
                   {/* {job.status === "completed" && (
                     <>
@@ -671,17 +706,40 @@ export default function AnalysisDetail() {
                 </div>
               </div>
             </CardHeader>
-            {job.status === "processing" && progressData && (
+            {(job.status === "processing" || (progressData && (progressData as any).failedVideos?.length > 0)) && progressData && (
               <CardContent>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>進捗状況</span>
-                    <span className="font-medium">{Math.max(0, progressData.progress)}%</span>
-                  </div>
-                  <Progress value={Math.max(0, progressData.progress)} className="h-2" />
-                  <p className="text-xs text-muted-foreground">
-                    {progressData.currentStep}
-                  </p>
+                  {job.status === "processing" && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span>進捗状況</span>
+                        <span className="font-medium">{Math.max(0, progressData.progress)}%</span>
+                      </div>
+                      <Progress value={Math.max(0, progressData.progress)} className="h-2" />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{progressData.currentStep}</span>
+                        <span>{progressData.completedVideos}/{progressData.totalVideos}本完了</span>
+                      </div>
+                    </>
+                  )}
+                  {(progressData as any).failedVideos?.length > 0 && (
+                    <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                      <div className="flex items-center gap-1 text-sm font-medium text-red-700 mb-1">
+                        <AlertTriangle className="h-4 w-4" />
+                        {(progressData as any).failedVideos.length}本の動画で処理に失敗
+                      </div>
+                      <div className="space-y-1">
+                        {(progressData as any).failedVideos.slice(0, 5).map((fv: any, i: number) => (
+                          <div key={i} className="text-xs text-red-600 truncate">
+                            ID: {fv.tiktokVideoId} - {fv.error}
+                          </div>
+                        ))}
+                        {(progressData as any).failedVideos.length > 5 && (
+                          <div className="text-xs text-red-500">他{(progressData as any).failedVideos.length - 5}件...</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             )}
@@ -1202,6 +1260,54 @@ export default function AnalysisDetail() {
                       )}
                     </AccordionContent>
                   </AccordionItem>
+
+                  {/* 投稿時間帯分析 */}
+                  {data?.videos && data.videos.length > 0 && (
+                    <AccordionItem value="posting-time" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        投稿時間帯分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <PostingTimeHeatmap videos={data.videos as any} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* 動画尺分析 */}
+                  {data?.videos && data.videos.length > 0 && (
+                    <AccordionItem value="duration-analysis" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        動画尺 x エンゲージメント分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <DurationAnalysis videos={data.videos as any} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* アカウント横断分析 */}
+                  {data?.videos && data.videos.length > 0 && (
+                    <AccordionItem value="account-analysis" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        アカウント別分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <AccountAnalysis videos={data.videos as any} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* ハッシュタグ戦略 */}
+                  {data?.report && (data.report as any).hashtagStrategy && (
+                    <AccordionItem value="hashtag-strategy" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        ハッシュタグ戦略分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
 
                 </Accordion>
 
