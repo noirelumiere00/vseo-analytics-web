@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare, BarChart3, TrendingUp } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare, BarChart3, TrendingUp, CheckSquare } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -55,6 +55,21 @@ export default function History() {
     },
   });
 
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [deleteSelectedIds, setDeleteSelectedIds] = useState<number[]>([]);
+
+  const bulkDeleteJobs = trpc.analysis.bulkDelete.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.deleted}件の分析ジョブを削除しました`);
+      setDeleteMode(false);
+      setDeleteSelectedIds([]);
+      utils.analysis.list.invalidate();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -91,6 +106,40 @@ export default function History() {
   const toggleCompareMode = () => {
     setCompareMode((prev) => !prev);
     setSelectedIds([]);
+    setDeleteMode(false);
+    setDeleteSelectedIds([]);
+  };
+
+  const toggleDeleteMode = () => {
+    setDeleteMode((prev) => !prev);
+    setDeleteSelectedIds([]);
+    setCompareMode(false);
+    setSelectedIds([]);
+  };
+
+  const toggleDeleteSelect = (e: React.MouseEvent, jobId: number) => {
+    e.stopPropagation();
+    setDeleteSelectedIds((prev) =>
+      prev.includes(jobId) ? prev.filter((id) => id !== jobId) : [...prev, jobId]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (deleteSelectedIds.length === 0) {
+      toast.info("削除するジョブを選択してください");
+      return;
+    }
+    if (window.confirm(`${deleteSelectedIds.length}件の分析ジョブを削除しますか？関連する全てのデータが削除されます。`)) {
+      bulkDeleteJobs.mutate({ jobIds: deleteSelectedIds });
+    }
+  };
+
+  const selectAllDeletable = () => {
+    if (!jobs) return;
+    const deletableIds = jobs.filter((j) => j.status !== "processing").map((j) => j.id);
+    setDeleteSelectedIds((prev) =>
+      prev.length === deletableIds.length ? [] : deletableIds
+    );
   };
 
   const toggleSelect = (e: React.MouseEvent, jobId: number) => {
@@ -129,14 +178,24 @@ export default function History() {
             </div>
             <div className="flex items-center gap-2">
               {jobs && jobs.length >= 2 && (
-                <Button
-                  variant={compareMode ? "default" : "outline"}
-                  onClick={toggleCompareMode}
-                  className={compareMode ? "gradient-primary text-white" : ""}
-                >
-                  <GitCompare className="h-4 w-4 mr-2" />
-                  {compareMode ? "キャンセル" : "比較モード"}
-                </Button>
+                <>
+                  <Button
+                    variant={deleteMode ? "default" : "outline"}
+                    onClick={toggleDeleteMode}
+                    className={deleteMode ? "bg-destructive hover:bg-destructive/90 text-white" : ""}
+                  >
+                    <CheckSquare className="h-4 w-4 mr-2" />
+                    {deleteMode ? "キャンセル" : "選択削除"}
+                  </Button>
+                  <Button
+                    variant={compareMode ? "default" : "outline"}
+                    onClick={toggleCompareMode}
+                    className={compareMode ? "gradient-primary text-white" : ""}
+                  >
+                    <GitCompare className="h-4 w-4 mr-2" />
+                    {compareMode ? "キャンセル" : "比較モード"}
+                  </Button>
+                </>
               )}
               <Button variant="outline" onClick={() => setLocation("/dashboard")}>
                 <BarChart3 className="h-4 w-4 mr-2" />
@@ -148,6 +207,36 @@ export default function History() {
               </Button>
             </div>
           </div>
+
+          {/* Delete action bar */}
+          {deleteMode && (
+            <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/30 bg-destructive/5">
+              <div className="flex items-center gap-3">
+                <Button variant="outline" size="sm" onClick={selectAllDeletable}>
+                  {jobs && deleteSelectedIds.length === jobs.filter((j) => j.status !== "processing").length
+                    ? "全解除"
+                    : "全選択"}
+                </Button>
+                <p className="text-sm text-muted-foreground">
+                  {deleteSelectedIds.length === 0
+                    ? "削除するジョブを選択してください"
+                    : `${deleteSelectedIds.length}件選択中`}
+                </p>
+              </div>
+              <Button
+                disabled={deleteSelectedIds.length === 0 || bulkDeleteJobs.isPending}
+                onClick={handleBulkDelete}
+                variant="destructive"
+              >
+                {bulkDeleteJobs.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 mr-2" />
+                )}
+                {deleteSelectedIds.length}件を削除
+              </Button>
+            </div>
+          )}
 
           {/* Compare action bar */}
           {compareMode && (
@@ -194,13 +283,22 @@ export default function History() {
             <div className="space-y-4">
               {jobs.map((job) => {
                 const isSelected = selectedIds.includes(job.id);
+                const isDeleteSelected = deleteSelectedIds.includes(job.id);
                 const isCompleted = job.status === "completed";
+                const isProcessing = job.status === "processing";
                 const isDisabled = compareMode && !isCompleted;
+                const isDeleteDisabled = deleteMode && isProcessing;
                 return (
                   <Card
                     key={job.id}
                     className={`transition-colors ${
-                      compareMode && isCompleted
+                      deleteMode
+                        ? isProcessing
+                          ? "opacity-50 cursor-not-allowed"
+                          : isDeleteSelected
+                          ? "border-destructive ring-2 ring-destructive/30 cursor-pointer"
+                          : "cursor-pointer hover:border-destructive/60"
+                        : compareMode && isCompleted
                         ? isSelected
                           ? "border-primary ring-2 ring-primary/30 cursor-pointer"
                           : "cursor-pointer hover:border-primary/60"
@@ -209,7 +307,9 @@ export default function History() {
                         : "cursor-pointer hover:border-primary"
                     }`}
                     onClick={(e) => {
-                      if (compareMode) {
+                      if (deleteMode) {
+                        if (!isProcessing) toggleDeleteSelect(e, job.id);
+                      } else if (compareMode) {
                         if (isCompleted) toggleSelect(e, job.id);
                       } else {
                         setLocation(`/analysis/${job.id}`);
@@ -219,6 +319,17 @@ export default function History() {
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-3 flex-1">
+                          {deleteMode && (
+                            <Checkbox
+                              checked={isDeleteSelected}
+                              disabled={isDeleteDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isProcessing) toggleDeleteSelect(e as unknown as React.MouseEvent, job.id);
+                              }}
+                              className="mt-0.5"
+                            />
+                          )}
                           {compareMode && (
                             <Checkbox
                               checked={isSelected}
@@ -253,7 +364,7 @@ export default function History() {
                         <div className="flex items-center gap-2">
                           {getStatusBadge(job.status)}
                           {/* 再実行ボタン（failed/pendingの場合） */}
-                          {!compareMode && (job.status === "failed" || job.status === "pending") && (
+                          {!compareMode && !deleteMode && (job.status === "failed" || job.status === "pending") && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -265,7 +376,7 @@ export default function History() {
                             </Button>
                           )}
                           {/* 削除ボタン（processing以外） */}
-                          {!compareMode && job.status !== "processing" && (
+                          {!compareMode && !deleteMode && job.status !== "processing" && (
                             <Button
                               variant="outline"
                               size="sm"

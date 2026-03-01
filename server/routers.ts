@@ -553,6 +553,28 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // ジョブを一括削除
+    bulkDelete: protectedProcedure
+      .input(z.object({ jobIds: z.array(z.number()).min(1).max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        const skipped: number[] = [];
+        let deleted = 0;
+        for (const jobId of input.jobIds) {
+          const job = await db.getAnalysisJobById(jobId);
+          if (!job || job.userId !== ctx.user.id) {
+            skipped.push(jobId);
+            continue;
+          }
+          if (job.status === "processing") {
+            skipped.push(jobId);
+            continue;
+          }
+          await db.deleteAnalysisJob(jobId);
+          deleted++;
+        }
+        return { success: true, deleted, skipped };
+      }),
+
     // 単一ジョブのPDFエクスポート（仮組環境では停止）
     // exportPdf: protectedProcedure
     //   .input(z.object({ jobId: z.number() }))
