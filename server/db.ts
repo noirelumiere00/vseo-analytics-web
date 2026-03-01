@@ -307,6 +307,29 @@ export async function resetStuckProcessingJobs() {
 }
 
 /**
+ * 分析ジョブの関連データをクリア（ジョブ自体は保持）
+ * 再実行時に重複データを防止するために使用
+ */
+export async function clearAnalysisJobData(jobId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const jobVideos = await db.select({ id: videos.id }).from(videos).where(eq(videos.jobId, jobId));
+  const videoIds = jobVideos.map(v => v.id);
+
+  if (videoIds.length > 0) {
+    await db.delete(ocrResults).where(inArray(ocrResults.videoId, videoIds));
+    await db.delete(transcriptions).where(inArray(transcriptions.videoId, videoIds));
+    await db.delete(analysisScores).where(inArray(analysisScores.videoId, videoIds));
+  }
+  await db.delete(videos).where(eq(videos.jobId, jobId));
+  await db.delete(analysisReports).where(eq(analysisReports.jobId, jobId));
+  await db.delete(tripleSearchResults).where(eq(tripleSearchResults.jobId, jobId));
+
+  console.log(`[Database] Cleared ${videoIds.length} videos and related data for job ${jobId}`);
+}
+
+/**
  * 分析ジョブを削除（関連データも含む）
  */
 export async function deleteAnalysisJob(jobId: number) {
