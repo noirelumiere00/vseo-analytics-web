@@ -5,31 +5,12 @@
 
 import { invokeLLM, LLMQuotaExhaustedError } from "./_core/llm";
 
-export async function analyzeFacetsImproved(
-  videosData: Array<{ accountName: string | null; description: string | null; sentiment?: string | null; jobId?: number }>,
-  jobId?: number
-): Promise<Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>> {
-  try {
-    // 同じ jobId の動画のみをフィルタリング
-    const filteredVideos = jobId 
-      ? videosData.filter(v => v.jobId === jobId).slice(0, 20)
-      : videosData.slice(0, 20);
-    
-    if (filteredVideos.length === 0) {
-      console.warn("[Facet Analysis] No videos found for jobId:", jobId);
-      return [];
-    }
+type FacetResult = Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>;
 
-    // 複数動画のテキストを統合（センチメント情報も含める）
-    const allTexts = filteredVideos
-      .map(v => `@${v.accountName} [${v.sentiment || 'neutral'}]: ${v.description || ""}`)
-      .join("\n\n");
-
-    console.log("[Facet Analysis] Analyzing facets for jobId:", jobId);
-    console.log("[Facet Analysis] Total videos:", filteredVideos.length);
-
-    // 側面の抽出とポジネガ比率を1回のLLMコールで取得
-    const facetPrompt = `
+async function tryAnalyzeFacets(
+  allTexts: string,
+): Promise<FacetResult> {
+  const facetPrompt = `
 あなたはビジネス視点の動画コンテンツ分析専門家です。
 以下の複数動画のテキストから、実際に言及されている「ビジネス上重要な側面」を4-6個抽出し、各側面のポジティブ/ネガティブ比率を計算してください。
 
@@ -38,76 +19,108 @@ export async function analyzeFacetsImproved(
 - 固有名詞（地名、施設名、製品名、ブランド名）は側面として抽出しないでください
 - 感情や評価を表す言葉ではなく、「何について」言及されているかを抽出してください
 - 各側面の比率: ポジティブ + ネガティブ = 100%（ニュートラルは除外）
+- positive_percentage と negative_percentage は 0〜100 の数値にしてください
 
 【動画テキスト】
 ${allTexts}
 `;
 
-    const facetResponse = await invokeLLM({
-      messages: [
-        {
-          role: "system",
-          content: "You are a business-focused video content analysis expert. Extract 4-6 main aspects actually mentioned in the texts (no proper nouns) and calculate positive/negative sentiment percentages for each aspect. Always respond in valid JSON format.",
-        },
-        { role: "user", content: facetPrompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "facet_analysis",
-          strict: true,
-          schema: {
-            type: "object",
-            properties: {
-              aspects: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    aspect: { type: "string" },
-                    positive_percentage: { type: "number", minimum: 0, maximum: 100 },
-                    negative_percentage: { type: "number", minimum: 0, maximum: 100 },
-                  },
-                  required: ["aspect", "positive_percentage", "negative_percentage"],
-                  additionalProperties: false,
+  const facetResponse = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: "You are a business-focused video content analysis expert. Extract 4-6 main aspects actually mentioned in the texts (no proper nouns) and calculate positive/negative sentiment percentages for each aspect. Always respond in valid JSON format.",
+      },
+      { role: "user", content: facetPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "facet_analysis",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            aspects: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  aspect: { type: "string" },
+                  positive_percentage: { type: "number" },
+                  negative_percentage: { type: "number" },
                 },
-                minItems: 4,
-                maxItems: 6,
+                required: ["aspect", "positive_percentage", "negative_percentage"],
+                additionalProperties: false,
               },
             },
-            required: ["aspects"],
-            additionalProperties: false,
           },
+          required: ["aspects"],
+          additionalProperties: false,
         },
       },
-    });
+    },
+  });
 
-    const facetContent = typeof facetResponse.choices[0]?.message?.content === 'string'
-      ? facetResponse.choices[0].message.content
-      : JSON.stringify(facetResponse.choices[0]?.message?.content);
+  const facetContent = typeof facetResponse.choices[0]?.message?.content === 'string'
+    ? facetResponse.choices[0].message.content
+    : JSON.stringify(facetResponse.choices[0]?.message?.content);
 
-    let aspectsWithSentiment: Array<{ aspect: string; positive_percentage: number; negative_percentage: number }> = [];
-    try {
-      const parsed = JSON.parse(facetContent || "{}");
-      aspectsWithSentiment = parsed.aspects || [];
-      console.log("[Facet Analysis] Aspects with sentiment:", aspectsWithSentiment);
-    } catch (error) {
-      console.error("[Facet Analysis] Error parsing facet response:", error);
-      return [];
-    }
+  const parsed = JSON.parse(facetContent || "{}");
+  const aspects: FacetResult = parsed.aspects || [];
 
-    if (aspectsWithSentiment.length === 0) {
-      console.warn("[Facet Analysis] No aspects returned");
-      return [];
-    }
+  if (aspects.length === 0) {
+    throw new Error("LLM returned empty aspects array");
+  }
 
-    return aspectsWithSentiment;
+  return aspects;
+}
 
-  } catch (error) {
-    console.error("[Facet Analysis] Error:", error);
-    if (error instanceof LLMQuotaExhaustedError) {
-      throw error;
-    }
+export async function analyzeFacetsImproved(
+  videosData: Array<{ accountName: string | null; description: string | null; sentiment?: string | null; jobId?: number }>,
+  jobId?: number
+): Promise<FacetResult> {
+  // 同じ jobId の動画のみをフィルタリング
+  const filteredVideos = jobId
+    ? videosData.filter(v => v.jobId === jobId).slice(0, 20)
+    : videosData.slice(0, 20);
+
+  if (filteredVideos.length === 0) {
+    console.warn("[Facet Analysis] No videos found for jobId:", jobId);
     return [];
   }
+
+  // 複数動画のテキストを統合（センチメント情報も含める）
+  const allTexts = filteredVideos
+    .map(v => `@${v.accountName} [${v.sentiment || 'neutral'}]: ${v.description || ""}`)
+    .join("\n\n");
+
+  console.log("[Facet Analysis] Analyzing facets for jobId:", jobId);
+  console.log("[Facet Analysis] Total videos:", filteredVideos.length);
+
+  // 最大2回リトライ（合計3回試行）
+  const MAX_ATTEMPTS = 3;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const result = await tryAnalyzeFacets(allTexts);
+      console.log(`[Facet Analysis] Success on attempt ${attempt}, ${result.length} aspects extracted`);
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (error instanceof LLMQuotaExhaustedError) {
+        throw error;
+      }
+      console.error(`[Facet Analysis] Attempt ${attempt}/${MAX_ATTEMPTS} failed:`, error instanceof Error ? error.message : error);
+      if (attempt < MAX_ATTEMPTS) {
+        const delay = attempt * 2000;
+        console.log(`[Facet Analysis] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  console.error(`[Facet Analysis] All ${MAX_ATTEMPTS} attempts failed for jobId ${jobId}. Last error:`, lastError);
+  return [];
 }
