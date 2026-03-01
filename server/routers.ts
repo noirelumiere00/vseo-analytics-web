@@ -204,6 +204,11 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
+        // 既に処理中の場合は重複実行を防止
+        if (job.status === "processing") {
+          return { success: true, message: "分析は既に実行中です。" };
+        }
+
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
         setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
@@ -211,6 +216,10 @@ export const appRouter = router({
         // 非同期で分析を実行
         setImmediate(async () => {
           try {
+            // 既存の分析データをクリア（再実行時の重複防止）
+            await db.clearAnalysisJobData(input.jobId);
+            console.log(`[Analysis] Cleared existing data for job ${input.jobId}`);
+
             if (job.keyword) {
               // === 3シークレットブラウザでTikTok検索 ===
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
