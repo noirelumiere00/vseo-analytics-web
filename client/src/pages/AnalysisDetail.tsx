@@ -31,7 +31,7 @@ export default function AnalysisDetail() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
-  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate">("dominance");
+  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
 
@@ -411,14 +411,39 @@ export default function AnalysisDetail() {
   const sortedCategorizedVideos = useMemo(() => {
     if (!categorizedVideos) return null;
     const rankInfo = (data?.tripleSearch as any)?.rankInfo ?? {};
+    const sentimentOrder: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
     const sort = (arr: any[]) => [...arr].sort((a, b) => {
       if (videoSortKey === "views") return (b.viewCount || 0) - (a.viewCount || 0);
       if (videoSortKey === "engagementRate") return getEngagementRate(b) - getEngagementRate(a);
+      if (videoSortKey === "sentiment") {
+        const sa = sentimentOrder[a.sentiment ?? ""] ?? 3;
+        const sb = sentimentOrder[b.sentiment ?? ""] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return (b.viewCount || 0) - (a.viewCount || 0); // 同センチメント内は再生数順
+      }
       // dominance: 順位重み付きスコア（高いほど安定して上位表示）
       return (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0);
     });
     return { all3: sort(categorizedVideos.all3), in2: sort(categorizedVideos.in2), in1: sort(categorizedVideos.in1) };
   }, [categorizedVideos, videoSortKey, data?.tripleSearch, getEngagementRate]);
+
+  // 全件用ソート済み動画リスト
+  const sortedVideos = useMemo(() => {
+    if (!data?.videos) return [];
+    const rankInfo = (data?.tripleSearch as any)?.rankInfo ?? {};
+    const sentimentOrder: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
+    return [...data.videos].sort((a, b) => {
+      if (videoSortKey === "views") return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
+      if (videoSortKey === "engagementRate") return getEngagementRate(b) - getEngagementRate(a);
+      if (videoSortKey === "sentiment") {
+        const sa = sentimentOrder[(a as any).sentiment ?? ""] ?? 3;
+        const sb = sentimentOrder[(b as any).sentiment ?? ""] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
+      }
+      return (rankInfo[(b as any).videoId]?.dominanceScore ?? 0) - (rankInfo[(a as any).videoId]?.dominanceScore ?? 0);
+    });
+  }, [data?.videos, videoSortKey, data?.tripleSearch, getEngagementRate]);
 
   // Helper functions as callbacks - MUST be before any early returns
   const getSentimentBadge = useCallback((sentiment: string | null) => {
@@ -1335,7 +1360,8 @@ export default function AnalysisDetail() {
                   {[
                     { key: "dominance", label: "安定順位順" },
                     { key: "views", label: "再生数順" },
-                    { key: "engagementRate", label: "エンゲージメント率順" },
+                    { key: "engagementRate", label: "ER率順" },
+                    { key: "sentiment", label: "ポジネガ順" },
                   ].map(({ key, label }) => (
                     <Button
                       key={key}
@@ -1378,11 +1404,11 @@ export default function AnalysisDetail() {
                       <VideoList videos={sortedCategorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                     <TabsContent value="all">
-                      <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                      <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                  <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                 )}
               </CardContent>
             </Card>
