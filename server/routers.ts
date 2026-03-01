@@ -111,8 +111,18 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
-        const videosData = await db.getVideosByJobId(input.jobId);
-        
+        const videosDataRaw = await db.getVideosByJobId(input.jobId);
+
+        // 重複排除: 同じvideoIdが複数レコード存在する場合、最新（id大）を優先
+        const seen = new Map<string, typeof videosDataRaw[0]>();
+        for (const v of videosDataRaw) {
+          const existing = seen.get(v.videoId);
+          if (!existing || v.id > existing.id) {
+            seen.set(v.videoId, v);
+          }
+        }
+        const videosData = Array.from(seen.values());
+
         // 各動画のOCR結果、音声文字起こし、スコアを取得
         const videosWithDetails = await Promise.all(
           videosData.map(async (video) => {
@@ -207,6 +217,9 @@ export const appRouter = router({
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
         setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
+
+        // 再実行時に古い動画データをクリア（重複防止）
+        await db.clearJobVideoData(input.jobId);
 
         // 非同期で分析を実行
         setImmediate(async () => {
