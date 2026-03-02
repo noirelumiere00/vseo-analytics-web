@@ -1350,7 +1350,7 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent>
                 {/* ソートコントロール */}
-                <div className="flex items-center gap-2 mb-4 pb-4 border-b">
+                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b">
                   <span className="text-xs text-muted-foreground font-medium">並び順:</span>
                   {[
                     { key: "dominance", label: "安定順位順" },
