@@ -1286,11 +1286,11 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* 投稿・動画尺・ハッシュタグ統合分析 */}
+                  {/* 投稿最適化インサイト */}
                   {data?.videos && data.videos.length > 0 && (
                     <AccordionItem value="posting-duration-hashtag" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        投稿・動画尺・ハッシュタグ分析
+                        投稿最適化インサイト
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <Tabs defaultValue="heatmap" className="w-full">
