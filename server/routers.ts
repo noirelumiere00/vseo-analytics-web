@@ -9,7 +9,8 @@ import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, an
 import { LLMQuotaExhaustedError } from "./_core/llm";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
-import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
+// pdfExporter: 全エンドポイントがコメントアウト済みのため import 削除（メモリ節約）
+// import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
 import * as fs from "fs";
 import * as path from "path";
@@ -232,8 +233,10 @@ export const appRouter = router({
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
                 15, // 各セッション15件
-                (msg: string) => {
-                  setProgress(input.jobId, { message: msg, percent: 40 });
+                (msg: string, scraperPct: number) => {
+                  // スクレイパーの進捗(5-90%)を全体の検索フェーズ(5-40%)にマッピング
+                  const pct = Math.min(40, Math.round(5 + ((scraperPct - 5) / 85) * 35));
+                  setProgress(input.jobId, { message: msg, percent: pct });
                 }
               );
 

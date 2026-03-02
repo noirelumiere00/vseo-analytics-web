@@ -31,7 +31,7 @@ export default function AnalysisDetail() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
-  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate">("dominance");
+  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
 
@@ -411,14 +411,39 @@ export default function AnalysisDetail() {
   const sortedCategorizedVideos = useMemo(() => {
     if (!categorizedVideos) return null;
     const rankInfo = (data?.tripleSearch as any)?.rankInfo ?? {};
+    const sentimentOrder: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
     const sort = (arr: any[]) => [...arr].sort((a, b) => {
       if (videoSortKey === "views") return (b.viewCount || 0) - (a.viewCount || 0);
       if (videoSortKey === "engagementRate") return getEngagementRate(b) - getEngagementRate(a);
+      if (videoSortKey === "sentiment") {
+        const sa = sentimentOrder[a.sentiment ?? ""] ?? 3;
+        const sb = sentimentOrder[b.sentiment ?? ""] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return (b.viewCount || 0) - (a.viewCount || 0); // 同センチメント内は再生数順
+      }
       // dominance: 順位重み付きスコア（高いほど安定して上位表示）
       return (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0);
     });
     return { all3: sort(categorizedVideos.all3), in2: sort(categorizedVideos.in2), in1: sort(categorizedVideos.in1) };
   }, [categorizedVideos, videoSortKey, data?.tripleSearch, getEngagementRate]);
+
+  // 全件用ソート済み動画リスト
+  const sortedVideos = useMemo(() => {
+    if (!data?.videos) return [];
+    const rankInfo = (data?.tripleSearch as any)?.rankInfo ?? {};
+    const sentimentOrder: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
+    return [...data.videos].sort((a, b) => {
+      if (videoSortKey === "views") return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
+      if (videoSortKey === "engagementRate") return getEngagementRate(b) - getEngagementRate(a);
+      if (videoSortKey === "sentiment") {
+        const sa = sentimentOrder[(a as any).sentiment ?? ""] ?? 3;
+        const sb = sentimentOrder[(b as any).sentiment ?? ""] ?? 3;
+        if (sa !== sb) return sa - sb;
+        return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
+      }
+      return (rankInfo[(b as any).videoId]?.dominanceScore ?? 0) - (rankInfo[(a as any).videoId]?.dominanceScore ?? 0);
+    });
+  }, [data?.videos, videoSortKey, data?.tripleSearch, getEngagementRate]);
 
   // Helper functions as callbacks - MUST be before any early returns
   const getSentimentBadge = useCallback((sentiment: string | null) => {
@@ -558,7 +583,7 @@ export default function AnalysisDetail() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium text-sm truncate">
-                            {j.keyword ? `#${j.keyword}` : "手動URL分析"}
+                            {j.keyword ? j.keyword.replace(/^#+/, "") : "手動URL分析"}
                           </span>
                           {isSelected && (
                             <Badge className="bg-primary text-white text-[10px] shrink-0">選択中</Badge>
@@ -1261,26 +1286,33 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* 投稿時間帯分析 */}
+                  {/* 投稿最適化インサイト */}
                   {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="posting-time" className="border rounded-xl">
+                    <AccordionItem value="posting-duration-hashtag" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        投稿件数ヒートマップ（曜日 x 時間帯）
+                        投稿最適化インサイト
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
-                        <PostingTimeHeatmap videos={data.videos as any} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* 動画尺分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="duration-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画尺 x 平均ER%
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <DurationAnalysis videos={data.videos as any} />
+                        <Tabs defaultValue="heatmap" className="w-full">
+                          <TabsList className="w-full">
+                            <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x ER</TabsTrigger>
+                            {(data.report as any)?.hashtagStrategy && (
+                              <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
+                            )}
+                          </TabsList>
+                          <TabsContent value="heatmap" className="mt-4">
+                            <PostingTimeHeatmap videos={data.videos as any} />
+                          </TabsContent>
+                          <TabsContent value="duration" className="mt-4">
+                            <DurationAnalysis videos={data.videos as any} />
+                          </TabsContent>
+                          {(data.report as any)?.hashtagStrategy && (
+                            <TabsContent value="hashtag" className="mt-4">
+                              <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                            </TabsContent>
+                          )}
+                        </Tabs>
                       </AccordionContent>
                     </AccordionItem>
                   )}
@@ -1293,18 +1325,6 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <AccountAnalysis videos={data.videos as any} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* ハッシュタグ戦略 */}
-                  {data?.report && (data.report as any).hashtagStrategy && (
-                    <AccordionItem value="hashtag-strategy" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        ハッシュタグ戦略分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <HashtagStrategy data={(data.report as any).hashtagStrategy} />
                       </AccordionContent>
                     </AccordionItem>
                   )}
@@ -1330,12 +1350,13 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent>
                 {/* ソートコントロール */}
-                <div className="flex items-center gap-2 mb-4 pb-4 border-b">
+                <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b">
                   <span className="text-xs text-muted-foreground font-medium">並び順:</span>
                   {[
                     { key: "dominance", label: "安定順位順" },
                     { key: "views", label: "再生数順" },
-                    { key: "engagementRate", label: "エンゲージメント率順" },
+                    { key: "engagementRate", label: "ER率順" },
+                    { key: "sentiment", label: "ポジネガ順" },
                   ].map(({ key, label }) => (
                     <Button
                       key={key}
@@ -1378,11 +1399,11 @@ export default function AnalysisDetail() {
                       <VideoList videos={sortedCategorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                     <TabsContent value="all">
-                      <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                      <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <VideoList videos={videos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                  <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                 )}
               </CardContent>
             </Card>

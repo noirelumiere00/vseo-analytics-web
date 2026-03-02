@@ -186,7 +186,7 @@ async function searchInIncognitoContext(
   const page = await context.newPage();
 
   try {
-    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setViewport({ width: 800, height: 600 });
     await page.setUserAgent(USER_AGENTS[sessionIndex % USER_AGENTS.length]);
     await page.setExtraHTTPHeaders({
       "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -470,6 +470,30 @@ function analyzeDuplicates(
   };
 }
 
+// Chromium起動引数を一元管理（メモリ最適化 + プロキシ設定）
+function buildChromiumArgs(): string[] {
+  const args = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--single-process",
+    "--disable-extensions",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--no-first-run",
+    "--window-size=800,600",
+    "--lang=ja-JP",
+  ];
+  if (process.env.PROXY_SERVER) {
+    args.push(`--proxy-server=${process.env.PROXY_SERVER}`);
+    console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER}`);
+  } else {
+    console.warn("[TikTok] PROXY_SERVER not set. Running without proxy.");
+  }
+  return args;
+}
+
 // メイン関数: 3つのシークレットブラウザで同一キーワード検索→重複度分析
 export async function searchTikTokTriple(
   keyword: string,
@@ -483,14 +507,7 @@ export async function searchTikTokTriple(
     browser = await puppeteer.launch({
       executablePath: "/usr/bin/chromium-browser",
       headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu",
-        "--window-size=1920,1080",
-        "--lang=ja-JP",
-      ],
+      args: buildChromiumArgs(),
     });
     console.log("[Puppeteer] Browser launched successfully");
   } catch (launchError: any) {
@@ -575,14 +592,7 @@ export async function searchTikTokVideos(
   const browser = await puppeteer.launch({
     executablePath: "/usr/bin/chromium-browser",
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ],
+    args: buildChromiumArgs(),
   });
 
   try {
@@ -605,18 +615,10 @@ export async function searchTikTokVideos(
  * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
  */
 export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
-  const puppeteer = require("puppeteer-extra");
-  
   const browser = await puppeteer.launch({
+    executablePath: "/usr/bin/chromium-browser",
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1920,1080",
-      "--lang=ja-JP",
-    ],
+    args: buildChromiumArgs(),
   });
 
   const page = await browser.newPage();

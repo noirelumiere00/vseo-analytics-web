@@ -243,9 +243,9 @@ export async function createAnalysisReport(report: InsertAnalysisReport) {
 export async function getAnalysisReportByJobId(jobId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  
+
   const result = await db.select().from(analysisReports).where(eq(analysisReports.jobId, jobId)).limit(1);
-  return result[0];
+  return result.length > 0 ? result[0] : undefined;
 }
 
 export async function updateAnalysisReport(jobId: number, report: Partial<InsertAnalysisReport>) {
