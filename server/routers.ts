@@ -233,8 +233,10 @@ export const appRouter = router({
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
                 15, // 各セッション15件
-                (msg: string) => {
-                  setProgress(input.jobId, { message: msg, percent: 40 });
+                (msg: string, scraperPct: number) => {
+                  // スクレイパーの進捗(5-90%)を全体の検索フェーズ(5-40%)にマッピング
+                  const pct = Math.min(40, Math.round(5 + ((scraperPct - 5) / 85) * 35));
+                  setProgress(input.jobId, { message: msg, percent: pct });
                 }
               );
 
