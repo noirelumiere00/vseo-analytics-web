@@ -1120,6 +1120,18 @@ export default function AnalysisDetail() {
                 {/* 詳細分析アコーディオン */}
                 <Accordion type="multiple" className="space-y-2">
 
+                  {/* アカウント横断分析 */}
+                  {data?.videos && data.videos.length > 0 && (
+                    <AccordionItem value="account-analysis" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        アカウント別分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <AccountAnalysis videos={data.videos as any} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
                   {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
                   {data && data.report && (
                     <AccordionItem value="aspects" className="border rounded-xl">
@@ -1313,18 +1325,6 @@ export default function AnalysisDetail() {
                             </TabsContent>
                           )}
                         </Tabs>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* アカウント横断分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="account-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        アカウント別分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <AccountAnalysis videos={data.videos as any} />
                       </AccordionContent>
                     </AccordionItem>
                   )}
