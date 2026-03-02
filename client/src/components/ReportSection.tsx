@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FrequentWordsCloud, type EmotionWord } from "./FrequentWordsCloud";
 
@@ -90,8 +91,16 @@ export function ReportSection({
   negativeWords = [],
   emotionWords,
 }: ReportSectionProps) {
-  const strengths = aspects.filter((a) => a.pos >= 75);
-  const improvements = aspects.filter((a) => a.pos < 75);
+  const [aspectSort, setAspectSort] = useState<"default" | "pos" | "neg">("default");
+
+  const sortedAspects = useMemo(() => {
+    if (aspectSort === "pos") return [...aspects].sort((a, b) => b.pos - a.pos);
+    if (aspectSort === "neg") return [...aspects].sort((a, b) => b.neg - a.neg);
+    return aspects;
+  }, [aspects, aspectSort]);
+
+  const strengths = sortedAspects.filter((a) => a.pos >= 75);
+  const improvements = sortedAspects.filter((a) => a.pos < 75);
 
   const cleanKeyword = keyword.replace(/^#+/, "");
 
@@ -107,32 +116,63 @@ export function ReportSection({
           <p className="text-xs text-muted-foreground mb-3">
             {platform}上の {cleanKeyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
           </p>
-          <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
-            </span>
-          </div>
-
-          {strengths.length > 0 && (
-            <div className="mb-3">
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
-                ● 強み
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
               </span>
-              {strengths.map((a) => (
-                <AspectRow key={a.name} aspect={a} />
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
+              </span>
+            </div>
+            <div className="flex gap-1">
+              {([
+                { key: "default", label: "強み/要改善" },
+                { key: "pos", label: "ポジ順" },
+                { key: "neg", label: "ネガ順" },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setAspectSort(key)}
+                  className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                    aspectSort === key
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"
+                  }`}
+                >
+                  {label}
+                </button>
               ))}
             </div>
-          )}
+          </div>
 
-          {improvements.length > 0 && (
+          {aspectSort === "default" ? (
+            <>
+              {strengths.length > 0 && (
+                <div className="mb-3">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
+                    ● 強み
+                  </span>
+                  {strengths.map((a) => (
+                    <AspectRow key={a.name} aspect={a} />
+                  ))}
+                </div>
+              )}
+
+              {improvements.length > 0 && (
+                <div>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
+                    ● 要改善
+                  </span>
+                  {improvements.map((a) => (
+                    <AspectRow key={a.name} aspect={a} />
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
             <div>
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
-                ● 要改善
-              </span>
-              {improvements.map((a) => (
+              {sortedAspects.map((a) => (
                 <AspectRow key={a.name} aspect={a} />
               ))}
             </div>
