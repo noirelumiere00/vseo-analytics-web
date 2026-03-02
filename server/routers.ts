@@ -9,7 +9,8 @@ import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, an
 import { LLMQuotaExhaustedError } from "./_core/llm";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
-import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
+// pdfExporter: 全エンドポイントがコメントアウト済みのため import 削除（メモリ節約）
+// import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
 import * as fs from "fs";
 import * as path from "path";
