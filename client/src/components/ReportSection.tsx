@@ -1,3 +1,4 @@
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FrequentWordsCloud, type EmotionWord } from "./FrequentWordsCloud";
 
 interface Aspect {
@@ -92,70 +93,66 @@ export function ReportSection({
   const strengths = aspects.filter((a) => a.pos >= 75);
   const improvements = aspects.filter((a) => a.pos < 75);
 
+  const cleanKeyword = keyword.replace(/^#+/, "");
+
   return (
-    <div className="space-y-0 pt-2">
+    <div className="pt-2">
+      <Tabs defaultValue="facets" className="w-full">
+        <TabsList className="w-full">
+          <TabsTrigger value="facets" className="flex-1 text-xs">側面分析</TabsTrigger>
+          <TabsTrigger value="words" className="flex-1 text-xs">頻出ワード分析</TabsTrigger>
+        </TabsList>
 
-      {/* 側面分析・強み弱み分析 */}
-      <div className="pb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-            側面分析・強み弱み分析
-          </h4>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">
-          {platform}上の #{keyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
-        </p>
-        <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
-          </span>
-        </div>
-
-        {strengths.length > 0 && (
-          <div className="mb-3">
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
-              ● 強み
-            </span>
-            {strengths.map((a) => (
-              <AspectRow key={a.name} aspect={a} />
-            ))}
-          </div>
-        )}
-
-        {improvements.length > 0 && (
-          <div>
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
-              ● 要改善
-            </span>
-            {improvements.map((a) => (
-              <AspectRow key={a.name} aspect={a} />
-            ))}
-          </div>
-        )}
-
-        {aspects.length === 0 && (
-          <p className="text-xs text-muted-foreground text-center py-4">
-            分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+        <TabsContent value="facets" className="mt-4">
+          <p className="text-xs text-muted-foreground mb-3">
+            {platform}上の {cleanKeyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
           </p>
-        )}
-      </div>
+          <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
+            </span>
+          </div>
 
-      <div className="border-t pt-4">
-        <div className="mb-3">
-          <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-            頻出ワード分析
-          </h4>
-        </div>
-        <FrequentWordsCloud
-          emotionWords={emotionWords}
-          positiveWords={positiveWords}
-          negativeWords={negativeWords}
-        />
-      </div>
+          {strengths.length > 0 && (
+            <div className="mb-3">
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
+                ● 強み
+              </span>
+              {strengths.map((a) => (
+                <AspectRow key={a.name} aspect={a} />
+              ))}
+            </div>
+          )}
 
+          {improvements.length > 0 && (
+            <div>
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
+                ● 要改善
+              </span>
+              {improvements.map((a) => (
+                <AspectRow key={a.name} aspect={a} />
+              ))}
+            </div>
+          )}
+
+          {aspects.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+            </p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="words" className="mt-4">
+          <FrequentWordsCloud
+            emotionWords={emotionWords}
+            positiveWords={positiveWords}
+            negativeWords={negativeWords}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
