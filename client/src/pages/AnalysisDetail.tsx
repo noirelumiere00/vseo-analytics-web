@@ -583,7 +583,7 @@ export default function AnalysisDetail() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium text-sm truncate">
-                            {j.keyword ? `#${j.keyword}` : "手動URL分析"}
+                            {j.keyword ? j.keyword.replace(/^#+/, "") : "手動URL分析"}
                           </span>
                           {isSelected && (
                             <Badge className="bg-primary text-white text-[10px] shrink-0">選択中</Badge>
@@ -1286,26 +1286,33 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* 投稿時間帯分析 */}
+                  {/* 投稿・動画尺・ハッシュタグ統合分析 */}
                   {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="posting-time" className="border rounded-xl">
+                    <AccordionItem value="posting-duration-hashtag" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        投稿件数ヒートマップ（曜日 x 時間帯）
+                        投稿・動画尺・ハッシュタグ分析
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
-                        <PostingTimeHeatmap videos={data.videos as any} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* 動画尺分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="duration-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画尺 x 平均ER%
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <DurationAnalysis videos={data.videos as any} />
+                        <Tabs defaultValue="heatmap" className="w-full">
+                          <TabsList className="w-full">
+                            <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x ER</TabsTrigger>
+                            {(data.report as any)?.hashtagStrategy && (
+                              <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
+                            )}
+                          </TabsList>
+                          <TabsContent value="heatmap" className="mt-4">
+                            <PostingTimeHeatmap videos={data.videos as any} />
+                          </TabsContent>
+                          <TabsContent value="duration" className="mt-4">
+                            <DurationAnalysis videos={data.videos as any} />
+                          </TabsContent>
+                          {(data.report as any)?.hashtagStrategy && (
+                            <TabsContent value="hashtag" className="mt-4">
+                              <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                            </TabsContent>
+                          )}
+                        </Tabs>
                       </AccordionContent>
                     </AccordionItem>
                   )}
@@ -1318,18 +1325,6 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
                         <AccountAnalysis videos={data.videos as any} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* ハッシュタグ戦略 */}
-                  {data?.report && (data.report as any).hashtagStrategy && (
-                    <AccordionItem value="hashtag-strategy" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        ハッシュタグ戦略分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <HashtagStrategy data={(data.report as any).hashtagStrategy} />
                       </AccordionContent>
                     </AccordionItem>
                   )}
