@@ -1,5 +1,7 @@
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { execSync } from "child_process";
+import * as fs from "fs";
 
 // Stealth プラグインを有効化
 const stealthPlugin = StealthPlugin();
@@ -470,6 +472,46 @@ function analyzeDuplicates(
   };
 }
 
+// Chromium/Chrome実行パスを自動検出
+function findChromiumPath(): string {
+  // 環境変数で指定があればそれを優先
+  if (process.env.CHROMIUM_PATH && fs.existsSync(process.env.CHROMIUM_PATH)) {
+    return process.env.CHROMIUM_PATH;
+  }
+
+  // 候補パスをチェック（優先度順）
+  const candidates = [
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/google-chrome",
+    "/opt/google/chrome/chrome",
+    "/usr/bin/chromium-browser",
+    "/usr/bin/chromium",
+    "/snap/bin/chromium",
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      console.log(`[Puppeteer] Found browser at: ${candidate}`);
+      return candidate;
+    }
+  }
+
+  // whichコマンドでの検索をフォールバック
+  try {
+    const result = execSync("which google-chrome-stable || which google-chrome || which chromium-browser || which chromium", { encoding: "utf-8" }).trim();
+    if (result) {
+      console.log(`[Puppeteer] Found browser via which: ${result}`);
+      return result;
+    }
+  } catch {
+    // ignore
+  }
+
+  // デフォルトフォールバック
+  console.warn("[Puppeteer] No browser found, falling back to /usr/bin/chromium-browser");
+  return "/usr/bin/chromium-browser";
+}
+
 // Chromium起動引数を一元管理（メモリ最適化 + プロキシ設定）
 function buildChromiumArgs(): string[] {
   const args = [
@@ -503,9 +545,10 @@ export async function searchTikTokTriple(
   // ブラウザを起動
   let browser: Browser;
   try {
-    console.log("[Puppeteer] Launching browser with executablePath: /usr/bin/chromium-browser");
+    const chromiumPath = findChromiumPath();
+    console.log(`[Puppeteer] Launching browser with executablePath: ${chromiumPath}`);
     browser = await puppeteer.launch({
-      executablePath: "/usr/bin/chromium-browser",
+      executablePath: chromiumPath,
       headless: true,
       args: buildChromiumArgs(),
     });
@@ -590,7 +633,7 @@ export async function searchTikTokVideos(
   onProgress?: (fetched: number, total: number) => void
 ): Promise<TikTokSearchResult> {
   const browser = await puppeteer.launch({
-    executablePath: "/usr/bin/chromium-browser",
+    executablePath: findChromiumPath(),
     headless: true,
     args: buildChromiumArgs(),
   });
@@ -616,7 +659,7 @@ export async function searchTikTokVideos(
  */
 export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
   const browser = await puppeteer.launch({
-    executablePath: "/usr/bin/chromium-browser",
+    executablePath: findChromiumPath(),
     headless: true,
     args: buildChromiumArgs(),
   });
