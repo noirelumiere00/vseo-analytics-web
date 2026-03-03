@@ -124,6 +124,17 @@ export type ResponseFormat =
 // ================================================================
 
 /**
+ * 絵文字・制御文字を除去して Bedrock Converse API の JSON シリアライゼーションエラーを防ぐ
+ */
+function sanitizeForBedrock(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/[\u{1F600}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{200D}\u{20E3}\u{FE0F}\u{E0020}-\u{E007F}]/gu, '')
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+}
+
+/**
  * messages配列から system role を抽出して Bedrock の system パラメータに変換
  * Bedrock Converse API は system を messages に含めず別パラメータで渡す
  */
@@ -145,11 +156,11 @@ function extractSystemAndMessages(messages: Message[]): {
         : "";
 
     if (msg.role === "system") {
-      system.push({ text: textContent });
+      system.push({ text: sanitizeForBedrock(textContent) });
     } else {
       bedrockMessages.push({
         role: msg.role === "assistant" ? "assistant" : "user",
-        content: [{ text: textContent }],
+        content: [{ text: sanitizeForBedrock(textContent) }],
       });
     }
   }
