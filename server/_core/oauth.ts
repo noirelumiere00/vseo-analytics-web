@@ -4,50 +4,56 @@ import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
-function getQueryParam(req: Request, key: string): string | undefined {
-  const value = req.query[key];
-  return typeof value === "string" ? value : undefined;
-}
-
 export function registerOAuthRoutes(app: Express) {
-  app.get("/api/oauth/callback", async (req: Request, res: Response) => {
-    const code = getQueryParam(req, "code");
-    const state = getQueryParam(req, "state");
-
-    if (!code || !state) {
-      res.status(400).json({ error: "code and state are required" });
-      return;
-    }
-
+  /**
+   * POST /api/auth/login
+   * Standalone local login – replaces external Manus OAuth.
+   * Accepts { name, email? } and creates a session.
+   */
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-      const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
+      const { name, email } = req.body ?? {};
 
-      if (!userInfo.openId) {
-        res.status(400).json({ error: "openId missing from user info" });
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        res.status(400).json({ error: "name is required" });
         return;
       }
 
+      // Derive a stable openId from the name (+ optional email).
+      // For a simple standalone setup we hash the name to create a
+      // deterministic identifier so the same person gets the same account.
+      const identifier = email?.trim()
+        ? email.trim().toLowerCase()
+        : name.trim().toLowerCase();
+
+      // Simple deterministic openId: prefix + base64 of identifier
+      const openId = "local_" + Buffer.from(identifier).toString("base64url");
+
       await db.upsertUser({
-        openId: userInfo.openId,
-        name: userInfo.name || null,
-        email: userInfo.email ?? null,
-        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+        openId,
+        name: name.trim(),
+        email: email?.trim() || null,
+        loginMethod: "local",
         lastSignedIn: new Date(),
       });
 
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
-        name: userInfo.name || "",
+      const sessionToken = await sdk.createSessionToken(openId, {
+        name: name.trim(),
         expiresInMs: ONE_YEAR_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      res.json({ success: true, openId });
     } catch (error) {
-      console.error("[OAuth] Callback failed", error);
-      res.status(500).json({ error: "OAuth callback failed" });
+      console.error("[Auth] Login failed", error);
+      res.status(500).json({ error: "Login failed" });
     }
+  });
+
+  // Keep legacy callback route for backwards-compatibility (no-op redirect)
+  app.get("/api/oauth/callback", (_req: Request, res: Response) => {
+    res.redirect(302, "/login");
   });
 }
