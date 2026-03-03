@@ -7,6 +7,7 @@ export class LLMQuotaExhaustedError extends Error {
   }
 }
 
+// === 型定義（変更なし・そのまま維持） ===
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
 export type TextContent = {
@@ -26,7 +27,7 @@ export type FileContent = {
   type: "file_url";
   file_url: {
     url: string;
-    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4" ;
+    mime_type?: "audio/mpeg" | "audio/wav" | "application/pdf" | "audio/mp4" | "video/mp4";
   };
 };
 
@@ -84,6 +85,7 @@ export type ToolCall = {
   };
 };
 
+// ★ InvokeResult はそのまま維持（呼び出し側は一切変更不要にする）
 export type InvokeResult = {
   id: string;
   created: number;
@@ -117,228 +119,158 @@ export type ResponseFormat =
   | { type: "json_object" }
   | { type: "json_schema"; json_schema: JsonSchema };
 
-const ensureArray = (
-  value: MessageContent | MessageContent[]
-): MessageContent[] => (Array.isArray(value) ? value : [value]);
+// ================================================================
+// Bedrock Converse API 用ヘルパー
+// ================================================================
 
-const normalizeContentPart = (
-  part: MessageContent
-): TextContent | ImageContent | FileContent => {
-  if (typeof part === "string") {
-    return { type: "text", text: part };
+/**
+ * messages配列から system role を抽出して Bedrock の system パラメータに変換
+ * Bedrock Converse API は system を messages に含めず別パラメータで渡す
+ */
+function extractSystemAndMessages(messages: Message[]): {
+  system: Array<{ text: string }>;
+  bedrockMessages: Array<{ role: string; content: Array<{ text: string }> }>;
+} {
+  const system: Array<{ text: string }> = [];
+  const bedrockMessages: Array<{ role: string; content: Array<{ text: string }> }> = [];
+
+  for (const msg of messages) {
+    const textContent = typeof msg.content === "string"
+      ? msg.content
+      : Array.isArray(msg.content)
+        ? msg.content
+            .map(c => (typeof c === "string" ? c : c.type === "text" ? c.text : ""))
+            .filter(Boolean)
+            .join("\n")
+        : "";
+
+    if (msg.role === "system") {
+      system.push({ text: textContent });
+    } else {
+      bedrockMessages.push({
+        role: msg.role === "assistant" ? "assistant" : "user",
+        content: [{ text: textContent }],
+      });
+    }
   }
 
-  if (part.type === "text") {
-    return part;
+  return { system, bedrockMessages };
+}
+
+/**
+ * response_format の json_schema 指定がある場合、
+ * プロンプト末尾に JSON スキーマ指示を注入する
+ * （Bedrock Converse API には json_schema モードがないため）
+ */
+function injectJsonSchemaInstruction(
+  bedrockMessages: Array<{ role: string; content: Array<{ text: string }> }>,
+  responseFormat?: ResponseFormat
+): void {
+  if (!responseFormat) return;
+
+  if (responseFormat.type === "json_schema" && responseFormat.json_schema?.schema) {
+    const schemaStr = JSON.stringify(responseFormat.json_schema.schema, null, 2);
+    const instruction = `\n\n【出力形式の厳守】以下のJSONスキーマに完全に準拠したJSONのみを返してください。JSONの前後にマークダウンのコードブロック(\`\`\`)や説明文を付けないでください。\n${schemaStr}`;
+
+    // 最後の user メッセージにスキーマ指示を追加
+    const lastUserMsg = [...bedrockMessages].reverse().find(m => m.role === "user");
+    if (lastUserMsg) {
+      lastUserMsg.content[lastUserMsg.content.length - 1].text += instruction;
+    }
+  } else if (responseFormat.type === "json_object") {
+    const instruction = `\n\n【出力形式】有効なJSONのみを返してください。JSONの前後にマークダウンのコードブロックや説明文を付けないでください。`;
+    const lastUserMsg = [...bedrockMessages].reverse().find(m => m.role === "user");
+    if (lastUserMsg) {
+      lastUserMsg.content[lastUserMsg.content.length - 1].text += instruction;
+    }
   }
+}
 
-  if (part.type === "image_url") {
-    return part;
-  }
-
-  if (part.type === "file_url") {
-    return part;
-  }
-
-  throw new Error("Unsupported message content part");
-};
-
-const normalizeMessage = (message: Message) => {
-  const { role, name, tool_call_id } = message;
-
-  if (role === "tool" || role === "function") {
-    const content = ensureArray(message.content)
-      .map(part => (typeof part === "string" ? part : JSON.stringify(part)))
-      .join("\n");
-
-    return {
-      role,
-      name,
-      tool_call_id,
-      content,
-    };
-  }
-
-  const contentParts = ensureArray(message.content).map(normalizeContentPart);
-
-  // If there's only text content, collapse to a single string for compatibility
-  if (contentParts.length === 1 && contentParts[0].type === "text") {
-    return {
-      role,
-      name,
-      content: contentParts[0].text,
-    };
-  }
+/**
+ * Bedrock Converse API のレスポンスを InvokeResult 形式に変換
+ * → 呼び出し側（videoAnalysis.ts 等）の choices[0].message.content を変更不要にする
+ */
+function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult {
+  const outputText = bedrockRes.output?.message?.content
+    ?.map((c: any) => c.text || "")
+    .join("") || "";
 
   return {
-    role,
-    name,
-    content: contentParts,
+    id: bedrockRes.$metadata?.requestId || "",
+    created: Math.floor(Date.now() / 1000),
+    model: modelId,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: outputText,
+        },
+        finish_reason: bedrockRes.stopReason || "end_turn",
+      },
+    ],
+    usage: bedrockRes.usage
+      ? {
+          prompt_tokens: bedrockRes.usage.inputTokens || 0,
+          completion_tokens: bedrockRes.usage.outputTokens || 0,
+          total_tokens: (bedrockRes.usage.inputTokens || 0) + (bedrockRes.usage.outputTokens || 0),
+        }
+      : undefined,
   };
-};
+}
 
-const normalizeToolChoice = (
-  toolChoice: ToolChoice | undefined,
-  tools: Tool[] | undefined
-): "none" | "auto" | ToolChoiceExplicit | undefined => {
-  if (!toolChoice) return undefined;
-
-  if (toolChoice === "none" || toolChoice === "auto") {
-    return toolChoice;
-  }
-
-  if (toolChoice === "required") {
-    if (!tools || tools.length === 0) {
-      throw new Error(
-        "tool_choice 'required' was provided but no tools were configured"
-      );
-    }
-
-    if (tools.length > 1) {
-      throw new Error(
-        "tool_choice 'required' needs a single tool or specify the tool name explicitly"
-      );
-    }
-
-    return {
-      type: "function",
-      function: { name: tools[0].function.name },
-    };
-  }
-
-  if ("name" in toolChoice) {
-    return {
-      type: "function",
-      function: { name: toolChoice.name },
-    };
-  }
-
-  return toolChoice;
-};
-
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
-
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-};
-
-const normalizeResponseFormat = ({
-  responseFormat,
-  response_format,
-  outputSchema,
-  output_schema,
-}: {
-  responseFormat?: ResponseFormat;
-  response_format?: ResponseFormat;
-  outputSchema?: OutputSchema;
-  output_schema?: OutputSchema;
-}):
-  | { type: "json_schema"; json_schema: JsonSchema }
-  | { type: "text" }
-  | { type: "json_object" }
-  | undefined => {
-  const explicitFormat = responseFormat || response_format;
-  if (explicitFormat) {
-    if (
-      explicitFormat.type === "json_schema" &&
-      !explicitFormat.json_schema?.schema
-    ) {
-      throw new Error(
-        "responseFormat json_schema requires a defined schema object"
-      );
-    }
-    return explicitFormat;
-  }
-
-  const schema = outputSchema || output_schema;
-  if (!schema) return undefined;
-
-  if (!schema.name || !schema.schema) {
-    throw new Error("outputSchema requires both name and schema");
-  }
-
-  return {
-    type: "json_schema",
-    json_schema: {
-      name: schema.name,
-      schema: schema.schema,
-      ...(typeof schema.strict === "boolean" ? { strict: schema.strict } : {}),
-    },
-  };
-};
+// ================================================================
+// メイン関数
+// ================================================================
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
-
-  const {
-    messages,
-    tools,
-    toolChoice,
-    tool_choice,
-    outputSchema,
-    output_schema,
-    responseFormat,
-    response_format,
-  } = params;
-
-  const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
-    messages: messages.map(normalizeMessage),
-  };
-
-  if (tools && tools.length > 0) {
-    payload.tools = tools;
-  }
-
-  const normalizedToolChoice = normalizeToolChoice(
-    toolChoice || tool_choice,
-    tools
+  // AWS SDK は動的 import（トップレベルで import するとビルドサイズが膨れるため）
+  const { BedrockRuntimeClient, ConverseCommand } = await import(
+    "@aws-sdk/client-bedrock-runtime"
   );
-  if (normalizedToolChoice) {
-    payload.tool_choice = normalizedToolChoice;
-  }
 
-  payload.max_tokens = 32768
-  payload.thinking = {
-    "budget_tokens": 128
-  }
-
-  const normalizedResponseFormat = normalizeResponseFormat({
-    responseFormat,
-    response_format,
-    outputSchema,
-    output_schema,
-  });
-
-  if (normalizedResponseFormat) {
-    payload.response_format = normalizedResponseFormat;
-  }
-
-  const response = await fetch(resolveApiUrl(), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+  const client = new BedrockRuntimeClient({
+    region: ENV.awsRegion,
+    credentials: {
+      accessKeyId: ENV.awsAccessKeyId,
+      secretAccessKey: ENV.awsSecretAccessKey,
     },
-    body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 412 || errorText.includes("usage exhausted") || errorText.includes("quota")) {
+  const modelId = ENV.bedrockModelId;
+  const maxTokens = params.maxTokens || params.max_tokens || 8192;
+
+  // メッセージを Bedrock 形式に変換
+  const { system, bedrockMessages } = extractSystemAndMessages(params.messages);
+
+  // response_format の json_schema をプロンプトに注入
+  const resolvedFormat =
+    params.responseFormat || params.response_format || undefined;
+  injectJsonSchemaInstruction(bedrockMessages, resolvedFormat);
+
+  const command = new ConverseCommand({
+    modelId,
+    system,
+    messages: bedrockMessages,
+    inferenceConfig: {
+      maxTokens,
+      temperature: 0.7,
+    },
+  });
+
+  try {
+    const response = await client.send(command);
+    return convertBedrockResponse(response, modelId);
+  } catch (error: any) {
+    if (
+      error.name === "ThrottlingException" ||
+      error.message?.includes("Too many requests") ||
+      error.message?.includes("quota")
+    ) {
       throw new LLMQuotaExhaustedError(
-        `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
+        `LLM invoke failed: ${error.name} – ${error.message}`
       );
     }
-    throw new Error(
-      `LLM invoke failed: ${response.status} ${response.statusText} – ${errorText}`
-    );
+    throw new Error(`LLM invoke failed: ${error.name} – ${error.message}`);
   }
-
-  return (await response.json()) as InvokeResult;
 }

@@ -7,4 +7,9 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // AWS Bedrock
+  awsRegion: process.env.AWS_REGION ?? "us-east-1",
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
+  bedrockModelId: process.env.BEDROCK_MODEL_ID ?? "us.anthropic.claude-sonnet-4-20250514-v1:0",
 };
