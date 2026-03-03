@@ -33,7 +33,7 @@ export function extractCommonPatterns(appearedInAll3Videos: any[]) {
 
 // 重複率計算の説明
 export const overlapRateExplanation = `
-重複率 = (3回全出現 + 2回出現) / 全ユニーク動画数 × 100
+重複率 = (2回以上出現の動画数) / 全ユニーク動画数 × 100
 
 この指標は、TikTokのアルゴリズムがどれだけ一貫した検索結果を返しているかを示します。
 高い重複率 = アルゴリズムが安定した上位動画を返している

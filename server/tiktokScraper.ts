@@ -44,20 +44,18 @@ export interface TikTokSearchResult {
   sessionIndex: number;
 }
 
-// 3回の検索結果と重複度分析を含む結果
+// 複数回の検索結果と重複度分析を含む結果
 export interface TikTokTripleSearchResult {
-  searches: [TikTokSearchResult, TikTokSearchResult, TikTokSearchResult];
+  searches: TikTokSearchResult[];
   duplicateAnalysis: {
-    // 3回全てに出現（最強の勝ちパターン）
-    appearedInAll3: TikTokVideo[];
-    // 2回出現（準勝ちパターン）
-    appearedIn2: TikTokVideo[];
-    // 1回のみ出現
-    appearedIn1Only: TikTokVideo[];
-    // 全ユニーク動画
+    // 出現回数別の動画リスト（key=出現回数, value=動画配列）
+    videosByAppearanceCount: Record<number, TikTokVideo[]>;
+    // 全ユニーク動画（出現回数降順→再生数降順）
     allUniqueVideos: TikTokVideo[];
-    // 重複率
+    // 重複率 （2回以上出現 / 全ユニーク × 100）
     overlapRate: number;
+    // 実際に成功したセッション数
+    numSessions: number;
   };
   keyword: string;
 }
@@ -67,6 +65,8 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
 ];
 
 // TikTokの内部APIを呼び出して検索結果を取得
@@ -410,9 +410,10 @@ async function searchInIncognitoContext(
   }
 }
 
-// 重複度分析: 3回の検索結果を比較して勝ちパターン動画を特定
+// 重複度分析: 複数回の検索結果を比較して勝ちパターン動画を特定
 function analyzeDuplicates(
-  searches: [TikTokSearchResult, TikTokSearchResult, TikTokSearchResult]
+  searches: TikTokSearchResult[],
+  numSearches: number
 ): TikTokTripleSearchResult["duplicateAnalysis"] {
   // 各動画IDの出現回数をカウント
   const videoAppearanceCount = new Map<string, number>();
@@ -438,38 +439,42 @@ function analyzeDuplicates(
     }
   }
 
-  const appearedInAll3: TikTokVideo[] = [];
-  const appearedIn2: TikTokVideo[] = [];
-  const appearedIn1Only: TikTokVideo[] = [];
+  // 出現回数別にグループ化（numSearches回 → 1回 まで）
+  const videosByAppearanceCount: Record<number, TikTokVideo[]> = {};
+  for (let c = numSearches; c >= 1; c--) {
+    videosByAppearanceCount[c] = [];
+  }
 
   for (const [videoId, count] of Array.from(videoAppearanceCount.entries())) {
     const video = videoMap.get(videoId)!;
-    if (count >= 3) {
-      appearedInAll3.push(video);
-    } else if (count === 2) {
-      appearedIn2.push(video);
-    } else {
-      appearedIn1Only.push(video);
+    const clampedCount = Math.min(count, numSearches);
+    if (!videosByAppearanceCount[clampedCount]) {
+      videosByAppearanceCount[clampedCount] = [];
     }
+    videosByAppearanceCount[clampedCount].push(video);
   }
 
   // 各カテゴリ内で再生数順にソート
-  appearedInAll3.sort((a, b) => b.stats.playCount - a.stats.playCount);
-  appearedIn2.sort((a, b) => b.stats.playCount - a.stats.playCount);
-  appearedIn1Only.sort((a, b) => b.stats.playCount - a.stats.playCount);
+  for (const videos of Object.values(videosByAppearanceCount)) {
+    videos.sort((a, b) => b.stats.playCount - a.stats.playCount);
+  }
 
-  const allUniqueVideos = [...appearedInAll3, ...appearedIn2, ...appearedIn1Only];
+  // 全ユニーク動画（出現回数降順→再生数降順）
+  const allUniqueVideos: TikTokVideo[] = [];
+  for (let c = numSearches; c >= 1; c--) {
+    allUniqueVideos.push(...(videosByAppearanceCount[c] || []));
+  }
+
   const totalUniqueCount = allUniqueVideos.length;
-  const duplicateCount = appearedInAll3.length + appearedIn2.length;
+  const duplicateCount = totalUniqueCount - (videosByAppearanceCount[1]?.length ?? 0);
   const overlapRate =
     totalUniqueCount > 0 ? (duplicateCount / totalUniqueCount) * 100 : 0;
 
   return {
-    appearedInAll3,
-    appearedIn2,
-    appearedIn1Only,
+    videosByAppearanceCount,
     allUniqueVideos,
     overlapRate,
+    numSessions: numSearches,
   };
 }
 
@@ -568,10 +573,11 @@ function buildChromiumArgs(): string[] {
   return args;
 }
 
-// メイン関数: 3つのシークレットブラウザで同一キーワード検索→重複度分析
+// メイン関数: 複数のシークレットブラウザで同一キーワード検索→重複度分析
 export async function searchTikTokTriple(
   keyword: string,
-  videosPerSearch: number = 15,
+  videosPerSearch: number = 30,
+  numSearches: number = 5,
   onProgress?: (message: string, percent: number) => void
 ): Promise<TikTokTripleSearchResult> {
   // ブラウザを起動
@@ -594,62 +600,85 @@ export async function searchTikTokTriple(
   }
 
   try {
-    if (onProgress) onProgress("3つのシークレットブラウザを起動中...", 5);
+    if (onProgress) onProgress(`${numSearches}つのシークレットブラウザを起動中...`, 5);
 
-    // 3つのシークレットブラウザコンテキストで順次検索
-    // （並列だとレート制限に引っかかるため順次実行）
-    const searches: TikTokSearchResult[] = [];
+    // 複数のシークレットブラウザコンテキストで並列検索
+    // 各セッションは異なるプロキシIP（Sticky Session）を使用するため並列実行可能
+    // スタガード起動（1.5秒間隔）でプロキシ接続の集中を回避
+    const STAGGER_DELAY_MS = 1500;
+    const progressPerSearch = Math.floor(75 / numSearches);
+    const sessionProgress = new Array(numSearches).fill(0);
 
-    for (let i = 0; i < 3; i++) {
-      if (onProgress) {
-        onProgress(`検索${i + 1}/3: シークレットブラウザで検索中...`, 10 + i * 25);
-      }
-
-      const result = await searchInIncognitoContext(
-        browser,
-        keyword,
-        videosPerSearch,
-        i,
-        (msg) => {
-          if (onProgress) {
-            const basePercent = 10 + i * 25;
-            onProgress(msg, basePercent);
-          }
+    const searchPromises = Array.from({ length: numSearches }, (_, i) =>
+      new Promise<TikTokSearchResult>(async (resolve, reject) => {
+        // スタガード起動: セッションごとに1.5秒ずらして開始
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, STAGGER_DELAY_MS * i));
         }
-      );
 
-      searches.push(result);
+        try {
+          if (onProgress) {
+            onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, 10 + i * progressPerSearch);
+          }
 
-      // 次の検索前に間隔を空ける（レート制限対策）
-      if (i < 2) {
-        if (onProgress)
-          onProgress(`検索${i + 1}完了。次の検索まで待機中...`, 10 + (i + 1) * 25 - 5);
-        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+          const result = await searchInIncognitoContext(
+            browser,
+            keyword,
+            videosPerSearch,
+            i,
+            (msg) => {
+              if (onProgress) {
+                sessionProgress[i] = 1;
+                const completedSessions = sessionProgress.filter(p => p > 0).length;
+                const pct = Math.min(85, 10 + Math.floor((completedSessions / numSearches) * 75));
+                onProgress(`[${completedSessions}/${numSearches}] ${msg}`, pct);
+              }
+            }
+          );
+
+          console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
+          resolve(result);
+        } catch (err) {
+          console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
+          reject(err);
+        }
+      })
+    );
+
+    // 全セッションの完了を待機（1つでも失敗しても他は続行）
+    const settled = await Promise.allSettled(searchPromises);
+    const searches: TikTokSearchResult[] = [];
+    for (const result of settled) {
+      if (result.status === "fulfilled") {
+        searches.push(result.value);
       }
     }
 
+    if (searches.length === 0) {
+      throw new Error("全てのTikTok検索セッションが失敗しました");
+    }
+
+    console.log(`[TikTok] ${searches.length}/${numSearches} sessions succeeded`);
+
     if (onProgress) onProgress("重複度分析中...", 85);
 
-    // 重複度分析
-    const tripleSearches = searches as [
-      TikTokSearchResult,
-      TikTokSearchResult,
-      TikTokSearchResult,
-    ];
-    const duplicateAnalysis = analyzeDuplicates(tripleSearches);
+    // 重複度分析（成功したセッション数で判定）
+    const duplicateAnalysis = analyzeDuplicates(searches, searches.length);
 
+    const countSummary = Object.entries(duplicateAnalysis.videosByAppearanceCount)
+      .sort(([a], [b]) => Number(b) - Number(a))
+      .map(([count, videos]) => `${count}回出現=${videos.length}`)
+      .join(", ");
     console.log(
-      `[TikTok] Triple search complete for "${keyword}":`,
-      `3回全出現=${duplicateAnalysis.appearedInAll3.length},`,
-      `2回出現=${duplicateAnalysis.appearedIn2.length},`,
-      `1回のみ=${duplicateAnalysis.appearedIn1Only.length},`,
+      `[TikTok] Search complete for "${keyword}" (${duplicateAnalysis.numSessions}sessions):`,
+      `${countSummary},`,
       `重複率=${duplicateAnalysis.overlapRate.toFixed(1)}%`
     );
 
     if (onProgress) onProgress("データ収集完了", 90);
 
     return {
-      searches: tripleSearches,
+      searches,
       duplicateAnalysis,
       keyword,
     };
@@ -661,7 +690,7 @@ export async function searchTikTokTriple(
 // 後方互換性のために残す（単一検索）
 export async function searchTikTokVideos(
   keyword: string,
-  maxVideos: number = 15,
+  maxVideos: number = 30,
   onProgress?: (fetched: number, total: number) => void
 ): Promise<TikTokSearchResult> {
   const browser = await puppeteer.launch({

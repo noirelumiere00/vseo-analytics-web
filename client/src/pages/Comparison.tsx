@@ -574,7 +574,7 @@ export default function Comparison() {
                   decimals={1}
                 />
                 <MetricRow
-                  label="3回出現（Winパターン）"
+                  label="全セッション出現（Winパターン）"
                   valueA={mA.winCount}
                   valueB={mB.winCount}
                   unit="本"

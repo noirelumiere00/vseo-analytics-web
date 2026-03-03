@@ -373,16 +373,20 @@ export default function AnalysisDetail() {
     };
   }, [data]);
 
-  // 動画をカテゴリ別に分類 - MUST be before any early returns
+  // セッション数とappearanceCountMapを取得
+  const numSessions = (data?.tripleSearch as any)?.numSessions ?? data?.tripleSearch?.searches?.length ?? 3;
+  const appearanceCountMap: Record<number, string[]> = (data?.tripleSearch?.duplicateAnalysis as any)?.appearanceCountMap ?? {};
+
+  // 動画をカテゴリ別に分類（出現回数別） - MUST be before any early returns
   const categorizedVideos = useMemo(() => {
     if (!data?.tripleSearch || !data?.videos?.length) return null;
-    const { appearedInAll3Ids, appearedIn2Ids, appearedIn1OnlyIds } = data.tripleSearch.duplicateAnalysis;
-    return {
-      all3: data.videos.filter(v => appearedInAll3Ids.includes(v.videoId)),
-      in2: data.videos.filter(v => appearedIn2Ids.includes(v.videoId)),
-      in1: data.videos.filter(v => appearedIn1OnlyIds.includes(v.videoId)),
-    };
-  }, [data]);
+    const result: Record<number, any[]> = {};
+    for (let c = numSessions; c >= 1; c--) {
+      const ids = appearanceCountMap[c] ?? [];
+      result[c] = data.videos.filter(v => ids.includes(v.videoId));
+    }
+    return result;
+  }, [data, numSessions, appearanceCountMap]);
 
   // エンゲージメント率（いいね+コメント+シェア+保存 / 再生数）
   const getEngagementRate = useCallback((video: any) => {
@@ -391,7 +395,7 @@ export default function AnalysisDetail() {
     return ((video.likeCount || 0) + (video.commentCount || 0) + (video.shareCount || 0) + (video.saveCount || 0)) / views * 100;
   }, []);
 
-  // グループ別統計（3回出現 vs 2回出現 vs 1回のみ）
+  // グループ別統計（出現回数別）
   const groupStats = useMemo(() => {
     if (!categorizedVideos) return null;
     const calc = (vids: any[]) => {
@@ -404,8 +408,12 @@ export default function AnalysisDetail() {
         : 0;
       return { count: vids.length, avgViews, avgEngagementRate, avgScore };
     };
-    return { all3: calc(categorizedVideos.all3), in2: calc(categorizedVideos.in2), in1: calc(categorizedVideos.in1) };
-  }, [categorizedVideos, getEngagementRate]);
+    const result: Record<number, ReturnType<typeof calc>> = {};
+    for (let c = numSessions; c >= 1; c--) {
+      result[c] = calc(categorizedVideos[c] ?? []);
+    }
+    return result;
+  }, [categorizedVideos, getEngagementRate, numSessions]);
 
   // ソート済み動画リスト
   const sortedCategorizedVideos = useMemo(() => {
@@ -424,8 +432,12 @@ export default function AnalysisDetail() {
       // dominance: 順位重み付きスコア（高いほど安定して上位表示）
       return (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0);
     });
-    return { all3: sort(categorizedVideos.all3), in2: sort(categorizedVideos.in2), in1: sort(categorizedVideos.in1) };
-  }, [categorizedVideos, videoSortKey, data?.tripleSearch, getEngagementRate]);
+    const result: Record<number, any[]> = {};
+    for (let c = numSessions; c >= 1; c--) {
+      result[c] = sort(categorizedVideos[c] ?? []);
+    }
+    return result;
+  }, [categorizedVideos, videoSortKey, data?.tripleSearch, getEngagementRate, numSessions]);
 
   // 全件用ソート済み動画リスト
   const sortedVideos = useMemo(() => {
@@ -462,15 +474,16 @@ export default function AnalysisDetail() {
 
   const getAppearanceBadge = useCallback((videoId: string) => {
     if (!data?.tripleSearch) return null;
-    const { appearedInAll3Ids, appearedIn2Ids } = data.tripleSearch.duplicateAnalysis;
-    if (appearedInAll3Ids.includes(videoId)) {
-      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />3回出現</Badge>;
+    const rankInfoItem = (data.tripleSearch as any).rankInfo?.[videoId];
+    const count = rankInfoItem?.appearanceCount ?? 0;
+    if (count >= numSessions) {
+      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />{numSessions}回出現</Badge>;
     }
-    if (appearedIn2Ids.includes(videoId)) {
-      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />2回出現</Badge>;
+    if (count >= 2) {
+      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />{count}回出現</Badge>;
     }
     return <Badge variant="outline">1回のみ</Badge>;
-  }, [data?.tripleSearch]);
+  }, [data?.tripleSearch, numSessions]);
 
   const formatNumber = useCallback((num: number | bigint | null | undefined) => {
     if (num === null || num === undefined) return "0";
@@ -781,63 +794,73 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
-                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
+                <div className={`grid gap-3 max-w-2xl mx-auto`} style={{ gridTemplateColumns: `repeat(${Math.min(tripleSearch.searches.length, 5)}, 1fr)` }}>
                   {tripleSearch.searches.map((search: any, i: number) => (
-                    <div key={i} className="text-center p-4 bg-muted rounded-lg">
+                    <div key={i} className="text-center p-3 bg-muted rounded-lg">
                       <div className="text-sm font-medium mb-1">アカウント {i + 1}</div>
-                      <div className="text-3xl font-bold">{search.totalFetched}</div>
+                      <div className="text-2xl font-bold">{search.totalFetched}</div>
                       <div className="text-xs text-muted-foreground">件取得</div>
                     </div>
                   ))}
                 </div>
 
-                {/* 重複度分析結果 */}
-                <div className="grid grid-cols-3 gap-4 max-w-lg mx-auto">
-                  <div className="text-center p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
-                    <Star className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-blue-600">{tripleSearch.duplicateAnalysis.appearedInAll3Count}</div>
-                    <div className="text-xs text-muted-foreground mt-1">3回全出現<br/>(勝ちパターン)</div>
-                  </div>
-                  <div className="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <Repeat className="h-6 w-6 text-blue-500 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-blue-600">{tripleSearch.duplicateAnalysis.appearedIn2Count}</div>
-                    <div className="text-xs text-muted-foreground mt-1">2回出現<br/>(準勝ち)</div>
-                  </div>
-                  <div className="text-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <Search className="h-6 w-6 text-gray-400 mx-auto mb-2" />
-                    <div className="text-3xl font-bold text-gray-500">{tripleSearch.duplicateAnalysis.appearedIn1OnlyCount}</div>
-                    <div className="text-xs text-muted-foreground mt-1">1回のみ<br/>(パーソナライズ)</div>
-                  </div>
+                {/* 重複度分析結果（動的: numSessions回→1回） */}
+                <div className={`grid gap-3 max-w-2xl mx-auto`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
+                  {Array.from({ length: numSessions }, (_, i) => {
+                    const count = numSessions - i;
+                    const ids = appearanceCountMap[count] ?? [];
+                    const isAll = count === numSessions;
+                    const isOne = count === 1;
+                    const bg = isAll ? "bg-yellow-50 border-2 border-yellow-400" : isOne ? "bg-gray-50 border border-gray-200" : "bg-blue-50 border border-blue-200";
+                    const textColor = isAll ? "text-yellow-600" : isOne ? "text-gray-500" : "text-blue-600";
+                    const Icon = isAll ? Star : isOne ? Search : Repeat;
+                    const label = isAll ? `${count}回全出現` : count === 1 ? "1回のみ" : `${count}回出現`;
+                    const sublabel = isAll ? "(勝ちパターン)" : isOne ? "(パーソナライズ)" : "(準勝ち)";
+                    return (
+                      <div key={count} className={`text-center p-3 rounded-lg ${bg}`}>
+                        <Icon className={`h-5 w-5 mx-auto mb-1 ${isAll ? "text-yellow-500" : isOne ? "text-gray-400" : "text-blue-500"}`} />
+                        <div className={`text-2xl font-bold ${textColor}`}>{ids.length}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{label}<br/>{sublabel}</div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* グループ別統計比較 */}
                 {groupStats && (
                   <div className="w-full">
                     <div className="text-sm font-semibold text-muted-foreground py-2">グループ別統計比較</div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {[
-                        { label: "3回出現", stats: groupStats.all3, bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
-                        { label: "2回出現", stats: groupStats.in2, bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-700" },
-                        { label: "1回のみ", stats: groupStats.in1, bg: "bg-gray-50", border: "border-gray-200", text: "text-gray-600" },
-                      ].map(({ label, stats, bg, border, text }) => (
-                        <div key={label} className={`p-3 rounded-lg border ${bg} ${border}`}>
-                          <div className={`text-xs font-bold mb-2 ${text}`}>{label}（{stats.count}件）</div>
-                          <div className="space-y-1.5 text-xs">
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均再生数</span>
-                              <span className="font-semibold">{formatNumber(Math.round(stats.avgViews))}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均ER%</span>
-                              <span className="font-semibold">{stats.avgEngagementRate.toFixed(2)}%</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">平均スコア</span>
-                              <span className="font-semibold">{stats.avgScore.toFixed(0)}</span>
+                    <div className={`grid gap-3`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
+                      {Array.from({ length: numSessions }, (_, i) => {
+                        const count = numSessions - i;
+                        const stats = groupStats[count];
+                        if (!stats) return null;
+                        const isAll = count === numSessions;
+                        const isOne = count === 1;
+                        const bg = isAll ? "bg-yellow-50" : isOne ? "bg-gray-50" : "bg-blue-50";
+                        const border = isAll ? "border-yellow-300" : isOne ? "border-gray-200" : "border-blue-200";
+                        const text = isAll ? "text-yellow-700" : isOne ? "text-gray-600" : "text-blue-700";
+                        const label = isAll ? `${count}回出現` : count === 1 ? "1回のみ" : `${count}回出現`;
+                        return (
+                          <div key={count} className={`p-3 rounded-lg border ${bg} ${border}`}>
+                            <div className={`text-xs font-bold mb-2 ${text}`}>{label}（{stats.count}件）</div>
+                            <div className="space-y-1.5 text-xs">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">平均再生数</span>
+                                <span className="font-semibold">{formatNumber(Math.round(stats.avgViews))}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">平均ER%</span>
+                                <span className="font-semibold">{stats.avgEngagementRate.toFixed(2)}%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">平均スコア</span>
+                                <span className="font-semibold">{stats.avgScore.toFixed(0)}</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1160,7 +1183,7 @@ export default function AnalysisDetail() {
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 pt-2">
                         <MicroAnalysisSection
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; sourceVideoIds?: string[] }> || []).map(insight => {
+                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
                             // 新カテゴリ (avoid/caution/leverage) + 旧カテゴリ後方互換 (risk/urgent/positive)
                             const cat = insight.category;
                             const priority =
@@ -1174,6 +1197,8 @@ export default function AnalysisDetail() {
                               action: insight.description,
                               priority: priority as "回避" | "注意" | "活用",
                               icon,
+                              analysis: insight.analysis,
+                              strategicAdvice: insight.strategicAdvice,
                               sourceVideoIds: insight.sourceVideoIds,
                             };
                           })}
@@ -1371,33 +1396,35 @@ export default function AnalysisDetail() {
                 </div>
 
                 {sortedCategorizedVideos && tripleSearch ? (
-                  <Tabs defaultValue="all3" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="all3" className="text-xs sm:text-sm">
-                        <Star className="h-3 w-3 mr-1 text-yellow-500" />
-                        勝ちパターン ({sortedCategorizedVideos.all3.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="in2" className="text-xs sm:text-sm">
-                        <Repeat className="h-3 w-3 mr-1 text-blue-500" />
-                        準勝ち ({sortedCategorizedVideos.in2.length})
-                      </TabsTrigger>
-                      <TabsTrigger value="in1" className="text-xs sm:text-sm">
-                        1回のみ ({sortedCategorizedVideos.in1.length})
-                      </TabsTrigger>
+                  <Tabs defaultValue={`count-${numSessions}`} className="w-full">
+                    <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${numSessions + 1}, 1fr)` }}>
+                      {Array.from({ length: numSessions }, (_, i) => {
+                        const c = numSessions - i;
+                        const isAll = c === numSessions;
+                        const isOne = c === 1;
+                        const label = isAll ? "勝ちパターン" : isOne ? "1回のみ" : `${c}回出現`;
+                        const Icon = isAll ? Star : isOne ? undefined : Repeat;
+                        const iconColor = isAll ? "text-yellow-500" : "text-blue-500";
+                        return (
+                          <TabsTrigger key={c} value={`count-${c}`} className="text-xs sm:text-sm">
+                            {Icon && <Icon className={`h-3 w-3 mr-1 ${iconColor}`} />}
+                            {label} ({(sortedCategorizedVideos[c] ?? []).length})
+                          </TabsTrigger>
+                        );
+                      })}
                       <TabsTrigger value="all" className="text-xs sm:text-sm">
                         全件 ({videos.length})
                       </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="all3">
-                      <VideoList videos={sortedCategorizedVideos.all3} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
-                    </TabsContent>
-                    <TabsContent value="in2">
-                      <VideoList videos={sortedCategorizedVideos.in2} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
-                    </TabsContent>
-                    <TabsContent value="in1">
-                      <VideoList videos={sortedCategorizedVideos.in1} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
-                    </TabsContent>
+                    {Array.from({ length: numSessions }, (_, i) => {
+                      const c = numSessions - i;
+                      return (
+                        <TabsContent key={c} value={`count-${c}`}>
+                          <VideoList videos={sortedCategorizedVideos[c] ?? []} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                        </TabsContent>
+                      );
+                    })}
                     <TabsContent value="all">
                       <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
                     </TabsContent>
