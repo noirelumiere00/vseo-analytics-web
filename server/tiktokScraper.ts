@@ -69,63 +69,6 @@ const USER_AGENTS = [
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
 ];
 
-// TikTokの内部APIを呼び出して検索結果を取得
-async function fetchSearchResults(
-  page: Page,
-  keyword: string,
-  offset: number = 0,
-  cursor: number = 0
-): Promise<any> {
-  return page.evaluate(
-    async (kw: string, off: number, cur: number) => {
-      const encodedKeyword = encodeURIComponent(kw);
-      const url = `https://www.tiktok.com/api/search/general/full/?keyword=${encodedKeyword}&offset=${off}&cursor=${cur}&search_source=normal_search&WebIdLastTime=${Math.floor(Date.now() / 1000)}&aid=1988&app_language=ja-JP&app_name=tiktok_web&browser_language=ja-JP&browser_name=Mozilla&browser_online=true&browser_platform=Win32&browser_version=121.0.0.0&channel=tiktok_web&cookie_enabled=true&device_platform=web_pc&focus_state=true&from_page=search&history_len=3&is_fullscreen=false&is_page_visible=true&os=windows&priority_region=JP&region=JP&screen_height=1080&screen_width=1920&webcast_language=ja-JP`;
-
-      try {
-        const response = await fetch(url, { credentials: "include" });
-        
-        // いきなり .json() でパースせず、まずはテキストとして受け取る
-        const text = await response.text();
-        
-        // 空のレスポンス（Bot弾きの典型）の場合
-        if (!text || text.trim() === "") {
-          console.error(`[TikTok API] Empty response (Status: ${response.status}). Likely blocked by anti-bot.`);
-          return { error: `TikTok returned an empty response (Status: ${response.status}). Likely blocked by anti-bot.` };
-        }
-        
-        // HTMLエラーページの検出（CAPTCHA等）
-        if (text.includes("<html") || text.includes("<!DOCTYPE")) {
-          const htmlSnippet = text.substring(0, 200).replace(/\n/g, " ");
-          console.error(`[TikTok API] Received HTML instead of JSON (likely CAPTCHA or error page):`, htmlSnippet);
-          return { error: `TikTok returned an error page (possibly CAPTCHA). Please try again later.` };
-        }
-        
-        try {
-          // テキストをJSONにパースする
-          const json = JSON.parse(text);
-          if (!response.ok) {
-            console.error(`[TikTok API] HTTP Error ${response.status}`);
-            console.error(`[TikTok API] Response body:`, JSON.stringify(json).substring(0, 500));
-          }
-          return { status: response.status, data: json };
-        } catch (parseError: any) {
-          // JSONパースに失敗した場合、返ってきたテキストの先頭100文字をエラーに含める
-          const snippet = text.substring(0, 100).replace(/\n/g, " ");
-          console.error(`[TikTok API] JSON Parse Error: ${parseError.message}`);
-          console.error(`[TikTok API] Response snippet:`, snippet);
-          return { error: `JSON Parse Error: ${parseError.message}. Response: ${snippet}` };
-        }
-      } catch (e: any) {
-        console.error(`[TikTok API] Fetch error: ${e.message}`);
-        return { error: e.message };
-      }
-    },
-    keyword,
-    offset,
-    cursor
-  );
-}
-
 // APIレスポンスからTikTokVideoオブジェクトに変換
 function parseVideoData(item: any): TikTokVideo | null {
   if (!item || item.type !== 1 || !item.item) return null;
@@ -179,6 +122,8 @@ function parseVideoData(item: any): TikTokVideo | null {
 }
 
 // 1つのシークレットブラウザコンテキストでキーワード検索して動画を取得
+// プランB: ネットワークインターセプト + ブラウザ内スクロールトリガーによるページネーション
+// ブラウザ自体にX-Bogus等の署名を生成させ、AWS側からの直接APIリクエストは行わない
 async function searchInIncognitoContext(
   browser: Browser,
   keyword: string,
@@ -189,6 +134,9 @@ async function searchInIncognitoContext(
   // 新しいインコグニートコンテキストを作成（Cookie/履歴なし）
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
+
+  // ページネーション安全装置: 最大10ページまで
+  const MAX_PAGES = 10;
 
   try {
     await page.setViewport({ width: 800, height: 600 });
@@ -222,29 +170,29 @@ async function searchInIncognitoContext(
       const resourceType = request.resourceType();
       const url = request.url();
 
-      // 許可：document, script, xhr, fetch （TikTok画面構篆とAPI JSON取得に必須）
+      // 許可：document, script, xhr, fetch, stylesheet（TikTok画面構築とAPI JSON取得に必須）
       if (
         resourceType === 'document' ||
         resourceType === 'script' ||
         resourceType === 'xhr' ||
-        resourceType === 'fetch'
+        resourceType === 'fetch' ||
+        resourceType === 'stylesheet'
       ) {
         request.continue();
         return;
       }
 
-      // 遭断：image, media, stylesheet, font （通信量を跳ね上げる原因）
+      // 遮断：image, media, font（通信量を跳ね上げる原因）
       if (
         resourceType === 'image' ||
         resourceType === 'media' ||
-        resourceType === 'stylesheet' ||
         resourceType === 'font'
       ) {
         request.abort();
         return;
       }
 
-      // 遭断：Google Analytics 等のトラッキング URL
+      // 遮断：Google Analytics 等のトラッキング URL
       if (
         url.includes('google-analytics.com') ||
         url.includes('analytics.google.com') ||
@@ -290,121 +238,188 @@ async function searchInIncognitoContext(
     if (onProgress) onProgress(`検索${sessionIndex + 1}: ブラウザ初期化中...`);
 
     await page.goto("https://www.tiktok.com/", {
-      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
+      waitUntil: "domcontentloaded",
       timeout: 30000,
     });
     // セッションごとに異なる待機時間（フィンガープリント対策）
     await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
 
-    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール
-    const performRobustScroll = async (maxScrolls: number = 5) => {
-      for (let i = 0; i < maxScrolls; i++) {
-        await page.evaluate(() => {
-          window.scrollBy(0, 500);
-        });
-        await new Promise((r) => setTimeout(r, 500));
-      }
-      console.log(`[TikTok Session ${sessionIndex + 1}] Robust scroll completed (${maxScrolls} scrolls)`);
-    };
+    // ========================================================
+    // プランB: ネットワークインターセプト + スクロールトリガー方式
+    // ブラウザのIntersectionObserver → 内部API発火 → レスポンスをキャプチャ
+    // X-Bogus等の署名はブラウザ自体が生成するため、外部リクエスト不要
+    // ========================================================
+    const allVideos: TikTokVideo[] = [];
+    let latestCursor = 0;
+    let latestHasMore = true;
+    let pagesFetched = 0;
 
-    // 検索ページに遷移してCookieを確立
+    // 【重要】page.goto の前にリスナーを設定し、初回APIレスポンスも確実にキャプチャする
+    page.on('response', async (response) => {
+      const url = response.url();
+      // TikTok検索APIのレスポンスを検出（URLパターンは複数ありうる）
+      if (!url.includes('/api/search/general/')) return;
+
+      try {
+        const text = await response.text();
+        if (!text || text.trim() === '' || text.includes('<html') || text.includes('<!DOCTYPE')) {
+          console.warn(`[TikTok Session ${sessionIndex + 1}] Non-JSON response from search API (status: ${response.status()})`);
+          return;
+        }
+
+        const json = JSON.parse(text);
+        const items = json?.data || json?.item_list || [];
+        const newVideos: TikTokVideo[] = [];
+
+        for (const item of items) {
+          const video = parseVideoData(item);
+          if (video && !allVideos.find(v => v.id === video.id)) {
+            allVideos.push(video);
+            newVideos.push(video);
+          }
+        }
+
+        // ページネーション情報を抽出（cursor / offset / has_more）
+        const cursor = json.cursor ?? json.offset ?? 0;
+        const hasMore = json.has_more === true || json.has_more === 1;
+
+        pagesFetched++;
+        latestCursor = cursor;
+        latestHasMore = hasMore;
+
+        console.log(
+          `[TikTok Session ${sessionIndex + 1}] API intercepted (page ${pagesFetched}): ` +
+          `+${newVideos.length} new, ${allVideos.length} total unique | cursor=${cursor}, has_more=${hasMore}`
+        );
+      } catch (e) {
+        // パース失敗は無視（非JSONレスポンス等）
+      }
+    });
+
+    // 検索ページに遷移（リスナーが初回APIレスポンスをキャプチャ）
     console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
     if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
-    
+
     await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
-      waitUntil: "domcontentloaded", // 画像ブロックでもDOM構篆完了を待機
+      waitUntil: "domcontentloaded",
       timeout: 30000,
     });
-    
-    // 【通信最適化】画像ブロックのためスクリーンショットを削除
-    // （画像ブロックで画像データが取得できないため削除）
-    console.log(`[TikTok Session ${sessionIndex + 1}] Screenshot skipped (images blocked for bandwidth optimization)`);
-    
+
+    // 初回データ待機: TikTokのJSハイドレーション完了を待つ
+    // 動画グリッドが描画されるまで最大15秒待機（domcontentloadedだけではJS未完了）
+    try {
+      await page.waitForSelector('[data-e2e="search_top-item-list"], [data-e2e="search-common-link"], [class*="DivItemContainerV2"]', {
+        timeout: 15000,
+      });
+      console.log(`[TikTok Session ${sessionIndex + 1}] Video grid detected in DOM`);
+    } catch {
+      console.warn(`[TikTok Session ${sessionIndex + 1}] Video grid selector not found within 15s, continuing with fallback...`);
+    }
+    // 追加の安定待機（IntersectionObserver初期化完了のため）
     await new Promise((r) => setTimeout(r, 3000));
-    // 【スクロール処理の「力技」化】CSS 遮断環境での堅牢なスクロール実行
-    await performRobustScroll(3);
 
-    const allVideos: TikTokVideo[] = [];
-    let offset = 0;
-    let cursor = 0;
-    const batchSize = 12;
-    let hasMore = true;
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (allVideos.length < maxVideos && hasMore && retryCount < maxRetries) {
-      console.log(
-        `[TikTok Session ${sessionIndex + 1}] Fetching offset=${offset}, cursor=${cursor}, current=${allVideos.length}/${maxVideos}`
-      );
-      if (onProgress)
-        onProgress(
-          `検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos})`
-        );
-
-      const result = await fetchSearchResults(page, keyword, offset, cursor);
-
-      if (result.error) {
-        console.error(
-          `[TikTok Session ${sessionIndex + 1}] API error: ${result.error}`
-        );
-        retryCount++;
-        await new Promise((r) => setTimeout(r, 2000));
-        continue;
-      }
-
-      if (
-        !result.data ||
-        result.data.status_code !== 0 ||
-        !result.data.data
-      ) {
-        console.log(
-          `[TikTok Session ${sessionIndex + 1}] No more data or error status: ${result.data?.status_code}`
-        );
-        hasMore = false;
-        break;
-      }
-
-      const items = result.data.data;
-      let newVideos = 0;
-
-      for (const item of items) {
-        const video = parseVideoData(item);
-        if (video && !allVideos.find((v) => v.id === video.id)) {
-          allVideos.push(video);
-          newVideos++;
-          if (allVideos.length >= maxVideos) break;
+    // SSRフォールバック: XHRリスナーで初回データが取れなかった場合、
+    // ページ埋め込みJSON（__UNIVERSAL_DATA_FOR_REHYDRATION__）から抽出
+    if (allVideos.length === 0) {
+      console.log(`[TikTok Session ${sessionIndex + 1}] No XHR data yet, trying SSR extraction...`);
+      try {
+        const ssrVideos = await page.evaluate(() => {
+          const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+          if (!el || !el.textContent) return null;
+          try {
+            const parsed = JSON.parse(el.textContent);
+            const searchData = parsed?.['__DEFAULT_SCOPE__']?.['webapp.search-detail'];
+            return searchData?.data ?? null;
+          } catch { return null; }
+        });
+        if (ssrVideos && Array.isArray(ssrVideos)) {
+          for (const item of ssrVideos) {
+            const video = parseVideoData(item);
+            if (video && !allVideos.find(v => v.id === video.id)) {
+              allVideos.push(video);
+            }
+          }
+          console.log(`[TikTok Session ${sessionIndex + 1}] SSR extraction: ${allVideos.length} videos`);
         }
-      }
-
-      console.log(
-        `[TikTok Session ${sessionIndex + 1}] Got ${newVideos} new videos, total: ${allVideos.length}`
-      );
-
-      if (newVideos === 0) {
-        retryCount++;
-      } else {
-        retryCount = 0;
-      }
-
-      offset += batchSize;
-      // TikTok APIはcursorベースのページネーション。レスポンスのcursorを次のリクエストに使用
-      if (result.data.cursor !== undefined && result.data.cursor !== null) {
-        cursor = result.data.cursor;
-      } else {
-        cursor = offset; // cursorがない場合はoffsetをフォールバック
-      }
-
-      // レート制限対策: セッションごとに異なる間隔
-      const delay = 1500 + Math.random() * 2000;
-      await new Promise((r) => setTimeout(r, delay));
-
-      if (result.data.has_more === 0 || result.data.has_more === false) {
-        hasMore = false;
+      } catch (e) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] SSR extraction failed:`, e);
       }
     }
 
+    console.log(`[TikTok Session ${sessionIndex + 1}] Initial batch: ${allVideos.length} videos`);
+
+    // ページネーションループ: スクロールでTikTokの無限スクロールをトリガー
+    // TikTokは scrollTo → IntersectionObserver発火 → X-Bogus付きAPI呼出 → DOM追加 のサイクル
+    // ブラウザ内部でAPI呼出が発火するため、署名(X-Bogus等)の生成はブラウザに委任される
+    //
+    // 【設計方針】スクロール試行回数(MAX_SCROLL_ATTEMPTS)とページネーション上限(MAX_PAGES)は別概念
+    // - 1回のスクロールで必ずしもAPIが発火するわけではない（空振りがある）
+    // - MAX_SCROLL_ATTEMPTS=30: スクロール試行の上限（空振り含む）
+    // - MAX_PAGES=10: APIレスポンスの取得ページ数の上限（安全装置）
+    const MAX_SCROLL_ATTEMPTS = 30;
+    let noNewDataCount = 0;
+    let prevScrollHeight = 0;
+
+    for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
+      // 十分な動画数を取得済み → 終了
+      if (allVideos.length >= maxVideos) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] Reached target: ${allVideos.length}/${maxVideos} videos`);
+        break;
+      }
+      // has_more=false → 終了
+      if (!latestHasMore && pagesFetched > 0) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] Server indicated no more results (has_more=false)`);
+        break;
+      }
+      // ページネーション安全装置: APIレスポンスがMAX_PAGES回に達したら終了
+      if (pagesFetched >= MAX_PAGES) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] Reached max pagination limit (${MAX_PAGES} API pages)`);
+        break;
+      }
+
+      const prevCount = allVideos.length;
+
+      // シンプルなスクロール: ページ末尾へ scrollTo（旧方式と同じ）
+      // 複雑な段階スクロールはIntersectionObserverのタイミングを乱すため採用しない
+      const currentHeight = await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+        return document.body.scrollHeight;
+      });
+
+      // 固定待機: TikTokのAPI呼出→レスポンス受信→DOM追加の一連を待つ
+      // 3秒はScrapFly推奨のTikTok用待機時間（短すぎるとAPI未着、長すぎると時間浪費）
+      await new Promise(r => setTimeout(r, 3000));
+
+      if (onProgress) {
+        onProgress(`検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos}) [スクロール${scroll + 1}]`);
+      }
+      console.log(
+        `[TikTok Session ${sessionIndex + 1}] Scroll ${scroll + 1}: ` +
+        `${allVideos.length} videos (height: ${currentHeight}, pages: ${pagesFetched}, cursor: ${latestCursor})`
+      );
+
+      // 停止判定
+      if (allVideos.length === prevCount) {
+        noNewDataCount++;
+        // ページ高さも変化なし = コンテンツ追加なし → 早期終了
+        if (currentHeight === prevScrollHeight && noNewDataCount >= 3) {
+          console.log(`[TikTok Session ${sessionIndex + 1}] Page height stalled & no new data (${noNewDataCount} scrolls), stopping`);
+          break;
+        }
+        // ページ高さは変わるがデータなし → もう少し待つ
+        if (noNewDataCount >= 5) {
+          console.log(`[TikTok Session ${sessionIndex + 1}] No new data after ${noNewDataCount} scrolls, stopping`);
+          break;
+        }
+      } else {
+        noNewDataCount = 0;
+      }
+
+      prevScrollHeight = currentHeight;
+    }
+
     console.log(
-      `[TikTok Session ${sessionIndex + 1}] Complete: ${allVideos.length} videos`
+      `[TikTok Session ${sessionIndex + 1}] Complete: ${allVideos.length} videos in ${pagesFetched} API pages`
     );
 
     return {
