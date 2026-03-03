@@ -725,7 +725,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
   let emotionWords: EmotionWord[] = [];
   let autoInsight: string = "";
-  let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string; sourceVideoIds: string[] }> = [];
+  let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string; analysis: string; strategicAdvice: string; sourceVideoIds: string[] }> = [];
 
   try {
     const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 15);
@@ -739,7 +739,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
       : 0;
 
     const combinedRes = await invokeLLM({
-      maxTokens: 8192,
+      maxTokens: 16384,
       messages: [
         {
           role: "system",
@@ -752,7 +752,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 【重要な制約】出力トークンに上限があります。JSONが途中で切れないよう以下を厳守してください:
 - annotationsは各ワードにつき1行{word,valence,arousal}のみ。説明文は不要。
 - autoInsightは2〜3文（150文字以内）。
-- keyInsightsは最重要の3個に絞り、descriptionは各50文字以内。
+- keyInsightsは4個。各項目にtitle, description, analysis, strategicAdvice, sourceVideoIdsを含めること。
 - 全体が完結した有効なJSONで返すことを最優先してください。
 
 ## タスク1: 感情座標アノテーション
@@ -768,15 +768,33 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 データ: ${totalVideos}本 / 総再生${totalViews.toLocaleString()} / Positive ${positiveCount}本(${positivePercentage}%) Negative ${negativeCount}本(${negativePercentage}%) / 平均ER: P=${positiveAvgER}% N=${negativeAvgER}%
 Positive頻出ワード: ${positiveWords.slice(0, 5).join(", ")} / Negative頻出ワード: ${negativeWords.slice(0, 5).join(", ")}
 
-## タスク3: VSEO主要示唆（3個）
-上記データに基づき、VSEO（動画SEO）視点でコンテンツ戦略の最重要示唆を3個生成してください。
+## タスク3: VSEO主要示唆（4個）
+あなたは世界最高峰のショート動画分析マーケターです。
+ターゲットとする市場・トピックにおいて、VSEO（動画検索最適化）の視点からコンテンツ戦略の最重要示唆を4個生成してください。
+
+【絶対原則：徹底した具体性と実行力】
+1. 固有名詞の特定と徹底した具体化: 一般名詞（アイテム、施設、サービス、これ、それ等）の使用を禁止します。分析対象となる動画データから、具体的な名称（商品名、型番、スポット名、特定のノウハウ名、流行語）を必ず特定して明記してください。
+2. 視聴者の心理的反応を直接引用: 視聴者のコメントや反応の傾向から、最も象徴的な心理・熱量を「〜という声がある」の形式で必ず引用してください。その発言が、視聴者のどのような「期待」「不安」「納得」を反映しているかを論理的に解説してください。
+3. 戦略的かつ構造的なネクストアクション: 制作現場ですぐに使えるレベルのアドバイスを提供してください。単なる推奨ではなく、「冒頭3秒のフックの文言」「カメラアングル」「テロップの配置」「具体的なABテスト案」など、クリエイティブ制作の具体的な指示を含めてください。
+
 カテゴリ定義（必ずこの3種から選択）:
-- avoid: ネガティブ文脈で伸びている・ブランドリスクがある → 避けるべきパターン
-- caution: 競合が多い・注意が必要な傾向 → 慎重に扱うべきパターン
-- leverage: 再生数・ERが高い勝ちパターン → 積極的に活用すべきパターン
-各示唆には、根拠となった動画のvideoIdを1〜2個 sourceVideoIds に含めてください。
-動画サンプル:
-${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment})`).join("\n")}`,
+- avoid: ブランドリスク/ネガティブ文脈 → 避けるべきパターン
+- caution: 競合過多/注意が必要 → 慎重に扱うべきパターン
+- leverage: 高ER勝ちパターン → 積極的に活用すべきパターン
+
+各示唆の出力形式:
+- title: 具体的な事象と視聴者ベネフィットを反映したタイトル
+- description: 1行要約（30文字程度）
+- analysis: 分析詳細（150-300文字）。固有名詞、具体的な引用コメント、および「なぜその反応が起きたのか」の市場背景・心理的因果関係を含めること。
+- strategicAdvice: 戦略的アドバイス（100-200文字）。次回動画で採用すべき具体的な構成案、編集の工夫、または新規企画の切り口を具体的に提案すること。
+- sourceVideoIds: 根拠動画のvideoId（1-2個）
+
+動画サンプル（上位20本）:
+${videosData.slice(0, 20).map(v => {
+  const vw = v.viewCount || 0;
+  const er = vw > 0 ? (((v.likeCount||0)+(v.commentCount||0)+(v.shareCount||0)+(v.saveCount||0))/vw*100).toFixed(2) : "0";
+  return `- [${v.videoId}] @${v.accountName}: ${(v.description || "").substring(0, 80)} (${v.sentiment}, ${vw.toLocaleString()}再生, ER:${er}%)`;
+}).join("\n")}`,
         },
       ],
       response_format: {
@@ -809,9 +827,11 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
                     category: { type: "string", enum: ["avoid", "caution", "leverage"] },
                     title: { type: "string" },
                     description: { type: "string" },
+                    analysis: { type: "string" },
+                    strategicAdvice: { type: "string" },
                     sourceVideoIds: { type: "array", items: { type: "string" } },
                   },
-                  required: ["category", "title", "description", "sourceVideoIds"],
+                  required: ["category", "title", "description", "analysis", "strategicAdvice", "sourceVideoIds"],
                   additionalProperties: false,
                 },
               },
@@ -823,9 +843,27 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
       },
     });
 
-    const combinedContent = typeof combinedRes.choices[0].message.content === "string"
+    let combinedContent = typeof combinedRes.choices[0].message.content === "string"
       ? combinedRes.choices[0].message.content
       : JSON.stringify(combinedRes.choices[0].message.content);
+
+    // finish_reason が max_tokens の場合、切れたJSONを修復試行
+    const finishReason = combinedRes.choices[0].finish_reason;
+    if (finishReason === "max_tokens" || finishReason === "end_turn_max_tokens") {
+      console.warn("[Report] LLM output was truncated (max_tokens). Attempting JSON repair...");
+      // 閉じ括弧を補完して有効なJSONに修復
+      let repaired = (combinedContent || "").trim();
+      // 末尾の不完全な文字列値を閉じる
+      const openQuotes = (repaired.match(/"/g) || []).length;
+      if (openQuotes % 2 !== 0) repaired += '"';
+      // 閉じていない配列・オブジェクトを補完
+      const openBrackets = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+      const openBraces = (repaired.match(/\{/g) || []).length - (repaired.match(/\}/g) || []).length;
+      for (let i = 0; i < openBrackets; i++) repaired += "]";
+      for (let i = 0; i < openBraces; i++) repaired += "}";
+      combinedContent = repaired;
+    }
+
     const combinedParsed = safeJsonParse(combinedContent || "{}");
 
     // 感情座標マップを構築
@@ -841,17 +879,23 @@ ${videosData.slice(0, 10).map(v => `- [videoId:${v.videoId}] @${v.accountName}: 
 
     autoInsight = combinedParsed.autoInsight || "";
     keyInsights = combinedParsed.keyInsights || [];
+
+    // keyInsightsが空または不十分な場合にログ出力
+    if (keyInsights.length < 4) {
+      console.warn(`[Report] Only ${keyInsights.length} keyInsights generated (expected 4). finish_reason=${finishReason}`);
+    }
   } catch (error) {
     console.error("[Report] Error in combined LLM analysis:", error);
     // LLM枠超過エラーは上位に伝搬して明示的に通知する
     if (error instanceof LLMQuotaExhaustedError) {
       throw error;
     }
-    emotionWords = [];
-    autoInsight = "";
-    keyInsights = [
-      { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。`, sourceVideoIds: [] },
-    ];
+    // 部分的に成功したデータがあれば保持する
+    if (emotionWords.length === 0 && autoInsight === "" && keyInsights.length === 0) {
+      keyInsights = [
+        { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。`, analysis: "", strategicAdvice: "", sourceVideoIds: [] },
+      ];
+    }
   }
 
   // 側面分析（ビジネス視点）
