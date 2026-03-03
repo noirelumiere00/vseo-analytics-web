@@ -2,6 +2,7 @@ import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import { execSync } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 
 // Stealth プラグインを有効化
 const stealthPlugin = StealthPlugin();
@@ -479,13 +480,44 @@ function findChromiumPath(): string {
     return process.env.CHROMIUM_PATH;
   }
 
-  // 候補パスをチェック（優先度順）
+  // Puppeteer がインストールした Chrome を最優先で探す（snap版より安定）
+  try {
+    const puppeteerFull = require("puppeteer");
+    const bundledPath = puppeteerFull.executablePath?.();
+    if (bundledPath && fs.existsSync(bundledPath)) {
+      console.log(`[Puppeteer] Found bundled Chrome at: ${bundledPath}`);
+      return bundledPath;
+    }
+  } catch {
+    // puppeteer (full) が使えない場合はスキップ
+  }
+
+  // .cache 内のPuppeteer Chromeを直接探す
+  const cacheDir = path.join(process.cwd(), ".cache", "puppeteer", "chrome");
+  if (fs.existsSync(cacheDir)) {
+    try {
+      const versions = fs.readdirSync(cacheDir).filter(d =>
+        d.startsWith("linux-")
+      );
+      for (const ver of versions.sort().reverse()) {
+        const chromePath = path.join(cacheDir, ver, "chrome-linux64", "chrome");
+        if (fs.existsSync(chromePath)) {
+          console.log(`[Puppeteer] Found cached Chrome at: ${chromePath}`);
+          return chromePath;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // 候補パスをチェック（優先度順 — snap版は最後に配置）
   const candidates = [
     "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
     "/opt/google/chrome/chrome",
-    "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
     "/snap/bin/chromium",
   ];
 
@@ -519,7 +551,7 @@ function buildChromiumArgs(): string[] {
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
-    "--single-process",
+    // NOTE: --single-process は除去。incognitoコンテキスト作成時にクラッシュする原因になる。
     "--disable-extensions",
     "--disable-background-networking",
     "--disable-default-apps",

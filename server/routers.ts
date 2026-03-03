@@ -412,6 +412,88 @@ export const appRouter = router({
         return { success: true, message: "3つのシークレットブラウザでTikTok検索を開始しました。" };
       }),
 
+    // LLM再分析（既存動画データに対してLLM部分だけ再実行）
+    reAnalyzeLLM: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "ジョブが見つかりません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const videos = await db.getVideosByJobId(input.jobId);
+        if (videos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "動画データがありません" });
+
+        // ステータスをprocessingに
+        await db.updateAnalysisJobStatus(input.jobId, "processing");
+        setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
+
+        // 非同期で実行
+        setImmediate(async () => {
+          try {
+            const BATCH_SIZE = 5;
+            const total = videos.length;
+
+            // Phase1: センチメント再分析
+            for (let i = 0; i < total; i += BATCH_SIZE) {
+              const batch = videos.slice(i, i + BATCH_SIZE);
+              const done = Math.min(i + BATCH_SIZE, total);
+              setProgress(input.jobId, {
+                message: `センチメント再分析中... (${done}/${total})`,
+                percent: Math.floor((done / total) * 60),
+              });
+
+              // 各動画のOCR/Transcriptionデータを取得
+              const sentimentInputs: SentimentInput[] = await Promise.all(
+                batch.map(async (v) => {
+                  const ocrResults = await db.getOcrResultsByVideoId(v.id);
+                  const transcription = await db.getTranscriptionByVideoId(v.id);
+                  return {
+                    title: v.title || "",
+                    description: v.description || "",
+                    hashtags: (v.hashtags as string[]) || [],
+                    ocrTexts: ocrResults.map((o: any) => o.extractedText || ""),
+                    transcriptionText: transcription?.fullText || "",
+                  };
+                })
+              );
+
+              const sentimentResults = await analyzeSentimentAndKeywordsBatch(sentimentInputs);
+
+              await Promise.all(
+                batch.map((v, j) => db.updateVideo(v.id, {
+                  sentiment: sentimentResults[j]?.sentiment ?? "neutral",
+                  keyHook: sentimentResults[j]?.keyHook ?? "",
+                  keywords: sentimentResults[j]?.keywords ?? [],
+                }))
+              );
+            }
+
+            // Phase2: 既存レポート削除 → レポート再生成
+            setProgress(input.jobId, { message: "レポート再生成中...", percent: 70 });
+            await db.deleteAnalysisReportByJobId(input.jobId);
+            await generateAnalysisReport(input.jobId);
+
+            // Phase3: 勝ちパターン共通点分析
+            setProgress(input.jobId, { message: "勝ちパターン共通点を再分析中...", percent: 90 });
+            if (job.keyword) {
+              await analyzeWinPatternCommonality(input.jobId, job.keyword);
+            }
+
+            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
+            setProgress(input.jobId, { message: "LLM再分析完了", percent: 100 });
+            setTimeout(() => progressStore.delete(input.jobId), 5000);
+            console.log(`[ReAnalyze] Completed LLM re-analysis for job ${input.jobId}`);
+          } catch (error) {
+            console.error("[ReAnalyze] Error:", error);
+            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
+            setProgress(input.jobId, { message: "LLM再分析でエラー発生", percent: -1 });
+            setTimeout(() => progressStore.delete(input.jobId), 5 * 60 * 1000);
+          }
+        });
+
+        return { success: true, message: "LLM再分析を開始しました" };
+      }),
+
     // 分析の進捗状況を取得
     getProgress: protectedProcedure
       .input(z.object({ jobId: z.number() }))

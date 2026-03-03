@@ -5,6 +5,11 @@
 
 import { invokeLLM, LLMQuotaExhaustedError } from "./_core/llm";
 
+function safeJsonParse(text: string): any {
+  try { return JSON.parse(text); }
+  catch { return JSON.parse(text.replace(/\\u(?![0-9a-fA-F]{4})/g, "\\\\u")); }
+}
+
 type FacetResult = Array<{ aspect: string; positive_percentage: number; negative_percentage: number }>;
 
 async function tryAnalyzeFacets(
@@ -66,7 +71,7 @@ ${allTexts}
     ? facetResponse.choices[0].message.content
     : JSON.stringify(facetResponse.choices[0]?.message?.content);
 
-  const parsed = JSON.parse(facetContent || "{}");
+  const parsed = safeJsonParse(facetContent || "{}");
   const aspects: FacetResult = parsed.aspects || [];
 
   if (aspects.length === 0) {
