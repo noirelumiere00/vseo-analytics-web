@@ -240,6 +240,12 @@ export async function createAnalysisReport(report: InsertAnalysisReport) {
   return result[0].insertId;
 }
 
+export async function deleteAnalysisReportByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(analysisReports).where(eq(analysisReports.jobId, jobId));
+}
+
 export async function getAnalysisReportByJobId(jobId: number) {
   const db = await getDb();
   if (!db) return undefined;
