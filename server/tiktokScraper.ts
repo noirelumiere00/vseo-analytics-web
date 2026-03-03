@@ -358,7 +358,6 @@ async function searchInIncognitoContext(
     // - MAX_PAGES=10: APIレスポンスの取得ページ数の上限（安全装置）
     const MAX_SCROLL_ATTEMPTS = 30;
     let noNewDataCount = 0;
-    let prevScrollHeight = 0;
 
     for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
       // 十分な動画数を取得済み → 終了
@@ -379,12 +378,36 @@ async function searchInIncognitoContext(
 
       const prevCount = allVideos.length;
 
-      // シンプルなスクロール: ページ末尾へ scrollTo（旧方式と同じ）
-      // 複雑な段階スクロールはIntersectionObserverのタイミングを乱すため採用しない
-      const currentHeight = await page.evaluate(() => {
-        window.scrollTo(0, document.body.scrollHeight);
+      // 【修正】scrollHeight に依存しないスクロール方式
+      // 画像/動画をブロックしているためDOMの高さが伸びず scrollHeight=viewportHeight のまま固定される問題を回避
+      // 方法: 累積オフセットで大きな値にスクロール + IntersectionObserver番兵要素を直接scrollIntoView
+      const currentHeight = await page.evaluate((scrollIdx) => {
+        // 1) 大きな累積オフセットで強制スクロール（scrollHeightに依存しない）
+        const targetY = (scrollIdx + 1) * 5000;
+        window.scrollTo(0, targetY);
+
+        // 2) TikTokの「もっと見る」番兵要素を直接ビューポートに入れる
+        //    IntersectionObserver のトリガーとなるDOM要素を探してscrollIntoView
+        const sentinels = [
+          // TikTokの無限スクロール番兵の候補セレクタ
+          '[data-e2e="search-common-infinite-scroll"]',
+          '[class*="InfiniteScroll"]',
+          '[class*="LoadMore"]',
+          '[class*="DivLoaderContainer"]',
+        ];
+        for (const sel of sentinels) {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            break;
+          }
+        }
+
+        // 3) 最終フォールバック: ページ末尾へ
+        window.scrollTo(0, Math.max(document.body.scrollHeight, targetY));
+
         return document.body.scrollHeight;
-      });
+      }, scroll);
 
       // 固定待機: TikTokのAPI呼出→レスポンス受信→DOM追加の一連を待つ
       // 3秒はScrapFly推奨のTikTok用待機時間（短すぎるとAPI未着、長すぎると時間浪費）
@@ -398,15 +421,9 @@ async function searchInIncognitoContext(
         `${allVideos.length} videos (height: ${currentHeight}, pages: ${pagesFetched}, cursor: ${latestCursor})`
       );
 
-      // 停止判定
+      // 停止判定: scrollHeightではなく「新データが取れたか」のみで判断
       if (allVideos.length === prevCount) {
         noNewDataCount++;
-        // ページ高さも変化なし = コンテンツ追加なし → 早期終了
-        if (currentHeight === prevScrollHeight && noNewDataCount >= 3) {
-          console.log(`[TikTok Session ${sessionIndex + 1}] Page height stalled & no new data (${noNewDataCount} scrolls), stopping`);
-          break;
-        }
-        // ページ高さは変わるがデータなし → もう少し待つ
         if (noNewDataCount >= 5) {
           console.log(`[TikTok Session ${sessionIndex + 1}] No new data after ${noNewDataCount} scrolls, stopping`);
           break;
@@ -414,8 +431,6 @@ async function searchInIncognitoContext(
       } else {
         noNewDataCount = 0;
       }
-
-      prevScrollHeight = currentHeight;
     }
 
     console.log(
