@@ -309,7 +309,7 @@ export async function generateAnalysisReportDocx(data: PDFGenerationData): Promi
         new TableRow({
           children: [
             new TableCell({
-              children: [new Paragraph("3回全出現")],
+              children: [new Paragraph("全セッション出現")],
               shading: { fill: "E0E0E0" },
               width: { size: 33, type: WidthType.PERCENTAGE },
             }),

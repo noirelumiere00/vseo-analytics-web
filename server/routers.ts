@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
@@ -143,35 +143,65 @@ export const appRouter = router({
         // レポートを取得
         const report = await db.getAnalysisReportByJobId(input.jobId);
 
-        // 3シークレットブラウザ検索結果をDBから取得
+        // 検索結果をDBから取得
         const tripleSearchData = await db.getTripleSearchResultByJobId(input.jobId);
+
+        // セッション数を searchData から動的に取得
+        const numSessions = tripleSearchData?.searchData?.length ?? 0;
+
+        // 各動画の出現回数を searchData から動的に計算
+        const videoAppearanceCount = new Map<string, number>();
+        if (tripleSearchData?.searchData) {
+          for (const session of tripleSearchData.searchData) {
+            const seen = new Set<string>();
+            for (const vid of session.videoIds) {
+              if (!seen.has(vid)) {
+                seen.add(vid);
+                videoAppearanceCount.set(vid, (videoAppearanceCount.get(vid) || 0) + 1);
+              }
+            }
+          }
+        }
+
+        // 出現回数別にグループ化（API返却用）
+        const appearanceCountMap: Record<number, string[]> = {};
+        for (let c = numSessions; c >= 1; c--) {
+          appearanceCountMap[c] = [];
+        }
+        for (const [videoId, count] of videoAppearanceCount.entries()) {
+          const clamped = Math.min(count, numSessions || count);
+          if (!appearanceCountMap[clamped]) appearanceCountMap[clamped] = [];
+          appearanceCountMap[clamped].push(videoId);
+        }
 
         // 各動画の順位情報を searchData から計算（重複率分析の高度化）
         // dominanceScore: 各セッションでの順位の逆数の平均 × 100（高いほど上位に安定して表示される）
         const rankInfo: Record<string, {
-          ranks: (number | null)[];   // [セッション0での順位, 1での順位, 2での順位] (null=未出現)
-          avgRank: number;            // 出現セッションでの平均順位
-          dominanceScore: number;     // 0-100、高いほど安定して上位に表示
+          ranks: (number | null)[];
+          avgRank: number;
+          dominanceScore: number;
+          appearanceCount: number;
         }> = {};
-        if (tripleSearchData?.searchData) {
+        if (tripleSearchData?.searchData && numSessions > 0) {
           const allVideoIds = [
             ...(tripleSearchData.appearedInAll3Ids ?? []),
             ...(tripleSearchData.appearedIn2Ids ?? []),
             ...(tripleSearchData.appearedIn1OnlyIds ?? []),
           ];
           for (const videoId of allVideoIds) {
-            const ranks: (number | null)[] = [null, null, null];
+            const ranks: (number | null)[] = new Array(numSessions).fill(null);
             for (const session of tripleSearchData.searchData) {
               const idx = session.videoIds.indexOf(videoId);
-              if (idx !== -1) ranks[session.sessionIndex] = idx + 1; // 1-indexed
+              if (idx !== -1 && session.sessionIndex < numSessions) {
+                ranks[session.sessionIndex] = idx + 1;
+              }
             }
             const presentRanks = ranks.filter((r): r is number => r !== null);
             const avgRank = presentRanks.length > 0
               ? presentRanks.reduce((a, b) => a + b, 0) / presentRanks.length
               : 999;
-            // (1/r1 + 1/r2 + 1/r3) / 3 * 100: rank#1 in all 3 = 100, rank#10 in 1 only = ~3.3
-            const dominanceScore = presentRanks.reduce((sum, r) => sum + (1 / r), 0) / 3 * 100;
-            rankInfo[videoId] = { ranks, avgRank, dominanceScore };
+            const dominanceScore = presentRanks.reduce((sum, r) => sum + (1 / r), 0) / numSessions * 100;
+            rankInfo[videoId] = { ranks, avgRank, dominanceScore, appearanceCount: videoAppearanceCount.get(videoId) ?? 0 };
           }
         }
 
@@ -181,14 +211,16 @@ export const appRouter = router({
           report,
           tripleSearch: tripleSearchData ? {
             searches: tripleSearchData.searchData ?? [],
+            numSessions,
             duplicateAnalysis: {
               appearedInAll3Count: tripleSearchData.appearedInAll3Ids?.length ?? 0,
               appearedIn2Count: tripleSearchData.appearedIn2Ids?.length ?? 0,
               appearedIn1OnlyCount: tripleSearchData.appearedIn1OnlyIds?.length ?? 0,
-              overlapRate: (tripleSearchData.overlapRate ?? 0) / 10, // DB stores as percentage * 10
+              overlapRate: (tripleSearchData.overlapRate ?? 0) / 10,
               appearedInAll3Ids: tripleSearchData.appearedInAll3Ids ?? [],
               appearedIn2Ids: tripleSearchData.appearedIn2Ids ?? [],
               appearedIn1OnlyIds: tripleSearchData.appearedIn1OnlyIds ?? [],
+              appearanceCountMap,
             },
             commonalityAnalysis: tripleSearchData.commonalityAnalysis ?? null,
             rankInfo,
@@ -226,13 +258,14 @@ export const appRouter = router({
         setImmediate(async () => {
           try {
             if (job.keyword) {
-              // === 3シークレットブラウザでTikTok検索 ===
+              // === 複数シークレットブラウザでTikTok検索 ===
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
-              setProgress(input.jobId, { message: "3つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
+              setProgress(input.jobId, { message: "5つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
 
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
-                15, // 各セッション15件
+                30, // 各セッション30件
+                5,  // 5つのシークレットブラウザ
                 (msg: string, scraperPct: number) => {
                   // スクレイパーの進捗(5-90%)を全体の検索フェーズ(5-40%)にマッピング
                   const pct = Math.min(40, Math.round(5 + ((scraperPct - 5) / 85) * 35));
@@ -240,7 +273,17 @@ export const appRouter = router({
                 }
               );
 
-              // 3シークレットブラウザ検索結果をDBに永続化
+              // 検索結果をDBに永続化
+              // DB列: appearedInAll3Ids=全セッション出現, appearedIn2Ids=2回以上(全未満), appearedIn1OnlyIds=1回のみ
+              const { videosByAppearanceCount, numSessions } = tripleResult.duplicateAnalysis;
+              const allSessionVideos = videosByAppearanceCount[numSessions] ?? [];
+              const oneOnlyVideos = videosByAppearanceCount[1] ?? [];
+              // 2回以上〜全セッション未満の動画を結合
+              const midVideos: typeof allSessionVideos = [];
+              for (let c = numSessions - 1; c >= 2; c--) {
+                midVideos.push(...(videosByAppearanceCount[c] ?? []));
+              }
+
               await db.saveTripleSearchResult({
                 jobId: input.jobId,
                 searchData: tripleResult.searches.map(s => ({
@@ -248,18 +291,17 @@ export const appRouter = router({
                   totalFetched: s.totalFetched,
                   videoIds: s.videos.map(v => v.id),
                 })),
-                appearedInAll3Ids: tripleResult.duplicateAnalysis.appearedInAll3.map(v => v.id),
-                appearedIn2Ids: tripleResult.duplicateAnalysis.appearedIn2.map(v => v.id),
-                appearedIn1OnlyIds: tripleResult.duplicateAnalysis.appearedIn1Only.map(v => v.id),
-                overlapRate: Math.round(tripleResult.duplicateAnalysis.overlapRate * 10), // Store as percentage * 10
+                appearedInAll3Ids: allSessionVideos.map(v => v.id),
+                appearedIn2Ids: midVideos.map(v => v.id),
+                appearedIn1OnlyIds: oneOnlyVideos.map(v => v.id),
+                overlapRate: Math.round(tripleResult.duplicateAnalysis.overlapRate * 10),
               });
 
-              console.log(`[Analysis] Triple search complete:`,
-                `3回全出現=${tripleResult.duplicateAnalysis.appearedInAll3.length},`,
-                `2回出現=${tripleResult.duplicateAnalysis.appearedIn2.length},`,
-                `1回のみ=${tripleResult.duplicateAnalysis.appearedIn1Only.length},`,
-                `重複率=${tripleResult.duplicateAnalysis.overlapRate.toFixed(1)}%`
-              );
+              const countSummary = Object.entries(videosByAppearanceCount)
+                .sort(([a], [b]) => Number(b) - Number(a))
+                .map(([count, videos]) => `${count}回出現=${videos.length}`)
+                .join(", ");
+              console.log(`[Analysis] Search complete (${numSessions}sessions): ${countSummary}, 重複率=${tripleResult.duplicateAnalysis.overlapRate.toFixed(1)}%`);
 
               // 全ユニーク動画を分析対象にする（重複度情報付き）
               const allUniqueVideos = tripleResult.duplicateAnalysis.allUniqueVideos;
@@ -409,7 +451,7 @@ export const appRouter = router({
           }
         });
 
-        return { success: true, message: "3つのシークレットブラウザでTikTok検索を開始しました。" };
+        return { success: true, message: "5つのシークレットブラウザでTikTok検索を開始しました。" };
       }),
 
     // LLM再分析（既存動画データに対してLLM部分だけ再実行）
@@ -819,16 +861,39 @@ export const appRouter = router({
   }),
 
   admin: router({
+    // ユーザー一覧
+    listUsers: adminProcedure.query(async () => {
+      return db.getAllUsers();
+    }),
+
+    // ユーザーのrole変更
+    updateUserRole: adminProcedure
+      .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
+      .mutation(async ({ input }) => {
+        await db.updateUserRole(input.userId, input.role);
+        return { success: true };
+      }),
+
+    // ユーザー削除
+    deleteUser: adminProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.userId === ctx.user.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "自分自身は削除できません" });
+        }
+        await db.deleteUserById(input.userId);
+        return { success: true };
+      }),
+
     // デバッグ用: サーバーログを取得
-    getLogs: publicProcedure
+    getLogs: adminProcedure
       .input(z.object({
         lines: z.number().default(500),
       }))
       .query(async ({ input }) => {
         try {
-          // まずインメモリバッファからログを取得（本番環境対応）
           const memoryLogs = logBuffer.getLines(input.lines);
-          
+
           if (memoryLogs.length > 0) {
             return {
               success: true,
@@ -838,10 +903,9 @@ export const appRouter = router({
               message: `インメモリバッファから最新 ${memoryLogs.length} 行を取得しました`,
             };
           }
-          
-          // フォールバック: ファイルから読み取り（開発環境）
+
           const logPath = path.join(process.cwd(), '.manus-logs', 'devserver.log');
-          
+
           if (!fs.existsSync(logPath)) {
             return {
               success: false,
@@ -849,11 +913,11 @@ export const appRouter = router({
               message: 'ログファイルが見つからず、インメモリバッファも空です',
             };
           }
-          
+
           const content = fs.readFileSync(logPath, 'utf-8');
           const lines = content.split('\n').filter((line: string) => line.trim());
           const recentLines = lines.slice(Math.max(0, lines.length - input.lines));
-          
+
           return {
             success: true,
             logs: recentLines,
