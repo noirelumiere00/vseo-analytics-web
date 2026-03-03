@@ -76,8 +76,13 @@ searchTikTokTriple()
 ## Phase 1: SSR埋め込みJSON抽出
 
 ### 概要
-TikTokの検索ページには `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">` というタグが埋め込まれている。
-ここにサーバーサイドレンダリング(SSR)された初回バッチのデータ（約12件）がJSON形式で格納されている。
+TikTokのページには `<script id="__UNIVERSAL_DATA_FOR_REHYDRATION__">` というタグが埋め込まれている。
+プロフィールページや動画ページでは初回バッチのデータがJSON形式で格納されている。
+
+**重要な注意**: Webリサーチの結果、**検索結果ページではこのSSRデータに動画リストが含まれないことが多い**。
+検索結果は内部API経由で動的に読み込まれるため、SSRデータは空の場合がある。
+ただし、TikTokは頻繁に構造を変更するため、Phase 1 はベストエフォートとして実装し、
+取得できればラッキー（~12件のボーナス）、取得できなくても Phase 2+3 で確実にカバーする設計とする。
 
 ### 実装手順
 
@@ -150,11 +155,13 @@ async function extractSSRData(page: Page): Promise<TikTokVideo[]> {
 ```
 
 ### 注意事項
+- **検索ページでは SSR データに動画リストが含まれないことが多い**（プロフィール/動画ページとは異なる）
 - TikTokは `__UNIVERSAL_DATA_FOR_REHYDRATION__` 内のキー名を頻繁に変更する
-  - 過去の例: `webapp.search-detail`, `webapp.search`, `seo.search`
+  - 過去の例: `webapp.search-detail`, `webapp.search`, `seo.search`, `webapp.search-result`
   - 旧形式: `SIGI_STATE` というIDの `<script>` タグが使われていた
 - SSRデータに `stats`（再生数等）が含まれない場合がある。その場合は後続の Phase で補完する
-- **Phase 1 だけで30件取れることは期待しない**。あくまで初期データとして活用
+- **Phase 1 は0件でも正常**。あくまでベストエフォートの初期データとして活用
+- Phase 1 が0件の場合、ログに scope のキー一覧を出力して将来のデバッグに備える
 
 ---
 
@@ -164,21 +171,32 @@ async function extractSSRData(page: Page): Promise<TikTokVideo[]> {
 検索結果ページのDOM上にレンダリングされた動画カード要素から、`querySelectorAll` でデータを直接抽出する。
 スクロールのたびにDOMを再スキャンし、新たに描画された動画カードを拾う。
 
-### DOMセレクタ一覧
+### DOMセレクタ一覧（2025年7月時点で確認済み）
 
 以下のセレクタを**優先度順**に試行する。TikTokはセレクタを頻繁に変更するため、複数パターンで冗長化する。
 
 ```typescript
-// 動画カード要素のセレクタ（優先度順）
+// 動画カード要素のセレクタ（優先度順、2025年7月確認済み）
 const VIDEO_CARD_SELECTORS = [
-  '[data-e2e="search_top-item"]',        // 検索トップ結果
-  '[data-e2e="search-card-desc"]',        // 検索カード説明
-  'div[class*="DivItemContainer"]',       // 汎用コンテナ（CSS Modules ハッシュ付き）
-  'div[class*="DivVideoCard"]',           // 動画カード
+  'div[id^="column-item-video-container"]', // ★2025年確認済み: IDプレフィックスベースのコンテナ
+  '[data-e2e="search_top-item"]',           // 検索トップ結果
+  '[data-e2e="search-card-desc"]',          // 検索カード説明
+  'div[class*="DivItemContainer"]',         // 汎用コンテナ（CSS Modules ハッシュ付き）
+  'div[class*="DivVideoCard"]',             // 動画カード
 ];
 
-// 動画リンクのセレクタ（全パターン共通）
+// 動画リンクのセレクタ（全パターン共通、最も安定）
 const VIDEO_LINK_SELECTOR = 'a[href*="/video/"]';
+
+// 動画カード内のデータ抽出セレクタ（2025年確認済み）
+const CARD_DATA_SELECTORS = {
+  // 投稿者名（data-e2e属性、比較的安定）
+  username: 'p[data-e2e="search-card-user-unique-id"]',
+  // 説明文（複数span要素を結合して取得）
+  description: 'span[data-e2e="new-desc-span"]',
+  // 投稿者リンク（@username形式）
+  authorLink: 'a[href^="/@"]',
+};
 
 // ログインモーダル閉じるボタン
 const MODAL_CLOSE_SELECTORS = [
@@ -188,6 +206,12 @@ const MODAL_CLOSE_SELECTORS = [
 ];
 ```
 
+### セレクタの安定性について
+- `data-e2e` 属性: TikTokの内部E2Eテスト用フックで、CSS classよりは安定しているが変更される可能性あり
+- `div[id^="column-item-video-container"]`: 2025年時点で確認済み、IDプレフィックスベース
+- `a[href*="/video/"]`: **最も安定**。URL構造はAPIレベルで変わらない限り不変
+- `div[class*="DivItemContainer"]`: CSS Modulesのハッシュが変わると機能しなくなる（2023-2024年有効、現在は不安定）
+
 ### 実装手順
 
 ```typescript
@@ -196,7 +220,7 @@ async function extractFromDOM(page: Page): Promise<Array<{ id: string; desc: str
   return page.evaluate(() => {
     const results: Array<{ id: string; desc: string; authorUniqueId: string; coverUrl: string; hashtags: string[] }> = [];
 
-    // 全ての動画リンクを取得
+    // 全ての動画リンクを取得（最も安定したセレクタ）
     const videoLinks = document.querySelectorAll('a[href*="/video/"]');
 
     for (const link of Array.from(videoLinks)) {
@@ -210,8 +234,11 @@ async function extractFromDOM(page: Page): Promise<Array<{ id: string; desc: str
       // 既に取得済みならスキップ
       if (results.find(r => r.id === videoId)) continue;
 
-      // 親要素から説明文・投稿者・カバー画像を探す
-      const card = link.closest('div[class*="Container"], div[class*="Card"], div[data-e2e]') || link.parentElement;
+      // 親要素の動画カードを探す（2025年確認済みセレクタ優先）
+      const card =
+        link.closest('div[id^="column-item-video-container"]') ||  // ★2025年確認済み
+        link.closest('div[class*="Container"], div[class*="Card"], div[data-e2e]') ||
+        link.parentElement;
 
       let desc = '';
       let authorUniqueId = '';
@@ -219,15 +246,27 @@ async function extractFromDOM(page: Page): Promise<Array<{ id: string; desc: str
       const hashtags: string[] = [];
 
       if (card) {
-        // 説明文
-        const descEl = card.querySelector('[data-e2e="search-card-desc"], span[class*="SpanText"], p, span');
-        if (descEl) desc = descEl.textContent || '';
+        // 説明文（2025年確認済み: 複数の span[data-e2e="new-desc-span"] を結合）
+        const descSpans = card.querySelectorAll('span[data-e2e="new-desc-span"]');
+        if (descSpans.length > 0) {
+          desc = Array.from(descSpans).map(s => s.textContent || '').join('');
+        } else {
+          // フォールバック: 旧セレクタ
+          const descEl = card.querySelector('[data-e2e="search-card-desc"], span[class*="SpanText"], p, span');
+          if (descEl) desc = descEl.textContent || '';
+        }
 
-        // 投稿者（@username リンクから取得）
-        const authorLink = card.querySelector('a[href^="/@"]');
-        if (authorLink) {
-          const authorMatch = (authorLink as HTMLAnchorElement).href.match(/\/@([^/?]+)/);
-          if (authorMatch) authorUniqueId = authorMatch[1];
+        // 投稿者（2025年確認済み: p[data-e2e="search-card-user-unique-id"]）
+        const usernameEl = card.querySelector('p[data-e2e="search-card-user-unique-id"]');
+        if (usernameEl) {
+          authorUniqueId = usernameEl.textContent || '';
+        } else {
+          // フォールバック: @username リンクから取得
+          const authorLink = card.querySelector('a[href^="/@"]');
+          if (authorLink) {
+            const authorMatch = (authorLink as HTMLAnchorElement).href.match(/\/@([^/?]+)/);
+            if (authorMatch) authorUniqueId = authorMatch[1];
+          }
         }
 
         // カバー画像
@@ -343,6 +382,57 @@ function setupNetworkInterception(page: Page): NetworkCaptureState {
 1. **`page.goto()` の前にセットアップする**こと。ページ遷移時にTikTokが自動発行する最初のAPI呼び出しも捕捉できる
 2. `response.json()` は1回しか呼べない。`response.text()` → `JSON.parse()` の方が安全な場合もある
 3. API の URL パターンは `/api/search/general/full` と `/api/search/item/full` の2種類がある
+
+### API レスポンス構造リファレンス
+
+検索APIのレスポンスは以下の構造（`tiktok-api-response.json` で実際に確認済み）:
+
+```json
+{
+  "status_code": 0,
+  "data": [
+    {
+      "type": 1,        // 1=動画, 4=ユーザー, 12=ハッシュタグ
+      "item": {
+        "id": "7607762642135960849",
+        "desc": "動画の説明文 #ハッシュタグ",
+        "createTime": 1771320326,
+        "video": {
+          "duration": 30,
+          "cover": "https://...",
+          "playAddr": "https://...",
+          "downloadAddr": "https://..."
+        },
+        "stats": {
+          "playCount": 100000,
+          "diggCount": 5000,
+          "commentCount": 300,
+          "shareCount": 200,
+          "collectCount": 100
+        },
+        "author": {
+          "uniqueId": "username",
+          "nickname": "表示名",
+          "avatarThumb": "https://..."
+        },
+        "authorStats": {
+          "followerCount": 50000,
+          "followingCount": 100,
+          "heartCount": 200000,
+          "videoCount": 500
+        },
+        "textExtra": [
+          { "hashtagName": "ハッシュタグ名" }
+        ]
+      }
+    }
+  ],
+  "has_more": 1,         // 1=次のページあり, 0=終了
+  "cursor": 12           // 次のリクエストで使う offset 値
+}
+```
+
+`parseVideoData()` は `type === 1` の `item` のみを処理する。`type === 4`（ユーザー）や `type === 12`（ハッシュタグ）は無視される。
 
 ---
 
