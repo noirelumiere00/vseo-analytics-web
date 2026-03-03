@@ -73,12 +73,13 @@ const USER_AGENTS = [
 async function fetchSearchResults(
   page: Page,
   keyword: string,
-  offset: number = 0
+  offset: number = 0,
+  cursor: number = 0
 ): Promise<any> {
   return page.evaluate(
-    async (kw: string, off: number) => {
+    async (kw: string, off: number, cur: number) => {
       const encodedKeyword = encodeURIComponent(kw);
-      const url = `https://www.tiktok.com/api/search/general/full/?keyword=${encodedKeyword}&offset=${off}&search_source=normal_search&WebIdLastTime=${Math.floor(Date.now() / 1000)}&aid=1988&app_language=ja-JP&app_name=tiktok_web&browser_language=ja-JP&browser_name=Mozilla&browser_online=true&browser_platform=Win32&browser_version=121.0.0.0&channel=tiktok_web&cookie_enabled=true&device_platform=web_pc&focus_state=true&from_page=search&history_len=3&is_fullscreen=false&is_page_visible=true&os=windows&priority_region=JP&region=JP&screen_height=1080&screen_width=1920&webcast_language=ja-JP`;
+      const url = `https://www.tiktok.com/api/search/general/full/?keyword=${encodedKeyword}&offset=${off}&cursor=${cur}&search_source=normal_search&WebIdLastTime=${Math.floor(Date.now() / 1000)}&aid=1988&app_language=ja-JP&app_name=tiktok_web&browser_language=ja-JP&browser_name=Mozilla&browser_online=true&browser_platform=Win32&browser_version=121.0.0.0&channel=tiktok_web&cookie_enabled=true&device_platform=web_pc&focus_state=true&from_page=search&history_len=3&is_fullscreen=false&is_page_visible=true&os=windows&priority_region=JP&region=JP&screen_height=1080&screen_width=1920&webcast_language=ja-JP`;
 
       try {
         const response = await fetch(url, { credentials: "include" });
@@ -120,7 +121,8 @@ async function fetchSearchResults(
       }
     },
     keyword,
-    offset
+    offset,
+    cursor
   );
 }
 
@@ -324,6 +326,7 @@ async function searchInIncognitoContext(
 
     const allVideos: TikTokVideo[] = [];
     let offset = 0;
+    let cursor = 0;
     const batchSize = 12;
     let hasMore = true;
     let retryCount = 0;
@@ -331,14 +334,14 @@ async function searchInIncognitoContext(
 
     while (allVideos.length < maxVideos && hasMore && retryCount < maxRetries) {
       console.log(
-        `[TikTok Session ${sessionIndex + 1}] Fetching offset=${offset}, current=${allVideos.length}/${maxVideos}`
+        `[TikTok Session ${sessionIndex + 1}] Fetching offset=${offset}, cursor=${cursor}, current=${allVideos.length}/${maxVideos}`
       );
       if (onProgress)
         onProgress(
           `検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos})`
         );
 
-      const result = await fetchSearchResults(page, keyword, offset);
+      const result = await fetchSearchResults(page, keyword, offset, cursor);
 
       if (result.error) {
         console.error(
@@ -384,6 +387,12 @@ async function searchInIncognitoContext(
       }
 
       offset += batchSize;
+      // TikTok APIはcursorベースのページネーション。レスポンスのcursorを次のリクエストに使用
+      if (result.data.cursor !== undefined && result.data.cursor !== null) {
+        cursor = result.data.cursor;
+      } else {
+        cursor = offset; // cursorがない場合はoffsetをフォールバック
+      }
 
       // レート制限対策: セッションごとに異なる間隔
       const delay = 1500 + Math.random() * 2000;
