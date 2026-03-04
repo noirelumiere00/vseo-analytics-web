@@ -1,10 +1,99 @@
-import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import puppeteerExtra from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { type Browser, type Page } from "puppeteer-core";
 import { execSync } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 
-// Stealth プラグインを有効化
-const stealthPlugin = StealthPlugin();
+// Stealth プラグインを有効化（Bot検出回避: navigator.webdriver隠蔽、Chrome自動化フラグ除去等）
+puppeteerExtra.use(StealthPlugin());
+
+// ===== Chrome永続プロファイル設定 =====
+const PROFILE_BASE_DIR = process.env.CHROME_PROFILE_DIR || "/data/chrome-profiles";
+const USE_CHROME_PROFILE = process.env.USE_CHROME_PROFILE !== "false";
+
+/**
+ * Chromeプロファイルディレクトリを確保する（なければ作成）
+ */
+function ensureProfileDir(sessionIndex: number): string {
+  const profileDir = path.join(PROFILE_BASE_DIR, `profile-${sessionIndex}`);
+  if (!fs.existsSync(profileDir)) {
+    fs.mkdirSync(profileDir, { recursive: true });
+    console.log(`[Chrome Profile] Created profile directory: ${profileDir}`);
+  } else {
+    console.log(`[Chrome Profile] Using existing profile: ${profileDir}`);
+  }
+  return profileDir;
+}
+
+/**
+ * プロファイルのウォームアップ（初回のみTikTokトップを訪問してCookie設定）
+ */
+async function warmupProfile(page: Page, sessionIndex: number): Promise<void> {
+  const profileDir = path.join(PROFILE_BASE_DIR, `profile-${sessionIndex}`);
+  const markerFile = path.join(profileDir, ".warmed-up");
+
+  if (fs.existsSync(markerFile)) {
+    console.log(`[Chrome Profile ${sessionIndex}] Already warmed up, skipping`);
+    return;
+  }
+
+  console.log(`[Chrome Profile ${sessionIndex}] First run - warming up profile...`);
+
+  try {
+    await page.goto("https://www.tiktok.com/ja-JP", {
+      waitUntil: "domcontentloaded",
+      timeout: 30000,
+    });
+    // 人間らしい動きをシミュレート
+    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
+    await page.evaluate(() => window.scrollBy(0, 300));
+    await new Promise((r) => setTimeout(r, 1000 + Math.random() * 2000));
+
+    fs.writeFileSync(markerFile, new Date().toISOString());
+    console.log(`[Chrome Profile ${sessionIndex}] Warmup complete`);
+  } catch (error) {
+    console.warn(`[Chrome Profile ${sessionIndex}] Warmup failed:`, error);
+    // ウォームアップ失敗でも検索は続行する
+  }
+}
+
+/**
+ * プロファイルのファイルロック取得（同時アクセス防止）
+ */
+function acquireProfileLock(sessionIndex: number): boolean {
+  const profileDir = ensureProfileDir(sessionIndex);
+  const lockFile = path.join(profileDir, ".lock");
+
+  if (fs.existsSync(lockFile)) {
+    // ロックが10分以上古い場合は強制解放
+    const lockAge = Date.now() - fs.statSync(lockFile).mtimeMs;
+    if (lockAge > 10 * 60 * 1000) {
+      console.warn(`[Chrome Profile] Stale lock on profile-${sessionIndex}, forcing release`);
+      fs.unlinkSync(lockFile);
+    } else {
+      console.warn(`[Chrome Profile] profile-${sessionIndex} is locked, falling back to incognito`);
+      return false;
+    }
+  }
+
+  fs.writeFileSync(lockFile, `${process.pid}-${Date.now()}`);
+  return true;
+}
+
+/**
+ * プロファイルのファイルロック解放
+ */
+function releaseProfileLock(sessionIndex: number): void {
+  const lockFile = path.join(PROFILE_BASE_DIR, `profile-${sessionIndex}`, ".lock");
+  try {
+    if (fs.existsSync(lockFile)) {
+      fs.unlinkSync(lockFile);
+    }
+  } catch {
+    // ignore
+  }
+}
 
 // TikTok内部APIから検索結果を取得するモジュール
 // 3つの独立したシークレット（インコグニート）ブラウザコンテキストで
@@ -175,17 +264,29 @@ function parseVideoData(item: any): TikTokVideo | null {
   };
 }
 
-// 1つのシークレットブラウザコンテキストでキーワード検索して動画を取得
+// 1つのブラウザコンテキストでキーワード検索して動画を取得
+// usePersistentProfile=true の場合、デフォルトページを使用しCookieが永続化される
 async function searchInIncognitoContext(
   browser: Browser,
   keyword: string,
   maxVideos: number,
   sessionIndex: number,
+  usePersistentProfile: boolean = false,
   onProgress?: (message: string) => void
 ): Promise<TikTokSearchResult> {
-  // 新しいインコグニートコンテキストを作成（Cookie/履歴なし）
-  const context = await browser.createBrowserContext();
-  const page = await context.newPage();
+  let page: Page;
+  let context: any = null;
+
+  if (usePersistentProfile) {
+    // 永続プロファイル: デフォルトページを使用（Cookie/LocalStorageが保存される）
+    const pages = await browser.pages();
+    page = pages[0] || await browser.newPage();
+    console.log(`[TikTok Session ${sessionIndex + 1}] Using persistent profile (cookies preserved)`);
+  } else {
+    // インコグニート: 従来通り（Cookie/履歴なし）
+    context = await browser.createBrowserContext();
+    page = await context.newPage();
+  }
 
   try {
     await page.setViewport({ width: 800, height: 600 });
@@ -280,6 +381,11 @@ async function searchInIncognitoContext(
       }
     } catch (ipCheckError: any) {
       console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
+    }
+
+    // 永続プロファイルの場合、初回ウォームアップを実行
+    if (usePersistentProfile) {
+      await warmupProfile(page, sessionIndex);
     }
 
     // TikTokにアクセスしてCookieを取得
@@ -405,7 +511,9 @@ async function searchInIncognitoContext(
     };
   } finally {
     await page.close();
-    await context.close(); // インコグニートコンテキストを完全に破棄
+    if (context) {
+      await context.close(); // インコグニートコンテキストを完全に破棄
+    }
   }
 }
 
@@ -536,48 +644,77 @@ function buildChromiumArgs(): string[] {
   return args;
 }
 
-// メイン関数: 3つのシークレットブラウザで同一キーワード検索→重複度分析
+/**
+ * ブラウザを1つ起動するヘルパー
+ * puppeteer-extra（StealthPlugin適用済み）を使用
+ * userDataDir 指定時は永続プロファイルで起動
+ */
+async function launchBrowser(userDataDir?: string): Promise<Browser> {
+  const chromiumPath = findChromiumPath();
+  const launchOptions: any = {
+    executablePath: chromiumPath,
+    headless: true,
+    args: buildChromiumArgs(),
+  };
+
+  if (userDataDir) {
+    launchOptions.userDataDir = userDataDir;
+  }
+
+  console.log(`[Puppeteer] Launching browser (profile: ${userDataDir || "none"})...`);
+  const browser = await puppeteerExtra.launch(launchOptions) as unknown as Browser;
+  console.log("[Puppeteer] Browser launched successfully");
+  return browser;
+}
+
+// メイン関数: 3つの独立ブラウザで同一キーワード検索→重複度分析
+// 永続プロファイル有効時: 各ブラウザが専用のChromeプロファイルを使用
 export async function searchTikTokTriple(
   keyword: string,
   videosPerSearch: number = 15,
   onProgress?: (message: string, percent: number) => void
 ): Promise<TikTokTripleSearchResult> {
-  // ブラウザを起動
-  let browser: Browser;
-  try {
-    const chromiumPath = findChromiumPath();
-    console.log(`[Puppeteer] Launching browser with executablePath: ${chromiumPath}`);
-    browser = await puppeteer.launch({
-      executablePath: chromiumPath,
-      headless: true,
-      args: buildChromiumArgs(),
-    });
-    console.log("[Puppeteer] Browser launched successfully");
-  } catch (launchError: any) {
-    console.error("[Puppeteer] CRITICAL: Failed to launch browser");
-    console.error("[Puppeteer] Error message:", launchError.message);
-    console.error("[Puppeteer] Error code:", launchError.code);
-    console.error("[Puppeteer] Error stack:", launchError.stack);
-    throw launchError;
+  const useProfile = USE_CHROME_PROFILE;
+
+  if (onProgress) onProgress("3つのブラウザを起動中...", 5);
+  if (useProfile) {
+    console.log(`[TikTok] Persistent Chrome profile enabled (dir: ${PROFILE_BASE_DIR})`);
   }
 
-  try {
-    if (onProgress) onProgress("3つのシークレットブラウザを起動中...", 5);
+  // 3つの独立ブラウザで順次検索（並列だとレート制限に引っかかるため）
+  const searches: TikTokSearchResult[] = [];
 
-    // 3つのシークレットブラウザコンテキストで順次検索
-    // （並列だとレート制限に引っかかるため順次実行）
-    const searches: TikTokSearchResult[] = [];
+  for (let i = 0; i < 3; i++) {
+    if (onProgress) {
+      onProgress(`検索${i + 1}/3: ブラウザで検索中...`, 10 + i * 25);
+    }
 
-    for (let i = 0; i < 3; i++) {
-      if (onProgress) {
-        onProgress(`検索${i + 1}/3: シークレットブラウザで検索中...`, 10 + i * 25);
-      }
+    // プロファイルロック取得（永続プロファイル使用時）
+    let profileLocked = false;
+    if (useProfile) {
+      profileLocked = acquireProfileLock(i);
+    }
+    const useProfileForThis = useProfile && profileLocked;
 
+    let browser: Browser;
+    try {
+      browser = await launchBrowser(
+        useProfileForThis ? ensureProfileDir(i) : undefined
+      );
+    } catch (launchError: any) {
+      if (useProfileForThis) releaseProfileLock(i);
+      console.error("[Puppeteer] CRITICAL: Failed to launch browser");
+      console.error("[Puppeteer] Error message:", launchError.message);
+      throw launchError;
+    }
+
+    try {
       const result = await searchInIncognitoContext(
         browser,
         keyword,
         videosPerSearch,
         i,
+        useProfileForThis,
         (msg) => {
           if (onProgress) {
             const basePercent = 10 + i * 25;
@@ -587,43 +724,44 @@ export async function searchTikTokTriple(
       );
 
       searches.push(result);
-
-      // 次の検索前に間隔を空ける（レート制限対策）
-      if (i < 2) {
-        if (onProgress)
-          onProgress(`検索${i + 1}完了。次の検索まで待機中...`, 10 + (i + 1) * 25 - 5);
-        await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
-      }
+    } finally {
+      await browser.close();
+      if (useProfileForThis) releaseProfileLock(i);
     }
 
-    if (onProgress) onProgress("重複度分析中...", 85);
-
-    // 重複度分析
-    const tripleSearches = searches as [
-      TikTokSearchResult,
-      TikTokSearchResult,
-      TikTokSearchResult,
-    ];
-    const duplicateAnalysis = analyzeDuplicates(tripleSearches);
-
-    console.log(
-      `[TikTok] Triple search complete for "${keyword}":`,
-      `3回全出現=${duplicateAnalysis.appearedInAll3.length},`,
-      `2回出現=${duplicateAnalysis.appearedIn2.length},`,
-      `1回のみ=${duplicateAnalysis.appearedIn1Only.length},`,
-      `重複率=${duplicateAnalysis.overlapRate.toFixed(1)}%`
-    );
-
-    if (onProgress) onProgress("データ収集完了", 90);
-
-    return {
-      searches: tripleSearches,
-      duplicateAnalysis,
-      keyword,
-    };
-  } finally {
-    await browser.close();
+    // 次の検索前に間隔を空ける（レート制限対策）
+    if (i < 2) {
+      if (onProgress)
+        onProgress(`検索${i + 1}完了。次の検索まで待機中...`, 10 + (i + 1) * 25 - 5);
+      await new Promise((r) => setTimeout(r, 3000 + Math.random() * 2000));
+    }
   }
+
+  if (onProgress) onProgress("重複度分析中...", 85);
+
+  // 重複度分析
+  const tripleSearches = searches as [
+    TikTokSearchResult,
+    TikTokSearchResult,
+    TikTokSearchResult,
+  ];
+  const duplicateAnalysis = analyzeDuplicates(tripleSearches);
+
+  console.log(
+    `[TikTok] Triple search complete for "${keyword}":`,
+    `3回全出現=${duplicateAnalysis.appearedInAll3.length},`,
+    `2回出現=${duplicateAnalysis.appearedIn2.length},`,
+    `1回のみ=${duplicateAnalysis.appearedIn1Only.length},`,
+    `重複率=${duplicateAnalysis.overlapRate.toFixed(1)}%`
+  );
+
+  if (onProgress) onProgress("データ収集完了", 90);
+
+  return {
+    searches: tripleSearches,
+    duplicateAnalysis,
+    keyword,
+  };
 }
 
 // 後方互換性のために残す（単一検索）
@@ -632,11 +770,7 @@ export async function searchTikTokVideos(
   maxVideos: number = 15,
   onProgress?: (fetched: number, total: number) => void
 ): Promise<TikTokSearchResult> {
-  const browser = await puppeteer.launch({
-    executablePath: findChromiumPath(),
-    headless: true,
-    args: buildChromiumArgs(),
-  });
+  const browser = await launchBrowser();
 
   try {
     const result = await searchInIncognitoContext(
@@ -644,6 +778,7 @@ export async function searchTikTokVideos(
       keyword,
       maxVideos,
       0,
+      false,
       (msg) => console.log(msg)
     );
     return result;
@@ -658,11 +793,7 @@ export async function searchTikTokVideos(
  * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
  */
 export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> {
-  const browser = await puppeteer.launch({
-    executablePath: findChromiumPath(),
-    headless: true,
-    args: buildChromiumArgs(),
-  });
+  const browser = await launchBrowser();
 
   const page = await browser.newPage();
   const comments: string[] = [];
