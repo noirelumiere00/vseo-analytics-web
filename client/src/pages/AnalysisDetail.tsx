@@ -1369,7 +1369,7 @@ export default function AnalysisDetail() {
                 </CardTitle>
                 <CardDescription>
                   {tripleSearch 
-                    ? "3シークレットブラウザ検索での出現回数別に分類" 
+                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類` 
                     : "収集された動画の詳細分析結果"}
                 </CardDescription>
               </CardHeader>

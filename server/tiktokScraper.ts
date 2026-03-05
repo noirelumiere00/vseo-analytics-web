@@ -139,7 +139,7 @@ async function searchInIncognitoContext(
   const MAX_PAGES = 10;
 
   try {
-    await page.setViewport({ width: 800, height: 600 });
+    await page.setViewport({ width: 1280, height: 900 });
     await page.setUserAgent(USER_AGENTS[sessionIndex % USER_AGENTS.length]);
     await page.setExtraHTTPHeaders({
       "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -182,9 +182,10 @@ async function searchInIncognitoContext(
         return;
       }
 
-      // 遮断：image, media, font（通信量を跳ね上げる原因）
+      // 遮断：media, font のみ（動画データとフォントは不要）
+      // 画像は許可 — サムネイル読み込みによりDOMの高さが正常に伸び、
+      // IntersectionObserverによるページネーションが機能する
       if (
-        resourceType === 'image' ||
         resourceType === 'media' ||
         resourceType === 'font'
       ) {
@@ -207,7 +208,7 @@ async function searchInIncognitoContext(
       request.continue();
     });
 
-    console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled (images, media, fonts, tracking blocked)`);
+    console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled (media, fonts, tracking blocked)`);
 
     // 【接続確認】lumtest.com/myip.json でプロキシ経由の IP を確認
     console.log(`[TikTok Session ${sessionIndex + 1}] Verifying proxy connection...`);
@@ -348,29 +349,22 @@ async function searchInIncognitoContext(
 
     console.log(`[TikTok Session ${sessionIndex + 1}] Initial batch: ${allVideos.length} videos`);
 
-    // ページネーションループ: スクロールでTikTokの無限スクロールをトリガー
-    // TikTokは scrollTo → IntersectionObserver発火 → X-Bogus付きAPI呼出 → DOM追加 のサイクル
-    // ブラウザ内部でAPI呼出が発火するため、署名(X-Bogus等)の生成はブラウザに委任される
-    //
-    // 【設計方針】スクロール試行回数(MAX_SCROLL_ATTEMPTS)とページネーション上限(MAX_PAGES)は別概念
-    // - 1回のスクロールで必ずしもAPIが発火するわけではない（空振りがある）
-    // - MAX_SCROLL_ATTEMPTS=30: スクロール試行の上限（空振り含む）
-    // - MAX_PAGES=10: APIレスポンスの取得ページ数の上限（安全装置）
-    const MAX_SCROLL_ATTEMPTS = 30;
+    // ページネーションループ: #grid-main コンテナをスクロールして追加データをトリガー
+    // 注意: TikTokのORCAS bot検出により、ページネーションAPIは空レスポンスを返すことが多い
+    // そのため、各セッションでは初回ロードの~12件が主な取得源となる
+    // 複数セッション実行 + 重複排除で目標件数を達成する設計
+    const MAX_SCROLL_ATTEMPTS = 8;
     let noNewDataCount = 0;
 
     for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
-      // 十分な動画数を取得済み → 終了
       if (allVideos.length >= maxVideos) {
         console.log(`[TikTok Session ${sessionIndex + 1}] Reached target: ${allVideos.length}/${maxVideos} videos`);
         break;
       }
-      // has_more=false → 終了
       if (!latestHasMore && pagesFetched > 0) {
         console.log(`[TikTok Session ${sessionIndex + 1}] Server indicated no more results (has_more=false)`);
         break;
       }
-      // ページネーション安全装置: APIレスポンスがMAX_PAGES回に達したら終了
       if (pagesFetched >= MAX_PAGES) {
         console.log(`[TikTok Session ${sessionIndex + 1}] Reached max pagination limit (${MAX_PAGES} API pages)`);
         break;
@@ -378,39 +372,17 @@ async function searchInIncognitoContext(
 
       const prevCount = allVideos.length;
 
-      // 【修正】scrollHeight に依存しないスクロール方式
-      // 画像/動画をブロックしているためDOMの高さが伸びず scrollHeight=viewportHeight のまま固定される問題を回避
-      // 方法: 累積オフセットで大きな値にスクロール + IntersectionObserver番兵要素を直接scrollIntoView
+      // #grid-main コンテナをスクロール（windowではなく実際のスクロール要素）
       const currentHeight = await page.evaluate((scrollIdx) => {
-        // 1) 大きな累積オフセットで強制スクロール（scrollHeightに依存しない）
-        const targetY = (scrollIdx + 1) * 5000;
-        window.scrollTo(0, targetY);
-
-        // 2) TikTokの「もっと見る」番兵要素を直接ビューポートに入れる
-        //    IntersectionObserver のトリガーとなるDOM要素を探してscrollIntoView
-        const sentinels = [
-          // TikTokの無限スクロール番兵の候補セレクタ
-          '[data-e2e="search-common-infinite-scroll"]',
-          '[class*="InfiniteScroll"]',
-          '[class*="LoadMore"]',
-          '[class*="DivLoaderContainer"]',
-        ];
-        for (const sel of sentinels) {
-          const el = document.querySelector(sel);
-          if (el) {
-            el.scrollIntoView({ behavior: 'instant', block: 'center' });
-            break;
-          }
+        const container = document.querySelector('#grid-main') as HTMLElement | null;
+        if (container) {
+          container.scrollTop = container.scrollHeight;
         }
-
-        // 3) 最終フォールバック: ページ末尾へ
-        window.scrollTo(0, Math.max(document.body.scrollHeight, targetY));
-
-        return document.body.scrollHeight;
+        // フォールバック: windowスクロールも実行
+        window.scrollTo(0, document.body.scrollHeight + (scrollIdx + 1) * 2000);
+        return container?.scrollHeight || document.body.scrollHeight;
       }, scroll);
 
-      // 固定待機: TikTokのAPI呼出→レスポンス受信→DOM追加の一連を待つ
-      // 3秒はScrapFly推奨のTikTok用待機時間（短すぎるとAPI未着、長すぎると時間浪費）
       await new Promise(r => setTimeout(r, 3000));
 
       if (onProgress) {
@@ -421,10 +393,9 @@ async function searchInIncognitoContext(
         `${allVideos.length} videos (height: ${currentHeight}, pages: ${pagesFetched}, cursor: ${latestCursor})`
       );
 
-      // 停止判定: scrollHeightではなく「新データが取れたか」のみで判断
       if (allVideos.length === prevCount) {
         noNewDataCount++;
-        if (noNewDataCount >= 5) {
+        if (noNewDataCount >= 2) {
           console.log(`[TikTok Session ${sessionIndex + 1}] No new data after ${noNewDataCount} scrolls, stopping`);
           break;
         }
@@ -600,12 +571,20 @@ function buildChromiumArgs(): string[] {
     "--disable-background-networking",
     "--disable-default-apps",
     "--no-first-run",
-    "--window-size=800,600",
+    "--window-size=1280,900",
     "--lang=ja-JP",
   ];
   if (process.env.PROXY_SERVER) {
     args.push(`--proxy-server=${process.env.PROXY_SERVER}`);
-    console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER}`);
+    // KYC未完了のBright Dataプロキシは SSL MITM を行うため、
+    // プロキシのCA証明書をChromeが信頼できない → ERR_CERT_AUTHORITY_INVALID
+    // KYC完了後は PROXY_KYC_VERIFIED=true を設定してこのフラグを除去できる
+    if (process.env.PROXY_KYC_VERIFIED !== "true") {
+      args.push("--ignore-certificate-errors");
+      console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER} (SSL cert bypass enabled — KYC未完了)`);
+    } else {
+      console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER} (KYC verified — direct SSL)`);
+    }
   } else {
     console.warn("[TikTok] PROXY_SERVER not set. Running without proxy.");
   }
@@ -639,57 +618,43 @@ export async function searchTikTokTriple(
   }
 
   try {
-    if (onProgress) onProgress(`${numSearches}つのシークレットブラウザを起動中...`, 5);
+    if (onProgress) onProgress(`${numSearches}回の検索セッションを開始...`, 5);
 
-    // 複数のシークレットブラウザコンテキストで並列検索
-    // 各セッションは異なるプロキシIP（Sticky Session）を使用するため並列実行可能
-    // スタガード起動（1.5秒間隔）でプロキシ接続の集中を回避
-    const STAGGER_DELAY_MS = 1500;
-    const progressPerSearch = Math.floor(75 / numSearches);
-    const sessionProgress = new Array(numSearches).fill(0);
-
-    const searchPromises = Array.from({ length: numSearches }, (_, i) =>
-      new Promise<TikTokSearchResult>(async (resolve, reject) => {
-        // スタガード起動: セッションごとに1.5秒ずらして開始
-        if (i > 0) {
-          await new Promise((r) => setTimeout(r, STAGGER_DELAY_MS * i));
-        }
-
-        try {
-          if (onProgress) {
-            onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, 10 + i * progressPerSearch);
-          }
-
-          const result = await searchInIncognitoContext(
-            browser,
-            keyword,
-            videosPerSearch,
-            i,
-            (msg) => {
-              if (onProgress) {
-                sessionProgress[i] = 1;
-                const completedSessions = sessionProgress.filter(p => p > 0).length;
-                const pct = Math.min(85, 10 + Math.floor((completedSessions / numSearches) * 75));
-                onProgress(`[${completedSessions}/${numSearches}] ${msg}`, pct);
-              }
-            }
-          );
-
-          console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
-          resolve(result);
-        } catch (err) {
-          console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
-          reject(err);
-        }
-      })
-    );
-
-    // 全セッションの完了を待機（1つでも失敗しても他は続行）
-    const settled = await Promise.allSettled(searchPromises);
+    // セッションを順次実行（同一IPからの並列アクセスはTikTokにレート制限される）
+    // 各セッションは初回ロードで~12件取得 → 複数セッションの重複排除で目標件数を達成
     const searches: TikTokSearchResult[] = [];
-    for (const result of settled) {
-      if (result.status === "fulfilled") {
-        searches.push(result.value);
+    const SESSION_INTERVAL_MS = 2000; // セッション間の待機時間
+
+    for (let i = 0; i < numSearches; i++) {
+      if (i > 0) {
+        await new Promise((r) => setTimeout(r, SESSION_INTERVAL_MS));
+      }
+
+      try {
+        if (onProgress) {
+          const pct = Math.min(85, 10 + Math.floor((i / numSearches) * 75));
+          onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, pct);
+        }
+
+        const result = await searchInIncognitoContext(
+          browser,
+          keyword,
+          videosPerSearch,
+          i,
+          (msg) => {
+            if (onProgress) {
+              const pct = Math.min(85, 10 + Math.floor(((i + 0.5) / numSearches) * 75));
+              onProgress(`[${i + 1}/${numSearches}] ${msg}`, pct);
+            }
+          }
+        );
+
+        console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
+        if (result.videos.length > 0) {
+          searches.push(result);
+        }
+      } catch (err) {
+        console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
       }
     }
 

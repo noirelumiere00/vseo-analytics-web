@@ -10,6 +10,7 @@ import History from "./pages/History";
 import AnalysisDetail from "./pages/AnalysisDetail";
 import ReportView from "./pages/ReportView";
 import { AdminLogs } from "./pages/AdminLogs";
+import Admin from "./pages/Admin";
 import Comparison from "./pages/Comparison";
 import Trend from "./pages/Trend";
 import Dashboard from "./pages/Dashboard";
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/compare" component={Comparison} />
       <Route path="/trend" component={Trend} />
       <Route path="/report/view/:jobId" component={ReportView} />
+      <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

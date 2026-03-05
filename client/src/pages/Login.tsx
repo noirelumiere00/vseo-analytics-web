@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 
 export default function Login() {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,6 +19,10 @@ export default function Login() {
       setError("名前を入力してください");
       return;
     }
+    if (!password) {
+      setError("パスワードを入力してください");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -28,7 +32,7 @@ export default function Login() {
         credentials: "include",
         body: JSON.stringify({
           name: name.trim(),
-          email: email.trim() || undefined,
+          password,
         }),
       });
 
@@ -38,7 +42,6 @@ export default function Login() {
         return;
       }
 
-      // Redirect to home
       window.location.href = "/";
     } catch {
       setError("サーバーに接続できません");
@@ -73,13 +76,13 @@ export default function Login() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">メールアドレス（任意）</Label>
+              <Label htmlFor="password">パスワード *</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="例: user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="password"
+                type="password"
+                placeholder="4文字以上"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
               />
             </div>
@@ -96,6 +99,9 @@ export default function Login() {
                 "サインイン"
               )}
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              初回ログイン時にアカウントが自動作成されます
+            </p>
           </form>
         </CardContent>
       </Card>

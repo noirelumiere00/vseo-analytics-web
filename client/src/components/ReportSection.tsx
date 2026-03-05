@@ -13,6 +13,8 @@ interface Proposal {
   action: string;
   priority: "回避" | "注意" | "活用";
   icon: string;
+  analysis?: string;
+  strategicAdvice?: string;
   sourceVideoIds?: string[];
 }
 
@@ -176,32 +178,49 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
         return (
           <div
             key={i}
-            className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 border"
+            className="rounded-lg bg-muted/30 border overflow-hidden"
           >
-            <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-semibold">{p.area}</span>
-                <PriorityBadge priority={p.priority} />
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
-              {refs.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {refs.map(r => (
-                    <a
-                      key={r.id}
-                      href={`https://www.tiktok.com/@${r.video?.accountId}/video/${r.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title={r.video?.title || r.id}
-                      className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                    >
-                      [参照{r.num}]
-                    </a>
-                  ))}
+            <div className="flex items-start gap-3 p-3">
+              <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-semibold">{p.area}</span>
+                  <PriorityBadge priority={p.priority} />
                 </div>
-              )}
+                <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
+              </div>
             </div>
+
+            {p.analysis && (
+              <div className="px-3 pb-2">
+                <div className="text-xs font-semibold text-foreground/70 mb-1">分析詳細</div>
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{p.analysis}</p>
+              </div>
+            )}
+
+            {p.strategicAdvice && (
+              <div className="mx-3 mb-2 p-2.5 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+                <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">戦略的アドバイス</div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed whitespace-pre-wrap">{p.strategicAdvice}</p>
+              </div>
+            )}
+
+            {refs.length > 0 && (
+              <div className="flex flex-wrap gap-1 px-3 pb-3">
+                {refs.map(r => (
+                  <a
+                    key={r.id}
+                    href={`https://www.tiktok.com/@${r.video?.accountId}/video/${r.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={r.video?.title || r.id}
+                    className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    [参照{r.num}]
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         );
       })}

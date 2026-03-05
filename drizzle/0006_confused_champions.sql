@@ -1,1 +1,1 @@
-DROP TABLE `analysis_cache`;
+DROP TABLE IF EXISTS `analysis_cache`;
