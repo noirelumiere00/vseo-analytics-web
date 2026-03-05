@@ -2,12 +2,12 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Search, Video, TrendingUp } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
+import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 
@@ -15,7 +15,6 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [keyword, setKeyword] = useState("");
-  const [manualUrls, setManualUrls] = useState("");
 
   const createAnalysis = trpc.analysis.create.useMutation({
     onSuccess: (data) => {
@@ -29,15 +28,8 @@ export default function Home() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const urls = manualUrls
-      .split("\n")
-      .map(url => url.trim())
-      .filter(url => url.length > 0);
-
     createAnalysis.mutate({
       keyword: keyword.trim() || undefined,
-      manualUrls: urls.length > 0 ? urls : undefined,
     });
   };
 
@@ -72,7 +64,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription>
-                    3アカウント×上位15投稿を自動収集し、重複度から真の人気動画を特定
+                    {SCRAPER_SESSION_COUNT}アカウント×上位{SCRAPER_VIDEOS_PER_SESSION}投稿を自動収集し、重複度から真の人気動画を特定
                   </CardDescription>
                 </CardContent>
               </Card>
@@ -132,7 +124,7 @@ export default function Home() {
             <CardHeader>
               <CardTitle>分析設定</CardTitle>
               <CardDescription>
-                キーワードを入力すると自動で上位動画を収集します。特定の動画を分析したい場合はURLを直接入力してください。
+                キーワードを入力すると自動で上位動画を収集します
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -147,22 +139,7 @@ export default function Home() {
                     onChange={(e) => setKeyword(e.target.value)}
                   />
                   <p className="text-sm text-muted-foreground">
-                    このキーワードで3アカウント×上位15投稿を自動収集します
-                  </p>
-                </div>
-
-                {/* Manual URLs Input */}
-                <div className="space-y-2">
-                  <Label htmlFor="urls">動画URL（任意、1行に1つ）</Label>
-                  <Textarea
-                    id="urls"
-                    placeholder="https://www.tiktok.com/@user/video/123456789&#10;https://www.tiktok.com/@user/video/987654321"
-                    rows={6}
-                    value={manualUrls}
-                    onChange={(e) => setManualUrls(e.target.value)}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    TikTokのURLを入力してください
+                    このキーワードで{SCRAPER_SESSION_COUNT}アカウント×上位{SCRAPER_VIDEOS_PER_SESSION}投稿を自動収集します
                   </p>
                 </div>
 

@@ -124,12 +124,18 @@ export type ResponseFormat =
 // ================================================================
 
 /**
- * 絵文字・制御文字を除去して Bedrock Converse API の JSON シリアライゼーションエラーを防ぐ
+ * 絵文字・制御文字・サロゲートペア等を除去して Bedrock Converse API の JSON シリアライゼーションエラーを防ぐ
  */
 function sanitizeForBedrock(text: string): string {
   if (!text) return '';
   return text
-    .replace(/[\u{1F600}-\u{1F6FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F000}-\u{1F02F}\u{1F0A0}-\u{1F0FF}\u{1F100}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{200D}\u{20E3}\u{FE0F}\u{E0020}-\u{E007F}]/gu, '')
+    // Lone surrogates (JSON仕様で不正)
+    .replace(/[\uD800-\uDFFF]/g, '')
+    // BOM・ゼロ幅文字
+    .replace(/[\uFEFF\u200B\u200C\u200D\u2060\uFFF9-\uFFFB]/g, '')
+    // 全絵文字・記号 (Supplementary Multilingual Plane以降を広範にカバー)
+    .replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{E0020}-\u{E007F}\u{20E3}]/gu, '')
+    // 制御文字
     .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '')
     .trim();
 }

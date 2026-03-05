@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -235,7 +235,7 @@ export const appRouter = router({
         }
       }),
 
-    // 分析を実行（バックグラウンド処理）- 3シークレットブラウザ検索方式
+    // 分析を実行（バックグラウンド処理）- 5シークレットブラウザ検索方式
     execute: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -260,12 +260,12 @@ export const appRouter = router({
             if (job.keyword) {
               // === 複数シークレットブラウザでTikTok検索 ===
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
-              setProgress(input.jobId, { message: "5つのシークレットブラウザでTikTok検索を開始...", percent: 5 });
+              setProgress(input.jobId, { message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始...`, percent: 5 });
 
               const tripleResult = await searchTikTokTriple(
                 job.keyword,
-                30, // 各セッション30件
-                5,  // 5つのシークレットブラウザ
+                SCRAPER_VIDEOS_PER_SESSION,
+                SCRAPER_SESSION_COUNT,
                 (msg: string, scraperPct: number) => {
                   // スクレイパーの進捗(5-90%)を全体の検索フェーズ(5-40%)にマッピング
                   const pct = Math.min(40, Math.round(5 + ((scraperPct - 5) / 85) * 35));
