@@ -145,25 +145,18 @@ async function searchInIncognitoContext(
       "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
     });
 
-    // 【Bright Data プロキシ設定】セッション固定（Sticky Session）の動的生成
-    const proxyServer = process.env.PROXY_SERVER;
-    const proxyUsername = process.env.PROXY_USERNAME;
-    const proxyPassword = process.env.PROXY_PASSWORD;
-
-    if (proxyServer && proxyUsername && proxyPassword) {
+    // プロキシ認証（有効時のみ）
+    if (isProxyEnabled()) {
       const sessionId = `session-${Date.now()}-${sessionIndex}`;
-      const authenticatedUsername = `${proxyUsername}-${sessionId}`;
-      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy authentication with session: ${sessionId}`);
-      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ認証中 (${sessionId})...`);
+      const authenticatedUsername = `${process.env.PROXY_USERNAME}-${sessionId}`;
+      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy session: ${sessionId}`);
       await page.authenticate({
         username: authenticatedUsername,
-        password: proxyPassword,
+        password: process.env.PROXY_PASSWORD!,
       });
-    } else {
-      console.warn(`[TikTok Session ${sessionIndex + 1}] Proxy environment variables not set. Running without proxy.`);
     }
 
-    // 【通信最適化】リクエストインターセプトを有効化（画像・動画・フォント・トラッキングをブロック）
+    // 通信最適化: 不要リソースをブロック
     await page.setRequestInterception(true);
 
     page.on('request', (request) => {
@@ -208,30 +201,21 @@ async function searchInIncognitoContext(
       request.continue();
     });
 
-    console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled (media, fonts, tracking blocked)`);
+    console.log(`[TikTok Session ${sessionIndex + 1}] Request interception enabled`);
 
-    // 【接続確認】lumtest.com/myip.json でプロキシ経由の IP を確認
-    console.log(`[TikTok Session ${sessionIndex + 1}] Verifying proxy connection...`);
-    if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ接続確認中...`);
-
-    try {
-      const ipCheckResponse = await page.evaluate(async () => {
-        const response = await fetch('https://lumtest.com/myip.json');
-        return response.json();
-      });
-
-      const ip = ipCheckResponse.ip || 'unknown';
-      const country = ipCheckResponse.country || 'unknown';
-      console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip}, Country: ${country}`);
-      if (onProgress) onProgress(`検索${sessionIndex + 1}: プロキシ IP: ${ip} (${country})`);
-
-      if (country !== 'JP') {
-        console.warn(`[TikTok Session ${sessionIndex + 1}] WARNING: Expected country JP, but got ${country}`);
-      } else {
-        console.log(`[TikTok Session ${sessionIndex + 1}] ✓ Confirmed: Japanese residential IP`);
+    // プロキシ接続確認（プロキシ有効時のみ）
+    if (isProxyEnabled()) {
+      try {
+        const ipCheckResponse = await page.evaluate(async () => {
+          const response = await fetch('https://lumtest.com/myip.json');
+          return response.json();
+        });
+        const ip = ipCheckResponse.ip || 'unknown';
+        const country = ipCheckResponse.country || 'unknown';
+        console.log(`[TikTok Session ${sessionIndex + 1}] Proxy IP: ${ip} (${country})`);
+      } catch (ipCheckError: any) {
+        console.warn(`[TikTok Session ${sessionIndex + 1}] Proxy IP check failed:`, ipCheckError.message);
       }
-    } catch (ipCheckError: any) {
-      console.warn(`[TikTok Session ${sessionIndex + 1}] Failed to verify proxy IP:`, ipCheckError.message);
     }
 
     // TikTokにアクセスしてCookieを取得
@@ -349,11 +333,9 @@ async function searchInIncognitoContext(
 
     console.log(`[TikTok Session ${sessionIndex + 1}] Initial batch: ${allVideos.length} videos`);
 
-    // ページネーションループ: #grid-main コンテナをスクロールして追加データをトリガー
-    // 注意: TikTokのORCAS bot検出により、ページネーションAPIは空レスポンスを返すことが多い
-    // そのため、各セッションでは初回ロードの~12件が主な取得源となる
-    // 複数セッション実行 + 重複排除で目標件数を達成する設計
-    const MAX_SCROLL_ATTEMPTS = 8;
+    // ページネーションループ: スクロールでTikTokの無限スクロールをトリガー
+    // 複合スクロール: #grid-main コンテナ + window + IntersectionObserver番兵
+    const MAX_SCROLL_ATTEMPTS = 15;
     let noNewDataCount = 0;
 
     for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
@@ -372,17 +354,37 @@ async function searchInIncognitoContext(
 
       const prevCount = allVideos.length;
 
-      // #grid-main コンテナをスクロール（windowではなく実際のスクロール要素）
+      // 複合スクロール: 3つの方法を組み合わせてIntersectionObserverを確実に発火させる
       const currentHeight = await page.evaluate((scrollIdx) => {
+        // 1) #grid-main コンテナをスクロール（TikTokの内部スクロール要素）
         const container = document.querySelector('#grid-main') as HTMLElement | null;
         if (container) {
           container.scrollTop = container.scrollHeight;
         }
-        // フォールバック: windowスクロールも実行
-        window.scrollTo(0, document.body.scrollHeight + (scrollIdx + 1) * 2000);
+
+        // 2) IntersectionObserver番兵要素をビューポートに入れる
+        const sentinels = [
+          '[data-e2e="search-common-infinite-scroll"]',
+          '[class*="InfiniteScroll"]',
+          '[class*="LoadMore"]',
+          '[class*="DivLoaderContainer"]',
+        ];
+        for (const sel of sentinels) {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.scrollIntoView({ behavior: 'instant', block: 'center' });
+            break;
+          }
+        }
+
+        // 3) window スクロール（フォールバック）
+        const targetY = (scrollIdx + 1) * 3000;
+        window.scrollTo(0, Math.max(document.body.scrollHeight, targetY));
+
         return container?.scrollHeight || document.body.scrollHeight;
       }, scroll);
 
+      // API呼出→レスポンス受信→DOM追加を待つ
       await new Promise(r => setTimeout(r, 3000));
 
       if (onProgress) {
@@ -395,7 +397,7 @@ async function searchInIncognitoContext(
 
       if (allVideos.length === prevCount) {
         noNewDataCount++;
-        if (noNewDataCount >= 2) {
+        if (noNewDataCount >= 3) {
           console.log(`[TikTok Session ${sessionIndex + 1}] No new data after ${noNewDataCount} scrolls, stopping`);
           break;
         }
@@ -559,6 +561,11 @@ function findChromiumPath(): string {
   return "/usr/bin/chromium-browser";
 }
 
+// プロキシが有効かどうかを判定
+function isProxyEnabled(): boolean {
+  return !!(process.env.PROXY_SERVER && process.env.PROXY_USERNAME && process.env.PROXY_PASSWORD);
+}
+
 // Chromium起動引数を一元管理（メモリ最適化 + プロキシ設定）
 function buildChromiumArgs(): string[] {
   const args = [
@@ -566,7 +573,6 @@ function buildChromiumArgs(): string[] {
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
     "--disable-gpu",
-    // NOTE: --single-process は除去。incognitoコンテキスト作成時にクラッシュする原因になる。
     "--disable-extensions",
     "--disable-background-networking",
     "--disable-default-apps",
@@ -576,17 +582,12 @@ function buildChromiumArgs(): string[] {
   ];
   if (process.env.PROXY_SERVER) {
     args.push(`--proxy-server=${process.env.PROXY_SERVER}`);
-    // KYC未完了のBright Dataプロキシは SSL MITM を行うため、
-    // プロキシのCA証明書をChromeが信頼できない → ERR_CERT_AUTHORITY_INVALID
-    // KYC完了後は PROXY_KYC_VERIFIED=true を設定してこのフラグを除去できる
     if (process.env.PROXY_KYC_VERIFIED !== "true") {
       args.push("--ignore-certificate-errors");
-      console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER} (SSL cert bypass enabled — KYC未完了)`);
-    } else {
-      console.log(`[TikTok] Proxy server configured: ${process.env.PROXY_SERVER} (KYC verified — direct SSL)`);
     }
+    console.log(`[TikTok] Proxy: ${process.env.PROXY_SERVER}`);
   } else {
-    console.warn("[TikTok] PROXY_SERVER not set. Running without proxy.");
+    console.log("[TikTok] Running without proxy (direct connection)");
   }
   return args;
 }
@@ -618,43 +619,56 @@ export async function searchTikTokTriple(
   }
 
   try {
-    if (onProgress) onProgress(`${numSearches}回の検索セッションを開始...`, 5);
+    if (onProgress) onProgress(`${numSearches}つのシークレットブラウザを起動中...`, 5);
 
-    // セッションを順次実行（同一IPからの並列アクセスはTikTokにレート制限される）
-    // 各セッションは初回ロードで~12件取得 → 複数セッションの重複排除で目標件数を達成
-    const searches: TikTokSearchResult[] = [];
-    const SESSION_INTERVAL_MS = 2000; // セッション間の待機時間
+    // 並列実行（スタガード起動で接続集中を回避）
+    // 各セッションは独立したincognitoコンテキストで実行される
+    const STAGGER_DELAY_MS = 1500;
+    const progressPerSearch = Math.floor(75 / numSearches);
+    const sessionProgress = new Array(numSearches).fill(0);
 
-    for (let i = 0; i < numSearches; i++) {
-      if (i > 0) {
-        await new Promise((r) => setTimeout(r, SESSION_INTERVAL_MS));
-      }
-
-      try {
-        if (onProgress) {
-          const pct = Math.min(85, 10 + Math.floor((i / numSearches) * 75));
-          onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, pct);
+    const searchPromises = Array.from({ length: numSearches }, (_, i) =>
+      new Promise<TikTokSearchResult>(async (resolve, reject) => {
+        // スタガード起動: セッションごとに1.5秒ずらして開始
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, STAGGER_DELAY_MS * i));
         }
 
-        const result = await searchInIncognitoContext(
-          browser,
-          keyword,
-          videosPerSearch,
-          i,
-          (msg) => {
-            if (onProgress) {
-              const pct = Math.min(85, 10 + Math.floor(((i + 0.5) / numSearches) * 75));
-              onProgress(`[${i + 1}/${numSearches}] ${msg}`, pct);
-            }
+        try {
+          if (onProgress) {
+            onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, 10 + i * progressPerSearch);
           }
-        );
 
-        console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
-        if (result.videos.length > 0) {
-          searches.push(result);
+          const result = await searchInIncognitoContext(
+            browser,
+            keyword,
+            videosPerSearch,
+            i,
+            (msg) => {
+              if (onProgress) {
+                sessionProgress[i] = 1;
+                const completedSessions = sessionProgress.filter(p => p > 0).length;
+                const pct = Math.min(85, 10 + Math.floor((completedSessions / numSearches) * 75));
+                onProgress(`[${completedSessions}/${numSearches}] ${msg}`, pct);
+              }
+            }
+          );
+
+          console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
+          resolve(result);
+        } catch (err) {
+          console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
+          reject(err);
         }
-      } catch (err) {
-        console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
+      })
+    );
+
+    // 全セッションの完了を待機（1つ失敗しても他は続行）
+    const settled = await Promise.allSettled(searchPromises);
+    const searches: TikTokSearchResult[] = [];
+    for (const result of settled) {
+      if (result.status === "fulfilled" && result.value.videos.length > 0) {
+        searches.push(result.value);
       }
     }
 
