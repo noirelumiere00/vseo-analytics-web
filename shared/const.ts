@@ -2,7 +2,7 @@ export const COOKIE_NAME = "app_session_id";
 
 /** TikTokスクレイピング設定（プロキシなしでは SESSION_COUNT=3 が安定上限） */
 export const SCRAPER_SESSION_COUNT = 3;
-export const SCRAPER_VIDEOS_PER_SESSION = 36;
+export const SCRAPER_VIDEOS_PER_SESSION = 60;
 export const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
 export const AXIOS_TIMEOUT_MS = 30_000;
 export const UNAUTHED_ERR_MSG = 'Please login (10001)';
