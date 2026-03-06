@@ -451,7 +451,7 @@ export const appRouter = router({
           }
         });
 
-        return { success: true, message: "5つのシークレットブラウザでTikTok検索を開始しました。" };
+        return { success: true, message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始しました。` };
       }),
 
     // LLM再分析（既存動画データに対してLLM部分だけ再実行）

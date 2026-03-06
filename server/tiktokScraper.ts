@@ -60,6 +60,12 @@ export interface TikTokTripleSearchResult {
   keyword: string;
 }
 
+// 人間らしいランダム遅延（min〜max ミリ秒）
+function humanDelay(minMs: number, maxMs: number): Promise<void> {
+  const ms = minMs + Math.random() * (maxMs - minMs);
+  return new Promise(r => setTimeout(r, ms));
+}
+
 // User-Agentのバリエーション（各シークレットブラウザで異なるUAを使用）
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
@@ -226,8 +232,8 @@ async function searchInIncognitoContext(
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
-    // セッションごとに異なる待機時間（フィンガープリント対策）
-    await new Promise((r) => setTimeout(r, 2000 + Math.random() * 2000));
+    // セッションごとに異なる待機時間（人間的なブラウジングを模倣）
+    await humanDelay(3000, 6000);
 
     // ========================================================
     // プランB: ネットワークインターセプト + スクロールトリガー方式
@@ -300,8 +306,8 @@ async function searchInIncognitoContext(
     } catch {
       console.warn(`[TikTok Session ${sessionIndex + 1}] Video grid selector not found within 15s, continuing with fallback...`);
     }
-    // 追加の安定待機（IntersectionObserver初期化完了のため）
-    await new Promise((r) => setTimeout(r, 3000));
+    // 追加の安定待機（IntersectionObserver初期化完了 + 人間的な閲覧時間）
+    await humanDelay(4000, 7000);
 
     // SSRフォールバック: XHRリスナーで初回データが取れなかった場合、
     // ページ埋め込みJSON（__UNIVERSAL_DATA_FOR_REHYDRATION__）から抽出
@@ -333,36 +339,45 @@ async function searchInIncognitoContext(
 
     console.log(`[TikTok Session ${sessionIndex + 1}] Initial batch: ${allVideos.length} videos`);
 
-    // ページネーションループ: スクロールでTikTokの無限スクロールをトリガー
-    // 複合スクロール: #grid-main コンテナ + window + IntersectionObserver番兵
-    const MAX_SCROLL_ATTEMPTS = 15;
+    // ページネーションループ: 人間的なペースでスクロール（〜5分で全セッション完了を目標）
+    // 複合スクロール: #grid-main + IntersectionObserver番兵 + window
+    // has_more=false でも即停止せず、ロングウェイト後にリトライ（TikTokの一時的な空応答対策）
+    const MAX_SCROLL_ATTEMPTS = 20;
     let noNewDataCount = 0;
+    let hasMoreFalseRetries = 0;
+    const MAX_HAS_MORE_FALSE_RETRIES = 2; // has_more=false 後に2回までリトライ
 
     for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
       if (allVideos.length >= maxVideos) {
         console.log(`[TikTok Session ${sessionIndex + 1}] Reached target: ${allVideos.length}/${maxVideos} videos`);
         break;
       }
-      if (!latestHasMore && pagesFetched > 0) {
-        console.log(`[TikTok Session ${sessionIndex + 1}] Server indicated no more results (has_more=false)`);
-        break;
-      }
       if (pagesFetched >= MAX_PAGES) {
         console.log(`[TikTok Session ${sessionIndex + 1}] Reached max pagination limit (${MAX_PAGES} API pages)`);
         break;
+      }
+      // has_more=false でもリトライ回数内なら続行（TikTokが一時的に空応答を返す対策）
+      if (!latestHasMore && pagesFetched > 0) {
+        if (hasMoreFalseRetries >= MAX_HAS_MORE_FALSE_RETRIES) {
+          console.log(`[TikTok Session ${sessionIndex + 1}] has_more=false persisted after ${hasMoreFalseRetries} retries, stopping`);
+          break;
+        }
+        hasMoreFalseRetries++;
+        console.log(`[TikTok Session ${sessionIndex + 1}] has_more=false, retry ${hasMoreFalseRetries}/${MAX_HAS_MORE_FALSE_RETRIES} after long wait...`);
+        await humanDelay(5000, 8000); // ロングウェイトしてからリトライ
       }
 
       const prevCount = allVideos.length;
 
       // 複合スクロール: 3つの方法を組み合わせてIntersectionObserverを確実に発火させる
       const currentHeight = await page.evaluate((scrollIdx) => {
-        // 1) #grid-main コンテナをスクロール（TikTokの内部スクロール要素）
+        // 1) #grid-main コンテナをスクロール
         const container = document.querySelector('#grid-main') as HTMLElement | null;
         if (container) {
           container.scrollTop = container.scrollHeight;
         }
 
-        // 2) IntersectionObserver番兵要素をビューポートに入れる
+        // 2) IntersectionObserver番兵をビューポートに入れる
         const sentinels = [
           '[data-e2e="search-common-infinite-scroll"]',
           '[class*="InfiniteScroll"]',
@@ -384,8 +399,8 @@ async function searchInIncognitoContext(
         return container?.scrollHeight || document.body.scrollHeight;
       }, scroll);
 
-      // API呼出→レスポンス受信→DOM追加を待つ
-      await new Promise(r => setTimeout(r, 3000));
+      // 人間的なスクロール間隔: 4〜7秒（ランダム）
+      await humanDelay(4000, 7000);
 
       if (onProgress) {
         onProgress(`検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos}) [スクロール${scroll + 1}]`);
@@ -395,14 +410,19 @@ async function searchInIncognitoContext(
         `${allVideos.length} videos (height: ${currentHeight}, pages: ${pagesFetched}, cursor: ${latestCursor})`
       );
 
-      if (allVideos.length === prevCount) {
+      if (allVideos.length > prevCount) {
+        noNewDataCount = 0;
+        hasMoreFalseRetries = 0; // データが取れたらリトライカウントもリセット
+      } else {
         noNewDataCount++;
-        if (noNewDataCount >= 3) {
+        if (noNewDataCount >= 5) {
           console.log(`[TikTok Session ${sessionIndex + 1}] No new data after ${noNewDataCount} scrolls, stopping`);
           break;
         }
-      } else {
-        noNewDataCount = 0;
+        // 空振り時は追加で少し長く待つ（TikTok側の応答待ち）
+        if (noNewDataCount >= 2) {
+          await humanDelay(3000, 5000);
+        }
       }
     }
 
@@ -619,56 +639,48 @@ export async function searchTikTokTriple(
   }
 
   try {
-    if (onProgress) onProgress(`${numSearches}つのシークレットブラウザを起動中...`, 5);
+    if (onProgress) onProgress(`${numSearches}回の検索セッションを順次開始...`, 5);
 
-    // 並列実行（スタガード起動で接続集中を回避）
-    // 各セッションは独立したincognitoコンテキストで実行される
-    const STAGGER_DELAY_MS = 1500;
-    const progressPerSearch = Math.floor(75 / numSearches);
-    const sessionProgress = new Array(numSearches).fill(0);
-
-    const searchPromises = Array.from({ length: numSearches }, (_, i) =>
-      new Promise<TikTokSearchResult>(async (resolve, reject) => {
-        // スタガード起動: セッションごとに1.5秒ずらして開始
-        if (i > 0) {
-          await new Promise((r) => setTimeout(r, STAGGER_DELAY_MS * i));
-        }
-
-        try {
-          if (onProgress) {
-            onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, 10 + i * progressPerSearch);
-          }
-
-          const result = await searchInIncognitoContext(
-            browser,
-            keyword,
-            videosPerSearch,
-            i,
-            (msg) => {
-              if (onProgress) {
-                sessionProgress[i] = 1;
-                const completedSessions = sessionProgress.filter(p => p > 0).length;
-                const pct = Math.min(85, 10 + Math.floor((completedSessions / numSearches) * 75));
-                onProgress(`[${completedSessions}/${numSearches}] ${msg}`, pct);
-              }
-            }
-          );
-
-          console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
-          resolve(result);
-        } catch (err) {
-          console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
-          reject(err);
-        }
-      })
-    );
-
-    // 全セッションの完了を待機（1つ失敗しても他は続行）
-    const settled = await Promise.allSettled(searchPromises);
+    // 順次実行: 同一IPからの同時アクセスを避け、bot検出リスクを最小化
+    // セッション間にランダム待機を挟み、人間的なブラウジングパターンを模倣
     const searches: TikTokSearchResult[] = [];
-    for (const result of settled) {
-      if (result.status === "fulfilled" && result.value.videos.length > 0) {
-        searches.push(result.value);
+
+    for (let i = 0; i < numSearches; i++) {
+      // セッション間のランダム待機（前セッション完了後に10〜20秒の休憩）
+      if (i > 0) {
+        const gap = 10_000 + Math.random() * 10_000;
+        console.log(`[TikTok] Session gap: ${(gap / 1000).toFixed(0)}s before session ${i + 1}`);
+        if (onProgress) {
+          onProgress(`次の検索まで待機中...`, Math.min(85, 10 + Math.floor((i / numSearches) * 75)));
+        }
+        await new Promise((r) => setTimeout(r, gap));
+      }
+
+      try {
+        const basePct = 10 + Math.floor((i / numSearches) * 75);
+        if (onProgress) {
+          onProgress(`検索${i + 1}/${numSearches}: シークレットブラウザで検索中...`, basePct);
+        }
+
+        const result = await searchInIncognitoContext(
+          browser,
+          keyword,
+          videosPerSearch,
+          i,
+          (msg) => {
+            if (onProgress) {
+              const pct = Math.min(85, basePct + Math.floor(75 / numSearches / 2));
+              onProgress(`[${i + 1}/${numSearches}] ${msg}`, pct);
+            }
+          }
+        );
+
+        console.log(`[TikTok] Session ${i + 1}/${numSearches} completed: ${result.videos.length} videos`);
+        if (result.videos.length > 0) {
+          searches.push(result);
+        }
+      } catch (err) {
+        console.error(`[TikTok] Session ${i + 1}/${numSearches} failed:`, err);
       }
     }
 
