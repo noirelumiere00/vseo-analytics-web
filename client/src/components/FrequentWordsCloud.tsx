@@ -72,17 +72,19 @@ const CustomDot = ({ cx = 0, cy = 0, payload }: CustomDotProps) => {
   if (!payload) return null;
   const maxCount = payload._maxCount || 1;
   const ratio = payload.count / maxCount;
-  const radius = Math.round(14 + ratio * 26); // 14px〜40px
+  const radius = Math.round(12 + ratio * 20); // 12px〜32px（小さめにして重なり軽減）
   const quadrant = getQuadrant(payload.valence, payload.arousal);
   const fill = BUBBLE_COLORS[quadrant];
-  const fontSize = radius > 22 ? 10 : 8;
-  const displayWord = payload.word.length > 5
-    ? payload.word.slice(0, 5) + "…"
+  // フォントサイズをバブルに合わせて調整
+  const maxChars = radius > 24 ? 6 : radius > 18 ? 5 : 4;
+  const fontSize = radius > 24 ? 10 : radius > 18 ? 9 : 8;
+  const displayWord = payload.word.length > maxChars
+    ? payload.word.slice(0, maxChars) + "…"
     : payload.word;
 
   return (
     <g>
-      <circle cx={cx} cy={cy} r={radius} fill={fill} opacity={0.75} />
+      <circle cx={cx} cy={cy} r={radius} fill={fill} opacity={0.7} />
       <text
         x={cx}
         y={cy}
@@ -114,17 +116,17 @@ const CustomTooltip = ({
   const d = payload[0].payload;
   const quadrant = getQuadrant(d.valence, d.arousal);
   const labels: Record<string, string> = {
-    joyExcited:  "喜・興奮",
-    calmPleasure:"楽・穏",
-    angryActive: "怒・活性",
-    sadPassive:  "哀・沈静",
+    joyExcited:  "ポジティブ × 盛り上がり",
+    calmPleasure:"ポジティブ × 落ち着き",
+    angryActive: "ネガティブ × 盛り上がり",
+    sadPassive:  "ネガティブ × 落ち着き",
   };
   return (
     <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-md text-sm">
       <div className="font-bold text-gray-800">{d.word}</div>
       <div className="text-gray-500 mt-0.5">出現数: {d.count}件</div>
-      <div className="text-gray-500">感情価: {d.valence.toFixed(2)}</div>
-      <div className="text-gray-500">感情強度: {d.arousal.toFixed(2)}</div>
+      <div className="text-gray-500">ポジ/ネガ度: {d.valence > 0 ? "+" : ""}{d.valence.toFixed(1)}</div>
+      <div className="text-gray-500">テンション: {d.arousal > 0 ? "+" : ""}{d.arousal.toFixed(1)}</div>
       <div className="mt-1 text-xs font-semibold" style={{ color: BUBBLE_COLORS[quadrant] }}>
         {labels[quadrant]}
       </div>
@@ -148,13 +150,13 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-base font-semibold text-gray-700">感情ワードマップ</h3>
+        <h3 className="text-base font-semibold text-gray-700">頻出ワード 感情マップ</h3>
         <div className="flex gap-3 text-xs text-gray-500 flex-wrap">
           {[
-            { key: "joyExcited",   label: "喜・興奮" },
-            { key: "calmPleasure", label: "楽・穏" },
-            { key: "angryActive",  label: "怒・活性" },
-            { key: "sadPassive",   label: "哀・沈静" },
+            { key: "joyExcited",   label: "ポジティブ × 盛り上がり" },
+            { key: "calmPleasure", label: "ポジティブ × 落ち着き" },
+            { key: "angryActive",  label: "ネガティブ × 盛り上がり" },
+            { key: "sadPassive",   label: "ネガティブ × 落ち着き" },
           ].map(({ key, label }) => (
             <span key={key} className="flex items-center gap-1">
               <span
@@ -164,18 +166,18 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
               {label}
             </span>
           ))}
-          <span className="text-gray-400">バブルサイズ = 出現頻度</span>
+          <span className="text-gray-400">丸が大きい = よく出るワード</span>
         </div>
       </div>
 
       {/* 軸ラベル */}
       <div className="relative">
         <div className="text-xs text-gray-400 text-center mb-1">
-          ↑ 喜び・楽しさ (感情価 +)
+          ↑ ポジティブ（好き・嬉しい・感動）
         </div>
         <div className="flex items-center gap-1">
           <div className="text-xs text-gray-400 writing-vertical-rl" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap" }}>
-            穏やか ← 感情強度 → 興奮
+            落ち着き ← テンション → 盛り上がり
           </div>
           <div className="flex-1" style={{ minHeight: 380 }}>
             <ResponsiveContainer width="100%" height={380}>
@@ -197,7 +199,7 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
                   tickCount={5}
                   tick={{ fontSize: 10, fill: "#6b7280" }}
                   tickFormatter={(v) => v.toFixed(1)}
-                  label={{ value: "感情強度（arousal）", position: "insideBottom", offset: -10, fontSize: 10, fill: "#9ca3af" }}
+                  label={{ value: "テンション", position: "insideBottom", offset: -10, fontSize: 10, fill: "#9ca3af" }}
                 />
                 <YAxis
                   type="number"
@@ -206,7 +208,7 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
                   tickCount={5}
                   tick={{ fontSize: 10, fill: "#6b7280" }}
                   tickFormatter={(v) => v.toFixed(1)}
-                  label={{ value: "感情価（valence）", angle: -90, position: "insideLeft", offset: 10, fontSize: 10, fill: "#9ca3af" }}
+                  label={{ value: "ポジ/ネガ", angle: -90, position: "insideLeft", offset: 10, fontSize: 10, fill: "#9ca3af" }}
                 />
 
                 <Tooltip content={<CustomTooltip />} />
@@ -220,12 +222,12 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
           </div>
         </div>
         <div className="text-xs text-gray-400 text-center mt-1">
-          ↓ 悲しみ・怒り (感情価 −)
+          ↓ ネガティブ（不満・批判・残念）
         </div>
       </div>
 
       <p className="text-xs text-gray-400">
-        ※ LLM（Gemini）がTikTok日本語コンテキストに基づきスコアを付与。バブルが大きいほど出現頻度が高い。
+        ※ 動画のキーワード・OCR・音声から頻出ワードを抽出し、AIが感情スコアを付与。丸が大きいほどよく出現するワード。
       </p>
     </div>
   );

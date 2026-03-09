@@ -100,7 +100,7 @@ export default function Login() {
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
-              初回ログイン時にアカウントが自動作成されます
+              登録済みのアカウントでログインしてください
             </p>
           </form>
         </CardContent>

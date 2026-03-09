@@ -65,33 +65,8 @@ export function registerOAuthRoutes(app: Express) {
         res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
         res.json({ success: true, openId: existingUser.openId });
       } else {
-        // New user registration
-        const identifier = email?.trim()
-          ? email.trim().toLowerCase()
-          : trimmedName.toLowerCase();
-        const openId = "local_" + Buffer.from(identifier).toString("base64url");
-
-        const passwordHash = await hashPassword(password);
-        const isAdmin = trimmedName === ENV.adminName;
-
-        await db.upsertUser({
-          openId,
-          name: trimmedName,
-          email: email?.trim() || null,
-          passwordHash,
-          loginMethod: "local",
-          role: isAdmin ? "admin" : "user",
-          lastSignedIn: new Date(),
-        });
-
-        const sessionToken = await sdk.createSessionToken(openId, {
-          name: trimmedName,
-          expiresInMs: ONE_YEAR_MS,
-        });
-
-        const cookieOptions = getSessionCookieOptions(req);
-        res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-        res.json({ success: true, openId });
+        // New user registration is disabled
+        res.status(403).json({ error: "新規登録は現在受け付けていません。管理者にお問い合わせください。" });
       }
     } catch (error) {
       console.error("[Auth] Login failed", error);
