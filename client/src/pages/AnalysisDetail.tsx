@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
-import { ReportSection, MicroAnalysisSection } from '@/components/ReportSection';
+import { ReportSection, MicroAnalysisSection, SeoMetaKeywordsSection } from '@/components/ReportSection';
 import { filterAdHashtags, isPromotionVideo } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
 import DurationAnalysis from "@/components/DurationAnalysis";
@@ -1268,39 +1268,49 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 動画ミクロ分析（マーケティング施策提案） */}
+                  {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
                   {data && data.report && (
                     <AccordionItem value="micro-analysis" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                         動画ミクロ分析
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 pt-2">
-                        <MicroAnalysisSection
-                          proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
-                            // 新カテゴリ (avoid/caution/leverage) + 旧カテゴリ後方互換 (risk/urgent/positive)
-                            const cat = insight.category;
-                            const priority =
-                              cat === "avoid" || cat === "risk" ? "回避" :
-                              cat === "caution" || cat === "urgent" ? "注意" : "活用";
-                            const icon =
-                              cat === "avoid" || cat === "risk" ? "🚫" :
-                              cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
-                            return {
-                              area: insight.title,
-                              action: insight.description,
-                              priority: priority as "回避" | "注意" | "活用",
-                              icon,
-                              analysis: insight.analysis,
-                              strategicAdvice: insight.strategicAdvice,
-                              sourceVideoIds: insight.sourceVideoIds,
-                            };
-                          })}
-                          videos={(data.videos || [])
-                            .slice()
-                            .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
-                            .slice(0, 15)
-                            .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
-                        />
+                        <Tabs defaultValue="insights" className="w-full">
+                          <TabsList className="w-full mb-3">
+                            <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
+                            <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="insights">
+                            <MicroAnalysisSection
+                              proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
+                                const cat = insight.category;
+                                const priority =
+                                  cat === "avoid" || cat === "risk" ? "回避" :
+                                  cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                                const icon =
+                                  cat === "avoid" || cat === "risk" ? "🚫" :
+                                  cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                                return {
+                                  area: insight.title,
+                                  action: insight.description,
+                                  priority: priority as "回避" | "注意" | "活用",
+                                  icon,
+                                  analysis: insight.analysis,
+                                  strategicAdvice: insight.strategicAdvice,
+                                  sourceVideoIds: insight.sourceVideoIds,
+                                };
+                              })}
+                              videos={(data.videos || [])
+                                .slice()
+                                .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
+                                .slice(0, 15)
+                                .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
+                            />
+                          </TabsContent>
+                          <TabsContent value="seo-keywords">
+                            <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
+                          </TabsContent>
+                        </Tabs>
                       </AccordionContent>
                     </AccordionItem>
                   )}
