@@ -26,6 +26,16 @@ import {
   ArrowDown,
   Sparkles,
   Ghost,
+  Clock,
+  Users,
+  Hash,
+  Brain,
+  Target,
+  Image,
+  Type,
+  Volume2,
+  Timer,
+  AlertTriangle,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
@@ -276,13 +286,33 @@ export default function Comparison() {
       });
     const avgER = erList.length > 0 ? erList.reduce((a, b) => a + b, 0) / erList.length : 0;
 
-    const avgScore =
-      videos.filter((v) => v.score?.overallScore != null).length > 0
-        ? videos
-            .filter((v) => v.score?.overallScore != null)
-            .reduce((s, v) => s + (v.score!.overallScore ?? 0), 0) /
-          videos.filter((v) => v.score?.overallScore != null).length
-        : 0;
+    const scoredVideos = videos.filter((v) => v.score?.overallScore != null);
+    const avgScore = scoredVideos.length > 0
+      ? scoredVideos.reduce((s, v) => s + (v.score!.overallScore ?? 0), 0) / scoredVideos.length
+      : 0;
+
+    // サブスコア平均
+    const avgThumbnailScore = scoredVideos.length > 0
+      ? scoredVideos.reduce((s, v) => s + (v.score!.thumbnailScore ?? 0), 0) / scoredVideos.length : 0;
+    const avgTextScore = scoredVideos.length > 0
+      ? scoredVideos.reduce((s, v) => s + (v.score!.textScore ?? 0), 0) / scoredVideos.length : 0;
+    const avgAudioScore = scoredVideos.length > 0
+      ? scoredVideos.reduce((s, v) => s + (v.score!.audioScore ?? 0), 0) / scoredVideos.length : 0;
+    const avgDurationScore = scoredVideos.length > 0
+      ? scoredVideos.reduce((s, v) => s + (v.score!.durationScore ?? 0), 0) / scoredVideos.length : 0;
+
+    // 平均動画尺（秒）
+    const durVideos = videos.filter((v) => (v.duration ?? 0) > 0);
+    const avgDuration = durVideos.length > 0
+      ? durVideos.reduce((s, v) => s + (v.duration ?? 0), 0) / durVideos.length : 0;
+
+    // 平均フォロワー数
+    const followerVideos = videos.filter((v) => (v.followerCount ?? 0) > 0);
+    const avgFollowerCount = followerVideos.length > 0
+      ? followerVideos.reduce((s, v) => s + (v.followerCount ?? 0), 0) / followerVideos.length : 0;
+
+    // ユニークアカウント数
+    const uniqueAccounts = new Set(videos.map((v) => v.accountId).filter(Boolean)).size;
 
     const triple = d.tripleSearch?.duplicateAnalysis;
     const overlapRate = triple?.overlapRate ?? 0;
@@ -298,6 +328,12 @@ export default function Comparison() {
     const sentNeuPct = sentTotal > 0 ? (sentNeu / sentTotal) * 100 : 0;
     const sentNegPct = sentTotal > 0 ? (sentNeg / sentTotal) * 100 : 0;
 
+    // インパクト分析
+    const positiveViewsShare = report?.positiveViewsShare ?? 0;
+    const negativeViewsShare = report?.negativeViewsShare ?? 0;
+    const positiveEngagementShare = report?.positiveEngagementShare ?? 0;
+    const negativeEngagementShare = report?.negativeEngagementShare ?? 0;
+
     return {
       totalVideos,
       totalViews,
@@ -308,12 +344,23 @@ export default function Comparison() {
       avgViews,
       avgER,
       avgScore,
+      avgThumbnailScore,
+      avgTextScore,
+      avgAudioScore,
+      avgDurationScore,
+      avgDuration,
+      avgFollowerCount,
+      uniqueAccounts,
       overlapRate,
       winCount,
       semi2Count,
       sentPosPct,
       sentNeuPct,
       sentNegPct,
+      positiveViewsShare,
+      negativeViewsShare,
+      positiveEngagementShare,
+      negativeEngagementShare,
     };
   };
 
@@ -1131,6 +1178,483 @@ export default function Comparison() {
                       </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- スコア内訳 ---- */}
+          {(mA.avgThumbnailScore > 0 || mB.avgThumbnailScore > 0) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Target className="h-4 w-4 text-primary" />
+                  スコア内訳
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <MetricRow
+                  label="サムネイル"
+                  valueA={mA.avgThumbnailScore}
+                  valueB={mB.avgThumbnailScore}
+                  decimals={1}
+                  icon={<Image className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="テキスト"
+                  valueA={mA.avgTextScore}
+                  valueB={mB.avgTextScore}
+                  decimals={1}
+                  icon={<Type className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="音声"
+                  valueA={mA.avgAudioScore}
+                  valueB={mB.avgAudioScore}
+                  decimals={1}
+                  icon={<Volume2 className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="尺"
+                  valueA={mA.avgDurationScore}
+                  valueB={mB.avgDurationScore}
+                  decimals={1}
+                  icon={<Timer className="h-3 w-3" />}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ---- コンテンツ特性 ---- */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Clock className="h-4 w-4 text-primary" />
+                コンテンツ特性
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-0">
+              <MetricRow
+                label="平均動画尺"
+                valueA={mA.avgDuration}
+                valueB={mB.avgDuration}
+                formatFn={(v) => v >= 60 ? `${Math.floor(v / 60)}分${Math.round(v % 60)}秒` : `${Math.round(v)}秒`}
+                icon={<Clock className="h-3 w-3" />}
+              />
+              <MetricRow
+                label="平均フォロワー数"
+                valueA={mA.avgFollowerCount}
+                valueB={mB.avgFollowerCount}
+                formatFn={formatBigNum}
+                icon={<Users className="h-3 w-3" />}
+              />
+              <MetricRow
+                label="ユニークアカウント数"
+                valueA={mA.uniqueAccounts}
+                valueB={mB.uniqueAccounts}
+                icon={<Users className="h-3 w-3" />}
+              />
+            </CardContent>
+          </Card>
+
+          {/* ---- インパクト分析（センチメント別のビュー/エンゲージメント占有率）---- */}
+          {(dataA.report && dataB.report) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Zap className="h-4 w-4 text-primary" />
+                  センチメント別インパクト
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-0">
+                <MetricRow
+                  label="ポジ動画の視聴シェア"
+                  valueA={mA.positiveViewsShare}
+                  valueB={mB.positiveViewsShare}
+                  unit="%"
+                  icon={<Eye className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="ネガ動画の視聴シェア"
+                  valueA={mA.negativeViewsShare}
+                  valueB={mB.negativeViewsShare}
+                  unit="%"
+                  invertColor
+                  icon={<Eye className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="ポジ動画のEGシェア"
+                  valueA={mA.positiveEngagementShare}
+                  valueB={mB.positiveEngagementShare}
+                  unit="%"
+                  icon={<Heart className="h-3 w-3" />}
+                />
+                <MetricRow
+                  label="ネガ動画のEGシェア"
+                  valueA={mA.negativeEngagementShare}
+                  valueB={mB.negativeEngagementShare}
+                  unit="%"
+                  invertColor
+                  icon={<Heart className="h-3 w-3" />}
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ---- ハッシュタグ戦略比較 ---- */}
+          {((dataA.report as any)?.hashtagStrategy || (dataB.report as any)?.hashtagStrategy) && (() => {
+            const hsA = (dataA.report as any)?.hashtagStrategy;
+            const hsB = (dataB.report as any)?.hashtagStrategy;
+            const combosA: { tags: string[]; count: number; avgER: number }[] = hsA?.topCombinations ?? [];
+            const combosB: { tags: string[]; count: number; avgER: number }[] = hsB?.topCombinations ?? [];
+            const recsA: string[] = hsA?.recommendations ?? [];
+            const recsB: string[] = hsB?.recommendations ?? [];
+            const maxCombos = Math.max(combosA.length, combosB.length, 5);
+
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Hash className="h-4 w-4 text-primary" />
+                    ハッシュタグ戦略
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* トップコンビネーション */}
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">上位ハッシュタグ組み合わせ（ER順）</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* A側 */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-blue-700 mb-1">分析 A</p>
+                        {combosA.slice(0, maxCombos).map((c, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[11px] p-1.5 rounded bg-blue-50/60 border border-blue-100">
+                            <span className="font-bold text-blue-600 w-4">{i + 1}.</span>
+                            <span className="flex-1 truncate">{c.tags.join(" ")}</span>
+                            <span className="text-[10px] text-muted-foreground shrink-0">ER {c.avgER.toFixed(1)}%</span>
+                          </div>
+                        ))}
+                        {combosA.length === 0 && <p className="text-[11px] text-muted-foreground">データなし</p>}
+                      </div>
+                      {/* B側 */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-amber-600 mb-1">分析 B</p>
+                        {combosB.slice(0, maxCombos).map((c, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[11px] p-1.5 rounded bg-amber-50/60 border border-amber-100">
+                            <span className="font-bold text-amber-600 w-4">{i + 1}.</span>
+                            <span className="flex-1 truncate">{c.tags.join(" ")}</span>
+                            <span className="text-[10px] text-muted-foreground shrink-0">ER {c.avgER.toFixed(1)}%</span>
+                          </div>
+                        ))}
+                        {combosB.length === 0 && <p className="text-[11px] text-muted-foreground">データなし</p>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI推奨 */}
+                  {(recsA.length > 0 || recsB.length > 0) && (
+                    <div className="pt-3 border-t">
+                      <p className="text-xs font-semibold text-muted-foreground mb-2">AI推奨</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          {recsA.map((r, i) => (
+                            <p key={i} className="text-[11px] text-muted-foreground leading-relaxed">• {r}</p>
+                          ))}
+                        </div>
+                        <div className="space-y-1">
+                          {recsB.map((r, i) => (
+                            <p key={i} className="text-[11px] text-muted-foreground leading-relaxed">• {r}</p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- AIインサイト比較 ---- */}
+          {((dataA.report as any)?.autoInsight || (dataB.report as any)?.autoInsight) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Brain className="h-4 w-4 text-primary" />
+                  AIインサイト
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-blue-700">分析 A</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {(dataA.report as any)?.autoInsight || "インサイトなし"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-amber-600">分析 B</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {(dataB.report as any)?.autoInsight || "インサイトなし"}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ---- 勝ちパターン共通点分析 比較 ---- */}
+          {(dataA.tripleSearch?.commonalityAnalysis || dataB.tripleSearch?.commonalityAnalysis) && (() => {
+            const caA = dataA.tripleSearch?.commonalityAnalysis;
+            const caB = dataB.tripleSearch?.commonalityAnalysis;
+            const fields: { key: string; label: string }[] = [
+              { key: "summary", label: "サマリー" },
+              { key: "keyHook", label: "キーフック" },
+              { key: "contentTrend", label: "コンテンツトレンド" },
+              { key: "formatFeatures", label: "フォーマット特徴" },
+              { key: "hashtagStrategy", label: "ハッシュタグ戦略" },
+              { key: "vseoTips", label: "VSEOヒント" },
+            ];
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    勝ちパターン共通点分析
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {fields.map(({ key, label }) => {
+                    const valA = (caA as any)?.[key] ?? "";
+                    const valB = (caB as any)?.[key] ?? "";
+                    if (!valA && !valB) return null;
+                    return (
+                      <div key={key} className="space-y-2">
+                        <p className="text-xs font-semibold">{label}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valA || "—"}
+                            </p>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valB || "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 負けパターン分析 比較 ---- */}
+          {(dataA.tripleSearch?.losePatternAnalysis || dataB.tripleSearch?.losePatternAnalysis) && (() => {
+            const lpA = dataA.tripleSearch?.losePatternAnalysis;
+            const lpB = dataB.tripleSearch?.losePatternAnalysis;
+            const fields: { key: string; label: string }[] = [
+              { key: "summary", label: "サマリー" },
+              { key: "badHook", label: "失敗フック" },
+              { key: "contentWeakness", label: "コンテンツ弱点" },
+              { key: "formatProblems", label: "フォーマット問題" },
+              { key: "hashtagMistakes", label: "ハッシュタグ失敗" },
+              { key: "avoidTips", label: "避けるべきポイント" },
+            ];
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    負けパターン分析
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {fields.map(({ key, label }) => {
+                    const valA = (lpA as any)?.[key] ?? "";
+                    const valB = (lpB as any)?.[key] ?? "";
+                    if (!valA && !valB) return null;
+                    return (
+                      <div key={key} className="space-y-2">
+                        <p className="text-xs font-semibold">{label}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-2.5 rounded-lg bg-red-50/60 border border-red-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valA || "—"}
+                            </p>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-orange-50/60 border border-orange-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valB || "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 勝ちパターン共通点分析（Ad） 比較 ---- */}
+          {(dataA.tripleSearch?.commonalityAnalysisAd || dataB.tripleSearch?.commonalityAnalysisAd) && (() => {
+            const caA = dataA.tripleSearch?.commonalityAnalysisAd;
+            const caB = dataB.tripleSearch?.commonalityAnalysisAd;
+            const fields: { key: string; label: string }[] = [
+              { key: "summary", label: "サマリー" },
+              { key: "keyHook", label: "キーフック" },
+              { key: "contentTrend", label: "コンテンツトレンド" },
+              { key: "formatFeatures", label: "フォーマット特徴" },
+              { key: "hashtagStrategy", label: "ハッシュタグ戦略" },
+              { key: "vseoTips", label: "VSEOヒント" },
+            ];
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    勝ちパターン共通点分析（Ad投稿）
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {fields.map(({ key, label }) => {
+                    const valA = (caA as any)?.[key] ?? "";
+                    const valB = (caB as any)?.[key] ?? "";
+                    if (!valA && !valB) return null;
+                    return (
+                      <div key={key} className="space-y-2">
+                        <p className="text-xs font-semibold">{label}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valA || "—"}
+                            </p>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valB || "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- 負けパターン分析（Ad） 比較 ---- */}
+          {(dataA.tripleSearch?.losePatternAnalysisAd || dataB.tripleSearch?.losePatternAnalysisAd) && (() => {
+            const lpA = dataA.tripleSearch?.losePatternAnalysisAd;
+            const lpB = dataB.tripleSearch?.losePatternAnalysisAd;
+            const fields: { key: string; label: string }[] = [
+              { key: "summary", label: "サマリー" },
+              { key: "badHook", label: "失敗フック" },
+              { key: "contentWeakness", label: "コンテンツ弱点" },
+              { key: "formatProblems", label: "フォーマット問題" },
+              { key: "hashtagMistakes", label: "ハッシュタグ失敗" },
+              { key: "avoidTips", label: "避けるべきポイント" },
+            ];
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    負けパターン分析（Ad投稿）
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {fields.map(({ key, label }) => {
+                    const valA = (lpA as any)?.[key] ?? "";
+                    const valB = (lpB as any)?.[key] ?? "";
+                    if (!valA && !valB) return null;
+                    return (
+                      <div key={key} className="space-y-2">
+                        <p className="text-xs font-semibold">{label}</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-2.5 rounded-lg bg-red-50/60 border border-red-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valA || "—"}
+                            </p>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-orange-50/60 border border-orange-200/60">
+                            <p className="text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {valB || "—"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ---- トップアカウント比較 ---- */}
+          {(() => {
+            const getTopAccounts = (d: typeof dataA) => {
+              const videos = d.videos ?? [];
+              const accountMap = new Map<string, { name: string; avatar: string; followers: number; views: number; count: number; erSum: number }>();
+              for (const v of videos) {
+                const id = v.accountId || "unknown";
+                const existing = accountMap.get(id) || { name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: v.followerCount ?? 0, views: 0, count: 0, erSum: 0 };
+                existing.views += v.viewCount ?? 0;
+                existing.count += 1;
+                if ((v.viewCount ?? 0) > 0) {
+                  const eng = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0) + (v.saveCount ?? 0);
+                  existing.erSum += (eng / (v.viewCount ?? 1)) * 100;
+                }
+                accountMap.set(id, existing);
+              }
+              return [...accountMap.entries()]
+                .map(([id, a]) => ({ id, ...a, avgER: a.count > 0 ? a.erSum / a.count : 0 }))
+                .sort((a, b) => b.views - a.views)
+                .slice(0, 5);
+            };
+            const topA = getTopAccounts(dataA);
+            const topB = getTopAccounts(dataB);
+            if (topA.length === 0 && topB.length === 0) return null;
+
+            const AccountRow = ({ acc, color }: { acc: typeof topA[0]; color: "blue" | "amber" }) => (
+              <div className={`flex items-center gap-2 p-2 rounded-lg border ${color === "blue" ? "bg-blue-50/40 border-blue-100" : "bg-amber-50/40 border-amber-100"}`}>
+                {acc.avatar && (
+                  <img src={acc.avatar} alt="" className="w-7 h-7 rounded-full shrink-0" referrerPolicy="no-referrer"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-medium truncate">{acc.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{acc.count}本 / {formatBigNum(acc.views)}再生</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-[10px] font-bold">ER {acc.avgER.toFixed(1)}%</p>
+                  <p className="text-[10px] text-muted-foreground">{formatBigNum(acc.followers)}フォロワー</p>
+                </div>
+              </div>
+            );
+
+            return (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Users className="h-4 w-4 text-primary" />
+                    トップアカウント（再生数順 Top5）
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-blue-700 mb-1">分析 A</p>
+                      {topA.map((acc) => <AccountRow key={acc.id} acc={acc} color="blue" />)}
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-bold text-amber-600 mb-1">分析 B</p>
+                      {topB.map((acc) => <AccountRow key={acc.id} acc={acc} color="amber" />)}
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             );

@@ -4,8 +4,58 @@ import { generateFacetAnalysisReport } from "./reportGenerator";
 import { transcribeAudio } from "./_core/voiceTranscription";
 import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
-import { filterAdHashtags } from "@shared/const";
-// import { scrapeTikTokComments } from "./tiktokScraper"; // TODO: Implement comment scraping if needed
+import { scrapeTikTokMetaKeywords } from "./tiktokScraper";
+import { filterAdHashtags, isPromotionVideo } from "@shared/const";
+
+/**
+ * 分析対象動画のTikTokメタキーワードを取得
+ * レポートに保存済みのデータを再利用し、不足分のみスクレイプ
+ */
+async function fetchMetaKeywordsForVideos(
+  jobId: number,
+  videos: Array<{ videoId: string; videoUrl: string | null; accountId: string | null }>
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+
+  // レポートに保存済みのメタKWを再利用
+  try {
+    const report = await db.getAnalysisReportByJobId(jobId);
+    if (report?.videoMetaKeywords) {
+      for (const entry of report.videoMetaKeywords) {
+        result.set(entry.videoId, entry.keywords);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 未取得の動画URLを収集
+  const missingUrls: string[] = [];
+  const urlToVideoId = new Map<string, string>();
+  for (const v of videos) {
+    if (result.has(v.videoId)) continue;
+    const url = v.videoUrl || (v.accountId ? `https://www.tiktok.com/@${v.accountId}/video/${v.videoId}` : "");
+    if (url) {
+      missingUrls.push(url);
+      urlToVideoId.set(url, v.videoId);
+    }
+  }
+
+  // 不足分をスクレイプ（最大5本に制限）
+  if (missingUrls.length > 0) {
+    try {
+      const toScrape = missingUrls.slice(0, 5);
+      console.log(`[Analysis] Fetching meta keywords for ${toScrape.length} videos...`);
+      const metaMap = await scrapeTikTokMetaKeywords(toScrape);
+      for (const [url, keywords] of metaMap) {
+        const vid = urlToVideoId.get(url);
+        if (vid) result.set(vid, keywords);
+      }
+    } catch (e) {
+      console.warn("[Analysis] Failed to fetch meta keywords:", (e as Error).message);
+    }
+  }
+
+  return result;
+}
 
 /** Sanitize and parse JSON from LLM output (handles bad Unicode escapes) */
 function safeJsonParse(text: string): any {
@@ -84,6 +134,7 @@ export async function analyzeVideoFromTikTok(
     followerCount: tiktokVideo.author.followerCount,
     accountAvatarUrl: tiktokVideo.author.avatarUrl,
     hashtags: tiktokVideo.hashtags,
+    isAd: tiktokVideo.isAd ? 1 : 0,
     postedAt: new Date(tiktokVideo.createTime * 1000),
   });
 
@@ -640,11 +691,12 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   // キーワード集計（OCR・音声データの重要度を高く）
   const allKeywords: string[] = [];
   const ocrAndAudioKeywords: string[] = []; // OCR・音声データから抽出したキーワード
+  const metaSeoKeywords: string[] = []; // TikTokが生成したSEOメタキーワード
 
   for (const video of videosData) {
     const keywords = video.keywords as string[] || [];
     allKeywords.push(...keywords);
-    
+
     // OCR結果から抽出したテキスト
     const ocrResults = await db.getOcrResultsByVideoId(video.id);
     for (const ocr of ocrResults) {
@@ -654,7 +706,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
         ocrAndAudioKeywords.push(...words);
       }
     }
-    
+
     // 音声文字起こし結果から抽出したテキスト
     const transcriptions = await db.getTranscriptionsByVideoId(video.id);
     for (const trans of transcriptions) {
@@ -663,6 +715,46 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
         ocrAndAudioKeywords.push(...words);
       }
     }
+  }
+
+  // TikTok SEO meta keywords を上位5動画から取得
+  let videoMetaKeywords: Array<{ videoUrl: string; videoId: string; accountId: string; keywords: string[] }> = [];
+  try {
+    const top5ByViews = [...videosData]
+      .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0))
+      .slice(0, 5);
+    const videoUrls = top5ByViews
+      .map(v => v.videoUrl || (v.accountId ? `https://www.tiktok.com/@${v.accountId}/video/${v.videoId}` : ""))
+      .filter(u => u.length > 0);
+
+    if (videoUrls.length > 0) {
+      console.log("[Report] Fetching TikTok meta SEO keywords from top 5 videos...");
+      const metaMap = await scrapeTikTokMetaKeywords(videoUrls);
+      for (const keywords of metaMap.values()) {
+        // "ホライゾンバルーン 予約 方法" → ["ホライゾンバルーン", "予約", "方法"] に分割
+        for (const phrase of keywords) {
+          const words = phrase.split(/\s+/).filter(w => w.length > 1);
+          metaSeoKeywords.push(...words);
+        }
+      }
+      console.log(`[Report] TikTok meta SEO keywords: ${metaSeoKeywords.length} words from ${metaMap.size} videos`);
+
+      // metaMap生データをvideoMetaKeywords形式に変換
+      for (const [url, keywords] of metaMap.entries()) {
+        const matched = top5ByViews.find(v => {
+          const vUrl = v.videoUrl || (v.accountId ? `https://www.tiktok.com/@${v.accountId}/video/${v.videoId}` : "");
+          return vUrl === url;
+        });
+        videoMetaKeywords.push({
+          videoUrl: url,
+          videoId: matched?.videoId || "",
+          accountId: matched?.accountId || "",
+          keywords,
+        });
+      }
+    }
+  } catch (e) {
+    console.warn("[Report] Failed to fetch TikTok meta keywords:", (e as Error).message);
   }
 
   // 頻出ワードを抽出（出現回数でソート、OCR・音声データを優先）
@@ -706,8 +798,12 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   };
 
   // countMap を返すユーティリティ
-  const buildWordCountMap = (words: string[], ocrAudioWords: string[]): Map<string, number> => {
+  const buildWordCountMap = (words: string[], ocrAudioWords: string[], seoWords: string[] = []): Map<string, number> => {
     const counts = new Map<string, number>();
+    // TikTok SEO meta keywords は最重要（重み3倍）
+    for (const w of seoWords) {
+      if (isValidWord(w)) counts.set(w, (counts.get(w) || 0) + 3);
+    }
     for (const w of ocrAudioWords) {
       if (isValidWord(w)) counts.set(w, (counts.get(w) || 0) + 2); // OCR/音声は重要度2倍
     }
@@ -717,8 +813,8 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
     return counts;
   };
 
-  const getTopWords = (words: string[], ocrAudioWords: string[], limit: number = 30): string[] => {
-    const counts = buildWordCountMap(words, ocrAudioWords);
+  const getTopWords = (words: string[], ocrAudioWords: string[], limit: number = 30, seoWords: string[] = []): string[] => {
+    const counts = buildWordCountMap(words, ocrAudioWords, seoWords);
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
@@ -728,16 +824,17 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   const getTopWordsWithCount = (
     words: string[],
     ocrAudioWords: string[],
-    limit: number = 30
+    limit: number = 30,
+    seoWords: string[] = []
   ): Array<{ word: string; count: number }> => {
-    const counts = buildWordCountMap(words, ocrAudioWords);
+    const counts = buildWordCountMap(words, ocrAudioWords, seoWords);
     return Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, limit)
       .map(([word, count]) => ({ word, count }));
   };
 
-  const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30);
+  const topAllKeywords = getTopWords(allKeywords, ocrAndAudioKeywords, 30, metaSeoKeywords);
 
   // per-video の sentiment + keywords から感情ワードを集計（後方互換）
   const positiveVideoKeywords: string[] = [];
@@ -767,7 +864,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
   let keyInsights: Array<{ category: "avoid" | "caution" | "leverage"; title: string; description: string; analysis: string; strategicAdvice: string; sourceVideoIds: string[] }> = [];
 
   try {
-    const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 25);
+    const wordsWithCount = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 25, metaSeoKeywords);
     const wordList = wordsWithCount.map(w => w.word).join("、");
 
     const positiveAvgER = positiveVideos.length > 0
@@ -913,6 +1010,7 @@ ${videosData.slice(0, 20).map(v => {
       const annotation = annotationMap.get(word) ?? { valence: 0, arousal: 0 };
       const sources: EmotionWordSource[] = ["keyword"];
       if (ocrAndAudioKeywords.includes(word)) sources.push("ocr");
+      if (metaSeoKeywords.includes(word)) sources.push("modal"); // modal = TikTok SEO meta
       return { word, count, ...annotation, sources };
     });
 
@@ -986,6 +1084,7 @@ ${videosData.slice(0, 20).map(v => {
     keyInsights,
     facets,
     hashtagStrategy,
+    videoMetaKeywords: videoMetaKeywords.length > 0 ? videoMetaKeywords : undefined,
   });
 
   console.log(`[Analysis] Report generated for job ${jobId}`);
@@ -1009,14 +1108,15 @@ export async function analyzeWinPatternCommonality(
     return;
   }
 
-  // 勝ちパターン動画の詳細データを取得
+  // 勝ちパターン動画の詳細データを取得（オーガニックのみ）
   const allVideos = await db.getVideosByJobId(jobId);
-  const winPatternVideos = allVideos.filter(v => 
+  const winPatternVideos = allVideos.filter(v =>
     tripleSearch.appearedInAll3Ids!.includes(v.videoId)
+    && !v.isAd && !isPromotionVideo(v.hashtags || [])
   );
 
   if (winPatternVideos.length === 0) {
-    console.log(`[Analysis] Win pattern videos not found in DB for job ${jobId}`);
+    console.log(`[Analysis] Win pattern organic videos not found in DB for job ${jobId}`);
     return;
   }
 
@@ -1037,6 +1137,9 @@ export async function analyzeWinPatternCommonality(
     }
   }
 
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, winPatternVideos);
+
   // 広告ハッシュタグを除外した上で動画情報を構築
   const videoSummaries = winPatternVideos.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);
@@ -1052,6 +1155,7 @@ export async function analyzeWinPatternCommonality(
       shares: v.shareCount || 0,
       keyHook: v.keyHook || "",
       sentiment: v.sentiment || "neutral",
+      metaKeywords: metaKwMap.get(v.videoId) || [],
     };
   });
 
@@ -1060,12 +1164,14 @@ export async function analyzeWinPatternCommonality(
 あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「勝ちパターン動画」${winPatternVideos.length}本のデータです。
 
 これらの動画がなぜTikTokのアルゴリズムに選ばれているのか、共通点を分析してください。
+「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との関連性に注目してください。
 
 【勝ちパターン動画データ】
 ${videoSummaries.map((v, i) => `
 動画${i + 1}: @${v.author} (フォロワー${v.followers.toLocaleString()})
 - 説明: ${v.description}
 - ハッシュタグ: ${v.hashtags.join(', ')}
+- TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
 - 動画長: ${v.duration}秒
 - 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
 - キーフック: ${v.keyHook}
@@ -1132,6 +1238,431 @@ ${videoSummaries.map((v, i) => `
   } catch (error) {
     console.error("[Analysis] Error analyzing win pattern commonality:", error);
     // LLM枠超過エラーは上位に伝搬して明示的に通知する
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * 負けパターン動画のBadポイント分析
+ * 再生数が低い + エンゲージメントが低い動画を抽出し、共通の失敗パターンをLLMで分析
+ */
+export async function analyzeLosePatternCommonality(
+  jobId: number,
+  keyword: string
+): Promise<void> {
+  console.log(`[Analysis] Analyzing lose pattern for job ${jobId}...`);
+
+  const allVideos = await db.getVideosByJobId(jobId);
+  if (allVideos.length === 0) {
+    console.log(`[Analysis] No videos found for job ${jobId}, skipping lose pattern analysis`);
+    return;
+  }
+
+  // プロモーション動画を除外
+  const organicVideos = allVideos.filter(v => !v.isAd && !isPromotionVideo(v.hashtags || []));
+  if (organicVideos.length < 10) {
+    console.log(`[Analysis] Not enough organic videos (${organicVideos.length}) for lose pattern analysis, skipping`);
+    return;
+  }
+
+  // エンゲージメント率を計算
+  const videosWithER = organicVideos
+    .filter(v => (v.viewCount ?? 0) > 0)
+    .map(v => {
+      const views = v.viewCount ?? 0;
+      const engagement = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0);
+      const er = views > 0 ? engagement / views : 0;
+      return { ...v, er };
+    });
+
+  if (videosWithER.length < 10) {
+    console.log(`[Analysis] Not enough videos with views for lose pattern analysis, skipping`);
+    return;
+  }
+
+  // 中央値を計算
+  const sortedByViews = [...videosWithER].sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+  const sortedByER = [...videosWithER].sort((a, b) => a.er - b.er);
+  const medianViews = sortedByViews[Math.floor(sortedByViews.length / 2)].viewCount ?? 0;
+  const medianER = sortedByER[Math.floor(sortedByER.length / 2)].er;
+
+  // 再生数が中央値以下 AND エンゲージメント率が中央値以下
+  const losePatternCandidates = videosWithER
+    .filter(v => (v.viewCount ?? 0) <= medianViews && v.er <= medianER)
+    .sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+
+  // 最大5本を選定、5本未満ならスキップ
+  const losePatternVideos = losePatternCandidates.slice(0, 5);
+  if (losePatternVideos.length < 5) {
+    console.log(`[Analysis] Not enough lose pattern videos (${losePatternVideos.length}/5), skipping`);
+    return;
+  }
+
+  console.log(`[Analysis] Found ${losePatternVideos.length} lose pattern videos (median views: ${medianViews}, median ER: ${(medianER * 100).toFixed(2)}%)`);
+
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
+
+  // 広告ハッシュタグを除外した上で動画情報を構築
+  const videoSummaries = losePatternVideos.map(v => {
+    const cleanHashtags = filterAdHashtags(v.hashtags || []);
+    return {
+      author: v.accountName || "不明",
+      followers: v.followerCount || 0,
+      description: [...(v.description || "")].slice(0, 200).join(""),
+      hashtags: cleanHashtags,
+      duration: v.duration || 0,
+      views: v.viewCount || 0,
+      likes: v.likeCount || 0,
+      comments: v.commentCount || 0,
+      shares: v.shareCount || 0,
+      keyHook: v.keyHook || "",
+      sentiment: v.sentiment || "neutral",
+      er: v.er,
+      metaKeywords: metaKwMap.get(v.videoId) || [],
+    };
+  });
+
+  try {
+    const prompt = `
+あなたはTikTok VSEOの厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、再生数・エンゲージメント率ともに中央値以下だった「負けパターン動画」${losePatternVideos.length}本のデータです。
+
+これらの動画がなぜパフォーマンスが低いのか、SNSマーケターのプロ視点でBadポイントを厳しく指摘してください。
+改善のために「避けるべきポイント」を明確にすることが目的です。
+「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との乖離や不足に注目してください。
+
+【負けパターン動画データ】
+${videoSummaries.map((v, i) => `
+動画${i + 1}: @${v.author} (フォロワー${v.followers.toLocaleString()})
+- 説明: ${v.description}
+- ハッシュタグ: ${v.hashtags.join(', ')}
+- TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 動画長: ${v.duration}秒
+- 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
+- エンゲージメント率: ${(v.er * 100).toFixed(2)}%
+- キーフック: ${v.keyHook}
+- センチメント: ${v.sentiment}
+`).join('')}
+
+以下の6項目について、具体的かつ厳しく指摘してください。各項目は1〜3文で。
+「〜が足りない」「〜は避けるべき」など、明確なダメ出しをしてください。
+`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a strict TikTok VSEO consultant. Always respond in Japanese. Return valid JSON. Be critical and point out specific weaknesses." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "lose_pattern_analysis",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary: {
+                type: "string",
+                description: "負けパターンの総括。例: 「これらの動画は〇〇という共通の弱点を持ち、〇〇が欠如しているためパフォーマンスが低い」",
+              },
+              badHook: {
+                type: "string",
+                description: "失敗しているフック要素。例: 「冒頭の訴求が弱く、スクロールを止める力がない。具体的には〇〇が不足」",
+              },
+              contentWeakness: {
+                type: "string",
+                description: "コンテンツの弱点。例: 「情報量が少なく、視聴者に具体的な価値を提供できていない」",
+              },
+              formatProblems: {
+                type: "string",
+                description: "フォーマット上の問題点。例: 「テンポが悪い、テキストが読みにくい、動画が長すぎる等」",
+              },
+              hashtagMistakes: {
+                type: "string",
+                description: "ハッシュタグ戦略の失敗。例: 「関連性の低いタグを多用し、ターゲット層にリーチできていない」",
+              },
+              avoidTips: {
+                type: "string",
+                description: "避けるべきポイントまとめ。例: 「〇〇は絶対に避け、代わりに〇〇を意識すべき」",
+              },
+            },
+            required: ["summary", "badHook", "contentWeakness", "formatProblems", "hashtagMistakes", "avoidTips"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = safeJsonParse(content || "{}");
+
+    await db.updateTripleSearchLosePattern(jobId, parsed);
+    console.log(`[Analysis] Lose pattern analysis completed for job ${jobId}`);
+  } catch (error) {
+    console.error("[Analysis] Error analyzing lose pattern:", error);
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * 勝ちパターン動画（Ad版）の共通点をLLMで分析
+ * 3ブラウザ全てで上位表示されたAd/プロモーション動画を対象
+ */
+export async function analyzeWinPatternCommonalityAd(
+  jobId: number,
+  keyword: string
+): Promise<void> {
+  console.log(`[Analysis] Analyzing win pattern commonality (Ad) for job ${jobId}...`);
+
+  const tripleSearch = await db.getTripleSearchResultByJobId(jobId);
+  if (!tripleSearch || !tripleSearch.appearedInAll3Ids || tripleSearch.appearedInAll3Ids.length === 0) {
+    console.log(`[Analysis] No win pattern videos found for job ${jobId}, skipping Ad commonality analysis`);
+    return;
+  }
+
+  const allVideos = await db.getVideosByJobId(jobId);
+  const adWinVideos = allVideos.filter(v =>
+    tripleSearch.appearedInAll3Ids!.includes(v.videoId)
+    && (!!v.isAd || isPromotionVideo(v.hashtags || []))
+  );
+
+  if (adWinVideos.length < 3) {
+    console.log(`[Analysis] Not enough Ad win pattern videos (${adWinVideos.length}/3) for job ${jobId}, skipping`);
+    return;
+  }
+
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, adWinVideos);
+
+  const videoSummaries = adWinVideos.map(v => {
+    const cleanHashtags = filterAdHashtags(v.hashtags || []);
+    return {
+      author: v.accountName || "不明",
+      followers: v.followerCount || 0,
+      description: [...(v.description || "")].slice(0, 200).join(""),
+      hashtags: cleanHashtags,
+      duration: v.duration || 0,
+      views: v.viewCount || 0,
+      likes: v.likeCount || 0,
+      comments: v.commentCount || 0,
+      shares: v.shareCount || 0,
+      keyHook: v.keyHook || "",
+      sentiment: v.sentiment || "neutral",
+      metaKeywords: metaKwMap.get(v.videoId) || [],
+    };
+  });
+
+  try {
+    const prompt = `
+あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「広告/プロモーション動画」${adWinVideos.length}本のデータです。
+
+これらの広告動画がなぜオーガニック検索結果でも上位に表示されているのか、共通点を分析してください。
+広告費をかけているにもかかわらずオーガニック検索でも評価されている理由に注目してください。
+「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との関連性に注目してください。
+
+【Ad勝ちパターン動画データ】
+${videoSummaries.map((v, i) => `
+動画${i + 1}: @${v.author} (フォロワー${v.followers.toLocaleString()})
+- 説明: ${v.description}
+- ハッシュタグ: ${v.hashtags.join(', ')}
+- TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 動画長: ${v.duration}秒
+- 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
+- キーフック: ${v.keyHook}
+- センチメント: ${v.sentiment}
+`).join('')}
+
+以下の6項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a TikTok VSEO expert specializing in ad content analysis. Always respond in Japanese. Return valid JSON." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "commonality_analysis_ad",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string", description: "広告動画がオーガニック検索でも上位に入る理由の総括" },
+              keyHook: { type: "string", description: "広告動画に共通するキーフック" },
+              contentTrend: { type: "string", description: "広告コンテンツの傾向・テーマ" },
+              formatFeatures: { type: "string", description: "フォーマット上の特徴" },
+              hashtagStrategy: { type: "string", description: "ハッシュタグ戦略の共通点" },
+              vseoTips: { type: "string", description: "広告×VSEOで上位を狙うための具体的アドバイス" },
+            },
+            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = safeJsonParse(content || "{}");
+
+    await db.updateTripleSearchCommonalityAd(jobId, parsed);
+    console.log(`[Analysis] Win pattern commonality (Ad) analysis completed for job ${jobId}`);
+  } catch (error) {
+    console.error("[Analysis] Error analyzing win pattern commonality (Ad):", error);
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
+  }
+}
+
+/**
+ * 負けパターン動画（Ad版）のBadポイント分析
+ * 広告費をかけたのにパフォーマンスが低い動画を対象
+ */
+export async function analyzeLosePatternCommonalityAd(
+  jobId: number,
+  keyword: string
+): Promise<void> {
+  console.log(`[Analysis] Analyzing lose pattern (Ad) for job ${jobId}...`);
+
+  const allVideos = await db.getVideosByJobId(jobId);
+  if (allVideos.length === 0) {
+    console.log(`[Analysis] No videos found for job ${jobId}, skipping Ad lose pattern analysis`);
+    return;
+  }
+
+  // Ad/プロモーション動画のみ抽出
+  const adVideos = allVideos.filter(v => !!v.isAd || isPromotionVideo(v.hashtags || []));
+  if (adVideos.length < 5) {
+    console.log(`[Analysis] Not enough Ad videos (${adVideos.length}/5) for Ad lose pattern analysis, skipping`);
+    return;
+  }
+
+  // エンゲージメント率を計算
+  const videosWithER = adVideos
+    .filter(v => (v.viewCount ?? 0) > 0)
+    .map(v => {
+      const views = v.viewCount ?? 0;
+      const engagement = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0);
+      const er = views > 0 ? engagement / views : 0;
+      return { ...v, er };
+    });
+
+  if (videosWithER.length < 5) {
+    console.log(`[Analysis] Not enough Ad videos with views (${videosWithER.length}/5) for Ad lose pattern analysis, skipping`);
+    return;
+  }
+
+  // 中央値を計算
+  const sortedByViews = [...videosWithER].sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+  const sortedByER = [...videosWithER].sort((a, b) => a.er - b.er);
+  const medianViews = sortedByViews[Math.floor(sortedByViews.length / 2)].viewCount ?? 0;
+  const medianER = sortedByER[Math.floor(sortedByER.length / 2)].er;
+
+  // 再生数が中央値以下 AND エンゲージメント率が中央値以下
+  const losePatternCandidates = videosWithER
+    .filter(v => (v.viewCount ?? 0) <= medianViews && v.er <= medianER)
+    .sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
+
+  const losePatternVideos = losePatternCandidates.slice(0, 5);
+  if (losePatternVideos.length < 3) {
+    console.log(`[Analysis] Not enough Ad lose pattern videos (${losePatternVideos.length}/3), skipping`);
+    return;
+  }
+
+  console.log(`[Analysis] Found ${losePatternVideos.length} Ad lose pattern videos (median views: ${medianViews}, median ER: ${(medianER * 100).toFixed(2)}%)`);
+
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
+
+  const videoSummaries = losePatternVideos.map(v => {
+    const cleanHashtags = filterAdHashtags(v.hashtags || []);
+    return {
+      author: v.accountName || "不明",
+      followers: v.followerCount || 0,
+      description: [...(v.description || "")].slice(0, 200).join(""),
+      hashtags: cleanHashtags,
+      duration: v.duration || 0,
+      views: v.viewCount || 0,
+      likes: v.likeCount || 0,
+      comments: v.commentCount || 0,
+      shares: v.shareCount || 0,
+      keyHook: v.keyHook || "",
+      sentiment: v.sentiment || "neutral",
+      er: v.er,
+      metaKeywords: metaKwMap.get(v.videoId) || [],
+    };
+  });
+
+  try {
+    const prompt = `
+あなたはTikTok広告運用の厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、広告費をかけているにもかかわらず再生数・エンゲージメント率ともに中央値以下だった「Ad負けパターン動画」${losePatternVideos.length}本のデータです。
+
+広告費をかけたのにパフォーマンスが低い理由を、SNSマーケターのプロ視点で厳しく指摘してください。
+「広告費の無駄遣い」という観点で、具体的に何が悪いのかを明確にすることが目的です。
+「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との乖離がある場合、広告費の無駄の根拠として指摘してください。
+
+【Ad負けパターン動画データ】
+${videoSummaries.map((v, i) => `
+動画${i + 1}: @${v.author} (フォロワー${v.followers.toLocaleString()})
+- 説明: ${v.description}
+- ハッシュタグ: ${v.hashtags.join(', ')}
+- TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 動画長: ${v.duration}秒
+- 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
+- エンゲージメント率: ${(v.er * 100).toFixed(2)}%
+- キーフック: ${v.keyHook}
+- センチメント: ${v.sentiment}
+`).join('')}
+
+以下の6項目について、具体的かつ厳しく指摘してください。各項目は1〜3文で。
+広告費を使っているのにこの結果では話にならない、という厳しいトーンで。
+`;
+
+    const response = await invokeLLM({
+      messages: [
+        { role: "system", content: "You are a strict TikTok ad consultant. Always respond in Japanese. Return valid JSON. Be very critical about wasted ad spend." },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "lose_pattern_analysis_ad",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              summary: { type: "string", description: "広告なのにパフォーマンスが低い理由の総括" },
+              badHook: { type: "string", description: "広告として失敗しているフック要素" },
+              contentWeakness: { type: "string", description: "広告コンテンツの弱点" },
+              formatProblems: { type: "string", description: "フォーマット上の問題点" },
+              hashtagMistakes: { type: "string", description: "ハッシュタグ戦略の失敗" },
+              avoidTips: { type: "string", description: "広告運用で避けるべきポイントまとめ" },
+            },
+            required: ["summary", "badHook", "contentWeakness", "formatProblems", "hashtagMistakes", "avoidTips"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = safeJsonParse(content || "{}");
+
+    await db.updateTripleSearchLosePatternAd(jobId, parsed);
+    console.log(`[Analysis] Lose pattern (Ad) analysis completed for job ${jobId}`);
+  } catch (error) {
+    console.error("[Analysis] Error analyzing lose pattern (Ad):", error);
     if (error instanceof LLMQuotaExhaustedError) {
       throw error;
     }
