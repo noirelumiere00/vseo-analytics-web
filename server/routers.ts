@@ -1085,12 +1085,18 @@ export const appRouter = router({
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+
+        // 既にキャンセル済みの場合は重複リクエストを無視
+        if (cancelledJobs.has(input.jobId)) {
+          return { success: true, message: "キャンセル処理中です" };
+        }
+
         if (job.status !== "processing") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "実行中のジョブのみキャンセルできます" });
         }
 
         cancelledJobs.add(input.jobId);
-        setProgress(input.jobId, { message: "キャンセル中...", percent: -1 });
+        setProgress(input.jobId, { message: "キャンセル中...（次のチェックポイントで停止します）", percent: -1 });
         console.log(`[Analysis] Cancel requested for job ${input.jobId}`);
         return { success: true, message: "キャンセルリクエストを受け付けました" };
       }),
