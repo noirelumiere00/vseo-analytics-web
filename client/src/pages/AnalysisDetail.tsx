@@ -645,20 +645,23 @@ export default function AnalysisDetail() {
     return n.toLocaleString();
   }, []);
 
-  // CSV ダウンロードヘルパー
+  // CSV ダウンロードヘルパー（tRPC batch形式対応）
   const downloadCsv = useCallback((endpoint: string, fallbackFilename: string) => {
-    fetch(`/api/trpc/${endpoint}?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
+    const batchInput = encodeURIComponent(JSON.stringify({ "0": { json: { jobId } } }));
+    fetch(`/api/trpc/${endpoint}?batch=1&input=${batchInput}`, { credentials: "include" })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
       .then(res => {
-        if (res?.error) {
-          toast.error(res.error.json?.message || "CSVエクスポートに失敗しました");
+        const item = Array.isArray(res) ? res[0] : res;
+        if (item?.error) {
+          toast.error(item.error.json?.message || "CSVエクスポートに失敗しました");
           return;
         }
-        const csvData = res?.result?.data?.csv;
-        const filename = res?.result?.data?.filename || fallbackFilename;
+        const data = item?.result?.data?.json || item?.result?.data;
+        const csvData = data?.csv;
+        const filename = data?.filename || fallbackFilename;
         if (csvData) {
           const bom = "\uFEFF";
           const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
