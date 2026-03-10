@@ -1001,17 +1001,13 @@ export default function AnalysisDetail() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsv", `analysis_${jobId}.csv`)}>
+                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsv", `動画一覧_${jobId}.csv`)}>
                     <Download className="mr-2 h-4 w-4" />
-                    動画一覧CSV
+                    動画一覧のみ
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsvReport", `report_${jobId}.csv`)}>
+                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsvReport", `レポート_${jobId}.csv`)}>
                     <FileText className="mr-2 h-4 w-4" />
-                    レポートCSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsvFull", `full_${jobId}.csv`)}>
-                    <Database className="mr-2 h-4 w-4" />
-                    全データCSV
+                    統合レポート（全データ）
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
