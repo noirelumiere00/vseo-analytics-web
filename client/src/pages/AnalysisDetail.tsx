@@ -178,8 +178,11 @@ export default function AnalysisDetail() {
     },
   });
 
+  const [cancelRequested, setCancelRequested] = useState(false);
+
   const cancelAnalysis = trpc.analysis.cancel.useMutation({
     onSuccess: () => {
+      setCancelRequested(true);
       toast.success("キャンセルリクエストを送信しました");
       refetchProgress();
     },
@@ -189,6 +192,14 @@ export default function AnalysisDetail() {
   });
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+
+  // キャンセル後にfailed状態になったらrefetch
+  useEffect(() => {
+    if (cancelRequested && progressData?.status === "failed") {
+      refetch();
+      setCancelRequested(false);
+    }
+  }, [cancelRequested, progressData?.status, refetch]);
 
   // PDF機能は仮組環境では停止
   // const exportPdf = trpc.analysis.exportPdf.useMutation({...});
@@ -256,12 +267,12 @@ export default function AnalysisDetail() {
     }
   }, [progressData?.status, refetch]);
 
-  // 自動的に分析を開始（pending状態の場合）
+  // 自動的に分析を開始（pending状態の場合、キャンセル直後は除外）
   useEffect(() => {
-    if (data?.job.status === "pending" && !executeAnalysis.isPending) {
+    if (data?.job.status === "pending" && !executeAnalysis.isPending && !cancelRequested) {
       executeAnalysis.mutate({ jobId });
     }
-  }, [data?.job.status, jobId]);
+  }, [data?.job.status, jobId, cancelRequested]);
 
 
   // レポート統計を計算 - MUST be before any early returns
@@ -911,20 +922,29 @@ export default function AnalysisDetail() {
 
                       {/* キャンセルボタン */}
                       <div className="flex flex-col items-center gap-1 pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                          onClick={() => setCancelDialogOpen(true)}
-                          disabled={cancelAnalysis.isPending}
-                        >
-                          {cancelAnalysis.isPending ? (
-                            <><Loader2 className="mr-2 h-3 w-3 animate-spin" />キャンセル中...</>
-                          ) : (
-                            <><XCircle className="mr-2 h-3 w-3" />分析をキャンセル</>
-                          )}
-                        </Button>
-                        <p className="text-[11px] text-muted-foreground">※ 収集済みデータは保持されます</p>
+                        {cancelRequested ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            キャンセル処理中...（次のチェックポイントで停止します）
+                          </div>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                              onClick={() => setCancelDialogOpen(true)}
+                              disabled={cancelAnalysis.isPending}
+                            >
+                              {cancelAnalysis.isPending ? (
+                                <><Loader2 className="mr-2 h-3 w-3 animate-spin" />送信中...</>
+                              ) : (
+                                <><XCircle className="mr-2 h-3 w-3" />分析をキャンセル</>
+                              )}
+                            </Button>
+                            <p className="text-[11px] text-muted-foreground">※ 収集済みデータは保持されます</p>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardContent>
