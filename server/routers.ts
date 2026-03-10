@@ -21,6 +21,22 @@ import pLimit from "p-limit";
 const analysisQueue = pLimit(2);
 let analysisQueuePending = 0; // キュー待ち数をトラッキング
 
+// キャンセル管理: jobId → true でキャンセルフラグを保持
+const cancelledJobs = new Set<number>();
+
+class JobCancelledError extends Error {
+  constructor(jobId: number) {
+    super(`Job ${jobId} was cancelled by user`);
+    this.name = "JobCancelledError";
+  }
+}
+
+function checkCancelled(jobId: number) {
+  if (cancelledJobs.has(jobId)) {
+    throw new JobCancelledError(jobId);
+  }
+}
+
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 type ProgressEntry = {
   message: string;
@@ -287,11 +303,15 @@ export const appRouter = router({
           setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
         }
 
+        // キャンセルフラグをクリア（再実行に備える）
+        cancelledJobs.delete(input.jobId);
+
         // ジョブキュー経由で非同期実行
         analysisQueue(async () => {
           analysisQueuePending--;
           setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
           try {
+            checkCancelled(input.jobId);
             if (job.keyword) {
               if (canResume) {
                 // === 途中再開モード: 検索スキップ、未分析動画のみ再処理 ===
@@ -313,6 +333,7 @@ export const appRouter = router({
                   }
 
                   for (let i = 0; i < total; i += BATCH_SIZE) {
+                    checkCancelled(input.jobId);
                     const batch = videosNeedingSentiment.slice(i, i + BATCH_SIZE);
                     const done = Math.min(i + BATCH_SIZE, total);
 
@@ -356,6 +377,7 @@ export const appRouter = router({
 
               } else {
               // === 新規実行: 複数シークレットブラウザでTikTok検索 ===
+              checkCancelled(input.jobId);
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
               setProgress(input.jobId, { message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始...`, percent: 5 });
 
@@ -418,6 +440,7 @@ export const appRouter = router({
               }
 
               for (let i = 0; i < total; i += BATCH_SIZE) {
+                checkCancelled(input.jobId);
                 const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
                 const done = Math.min(i + BATCH_SIZE, total);
 
@@ -495,28 +518,33 @@ export const appRouter = router({
             }
 
             // レポート生成
+            checkCancelled(input.jobId);
             setProgress(input.jobId, { message: "分析レポート生成中...", percent: 85 });
             await generateAnalysisReport(input.jobId);
 
             // 勝ちパターン動画の共通点をLLMで分析（オーガニック）
+            checkCancelled(input.jobId);
             setProgress(input.jobId, { message: "勝ちパターン（オーガニック）を分析中...", percent: 88 });
             if (job.keyword) {
               await analyzeWinPatternCommonality(input.jobId, job.keyword);
             }
 
             // 勝ちパターン動画の共通点をLLMで分析（Ad）
+            checkCancelled(input.jobId);
             setProgress(input.jobId, { message: "勝ちパターン（Ad）を分析中...", percent: 91 });
             if (job.keyword) {
               await analyzeWinPatternCommonalityAd(input.jobId, job.keyword);
             }
 
             // 負けパターン動画のBadポイント分析（オーガニック）
+            checkCancelled(input.jobId);
             setProgress(input.jobId, { message: "負けパターン（オーガニック）を分析中...", percent: 94 });
             if (job.keyword) {
               await analyzeLosePatternCommonality(input.jobId, job.keyword);
             }
 
             // 負けパターン動画のBadポイント分析（Ad）
+            checkCancelled(input.jobId);
             setProgress(input.jobId, { message: "負けパターン（Ad）を分析中...", percent: 97 });
             if (job.keyword) {
               await analyzeLosePatternCommonalityAd(input.jobId, job.keyword);
@@ -532,6 +560,15 @@ export const appRouter = router({
             }, 5000);
             console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
           } catch (error) {
+            // キャンセル処理
+            if (error instanceof JobCancelledError) {
+              cancelledJobs.delete(input.jobId);
+              await db.updateAnalysisJobStatus(input.jobId, "failed");
+              setProgress(input.jobId, { message: "分析がキャンセルされました。収集済みデータは保持されています。", percent: -1 });
+              console.log(`[Analysis] Job ${input.jobId} cancelled by user`);
+              return;
+            }
+
             const errorMessage = error instanceof Error ? error.message : "不明なエラー";
             const isLLMQuotaError = error instanceof LLMQuotaExhaustedError
               || errorMessage.includes("usage exhausted")
@@ -998,6 +1035,244 @@ export const appRouter = router({
     //       });
     //     }
     //   }),
+
+    // 分析をキャンセル
+    cancel: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        if (job.status !== "processing") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "実行中のジョブのみキャンセルできます" });
+        }
+
+        cancelledJobs.add(input.jobId);
+        setProgress(input.jobId, { message: "キャンセル中...", percent: -1 });
+        console.log(`[Analysis] Cancel requested for job ${input.jobId}`);
+        return { success: true, message: "キャンセルリクエストを受け付けました" };
+      }),
+
+    // レポートCSVエクスポート（センチメント分布、勝ち/負けパターン、ハッシュタグ戦略、インサイト）
+    exportCsvReport: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+        const videos = await db.getVideosByJobId(input.jobId);
+
+        const sections: string[] = [];
+
+        // セクション1: 基本情報
+        sections.push("=== 基本情報 ===");
+        sections.push(`キーワード,${job.keyword || "手動URL"}`);
+        sections.push(`分析日時,${job.createdAt ? new Date(job.createdAt).toLocaleString("ja-JP") : ""}`);
+        sections.push(`総動画数,${report?.totalVideos ?? videos.length}`);
+        sections.push(`総再生数,${report?.totalViews ?? ""}`);
+        sections.push(`総エンゲージメント,${report?.totalEngagement ?? ""}`);
+        sections.push("");
+
+        // セクション2: センチメント分布
+        sections.push("=== センチメント分布 ===");
+        sections.push("分類,件数,割合(%)");
+        sections.push(`Positive,${report?.positiveCount ?? ""},${report?.positivePercentage ?? ""}`);
+        sections.push(`Neutral,${report?.neutralCount ?? ""},${report?.neutralPercentage ?? ""}`);
+        sections.push(`Negative,${report?.negativeCount ?? ""},${report?.negativePercentage ?? ""}`);
+        sections.push("");
+
+        // セクション3: インパクト分析
+        sections.push("=== インパクト分析 ===");
+        sections.push("指標,Positive(%),Negative(%)");
+        sections.push(`再生数シェア,${report?.positiveViewsShare ?? ""},${report?.negativeViewsShare ?? ""}`);
+        sections.push(`エンゲージメントシェア,${report?.positiveEngagementShare ?? ""},${report?.negativeEngagementShare ?? ""}`);
+        sections.push("");
+
+        // セクション4: 重複分析
+        if (tripleSearch) {
+          sections.push("=== 重複分析 ===");
+          const all3 = (tripleSearch.appearedInAll3Ids as string[] || []).length;
+          const in2 = (tripleSearch.appearedIn2Ids as string[] || []).length;
+          const in1 = (tripleSearch.appearedIn1OnlyIds as string[] || []).length;
+          sections.push(`全セッション出現,${all3}`);
+          sections.push(`2セッション出現,${in2}`);
+          sections.push(`1セッションのみ,${in1}`);
+          sections.push(`重複率(%),${((tripleSearch.overlapRate ?? 0) / 10).toFixed(1)}`);
+          sections.push("");
+        }
+
+        // セクション5: 勝ちパターン分析
+        const winOrganic = tripleSearch?.commonalityAnalysis as any;
+        if (winOrganic) {
+          sections.push("=== 勝ちパターン（オーガニック） ===");
+          sections.push(`サマリー,"${(winOrganic.summary || "").replace(/"/g, '""')}"`);
+          sections.push(`キーフック,"${(winOrganic.keyHook || "").replace(/"/g, '""')}"`);
+          sections.push(`コンテンツ傾向,"${(winOrganic.contentTrend || "").replace(/"/g, '""')}"`);
+          sections.push(`フォーマット特徴,"${(winOrganic.formatFeatures || "").replace(/"/g, '""')}"`);
+          sections.push(`ハッシュタグ戦略,"${(winOrganic.hashtagStrategy || "").replace(/"/g, '""')}"`);
+          sections.push(`VSEOヒント,"${(winOrganic.vseoTips || "").replace(/"/g, '""')}"`);
+          sections.push("");
+        }
+
+        const winAd = tripleSearch?.commonalityAnalysisAd as any;
+        if (winAd) {
+          sections.push("=== 勝ちパターン（Ad） ===");
+          sections.push(`サマリー,"${(winAd.summary || "").replace(/"/g, '""')}"`);
+          sections.push(`キーフック,"${(winAd.keyHook || "").replace(/"/g, '""')}"`);
+          sections.push(`コンテンツ傾向,"${(winAd.contentTrend || "").replace(/"/g, '""')}"`);
+          sections.push(`フォーマット特徴,"${(winAd.formatFeatures || "").replace(/"/g, '""')}"`);
+          sections.push(`ハッシュタグ戦略,"${(winAd.hashtagStrategy || "").replace(/"/g, '""')}"`);
+          sections.push(`VSEOヒント,"${(winAd.vseoTips || "").replace(/"/g, '""')}"`);
+          sections.push("");
+        }
+
+        // セクション6: 負けパターン分析
+        const loseOrganic = tripleSearch?.losePatternAnalysis as any;
+        if (loseOrganic) {
+          sections.push("=== 負けパターン（オーガニック） ===");
+          sections.push(`サマリー,"${(loseOrganic.summary || "").replace(/"/g, '""')}"`);
+          sections.push(`悪いフック,"${(loseOrganic.badHook || "").replace(/"/g, '""')}"`);
+          sections.push(`コンテンツの弱点,"${(loseOrganic.contentWeakness || "").replace(/"/g, '""')}"`);
+          sections.push(`フォーマット問題,"${(loseOrganic.formatProblems || "").replace(/"/g, '""')}"`);
+          sections.push(`ハッシュタグの誤り,"${(loseOrganic.hashtagMistakes || "").replace(/"/g, '""')}"`);
+          sections.push(`回避ヒント,"${(loseOrganic.avoidTips || "").replace(/"/g, '""')}"`);
+          sections.push("");
+        }
+
+        const loseAd = tripleSearch?.losePatternAnalysisAd as any;
+        if (loseAd) {
+          sections.push("=== 負けパターン（Ad） ===");
+          sections.push(`サマリー,"${(loseAd.summary || "").replace(/"/g, '""')}"`);
+          sections.push(`悪いフック,"${(loseAd.badHook || "").replace(/"/g, '""')}"`);
+          sections.push(`コンテンツの弱点,"${(loseAd.contentWeakness || "").replace(/"/g, '""')}"`);
+          sections.push(`フォーマット問題,"${(loseAd.formatProblems || "").replace(/"/g, '""')}"`);
+          sections.push(`ハッシュタグの誤り,"${(loseAd.hashtagMistakes || "").replace(/"/g, '""')}"`);
+          sections.push(`回避ヒント,"${(loseAd.avoidTips || "").replace(/"/g, '""')}"`);
+          sections.push("");
+        }
+
+        // セクション7: ハッシュタグ戦略
+        const hashtagStrategy = report?.hashtagStrategy as any;
+        if (hashtagStrategy?.topCombinations?.length) {
+          sections.push("=== ハッシュタグ戦略 ===");
+          sections.push("タグ組合せ,出現回数,平均ER(%)");
+          for (const combo of hashtagStrategy.topCombinations.slice(0, 20)) {
+            const tags = (combo.tags || []).join(" ");
+            sections.push(`"${tags}",${combo.count ?? ""},${combo.avgER ?? ""}`);
+          }
+          sections.push("");
+        }
+
+        // セクション8: ファセット分析
+        const facets = report?.facets as any[];
+        if (facets?.length) {
+          sections.push("=== ファセット分析 ===");
+          sections.push("アスペクト,Positive(%),Negative(%)");
+          for (const f of facets) {
+            sections.push(`${f.aspect},${f.positive ?? ""},${f.negative ?? ""}`);
+          }
+          sections.push("");
+        }
+
+        // セクション9: AIインサイト
+        if (report?.autoInsight) {
+          sections.push("=== AIインサイト ===");
+          sections.push(`"${(report.autoInsight as string).replace(/"/g, '""')}"`);
+          sections.push("");
+        }
+
+        // セクション10: キーインサイト
+        const keyInsights = report?.keyInsights as any[];
+        if (keyInsights?.length) {
+          sections.push("=== キーインサイト ===");
+          sections.push("カテゴリ,タイトル,説明");
+          for (const insight of keyInsights) {
+            sections.push(`${insight.category},"${(insight.title || "").replace(/"/g, '""')}","${(insight.description || "").replace(/"/g, '""')}"`);
+          }
+        }
+
+        return { csv: sections.join("\n"), filename: `report_${input.jobId}_${job.keyword || "manual"}.csv` };
+      }),
+
+    // 全データCSVエクスポート（動画一覧+アカウント集計+重複分析）
+    exportCsvFull: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const videos = await db.getVideosByJobId(input.jobId);
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+
+        const sections: string[] = [];
+
+        // Part1: 動画一覧（既存exportCsvと同等+出現回数）
+        sections.push("=== 動画一覧 ===");
+        const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
+        sections.push("動画ID,アカウント,説明文,再生数,いいね,コメント,シェア,保存,ER%,センチメント,キーフック,ハッシュタグ,動画尺(秒),投稿日時,出現回数,支配度スコア,URL");
+        for (const v of videos) {
+          const views = Number(v.viewCount) || 0;
+          const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
+          const er = views > 0 ? ((eng / views) * 100).toFixed(2) : "0";
+          const desc = (v.description || "").replace(/[\r\n,"]/g, " ").substring(0, 100);
+          const hashtags = (v.hashtags as string[] || []).join(" ");
+          const posted = v.postedAt ? new Date(v.postedAt).toLocaleString("ja-JP") : "";
+          const ri = rankInfo[v.videoId];
+          const appearances = ri?.appearanceCount ?? "";
+          const dominance = ri?.dominanceScore?.toFixed(1) ?? "";
+          sections.push(`${v.videoId},${v.accountName},"${desc}",${v.viewCount},${v.likeCount},${v.commentCount},${v.shareCount},${v.saveCount},${er},${v.sentiment || ""},${(v.keyHook || "").replace(/,/g, "；")},${hashtags},${v.duration || ""},${posted},${appearances},${dominance},${v.videoUrl}`);
+        }
+        sections.push("");
+
+        // Part2: アカウント集計
+        sections.push("=== アカウント集計 ===");
+        sections.push("アカウント名,動画数,合計再生数,平均再生数,合計いいね,平均ER%,フォロワー数");
+        const accountMap = new Map<string, typeof videos>();
+        for (const v of videos) {
+          const name = v.accountName || "不明";
+          if (!accountMap.has(name)) accountMap.set(name, []);
+          accountMap.get(name)!.push(v);
+        }
+        for (const [name, acctVideos] of accountMap) {
+          const totalViews = acctVideos.reduce((s, v) => s + (Number(v.viewCount) || 0), 0);
+          const avgViews = Math.round(totalViews / acctVideos.length);
+          const totalLikes = acctVideos.reduce((s, v) => s + (Number(v.likeCount) || 0), 0);
+          const totalEng = acctVideos.reduce((s, v) => s + (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0), 0);
+          const avgER = totalViews > 0 ? ((totalEng / totalViews) * 100).toFixed(2) : "0";
+          const follower = acctVideos[0]?.followerCount ?? "";
+          sections.push(`${name},${acctVideos.length},${totalViews},${avgViews},${totalLikes},${avgER},${follower}`);
+        }
+        sections.push("");
+
+        // Part3: 重複分析サマリ
+        if (tripleSearch) {
+          sections.push("=== 重複分析サマリ ===");
+          const all3 = (tripleSearch.appearedInAll3Ids as string[] || []).length;
+          const in2 = (tripleSearch.appearedIn2Ids as string[] || []).length;
+          const in1 = (tripleSearch.appearedIn1OnlyIds as string[] || []).length;
+          sections.push(`全セッション出現,${all3}`);
+          sections.push(`2セッション出現,${in2}`);
+          sections.push(`1セッションのみ,${in1}`);
+          sections.push(`重複率(%),${((tripleSearch.overlapRate ?? 0) / 10).toFixed(1)}`);
+          sections.push("");
+        }
+
+        // Part4: センチメント分布
+        if (report) {
+          sections.push("=== センチメント分布 ===");
+          sections.push("分類,件数,割合(%)");
+          sections.push(`Positive,${report.positiveCount ?? ""},${report.positivePercentage ?? ""}`);
+          sections.push(`Neutral,${report.neutralCount ?? ""},${report.neutralPercentage ?? ""}`);
+          sections.push(`Negative,${report.negativeCount ?? ""},${report.negativePercentage ?? ""}`);
+        }
+
+        return { csv: sections.join("\n"), filename: `full_${input.jobId}_${job.keyword || "manual"}.csv` };
+      }),
 
     // ジョブを再実行（failed/pendingのジョブをリセットして再実行）
     retry: protectedProcedure

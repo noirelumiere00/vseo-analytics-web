@@ -11,7 +11,23 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Database } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
@@ -161,6 +177,18 @@ export default function AnalysisDetail() {
       toast.error(errorMessage, { duration: 5000 });
     },
   });
+
+  const cancelAnalysis = trpc.analysis.cancel.useMutation({
+    onSuccess: () => {
+      toast.success("キャンセルリクエストを送信しました");
+      refetchProgress();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // PDF機能は仮組環境では停止
   // const exportPdf = trpc.analysis.exportPdf.useMutation({...});
@@ -617,6 +645,28 @@ export default function AnalysisDetail() {
     return n.toLocaleString();
   }, []);
 
+  // CSV ダウンロードヘルパー
+  const downloadCsv = useCallback((endpoint: string, fallbackFilename: string) => {
+    fetch(`/api/trpc/${endpoint}?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
+      .then(r => r.json())
+      .then(res => {
+        const csvData = res?.result?.data?.csv;
+        const filename = res?.result?.data?.filename || fallbackFilename;
+        if (csvData) {
+          const bom = "\uFEFF";
+          const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+          toast.success("CSVをダウンロードしました");
+        }
+      })
+      .catch(() => toast.error("CSVエクスポートに失敗しました"));
+  }, [jobId]);
+
   // === Early returns AFTER all hooks ===
   // マークダウンレポートセクション
   const renderMarkdownReport = () => {
@@ -846,12 +896,54 @@ export default function AnalysisDetail() {
                           );
                         })}
                       </div>
+
+                      {/* キャンセルボタン */}
+                      <div className="flex flex-col items-center gap-1 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                          onClick={() => setCancelDialogOpen(true)}
+                          disabled={cancelAnalysis.isPending}
+                        >
+                          {cancelAnalysis.isPending ? (
+                            <><Loader2 className="mr-2 h-3 w-3 animate-spin" />キャンセル中...</>
+                          ) : (
+                            <><XCircle className="mr-2 h-3 w-3" />分析をキャンセル</>
+                          )}
+                        </Button>
+                        <p className="text-[11px] text-muted-foreground">※ 収集済みデータは保持されます</p>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               )}
             </>
           )}
+
+          {/* キャンセル確認ダイアログ */}
+          <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>分析をキャンセルしますか？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  実行中の分析を中断します。既に収集済みの動画データは保持され、後から再実行できます。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>戻る</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    cancelAnalysis.mutate({ jobId });
+                    setCancelDialogOpen(false);
+                  }}
+                >
+                  キャンセルする
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
           {/* Completed — アクションバー（インライン） */}
           {job.status === "completed" && (
@@ -868,33 +960,29 @@ export default function AnalysisDetail() {
                   <><Play className="mr-2 h-4 w-4" />再実行</>
                 )}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  fetch(`/api/trpc/analysis.exportCsv?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
-                    .then(r => r.json())
-                    .then(res => {
-                      const csvData = res?.result?.data?.csv;
-                      const filename = res?.result?.data?.filename || `analysis_${jobId}.csv`;
-                      if (csvData) {
-                        const bom = "\uFEFF";
-                        const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = filename;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        toast.success("CSVをダウンロードしました");
-                      }
-                    })
-                    .catch(() => toast.error("CSVエクスポートに失敗しました"));
-                }}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                CSV
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Download className="mr-2 h-4 w-4" />
+                    CSV
+                    <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsv", `analysis_${jobId}.csv`)}>
+                    <Download className="mr-2 h-4 w-4" />
+                    動画一覧CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsvReport", `report_${jobId}.csv`)}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    レポートCSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsvFull", `full_${jobId}.csv`)}>
+                    <Database className="mr-2 h-4 w-4" />
+                    全データCSV
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
