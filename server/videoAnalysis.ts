@@ -1265,40 +1265,23 @@ export async function analyzeLosePatternCommonality(
     return;
   }
 
-  // エンゲージメント率を計算
-  const videosWithER = organicVideos
-    .filter(v => (v.viewCount ?? 0) > 0)
-    .map(v => {
-      const views = v.viewCount ?? 0;
-      const engagement = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0);
-      const er = views > 0 ? engagement / views : 0;
-      return { ...v, er };
-    });
+  // 平均再生数を計算し、平均以下の動画を負けパターン候補とする
+  const videosWithViews = organicVideos.filter(v => (v.viewCount ?? 0) > 0);
+  const avgViews = videosWithViews.reduce((sum, v) => sum + (v.viewCount ?? 0), 0) / (videosWithViews.length || 1);
 
-  if (videosWithER.length < 5) {
-    console.log(`[Analysis] Not enough videos with views (${videosWithER.length}/5) for lose pattern analysis, skipping`);
-    return;
-  }
-
-  // 中央値を計算
-  const sortedByViews = [...videosWithER].sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
-  const sortedByER = [...videosWithER].sort((a, b) => a.er - b.er);
-  const medianViews = sortedByViews[Math.floor(sortedByViews.length / 2)].viewCount ?? 0;
-  const medianER = sortedByER[Math.floor(sortedByER.length / 2)].er;
-
-  // 再生数が中央値以下 AND エンゲージメント率が中央値以下
-  const losePatternCandidates = videosWithER
-    .filter(v => (v.viewCount ?? 0) <= medianViews && v.er <= medianER)
+  const losePatternCandidates = videosWithViews
+    .filter(v => (v.viewCount ?? 0) < avgViews)
     .sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
 
   // 最大5本を選定、3本未満ならスキップ
   const losePatternVideos = losePatternCandidates.slice(0, 5);
+
   if (losePatternVideos.length < 3) {
     console.log(`[Analysis] Not enough lose pattern videos (${losePatternVideos.length}/3), skipping`);
     return;
   }
 
-  console.log(`[Analysis] Found ${losePatternVideos.length} lose pattern videos (median views: ${medianViews}, median ER: ${(medianER * 100).toFixed(2)}%)`);
+  console.log(`[Analysis] Found ${losePatternVideos.length} lose pattern videos (avg views: ${Math.round(avgViews)})`);
 
   // TikTokメタキーワードを取得
   const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
@@ -1539,35 +1522,17 @@ export async function analyzeLosePatternCommonalityAd(
 
   // Ad/プロモーション動画のみ抽出
   const adVideos = allVideos.filter(v => !!v.isAd || isPromotionVideo(v.hashtags || []));
-  if (adVideos.length < 5) {
-    console.log(`[Analysis] Not enough Ad videos (${adVideos.length}/5) for Ad lose pattern analysis, skipping`);
+  if (adVideos.length < 3) {
+    console.log(`[Analysis] Not enough Ad videos (${adVideos.length}/3) for Ad lose pattern analysis, skipping`);
     return;
   }
 
-  // エンゲージメント率を計算
-  const videosWithER = adVideos
-    .filter(v => (v.viewCount ?? 0) > 0)
-    .map(v => {
-      const views = v.viewCount ?? 0;
-      const engagement = (v.likeCount ?? 0) + (v.commentCount ?? 0) + (v.shareCount ?? 0);
-      const er = views > 0 ? engagement / views : 0;
-      return { ...v, er };
-    });
+  // 平均再生数を計算し、平均以下の動画を負けパターン候補とする
+  const adWithViews = adVideos.filter(v => (v.viewCount ?? 0) > 0);
+  const avgViews = adWithViews.reduce((sum, v) => sum + (v.viewCount ?? 0), 0) / (adWithViews.length || 1);
 
-  if (videosWithER.length < 5) {
-    console.log(`[Analysis] Not enough Ad videos with views (${videosWithER.length}/5) for Ad lose pattern analysis, skipping`);
-    return;
-  }
-
-  // 中央値を計算
-  const sortedByViews = [...videosWithER].sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
-  const sortedByER = [...videosWithER].sort((a, b) => a.er - b.er);
-  const medianViews = sortedByViews[Math.floor(sortedByViews.length / 2)].viewCount ?? 0;
-  const medianER = sortedByER[Math.floor(sortedByER.length / 2)].er;
-
-  // 再生数が中央値以下 AND エンゲージメント率が中央値以下
-  const losePatternCandidates = videosWithER
-    .filter(v => (v.viewCount ?? 0) <= medianViews && v.er <= medianER)
+  const losePatternCandidates = adWithViews
+    .filter(v => (v.viewCount ?? 0) < avgViews)
     .sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
 
   const losePatternVideos = losePatternCandidates.slice(0, 5);
@@ -1576,7 +1541,7 @@ export async function analyzeLosePatternCommonalityAd(
     return;
   }
 
-  console.log(`[Analysis] Found ${losePatternVideos.length} Ad lose pattern videos (median views: ${medianViews}, median ER: ${(medianER * 100).toFixed(2)}%)`);
+  console.log(`[Analysis] Found ${losePatternVideos.length} Ad lose pattern videos (avg views: ${Math.round(avgViews)})`);
 
   // TikTokメタキーワードを取得
   const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
