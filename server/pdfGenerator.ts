@@ -425,6 +425,145 @@ export async function generateAnalysisReportDocx(data: PDFGenerationData): Promi
         sections.push(new Paragraph({ text: analysis.vseoTips, spacing: { after: 50 } }));
       }
     }
+
+    // 負けパターン分析
+    if (data.tripleSearch.losePatternAnalysis) {
+      sections.push(
+        new Paragraph({
+          text: "負けパターン分析（Badポイント）",
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 100, after: 50 },
+        })
+      );
+
+      const lp = data.tripleSearch.losePatternAnalysis;
+
+      if (lp.summary) {
+        sections.push(
+          new Paragraph({
+            text: "総括",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.summary, spacing: { after: 50 } }));
+      }
+
+      if (lp.badHook) {
+        sections.push(
+          new Paragraph({
+            text: "失敗フック要素",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.badHook, spacing: { after: 50 } }));
+      }
+
+      if (lp.contentWeakness) {
+        sections.push(
+          new Paragraph({
+            text: "コンテンツの弱点",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.contentWeakness, spacing: { after: 50 } }));
+      }
+
+      if (lp.formatProblems) {
+        sections.push(
+          new Paragraph({
+            text: "フォーマット問題",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.formatProblems, spacing: { after: 50 } }));
+      }
+
+      if (lp.hashtagMistakes) {
+        sections.push(
+          new Paragraph({
+            text: "ハッシュタグの失敗",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.hashtagMistakes, spacing: { after: 50 } }));
+      }
+
+      if (lp.avoidTips) {
+        sections.push(
+          new Paragraph({
+            text: "避けるべきポイント",
+            heading: HeadingLevel.HEADING_4,
+            spacing: { before: 50, after: 30 },
+          })
+        );
+        sections.push(new Paragraph({ text: lp.avoidTips, spacing: { after: 50 } }));
+      }
+    }
+
+    // 勝ちパターン共通点分析（Ad投稿）
+    if (data.tripleSearch.commonalityAnalysisAd) {
+      sections.push(
+        new Paragraph({
+          text: "勝ちパターン共通点分析（Ad投稿）",
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 100, after: 50 },
+        })
+      );
+
+      const adAnalysis = data.tripleSearch.commonalityAnalysisAd;
+      const adWinFields: { key: string; label: string }[] = [
+        { key: "summary", label: "総括" },
+        { key: "keyHook", label: "共通キーフック" },
+        { key: "contentTrend", label: "コンテンツ傾向" },
+        { key: "formatFeatures", label: "フォーマット特徴" },
+        { key: "hashtagStrategy", label: "ハッシュタグ戦略" },
+        { key: "vseoTips", label: "VSEO攻略ポイント" },
+      ];
+      for (const { key, label } of adWinFields) {
+        const val = (adAnalysis as any)[key];
+        if (val) {
+          sections.push(
+            new Paragraph({ text: label, heading: HeadingLevel.HEADING_4, spacing: { before: 50, after: 30 } })
+          );
+          sections.push(new Paragraph({ text: val, spacing: { after: 50 } }));
+        }
+      }
+    }
+
+    // 負けパターン分析（Ad投稿）
+    if (data.tripleSearch.losePatternAnalysisAd) {
+      sections.push(
+        new Paragraph({
+          text: "負けパターン分析（Ad投稿）",
+          heading: HeadingLevel.HEADING_3,
+          spacing: { before: 100, after: 50 },
+        })
+      );
+
+      const adLp = data.tripleSearch.losePatternAnalysisAd;
+      const adLoseFields: { key: string; label: string }[] = [
+        { key: "summary", label: "総括" },
+        { key: "badHook", label: "失敗フック要素" },
+        { key: "contentWeakness", label: "コンテンツの弱点" },
+        { key: "formatProblems", label: "フォーマット問題" },
+        { key: "hashtagMistakes", label: "ハッシュタグの失敗" },
+        { key: "avoidTips", label: "避けるべきポイント" },
+      ];
+      for (const { key, label } of adLoseFields) {
+        const val = (adLp as any)[key];
+        if (val) {
+          sections.push(
+            new Paragraph({ text: label, heading: HeadingLevel.HEADING_4, spacing: { before: 50, after: 30 } })
+          );
+          sections.push(new Paragraph({ text: val, spacing: { after: 50 } }));
+        }
+      }
+    }
   }
 
   // 動画リスト

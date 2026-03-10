@@ -1,4 +1,4 @@
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { 
   InsertUser, 
@@ -169,6 +169,20 @@ export async function getAnalysisJobsByUserId(userId: number) {
   }
 }
 
+export async function getProcessingJobByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    const [result] = await db.select().from(analysisJobs)
+      .where(and(eq(analysisJobs.userId, userId), eq(analysisJobs.status, "processing")))
+      .limit(1);
+    return result ?? null;
+  } catch (error) {
+    console.error("[Database] Error checking processing job:", error);
+    return null;
+  }
+}
+
 export async function getAnalysisJobById(jobId: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -319,9 +333,36 @@ export async function saveTripleSearchResult(data: InsertTripleSearchResult) {
 export async function updateTripleSearchCommonality(jobId: number, commonalityAnalysis: InsertTripleSearchResult['commonalityAnalysis']) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   await db.update(tripleSearchResults)
     .set({ commonalityAnalysis })
+    .where(eq(tripleSearchResults.jobId, jobId));
+}
+
+export async function updateTripleSearchLosePattern(jobId: number, losePatternAnalysis: InsertTripleSearchResult['losePatternAnalysis']) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(tripleSearchResults)
+    .set({ losePatternAnalysis })
+    .where(eq(tripleSearchResults.jobId, jobId));
+}
+
+export async function updateTripleSearchCommonalityAd(jobId: number, commonalityAnalysisAd: InsertTripleSearchResult['commonalityAnalysisAd']) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(tripleSearchResults)
+    .set({ commonalityAnalysisAd })
+    .where(eq(tripleSearchResults.jobId, jobId));
+}
+
+export async function updateTripleSearchLosePatternAd(jobId: number, losePatternAnalysisAd: InsertTripleSearchResult['losePatternAnalysisAd']) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(tripleSearchResults)
+    .set({ losePatternAnalysisAd })
     .where(eq(tripleSearchResults.jobId, jobId));
 }
 

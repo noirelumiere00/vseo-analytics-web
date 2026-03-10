@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
+import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeLosePatternCommonality, analyzeWinPatternCommonalityAd, analyzeLosePatternCommonalityAd, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
 import { LLMQuotaExhaustedError } from "./_core/llm";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
@@ -15,6 +15,11 @@ import { generateExportToken } from "./_core/exportToken";
 import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
+import pLimit from "p-limit";
+
+// グローバルジョブキュー: 同時実行を最大2に制限（RAM 1.9GB、1ジョブ≒600MB）
+const analysisQueue = pLimit(2);
+let analysisQueuePending = 0; // キュー待ち数をトラッキング
 
 // 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
 type ProgressEntry = {
@@ -223,6 +228,9 @@ export const appRouter = router({
               appearanceCountMap,
             },
             commonalityAnalysis: tripleSearchData.commonalityAnalysis ?? null,
+            losePatternAnalysis: tripleSearchData.losePatternAnalysis ?? null,
+            commonalityAnalysisAd: tripleSearchData.commonalityAnalysisAd ?? null,
+            losePatternAnalysisAd: tripleSearchData.losePatternAnalysisAd ?? null,
             rankInfo,
           } : null,
         };
@@ -247,18 +255,107 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
+        // ユーザーレート制限: 1人1つまで同時分析可能
+        const processingJob = await db.getProcessingJobByUserId(ctx.user.id);
+        if (processingJob && processingJob.id !== input.jobId) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `別の分析が実行中です（ジョブ #${processingJob.id}）。完了後に再度お試しください。`,
+          });
+        }
+
         // ステータスを処理中に更新
         await db.updateAnalysisJobStatus(input.jobId, "processing");
-        setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
 
-        // 再実行時に古い動画データをクリア（重複防止）
-        await db.clearJobVideoData(input.jobId);
+        // 検索データが既に存在するかチェック（途中再開判定）
+        const existingSearchResult = await db.getTripleSearchResultByJobId(input.jobId);
+        const existingVideos = await db.getVideosByJobId(input.jobId);
+        const canResume = !!(job.keyword && existingSearchResult && existingVideos.length > 0);
 
-        // 非同期で分析を実行
-        setImmediate(async () => {
+        if (!canResume) {
+          // 新規実行: 古い動画データをクリア（重複防止）
+          await db.clearJobVideoData(input.jobId);
+        }
+
+        // ジョブキューに投入（グローバル同時実行制限）
+        analysisQueuePending++;
+        const queuePosition = analysisQueuePending;
+        if (analysisQueue.activeCount >= 2) {
+          setProgress(input.jobId, { message: `キュー待ち中...（${queuePosition}番目）`, percent: 0 });
+          console.log(`[Analysis] Job ${input.jobId} queued (position: ${queuePosition}, active: ${analysisQueue.activeCount})`);
+        } else {
+          setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
+        }
+
+        // ジョブキュー経由で非同期実行
+        analysisQueue(async () => {
+          analysisQueuePending--;
+          setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
           try {
             if (job.keyword) {
-              // === 複数シークレットブラウザでTikTok検索 ===
+              if (canResume) {
+                // === 途中再開モード: 検索スキップ、未分析動画のみ再処理 ===
+                console.log(`[Analysis] Resuming job ${input.jobId} - skipping search (${existingVideos.length} videos in DB)`);
+                setProgress(input.jobId, { message: `途中から再開中...（${existingVideos.length}件の動画データを再利用）`, percent: 42 });
+
+                // センチメント未分析の動画を抽出
+                const videosNeedingSentiment = existingVideos.filter(v => !v.sentiment);
+
+                if (videosNeedingSentiment.length > 0) {
+                  const BATCH_SIZE = 5;
+                  const total = videosNeedingSentiment.length;
+                  {
+                    const entry = progressStore.get(input.jobId);
+                    if (entry) {
+                      entry.totalTarget = existingVideos.length;
+                      entry.processedCount = existingVideos.length - total;
+                    }
+                  }
+
+                  for (let i = 0; i < total; i += BATCH_SIZE) {
+                    const batch = videosNeedingSentiment.slice(i, i + BATCH_SIZE);
+                    const done = Math.min(i + BATCH_SIZE, total);
+
+                    setProgress(input.jobId, {
+                      message: `センチメント分析中... (${done}/${total})`,
+                      percent: 42 + Math.floor((done / total) * 36),
+                    });
+
+                    // DBからSentimentInputを復元
+                    const sentimentInputs: SentimentInput[] = await Promise.all(
+                      batch.map(async (v) => {
+                        const ocrData = await db.getOcrResultsByVideoId(v.id);
+                        const transcription = await db.getTranscriptionByVideoId(v.id);
+                        return {
+                          title: v.title || "",
+                          description: v.description || "",
+                          hashtags: (v.hashtags as string[]) || [],
+                          ocrTexts: ocrData.map((o: any) => o.extractedText || ""),
+                          transcriptionText: transcription?.fullText || "",
+                        };
+                      })
+                    );
+
+                    const sentimentResults = await analyzeSentimentAndKeywordsBatch(sentimentInputs);
+
+                    await Promise.all(
+                      batch.map((v, j) => db.updateVideo(v.id, {
+                        sentiment: sentimentResults[j]?.sentiment ?? "neutral",
+                        keyHook: sentimentResults[j]?.keyHook ?? "",
+                        keywords: sentimentResults[j]?.keywords ?? [],
+                      }))
+                    );
+
+                    const entry = progressStore.get(input.jobId);
+                    if (entry) entry.processedCount = existingVideos.length - total + done;
+                  }
+                }
+
+                // レポート再生成のため既存レポートを削除
+                await db.deleteAnalysisReportByJobId(input.jobId);
+
+              } else {
+              // === 新規実行: 複数シークレットブラウザでTikTok検索 ===
               console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
               setProgress(input.jobId, { message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始...`, percent: 5 });
 
@@ -383,6 +480,7 @@ export const appRouter = router({
                 });
               }
 
+              } // end of else (new execution with search)
             } else if (job.manualUrls && job.manualUrls.length > 0) {
               // === 手動URL指定の場合 ===
               for (let i = 0; i < job.manualUrls.length; i++) {
@@ -400,10 +498,28 @@ export const appRouter = router({
             setProgress(input.jobId, { message: "分析レポート生成中...", percent: 85 });
             await generateAnalysisReport(input.jobId);
 
-            // 勝ちパターン動画の共通点をLLMで分析
-            setProgress(input.jobId, { message: "勝ちパターン動画の共通点を分析中...", percent: 92 });
+            // 勝ちパターン動画の共通点をLLMで分析（オーガニック）
+            setProgress(input.jobId, { message: "勝ちパターン（オーガニック）を分析中...", percent: 88 });
             if (job.keyword) {
               await analyzeWinPatternCommonality(input.jobId, job.keyword);
+            }
+
+            // 勝ちパターン動画の共通点をLLMで分析（Ad）
+            setProgress(input.jobId, { message: "勝ちパターン（Ad）を分析中...", percent: 91 });
+            if (job.keyword) {
+              await analyzeWinPatternCommonalityAd(input.jobId, job.keyword);
+            }
+
+            // 負けパターン動画のBadポイント分析（オーガニック）
+            setProgress(input.jobId, { message: "負けパターン（オーガニック）を分析中...", percent: 94 });
+            if (job.keyword) {
+              await analyzeLosePatternCommonality(input.jobId, job.keyword);
+            }
+
+            // 負けパターン動画のBadポイント分析（Ad）
+            setProgress(input.jobId, { message: "負けパターン（Ad）を分析中...", percent: 97 });
+            if (job.keyword) {
+              await analyzeLosePatternCommonalityAd(input.jobId, job.keyword);
             }
 
             // ステータスを完了に更新
@@ -449,6 +565,8 @@ export const appRouter = router({
               console.log(`[Analysis] Progress store cleaned after error for job ${input.jobId}`);
             }, 5 * 60 * 1000);
           }
+        }).catch(err => {
+          console.error(`[Analysis] Queue error for job ${input.jobId}:`, err);
         });
 
         return { success: true, message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始しました。` };
@@ -465,12 +583,29 @@ export const appRouter = router({
         const videos = await db.getVideosByJobId(input.jobId);
         if (videos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "動画データがありません" });
 
+        // ユーザーレート制限: 1人1つまで同時分析可能
+        const processingJob = await db.getProcessingJobByUserId(ctx.user.id);
+        if (processingJob && processingJob.id !== input.jobId) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: `別の分析が実行中です（ジョブ #${processingJob.id}）。完了後に再度お試しください。`,
+          });
+        }
+
         // ステータスをprocessingに
         await db.updateAnalysisJobStatus(input.jobId, "processing");
-        setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
 
-        // 非同期で実行
-        setImmediate(async () => {
+        // ジョブキューに投入
+        analysisQueuePending++;
+        if (analysisQueue.activeCount >= 2) {
+          setProgress(input.jobId, { message: "キュー待ち中...", percent: 0 });
+        } else {
+          setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
+        }
+
+        analysisQueue(async () => {
+          analysisQueuePending--;
+          setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
           try {
             const BATCH_SIZE = 5;
             const total = videos.length;
@@ -515,10 +650,28 @@ export const appRouter = router({
             await db.deleteAnalysisReportByJobId(input.jobId);
             await generateAnalysisReport(input.jobId);
 
-            // Phase3: 勝ちパターン共通点分析
-            setProgress(input.jobId, { message: "勝ちパターン共通点を再分析中...", percent: 90 });
+            // Phase3: 勝ちパターン共通点分析（オーガニック）
+            setProgress(input.jobId, { message: "勝ちパターン（オーガニック）を再分析中...", percent: 80 });
             if (job.keyword) {
               await analyzeWinPatternCommonality(input.jobId, job.keyword);
+            }
+
+            // Phase4: 勝ちパターン共通点分析（Ad）
+            setProgress(input.jobId, { message: "勝ちパターン（Ad）を再分析中...", percent: 85 });
+            if (job.keyword) {
+              await analyzeWinPatternCommonalityAd(input.jobId, job.keyword);
+            }
+
+            // Phase5: 負けパターン分析（オーガニック）
+            setProgress(input.jobId, { message: "負けパターン（オーガニック）を再分析中...", percent: 90 });
+            if (job.keyword) {
+              await analyzeLosePatternCommonality(input.jobId, job.keyword);
+            }
+
+            // Phase6: 負けパターン分析（Ad）
+            setProgress(input.jobId, { message: "負けパターン（Ad）を再分析中...", percent: 95 });
+            if (job.keyword) {
+              await analyzeLosePatternCommonalityAd(input.jobId, job.keyword);
             }
 
             await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
@@ -531,6 +684,8 @@ export const appRouter = router({
             setProgress(input.jobId, { message: "LLM再分析でエラー発生", percent: -1 });
             setTimeout(() => progressStore.delete(input.jobId), 5 * 60 * 1000);
           }
+        }).catch(err => {
+          console.error(`[ReAnalyze] Queue error for job ${input.jobId}:`, err);
         });
 
         return { success: true, message: "LLM再分析を開始しました" };
@@ -578,6 +733,10 @@ export const appRouter = router({
               : "待機中"
           ),
           failedVideos: progressInfo?.failedVideos ?? [],
+          queue: {
+            activeJobs: analysisQueue.activeCount,
+            pendingJobs: analysisQueue.pendingCount,
+          },
         };
       }),
     // CSVエクスポート

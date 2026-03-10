@@ -67,7 +67,8 @@ export const videos = mysqlTable("videos", {
   keyHook: text("keyHook"), // キーフック（動画の主要な訴求ポイント）
   keywords: json("keywords").$type<string[]>(), // 抽出されたキーワード配列
   hashtags: json("hashtags").$type<string[]>(), // ハッシュタグ配列
-  
+  isAd: int("isAd").default(0), // TikTok APIの広告フラグ（0=通常, 1=広告/有償パートナーシップ）
+
   duplicateCount: int("duplicateCount").default(0), // 3アカウント間での重複出現回数
   postedAt: timestamp("postedAt"), // 投稿日時
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -184,6 +185,14 @@ export const analysisReports = mysqlTable("analysis_reports", {
     sourceVideoIds?: string[];
    }>>(),
   
+  // 動画個別メタキーワード（生データ）
+  videoMetaKeywords: json("videoMetaKeywords").$type<Array<{
+    videoUrl: string;
+    videoId: string;
+    accountId: string;
+    keywords: string[];
+  }>>(),
+
   // ハッシュタグ戦略分析
   hashtagStrategy: json("hashtagStrategy").$type<{
     topCombinations: Array<{ tags: string[]; count: number; avgER: number }>;
@@ -225,6 +234,30 @@ export const tripleSearchResults = mysqlTable("triple_search_results", {
     formatFeatures: string;
     hashtagStrategy: string;
     vseoTips: string;
+  }>(),
+  losePatternAnalysis: json("losePatternAnalysis").$type<{
+    summary: string;
+    badHook: string;
+    contentWeakness: string;
+    formatProblems: string;
+    hashtagMistakes: string;
+    avoidTips: string;
+  }>(),
+  commonalityAnalysisAd: json("commonalityAnalysisAd").$type<{
+    summary: string;
+    keyHook: string;
+    contentTrend: string;
+    formatFeatures: string;
+    hashtagStrategy: string;
+    vseoTips: string;
+  }>(),
+  losePatternAnalysisAd: json("losePatternAnalysisAd").$type<{
+    summary: string;
+    badHook: string;
+    contentWeakness: string;
+    formatProblems: string;
+    hashtagMistakes: string;
+    avoidTips: string;
   }>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

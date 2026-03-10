@@ -11,27 +11,91 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare } from "lucide-react";
+import { Loader2, ArrowLeft, Play, Eye, Heart, MessageCircle, Share2, Bookmark, Users, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection } from '@/components/ReportSection';
-import { filterAdHashtags } from "@shared/const";
+import { filterAdHashtags, isPromotionVideo } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
 import HashtagStrategy from "@/components/HashtagStrategy";
+
+function WinPatternContent({ analysis }: { analysis: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string } }) {
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-white rounded-lg border border-blue-100">
+        <p className="text-sm font-medium text-slate-800">{analysis.summary}</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="text-xs font-semibold text-blue-700 mb-1">🎣 共通キーフック</div>
+          <p className="text-sm text-foreground">{analysis.keyHook}</p>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="text-xs font-semibold text-blue-700 mb-1">📋 コンテンツ傾向</div>
+          <p className="text-sm text-foreground">{analysis.contentTrend}</p>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="text-xs font-semibold text-blue-700 mb-1">🎬 フォーマット特徴</div>
+          <p className="text-sm text-foreground">{analysis.formatFeatures}</p>
+        </div>
+        <div className="p-3 bg-slate-50 rounded-lg">
+          <div className="text-xs font-semibold text-blue-700 mb-1"># ハッシュタグ戦略</div>
+          <p className="text-sm text-foreground">{analysis.hashtagStrategy}</p>
+        </div>
+      </div>
+      <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="text-xs font-semibold text-blue-700 mb-1">💡 VSEO攻略ポイント</div>
+        <p className="text-sm text-blue-900 font-medium">{analysis.vseoTips}</p>
+      </div>
+    </div>
+  );
+}
+
+function LosePatternContent({ analysis }: { analysis: { summary: string; badHook: string; contentWeakness: string; formatProblems: string; hashtagMistakes: string; avoidTips: string } }) {
+  return (
+    <div className="space-y-4">
+      <div className="p-3 bg-white rounded-lg border border-red-100">
+        <p className="text-sm font-medium text-slate-800">{analysis.summary}</p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="p-3 bg-red-50/50 rounded-lg">
+          <div className="text-xs font-semibold text-red-700 mb-1">🎣 失敗フック要素</div>
+          <p className="text-sm text-foreground">{analysis.badHook}</p>
+        </div>
+        <div className="p-3 bg-red-50/50 rounded-lg">
+          <div className="text-xs font-semibold text-red-700 mb-1">📉 コンテンツの弱点</div>
+          <p className="text-sm text-foreground">{analysis.contentWeakness}</p>
+        </div>
+        <div className="p-3 bg-red-50/50 rounded-lg">
+          <div className="text-xs font-semibold text-red-700 mb-1">🎬 フォーマット問題</div>
+          <p className="text-sm text-foreground">{analysis.formatProblems}</p>
+        </div>
+        <div className="p-3 bg-red-50/50 rounded-lg">
+          <div className="text-xs font-semibold text-red-700 mb-1"># ハッシュタグの失敗</div>
+          <p className="text-sm text-foreground">{analysis.hashtagMistakes}</p>
+        </div>
+      </div>
+      <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+        <div className="text-xs font-semibold text-red-700 mb-1">⚠️ 避けるべきポイント</div>
+        <p className="text-sm text-red-900 font-medium">{analysis.avoidTips}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const jobId = parseInt(params.id || "0");
-  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment">("dominance");
+  const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment" | "promotion">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
 
@@ -47,13 +111,40 @@ export default function AnalysisDetail() {
 
   const { data: progressData, refetch: refetchProgress } = trpc.analysis.getProgress.useQuery(
     { jobId },
-    { 
+    {
       enabled: user !== undefined && jobId > 0,
       refetchInterval: (query) => {
         return query.state.data?.status === "processing" ? 2000 : false;
       }
     }
   );
+
+  // 残り時間の推定
+  const progressStartRef = useRef<{ time: number; pct: number } | null>(null);
+  const [estimatedRemaining, setEstimatedRemaining] = useState<string | null>(null);
+
+  useEffect(() => {
+    const pct = progressData?.progress ?? 0;
+    if (pct <= 0 || pct >= 100 || progressData?.status !== "processing") {
+      progressStartRef.current = null;
+      setEstimatedRemaining(null);
+      return;
+    }
+    if (!progressStartRef.current || pct < progressStartRef.current.pct) {
+      progressStartRef.current = { time: Date.now(), pct };
+      return;
+    }
+    const elapsed = (Date.now() - progressStartRef.current.time) / 1000;
+    const pctDone = pct - progressStartRef.current.pct;
+    if (pctDone < 3 || elapsed < 10) return;
+    const secPerPct = elapsed / pctDone;
+    const remaining = Math.round(secPerPct * (100 - pct));
+    if (remaining < 60) {
+      setEstimatedRemaining(`残り約${remaining}秒`);
+    } else {
+      setEstimatedRemaining(`残り約${Math.ceil(remaining / 60)}分`);
+    }
+  }, [progressData?.progress, progressData?.status]);
 
   const executeAnalysis = trpc.analysis.execute.useMutation({
     onSuccess: (result) => {
@@ -429,7 +520,16 @@ export default function AnalysisDetail() {
         if (sa !== sb) return sa - sb;
         return (b.viewCount || 0) - (a.viewCount || 0); // 同センチメント内は再生数順
       }
-      // dominance: 順位重み付きスコア（高いほど安定して上位表示）
+      if (videoSortKey === "promotion") {
+        const aPromo = (a.isAd || isPromotionVideo(a.hashtags || [])) ? 0 : 1;
+        const bPromo = (b.isAd || isPromotionVideo(b.hashtags || [])) ? 0 : 1;
+        if (aPromo !== bPromo) return aPromo - bPromo;
+        return (b.viewCount || 0) - (a.viewCount || 0);
+      }
+      // 安定順位順: 平均順位昇順（低い＝上位）→ 同順位はdominanceScore降順
+      const avgA = rankInfo[a.videoId]?.avgRank ?? 999;
+      const avgB = rankInfo[b.videoId]?.avgRank ?? 999;
+      if (avgA !== avgB) return avgA - avgB;
       return (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0);
     });
     const result: Record<number, any[]> = {};
@@ -453,9 +553,33 @@ export default function AnalysisDetail() {
         if (sa !== sb) return sa - sb;
         return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
       }
+      if (videoSortKey === "promotion") {
+        const aPromo = ((a as any).isAd || isPromotionVideo((a as any).hashtags || [])) ? 0 : 1;
+        const bPromo = ((b as any).isAd || isPromotionVideo((b as any).hashtags || [])) ? 0 : 1;
+        if (aPromo !== bPromo) return aPromo - bPromo;
+        return ((b as any).viewCount || 0) - ((a as any).viewCount || 0);
+      }
+      // 安定順位順: 平均順位昇順（低い＝上位）→ 同順位はdominanceScore降順
+      const avgA = rankInfo[(a as any).videoId]?.avgRank ?? 999;
+      const avgB = rankInfo[(b as any).videoId]?.avgRank ?? 999;
+      if (avgA !== avgB) return avgA - avgB;
       return (rankInfo[(b as any).videoId]?.dominanceScore ?? 0) - (rankInfo[(a as any).videoId]?.dominanceScore ?? 0);
     });
   }, [data?.videos, videoSortKey, data?.tripleSearch, getEngagementRate]);
+
+  // videoMetaKeywords Map（videoId → keywords[]）
+  const metaKeywordsMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    const vmk = (data?.report as any)?.videoMetaKeywords;
+    if (Array.isArray(vmk)) {
+      for (const item of vmk) {
+        if (item.videoId && Array.isArray(item.keywords)) {
+          map.set(item.videoId, item.keywords);
+        }
+      }
+    }
+    return map;
+  }, [data?.report]);
 
   // Helper functions as callbacks - MUST be before any early returns
   const getSentimentBadge = useCallback((sentiment: string | null) => {
@@ -543,11 +667,11 @@ export default function AnalysisDetail() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold">
-                <span className="gradient-text">分析結果</span>
+                <span className="gradient-text">{job.keyword ? job.keyword.replace(/^#+/, "") : "手動URL分析"}</span>
               </h1>
-              <p className="text-muted-foreground mt-2">
-                {job.keyword ? `キーワード: ${job.keyword}` : "手動URL分析"}
-              </p>
+              {job.status === "completed" && (
+                <p className="text-muted-foreground mt-2">分析完了</p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {job.status === "completed" && (
@@ -560,7 +684,7 @@ export default function AnalysisDetail() {
                   比較
                 </Button>
               )}
-              <Button variant="outline" onClick={() => setLocation("/")}>
+              <Button variant="outline" onClick={() => setLocation("/history")}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 履歴に戻る
               </Button>
@@ -633,155 +757,146 @@ export default function AnalysisDetail() {
             </DialogContent>
           </Dialog>
 
-          {/* Status Card */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <CardTitle className="flex items-center gap-2">
-                    ステータス
-                    {job.status === "completed" && <span className="text-green-600">✓</span>}
-                    {job.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-blue-600" />}
-                  </CardTitle>
-                  <CardDescription>
-                    {job.status === "completed" && "分析が完了しました"}
-                    {job.status === "processing" && (progressData?.currentStep || "分析を実行中です...")}
-                    {job.status === "failed" && (progressData?.currentStep ? progressData.currentStep : "分析に失敗しました。再実行してください。")}
-                    {job.status === "pending" && "分析を自動的に開始します..."}
-                  </CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  {(job.status === "failed" || job.status === "completed") && (
-                    <Button 
-                      className="gradient-primary text-white"
-                      onClick={() => executeAnalysis.mutate({ jobId })}
-                      disabled={executeAnalysis.isPending}
-                    >
-                      {executeAnalysis.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          実行中...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="mr-2 h-4 w-4" />
-                          再実行
-                        </>
-                      )}
-                    </Button>
-                  )}
-                  {job.status === "completed" && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        const link = document.createElement("a");
-                        link.href = `/api/export-csv?jobId=${jobId}`;
-                        // Use tRPC query to get CSV
-                        fetch(`/api/trpc/analysis.exportCsv?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
-                          .then(r => r.json())
-                          .then(res => {
-                            const csvData = res?.result?.data?.csv;
-                            const filename = res?.result?.data?.filename || `analysis_${jobId}.csv`;
-                            if (csvData) {
-                              const bom = "\uFEFF";
-                              const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement("a");
-                              a.href = url;
-                              a.download = filename;
-                              a.click();
-                              URL.revokeObjectURL(url);
-                              toast.success("CSVをダウンロードしました");
-                            }
-                          })
-                          .catch(() => toast.error("CSVエクスポートに失敗しました"));
-                      }}
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      CSV
-                    </Button>
-                  )}
-                  {/* PDF機能は仮組環境では停止 */}
-                  {/* {job.status === "completed" && (
-                    <>
-                      <Button 
-                        variant="outline"
-                        onClick={() => exportPdf.mutate({ jobId })}
-                        disabled={exportPdf.isPending}
+          {/* Processing / Pending / Failed */}
+          {job.status !== "completed" && (
+            <>
+              {job.status === "failed" ? (
+                <Card className="border-destructive/30">
+                  <CardContent className="py-8">
+                    <div className="flex flex-col items-center gap-4 text-center">
+                      <AlertTriangle className="h-8 w-8 text-destructive" />
+                      <div>
+                        <p className="font-medium text-destructive">分析に失敗しました</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {progressData?.currentStep || "再実行してください"}
+                        </p>
+                      </div>
+                      <Button
+                        className="gradient-primary text-white"
+                        onClick={() => executeAnalysis.mutate({ jobId })}
+                        disabled={executeAnalysis.isPending}
                       >
-                        {exportPdf.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            生成中...
-                          </>
+                        {executeAnalysis.isPending ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />実行中...</>
                         ) : (
-                          <>
-                            <Download className="mr-2 h-4 w-4" />
-                            PDF (表形式)
-                          </>
+                          <><Play className="mr-2 h-4 w-4" />再実行</>
                         )}
                       </Button>
-                      <Button 
-                        variant="outline"
-                        onClick={handleExportPdfSnapshot}
-                        disabled={exportPdfSnapshot.isPending}
-                        className="bg-blue-50 hover:bg-blue-100"
-                      >
-                        {exportPdfSnapshot.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            生成中...
-                          </>
-                        ) : (
-                          <>
-                            <Download className="mr-2 h-4 w-4" />
-                            PDF (全開)
-                          </>
-                        )}
-                      </Button>
-                    </>
-                  ) */}
-                </div>
-              </div>
-            </CardHeader>
-            {(job.status === "processing" || (progressData && (progressData as any).failedVideos?.length > 0)) && progressData && (
-              <CardContent>
-                <div className="space-y-2">
-                  {job.status === "processing" && (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span>進捗状況</span>
-                        <span className="font-medium">{Math.max(0, progressData.progress)}%</span>
-                      </div>
-                      <Progress value={Math.max(0, progressData.progress)} className="h-2" />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{progressData.currentStep}</span>
-                        <span>{progressData.completedVideos}/{progressData.totalVideos}本完了</span>
-                      </div>
-                    </>
-                  )}
-                  {(progressData as any).failedVideos?.length > 0 && (
-                    <div className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
-                      <div className="flex items-center gap-1 text-sm font-medium text-red-700 mb-1">
-                        <AlertTriangle className="h-4 w-4" />
-                        {(progressData as any).failedVideos.length}本の動画で処理に失敗
-                      </div>
-                      <div className="space-y-1">
-                        {(progressData as any).failedVideos.slice(0, 5).map((fv: any, i: number) => (
-                          <div key={i} className="text-xs text-red-600 truncate">
-                            ID: {fv.tiktokVideoId} - {fv.error}
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border-primary/20">
+                  <CardContent className="py-10">
+                    <div className="max-w-md mx-auto space-y-8">
+                      {/* メインステータス */}
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <div className="relative">
+                          <div className="h-16 w-16 rounded-full border-4 border-primary/20 flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
                           </div>
-                        ))}
-                        {(progressData as any).failedVideos.length > 5 && (
-                          <div className="text-xs text-red-500">他{(progressData as any).failedVideos.length - 5}件...</div>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-lg">
+                            {progressData?.currentStep || (job.status === "pending" ? "分析を準備中..." : "分析を実行中...")}
+                          </p>
+                          {progressData && (
+                            <div className="text-sm text-muted-foreground mt-1">
+                              <span>{Math.max(0, progressData.progress)}%</span>
+                              {estimatedRemaining && (
+                                <span className="ml-2 text-xs">({estimatedRemaining})</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {progressData && (
+                          <div className="w-full">
+                            <Progress value={Math.max(0, progressData.progress)} className="h-2" />
+                          </div>
                         )}
+                      </div>
+
+                      {/* ステップインジケーター */}
+                      <div className="space-y-3">
+                        {[
+                          { label: "動画データ収集", desc: "TikTok検索結果から動画を取得", startAt: 1, doneAt: 41 },
+                          { label: "重複度・順位分析", desc: "複数セッションの出現パターンを分析", startAt: 41, doneAt: 43 },
+                          { label: "動画コンテンツ解析", desc: "OCR・音声文字起こし・センチメント分析", startAt: 43, doneAt: 80 },
+                          { label: "AIレポート生成", desc: "インサイト・戦略提案を自動生成", startAt: 80, doneAt: 99 },
+                        ].map((step, i) => {
+                          const pct = progressData?.progress ?? 0;
+                          const isDone = pct >= step.doneAt;
+                          const isActive = pct >= step.startAt && !isDone;
+                          return (
+                            <div key={i} className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${isActive ? "bg-primary/5 border border-primary/20" : isDone ? "opacity-60" : "opacity-40"}`}>
+                              <div className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${isDone ? "bg-green-500" : isActive ? "bg-primary" : "bg-muted"}`}>
+                                {isDone ? (
+                                  <CheckCircle className="h-3.5 w-3.5 text-white" />
+                                ) : isActive ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground font-bold">{i + 1}</span>
+                                )}
+                              </div>
+                              <div>
+                                <p className={`text-sm font-medium ${isActive ? "text-foreground" : ""}`}>{step.label}</p>
+                                <p className="text-xs text-muted-foreground">{step.desc}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  )}
-                </div>
-              </CardContent>
-            )}
-          </Card>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
+
+          {/* Completed — アクションバー（インライン） */}
+          {job.status === "completed" && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                className="gradient-primary text-white"
+                onClick={() => executeAnalysis.mutate({ jobId })}
+                disabled={executeAnalysis.isPending}
+                size="sm"
+              >
+                {executeAnalysis.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />実行中...</>
+                ) : (
+                  <><Play className="mr-2 h-4 w-4" />再実行</>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  fetch(`/api/trpc/analysis.exportCsv?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
+                    .then(r => r.json())
+                    .then(res => {
+                      const csvData = res?.result?.data?.csv;
+                      const filename = res?.result?.data?.filename || `analysis_${jobId}.csv`;
+                      if (csvData) {
+                        const bom = "\uFEFF";
+                        const blob = new Blob([bom + csvData], { type: "text/csv;charset=utf-8" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = filename;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        toast.success("CSVをダウンロードしました");
+                      }
+                    })
+                    .catch(() => toast.error("CSVエクスポートに失敗しました"));
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                CSV
+              </Button>
+            </div>
+          )}
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
@@ -888,40 +1003,62 @@ export default function AnalysisDetail() {
                           </span>
                         </AccordionTrigger>
                         <AccordionContent>
-                          <div className="space-y-4 pt-2">
-                            {/* 総括 */}
-                            <div className="p-3 bg-white rounded-lg border border-blue-100">
-                              <p className="text-sm font-medium text-slate-800">
-                                {tripleSearch.commonalityAnalysis.summary}
-                              </p>
+                          {tripleSearch.commonalityAnalysisAd ? (
+                            <Tabs defaultValue="organic" className="w-full pt-2">
+                              <TabsList className="grid w-full grid-cols-2 mb-3">
+                                <TabsTrigger value="organic">オーガニック</TabsTrigger>
+                                <TabsTrigger value="ad" className="flex items-center gap-1">
+                                  <Megaphone className="h-3 w-3" />Ad投稿
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="organic">
+                                <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                              </TabsContent>
+                              <TabsContent value="ad">
+                                <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                              </TabsContent>
+                            </Tabs>
+                          ) : (
+                            <div className="pt-2">
+                              <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
                             </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
 
-                            {/* 分析項目 */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              <div className="p-3 bg-slate-50 rounded-lg">
-                                <div className="text-xs font-semibold text-blue-700 mb-1">🎣 共通キーフック</div>
-                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.keyHook}</p>
-                              </div>
-                              <div className="p-3 bg-slate-50 rounded-lg">
-                                <div className="text-xs font-semibold text-blue-700 mb-1">📋 コンテンツ傾向</div>
-                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.contentTrend}</p>
-                              </div>
-                              <div className="p-3 bg-slate-50 rounded-lg">
-                                <div className="text-xs font-semibold text-blue-700 mb-1">🎬 フォーマット特徴</div>
-                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.formatFeatures}</p>
-                              </div>
-                              <div className="p-3 bg-slate-50 rounded-lg">
-                                <div className="text-xs font-semibold text-blue-700 mb-1"># ハッシュタグ戦略</div>
-                                <p className="text-sm text-foreground">{tripleSearch.commonalityAnalysis.hashtagStrategy}</p>
-                              </div>
+                  {/* 負けパターン分析 - 赤/オレンジ系アコーディオン */}
+                  {tripleSearch.losePatternAnalysis && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="losePattern" className="border-red-200">
+                        <AccordionTrigger className="text-sm font-semibold text-red-800 hover:no-underline py-2">
+                          <span className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            負けパターン動画のBadポイント分析
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {tripleSearch.losePatternAnalysisAd ? (
+                            <Tabs defaultValue="organic" className="w-full pt-2">
+                              <TabsList className="grid w-full grid-cols-2 mb-3">
+                                <TabsTrigger value="organic">オーガニック</TabsTrigger>
+                                <TabsTrigger value="ad" className="flex items-center gap-1">
+                                  <Megaphone className="h-3 w-3" />Ad投稿
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="organic">
+                                <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
+                              </TabsContent>
+                              <TabsContent value="ad">
+                                <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
+                              </TabsContent>
+                            </Tabs>
+                          ) : (
+                            <div className="pt-2">
+                              <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
                             </div>
-
-                            {/* VSEO攻略ポイント */}
-                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                              <div className="text-xs font-semibold text-blue-700 mb-1">💡 VSEO攻略ポイント</div>
-                              <p className="text-sm text-blue-900 font-medium">{tripleSearch.commonalityAnalysis.vseoTips}</p>
-                            </div>
-                          </div>
+                          )}
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>
@@ -1125,6 +1262,7 @@ export default function AnalysisDetail() {
                           positiveWords={reportStats.positiveWords}
                           negativeWords={reportStats.negativeWords}
                           emotionWords={(data.report as any)?.emotionWords ?? undefined}
+                          videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined}
                         />
                       </AccordionContent>
                     </AccordionItem>
@@ -1276,7 +1414,7 @@ export default function AnalysisDetail() {
                         <Tabs defaultValue="heatmap" className="w-full">
                           <TabsList className="w-full">
                             <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
-                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x ER</TabsTrigger>
+                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
                             {(data.report as any)?.hashtagStrategy && (
                               <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
                             )}
@@ -1304,7 +1442,7 @@ export default function AnalysisDetail() {
                         アカウント別分析
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4">
-                        <AccountAnalysis videos={data.videos as any} />
+                        <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
                       </AccordionContent>
                     </AccordionItem>
                   )}
@@ -1337,6 +1475,7 @@ export default function AnalysisDetail() {
                     { key: "views", label: "再生数順" },
                     { key: "engagementRate", label: "ER率順" },
                     { key: "sentiment", label: "ポジネガ順" },
+                    { key: "promotion", label: "広告順" },
                   ].map(({ key, label }) => (
                     <Button
                       key={key}
@@ -1376,29 +1515,23 @@ export default function AnalysisDetail() {
                       const c = numSessions - i;
                       return (
                         <TabsContent key={c} value={`count-${c}`}>
-                          <VideoList videos={sortedCategorizedVideos[c] ?? []} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                          <VideoList videos={sortedCategorizedVideos[c] ?? []} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} metaKeywordsMap={metaKeywordsMap} />
                         </TabsContent>
                       );
                     })}
                     <TabsContent value="all">
-                      <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                      <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} metaKeywordsMap={metaKeywordsMap} />
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} />
+                  <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} metaKeywordsMap={metaKeywordsMap} />
                 )}
               </CardContent>
             </Card>
-          ) : videos.length === 0 && (
+          ) : videos.length === 0 && job.status === "completed" && (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">
-                  {job.status === "pending" 
-                    ? "分析を自動的に開始します..." 
-                    : job.status === "processing"
-                    ? "動画データを収集中です..."
-                    : "動画データがありません"}
-                </p>
+                <p className="text-muted-foreground">動画データがありません</p>
               </CardContent>
             </Card>
           )}
@@ -1409,13 +1542,14 @@ export default function AnalysisDetail() {
 }
 
 // 動画リストコンポーネント
-function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber, getEngagementRate, rankInfo }: {
+function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber, getEngagementRate, rankInfo, metaKeywordsMap }: {
   videos: any[];
   getSentimentBadge: (sentiment: string | null) => React.ReactNode;
   getAppearanceBadge: (videoId: string) => React.ReactNode;
   formatNumber: (num: number | bigint | null | undefined) => string;
   getEngagementRate: (video: any) => number;
   rankInfo?: Record<string, { ranks: (number | null)[]; avgRank: number; dominanceScore: number }>;
+  metaKeywordsMap?: Map<string, string[]>;
 }) {
   if (videos.length === 0) {
     return (
@@ -1466,6 +1600,11 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                   <span className="text-xs">@{video.accountId}</span>
                   {getSentimentBadge(video.sentiment)}
                   {getAppearanceBadge(video.videoId)}
+                  {(video.isAd || isPromotionVideo(video.hashtags || [])) && (
+                    <Badge className="bg-orange-100 text-orange-800">
+                      <Megaphone className="h-3 w-3 mr-1" />{video.isAd ? "広告" : "プロモーション"}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -1596,6 +1735,19 @@ function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber
                       </div>
                     </div>
                   )}
+                  {(() => {
+                    const mkw = metaKeywordsMap?.get(video.videoId);
+                    return mkw && mkw.length > 0 ? (
+                      <div>
+                        <span className="text-muted-foreground">SEOキーワード:</span>{" "}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {mkw.map((kw: string, i: number) => (
+                            <Badge key={i} className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200">{kw}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
                   {video.hashtags && video.hashtags.length > 0 && (() => {
                     const filteredTags = filterAdHashtags(video.hashtags);
                     return filteredTags.length > 0 ? (
