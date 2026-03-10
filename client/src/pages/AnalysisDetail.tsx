@@ -648,8 +648,15 @@ export default function AnalysisDetail() {
   // CSV ダウンロードヘルパー
   const downloadCsv = useCallback((endpoint: string, fallbackFilename: string) => {
     fetch(`/api/trpc/${endpoint}?input=${encodeURIComponent(JSON.stringify({ jobId }))}`, { credentials: "include" })
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(res => {
+        if (res?.error) {
+          toast.error(res.error.json?.message || "CSVエクスポートに失敗しました");
+          return;
+        }
         const csvData = res?.result?.data?.csv;
         const filename = res?.result?.data?.filename || fallbackFilename;
         if (csvData) {
@@ -662,9 +669,11 @@ export default function AnalysisDetail() {
           a.click();
           URL.revokeObjectURL(url);
           toast.success("CSVをダウンロードしました");
+        } else {
+          toast.error("CSVデータが空です");
         }
       })
-      .catch(() => toast.error("CSVエクスポートに失敗しました"));
+      .catch((err) => toast.error(`CSVエクスポートに失敗しました: ${err.message}`));
   }, [jobId]);
 
   // === Early returns AFTER all hooks ===
@@ -969,15 +978,15 @@ export default function AnalysisDetail() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsv", `analysis_${jobId}.csv`)}>
+                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsv", `analysis_${jobId}.csv`)}>
                     <Download className="mr-2 h-4 w-4" />
                     動画一覧CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsvReport", `report_${jobId}.csv`)}>
+                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsvReport", `report_${jobId}.csv`)}>
                     <FileText className="mr-2 h-4 w-4" />
                     レポートCSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => downloadCsv("analysis.exportCsvFull", `full_${jobId}.csv`)}>
+                  <DropdownMenuItem onSelect={() => downloadCsv("analysis.exportCsvFull", `full_${jobId}.csv`)}>
                     <Database className="mr-2 h-4 w-4" />
                     全データCSV
                   </DropdownMenuItem>
