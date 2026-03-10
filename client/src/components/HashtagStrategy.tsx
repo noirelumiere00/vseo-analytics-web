@@ -5,12 +5,17 @@ type HashtagStrategyData = {
   recommendations: string[];
 };
 
+function fmtViews(n: number) {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+  return n.toLocaleString();
+}
+
 export default function HashtagStrategy({ data }: { data: HashtagStrategyData | null | undefined }) {
   if (!data || (!data.topCombinations?.length && !data.recommendations?.length)) {
     return <p className="text-sm text-muted-foreground">ハッシュタグデータが不足しています</p>;
   }
 
-  const maxER = Math.max(...(data.topCombinations || []).map(c => c.avgER), 1);
+  const maxViews = Math.max(...(data.topCombinations || []).map(c => c.avgER), 1);
 
   return (
     <div className="space-y-4">
@@ -28,7 +33,7 @@ export default function HashtagStrategy({ data }: { data: HashtagStrategyData | 
 
       {data.topCombinations && data.topCombinations.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold mb-2">高ER ハッシュタグ組み合わせ TOP10</h4>
+          <h4 className="text-sm font-semibold mb-2">高再生 ハッシュタグ組み合わせ TOP10</h4>
           <div className="space-y-1.5">
             {data.topCombinations.map((combo, i) => (
               <div key={i} className="flex items-center gap-2">
@@ -41,10 +46,10 @@ export default function HashtagStrategy({ data }: { data: HashtagStrategyData | 
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-blue-500 rounded-full"
-                    style={{ width: `${(combo.avgER / maxER) * 100}%` }}
+                    style={{ width: `${(combo.avgER / maxViews) * 100}%` }}
                   />
                 </div>
-                <span className="text-xs font-medium w-16 text-right">{combo.avgER}%</span>
+                <span className="text-xs font-medium w-20 text-right">{fmtViews(combo.avgER)}</span>
                 <span className="text-[10px] text-muted-foreground w-10">({combo.count}本)</span>
               </div>
             ))}

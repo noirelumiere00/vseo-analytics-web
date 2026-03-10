@@ -1,4 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { FrequentWordsCloud, type EmotionWord } from "./FrequentWordsCloud";
 
 interface Aspect {
@@ -38,6 +39,12 @@ interface ReportSectionProps {
   positiveWords?: WordData[];
   negativeWords?: WordData[];
   emotionWords?: EmotionWord[];
+  videoMetaKeywords?: Array<{
+    videoUrl: string;
+    videoId: string;
+    accountId: string;
+    keywords: string[];
+  }>;
 }
 
 function AspectRow({ aspect }: { aspect: Aspect }) {
@@ -91,6 +98,7 @@ export function ReportSection({
   positiveWords = [],
   negativeWords = [],
   emotionWords,
+  videoMetaKeywords,
 }: ReportSectionProps) {
   const strengths = aspects.filter((a) => a.pos >= 75);
   const improvements = aspects.filter((a) => a.pos < 75);
@@ -154,6 +162,7 @@ export function ReportSection({
             negativeWords={negativeWords}
           />
         </TabsContent>
+
       </Tabs>
     </div>
   );
@@ -169,6 +178,16 @@ interface VideoRef {
 export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposal[]; videos?: VideoRef[] }) {
   // videoId → 参照番号マップ
   const refMap = new Map<string, number>((videos ?? []).map((v, i) => [v.videoId, i + 1]));
+  // videoId → accountId マップ（テキスト中の[videoId]をアカウント名に置換用）
+  const accountMap = new Map<string, string>((videos ?? []).map(v => [v.videoId, v.accountId]));
+  // テキスト中の 動画[videoId] や [videoId] をアカウント名に置換
+  const replaceVideoIds = (text: string): string => {
+    return text.replace(/動画\[(\d+)\]|\[(\d+)\]/g, (_match, id1, id2) => {
+      const vid = id1 || id2;
+      const account = accountMap.get(vid);
+      return account ? `@${account}` : _match;
+    });
+  };
   return (
     <div className="space-y-2">
       {proposals.map((p, i) => {
@@ -194,14 +213,14 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
             {p.analysis && (
               <div className="px-3 pb-2">
                 <div className="text-xs font-semibold text-foreground/70 mb-1">分析詳細</div>
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{p.analysis}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.analysis)}</p>
               </div>
             )}
 
             {p.strategicAdvice && (
               <div className="mx-3 mb-2 p-2.5 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
                 <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">戦略的アドバイス</div>
-                <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed whitespace-pre-wrap">{p.strategicAdvice}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.strategicAdvice)}</p>
               </div>
             )}
 
@@ -227,6 +246,50 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
       {proposals.length === 0 && (
         <p className="text-xs text-muted-foreground text-center py-4">
           分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function SeoMetaKeywordsSection({ videoMetaKeywords }: { videoMetaKeywords?: Array<{ videoUrl: string; videoId: string; accountId: string; keywords: string[] }> }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-3">
+        再生数上位5動画のページから取得した、TikTokが自動生成するSEOメタキーワード（生データ）。
+      </p>
+      {videoMetaKeywords && videoMetaKeywords.length > 0 ? (
+        <div className="space-y-3">
+          {videoMetaKeywords.map((vm) => (
+            <div key={vm.videoId || vm.videoUrl} className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <a
+                  href={vm.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold text-blue-600 hover:underline"
+                >
+                  @{vm.accountId || "unknown"}
+                </a>
+                <span className="text-[10px] text-muted-foreground">{vm.videoId}</span>
+              </div>
+              {vm.keywords.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {vm.keywords.map((kw, i) => (
+                    <Badge key={i} variant="secondary" className="text-xs font-normal">
+                      {kw}
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">キーワードなし</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          メタキーワードデータがありません。新規分析を実行すると取得されます。
         </p>
       )}
     </div>

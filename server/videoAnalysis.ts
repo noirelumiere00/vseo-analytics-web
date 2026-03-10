@@ -468,22 +468,20 @@ function analyzeHashtagCombinations(videosData: Array<{
   shareCount?: number | bigint | null;
   saveCount?: number | bigint | null;
 }>): { topCombinations: Array<{ tags: string[]; count: number; avgER: number }>; recommendations: string[] } {
-  // 2タグの組み合わせごとにERを集計
-  const combMap = new Map<string, { tags: string[]; count: number; erSum: number }>();
+  // 2タグの組み合わせごとに再生数を集計（avgER フィールドに平均再生数を格納）
+  const combMap = new Map<string, { tags: string[]; count: number; viewsSum: number }>();
   for (const v of videosData) {
     const tags = (v.hashtags || []).filter(t => t.length > 0).slice(0, 10);
     const views = Number(v.viewCount) || 0;
-    const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
-    const er = views > 0 ? (eng / views) * 100 : 0;
     for (let i = 0; i < tags.length; i++) {
       for (let j = i + 1; j < tags.length; j++) {
         const key = [tags[i], tags[j]].sort().join("|||");
         const existing = combMap.get(key);
         if (existing) {
           existing.count++;
-          existing.erSum += er;
+          existing.viewsSum += views;
         } else {
-          combMap.set(key, { tags: [tags[i], tags[j]].sort(), count: 1, erSum: er });
+          combMap.set(key, { tags: [tags[i], tags[j]].sort(), count: 1, viewsSum: views });
         }
       }
     }
@@ -491,38 +489,38 @@ function analyzeHashtagCombinations(videosData: Array<{
 
   const combinations = Array.from(combMap.values())
     .filter(c => c.count >= 2)
-    .map(c => ({ tags: c.tags, count: c.count, avgER: Math.round((c.erSum / c.count) * 100) / 100 }))
+    .map(c => ({ tags: c.tags, count: c.count, avgER: Math.round(c.viewsSum / c.count) }))
     .sort((a, b) => b.avgER - a.avgER)
     .slice(0, 10);
 
-  // 単体タグのER集計
-  const tagMap = new Map<string, { count: number; erSum: number }>();
+  // 単体タグの再生数集計
+  const tagMap = new Map<string, { count: number; viewsSum: number }>();
   for (const v of videosData) {
     const tags = (v.hashtags || []).filter(t => t.length > 0);
     const views = Number(v.viewCount) || 0;
-    const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
-    const er = views > 0 ? (eng / views) * 100 : 0;
     for (const tag of tags) {
       const existing = tagMap.get(tag);
-      if (existing) { existing.count++; existing.erSum += er; }
-      else tagMap.set(tag, { count: 1, erSum: er });
+      if (existing) { existing.count++; existing.viewsSum += views; }
+      else tagMap.set(tag, { count: 1, viewsSum: views });
     }
   }
   const topTags = Array.from(tagMap.entries())
     .filter(([, v]) => v.count >= 2)
-    .map(([tag, v]) => ({ tag, count: v.count, avgER: v.erSum / v.count }))
-    .sort((a, b) => b.avgER - a.avgER);
+    .map(([tag, v]) => ({ tag, count: v.count, avgViews: Math.round(v.viewsSum / v.count) }))
+    .sort((a, b) => b.avgViews - a.avgViews);
+
+  const fmtViews = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n.toLocaleString();
 
   const recommendations: string[] = [];
   if (topTags.length > 0) {
-    recommendations.push(`最も高ERのタグ: #${topTags[0].tag}（平均ER ${topTags[0].avgER.toFixed(1)}%、${topTags[0].count}本）`);
+    recommendations.push(`最も高再生のタグ: #${topTags[0].tag}（平均${fmtViews(topTags[0].avgViews)}再生、${topTags[0].count}本）`);
   }
   if (combinations.length > 0) {
-    recommendations.push(`最強の組み合わせ: #${combinations[0].tags.join(" + #")}（平均ER ${combinations[0].avgER}%）`);
+    recommendations.push(`最強の組み合わせ: #${combinations[0].tags.join(" + #")}（平均${fmtViews(combinations[0].avgER)}再生）`);
   }
-  const lowER = topTags.filter(t => t.count >= 3).sort((a, b) => a.avgER - b.avgER);
-  if (lowER.length > 0 && lowER[0].avgER < topTags[0]?.avgER * 0.5) {
-    recommendations.push(`避けるべきタグ: #${lowER[0].tag}（平均ER ${lowER[0].avgER.toFixed(1)}%、全体平均の半分以下）`);
+  const lowViews = topTags.filter(t => t.count >= 3).sort((a, b) => a.avgViews - b.avgViews);
+  if (lowViews.length > 0 && topTags[0] && lowViews[0].avgViews < topTags[0].avgViews * 0.5) {
+    recommendations.push(`避けるべきタグ: #${lowViews[0].tag}（平均${fmtViews(lowViews[0].avgViews)}再生、全体平均の半分以下）`);
   }
 
   return { topCombinations: combinations, recommendations };
@@ -1262,8 +1260,8 @@ export async function analyzeLosePatternCommonality(
 
   // プロモーション動画を除外
   const organicVideos = allVideos.filter(v => !v.isAd && !isPromotionVideo(v.hashtags || []));
-  if (organicVideos.length < 10) {
-    console.log(`[Analysis] Not enough organic videos (${organicVideos.length}) for lose pattern analysis, skipping`);
+  if (organicVideos.length < 5) {
+    console.log(`[Analysis] Not enough organic videos (${organicVideos.length}/5) for lose pattern analysis, skipping`);
     return;
   }
 
@@ -1277,8 +1275,8 @@ export async function analyzeLosePatternCommonality(
       return { ...v, er };
     });
 
-  if (videosWithER.length < 10) {
-    console.log(`[Analysis] Not enough videos with views for lose pattern analysis, skipping`);
+  if (videosWithER.length < 5) {
+    console.log(`[Analysis] Not enough videos with views (${videosWithER.length}/5) for lose pattern analysis, skipping`);
     return;
   }
 
@@ -1293,10 +1291,10 @@ export async function analyzeLosePatternCommonality(
     .filter(v => (v.viewCount ?? 0) <= medianViews && v.er <= medianER)
     .sort((a, b) => (a.viewCount ?? 0) - (b.viewCount ?? 0));
 
-  // 最大5本を選定、5本未満ならスキップ
+  // 最大5本を選定、3本未満ならスキップ
   const losePatternVideos = losePatternCandidates.slice(0, 5);
-  if (losePatternVideos.length < 5) {
-    console.log(`[Analysis] Not enough lose pattern videos (${losePatternVideos.length}/5), skipping`);
+  if (losePatternVideos.length < 3) {
+    console.log(`[Analysis] Not enough lose pattern videos (${losePatternVideos.length}/3), skipping`);
     return;
   }
 
