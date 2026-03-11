@@ -1,0 +1,1 @@
+ALTER TABLE `analysis_reports` ADD `videoMetaKeywords` json;

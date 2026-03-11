@@ -335,3 +335,232 @@ export const trendDiscoveryJobs = mysqlTable("trend_discovery_jobs", {
 
 export type TrendDiscoveryJob = typeof trendDiscoveryJobs.$inferSelect;
 export type InsertTrendDiscoveryJob = typeof trendDiscoveryJobs.$inferInsert;
+
+// ============================
+// 施策効果レポート（キャンペーン）
+// ============================
+
+/**
+ * キャンペーン（施策前後の効果測定の単位）
+ */
+export const campaigns = mysqlTable("campaigns", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  clientName: varchar("clientName", { length: 255 }),
+
+  // 計測対象
+  keywords: json("keywords").$type<string[]>().notNull(),
+  ownAccountIds: json("ownAccountIds").$type<string[]>().notNull(),
+  ownVideoIds: json("ownVideoIds").$type<string[]>(),
+  campaignHashtags: json("campaignHashtags").$type<string[]>(),
+
+  // 競合
+  competitors: json("competitors").$type<Array<{
+    name: string;
+    account_id: string;
+  }>>(),
+
+  // ブランド関連ワード（オマージュ検出用）
+  brandKeywords: json("brandKeywords").$type<string[]>(),
+
+  // スナップショットリンク
+  baselineSnapshotId: int("baselineSnapshotId"),
+  measurementSnapshotId: int("measurementSnapshotId"),
+
+  status: mysqlEnum("status", ["draft", "baseline_captured", "measurement_captured", "report_ready"]).default("draft").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type InsertCampaign = typeof campaigns.$inferInsert;
+
+/**
+ * キャンペーンスナップショット（ベースライン or 効果測定）
+ */
+export const campaignSnapshots = mysqlTable("campaign_snapshots", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull(),
+  snapshotType: mysqlEnum("snapshotType", ["baseline", "measurement"]).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+
+  // KW別検索結果
+  searchResults: json("searchResults").$type<Record<string, {
+    total_results: number;
+    all_videos: Array<{
+      video_id: string;
+      video_url: string;
+      creator_username: string;
+      description: string;
+      hashtags: string[];
+      view_count: number;
+      like_count: number;
+      comment_count: number;
+      share_count: number;
+      search_rank: number;
+      created_at: string;
+    }>;
+    own_videos: Array<{
+      video_id: string;
+      video_url: string;
+      creator_username: string;
+      description: string;
+      hashtags: string[];
+      view_count: number;
+      like_count: number;
+      comment_count: number;
+      share_count: number;
+      search_rank: number;
+      created_at: string;
+      er: number;
+    }>;
+    competitor_positions: Array<{
+      competitor_name: string;
+      competitor_id: string;
+      best_rank: number | null;
+      video_count_in_top30: number;
+    }>;
+    share_of_voice: {
+      own_count: number;
+      total_count: number;
+      percentage: string;
+    };
+    screenshot_key: string | null;
+  }>>(),
+
+  // 競合プロフィール
+  competitorProfiles: json("competitorProfiles").$type<Record<string, {
+    name: string;
+    follower_count: number;
+    video_count: number;
+    recent_post_dates: string[];
+  }>>(),
+
+  // 波及効果
+  rippleEffect: json("rippleEffect").$type<Record<string, {
+    total_post_count: number;
+    other_post_count: number;
+    other_total_views: number;
+    other_avg_views: number;
+    omaage_videos: Array<{
+      video_url: string;
+      creator: string;
+      views: number;
+      likes: number;
+      description: string;
+      hashtags: string[];
+      posted_at: string;
+    }>;
+  }>>(),
+
+  capturedAt: timestamp("capturedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CampaignSnapshot = typeof campaignSnapshots.$inferSelect;
+export type InsertCampaignSnapshot = typeof campaignSnapshots.$inferInsert;
+
+/**
+ * キャンペーンレポート（2スナップショット比較結果）
+ */
+export const campaignReports = mysqlTable("campaign_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull().unique(),
+
+  baselineDate: timestamp("baselineDate"),
+  measurementDate: timestamp("measurementDate"),
+
+  // サマリー
+  summary: json("summary").$type<{
+    primary_keyword: string;
+    rank_before: number | null;
+    rank_after: number | null;
+    rank_change: number | null;
+    views_before: number;
+    views_after: number;
+    er_before: number;
+    er_after: number;
+    sov_before: string;
+    sov_after: string;
+    related_posts_before: number;
+    related_posts_after: number;
+    omaage_count: number;
+  }>(),
+
+  // 自社ポジション
+  positionReport: json("positionReport").$type<Array<{
+    keyword: string;
+    before_rank: number | null;
+    after_rank: number | null;
+    rank_change: number | null;
+    before_views: number;
+    after_views: number;
+    views_change_pct: string | null;
+    before_er: number;
+    after_er: number;
+  }>>(),
+
+  // 競合比較
+  competitorReport: json("competitorReport").$type<Record<string, {
+    own_rank: number | null;
+    competitors: Array<{
+      competitor_name: string;
+      competitor_id: string;
+      best_rank: number | null;
+      video_count_in_top30: number;
+    }>;
+    is_top: boolean;
+  }>>(),
+
+  // シェア・オブ・ボイス
+  sovReport: json("sovReport").$type<Record<string, {
+    before: { own_count: number; total_count: number; percentage: string };
+    after: { own_count: number; total_count: number; percentage: string };
+  }>>(),
+
+  // 競合投稿頻度
+  competitorFrequencyReport: json("competitorFrequencyReport").$type<Array<{
+    name: string;
+    is_own: boolean;
+    frequency: {
+      avg_interval_days: number;
+      posts_per_week: number;
+      sample_size: number;
+    } | null;
+  }>>(),
+
+  // 波及効果
+  rippleReport: json("rippleReport").$type<Record<string, {
+    before_posts: number;
+    after_posts: number;
+    posts_change: number;
+    posts_change_pct: string | null;
+    before_total_views: number;
+    after_total_views: number;
+    omaage_videos: Array<{
+      video_url: string;
+      creator: string;
+      views: number;
+      likes: number;
+      description: string;
+      hashtags: string[];
+      posted_at: string;
+    }>;
+    omaage_count: number;
+  }>>(),
+
+  // スクリーンショット
+  screenshots: json("screenshots").$type<Record<string, {
+    before: string | null;
+    after: string | null;
+  }>>(),
+
+  notes: json("notes").$type<string[]>(),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CampaignReport = typeof campaignReports.$inferSelect;
+export type InsertCampaignReport = typeof campaignReports.$inferInsert;

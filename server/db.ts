@@ -11,6 +11,9 @@ import {
   analysisReports,
   tripleSearchResults,
   trendDiscoveryJobs,
+  campaigns,
+  campaignSnapshots,
+  campaignReports,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
@@ -19,6 +22,9 @@ import {
   InsertAnalysisReport,
   InsertTripleSearchResult,
   InsertTrendDiscoveryJob,
+  InsertCampaign,
+  InsertCampaignSnapshot,
+  InsertCampaignReport,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -458,11 +464,11 @@ export async function clearJobVideoData(jobId: number) {
 export async function deleteAnalysisJob(jobId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   // 関連する動画IDを取得
   const jobVideos = await db.select({ id: videos.id }).from(videos).where(eq(videos.jobId, jobId));
   const videoIds = jobVideos.map(v => v.id);
-  
+
   // 関連データを削除
   if (videoIds.length > 0) {
     await db.delete(ocrResults).where(inArray(ocrResults.videoId, videoIds));
@@ -473,4 +479,103 @@ export async function deleteAnalysisJob(jobId: number) {
   await db.delete(analysisReports).where(eq(analysisReports.jobId, jobId));
   await db.delete(tripleSearchResults).where(eq(tripleSearchResults.jobId, jobId));
   await db.delete(analysisJobs).where(eq(analysisJobs.id, jobId));
+}
+
+// === Campaigns ===
+
+export async function createCampaign(data: InsertCampaign) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaigns).values(data);
+  return result[0].insertId;
+}
+
+export async function getCampaignsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaigns).where(eq(campaigns.userId, userId)).orderBy(desc(campaigns.createdAt));
+}
+
+export async function getCampaignById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaigns).where(eq(campaigns.id, id)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function updateCampaign(id: number, data: Partial<InsertCampaign>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaigns).set(data).where(eq(campaigns.id, id));
+}
+
+export async function deleteCampaign(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(campaignReports).where(eq(campaignReports.campaignId, id));
+  await db.delete(campaignSnapshots).where(eq(campaignSnapshots.campaignId, id));
+  await db.delete(campaigns).where(eq(campaigns.id, id));
+}
+
+// === Campaign Snapshots ===
+
+export async function createCampaignSnapshot(data: InsertCampaignSnapshot) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaignSnapshots).values(data);
+  return result[0].insertId;
+}
+
+export async function getCampaignSnapshotById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaignSnapshots).where(eq(campaignSnapshots.id, id)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function getCampaignSnapshotsByCampaignId(campaignId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignSnapshots).where(eq(campaignSnapshots.campaignId, campaignId)).orderBy(desc(campaignSnapshots.createdAt));
+}
+
+export async function updateCampaignSnapshot(id: number, data: Partial<InsertCampaignSnapshot>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaignSnapshots).set(data).where(eq(campaignSnapshots.id, id));
+}
+
+// === Campaign Reports ===
+
+export async function createCampaignReport(data: InsertCampaignReport) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaignReports).values(data);
+  return result[0].insertId;
+}
+
+export async function getCampaignReportByCampaignId(campaignId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaignReports).where(eq(campaignReports.campaignId, campaignId)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function upsertCampaignReport(data: InsertCampaignReport) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(campaignReports).values(data).onDuplicateKeyUpdate({
+    set: {
+      baselineDate: data.baselineDate,
+      measurementDate: data.measurementDate,
+      summary: data.summary,
+      positionReport: data.positionReport,
+      competitorReport: data.competitorReport,
+      sovReport: data.sovReport,
+      competitorFrequencyReport: data.competitorFrequencyReport,
+      rippleReport: data.rippleReport,
+      screenshots: data.screenshots,
+      notes: data.notes,
+    },
+  });
 }

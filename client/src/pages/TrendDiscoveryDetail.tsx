@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Download, Eye, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
+import { ArrowLeft, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
@@ -105,10 +105,16 @@ export default function TrendDiscoveryDetail() {
             </div>
           </div>
           {job.status === "completed" && (
-            <Button variant="outline" onClick={handleExportCsv}>
-              <Download className="h-4 w-4 mr-2" />
-              CSV出力
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
+                <FileText className="h-4 w-4 mr-2" />
+                施策レポート作成
+              </Button>
+              <Button variant="outline" onClick={handleExportCsv}>
+                <Download className="h-4 w-4 mr-2" />
+                CSV出力
+              </Button>
+            </div>
           )}
         </div>
 

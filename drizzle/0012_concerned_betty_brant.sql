@@ -1,0 +1,1 @@
+ALTER TABLE `videos` ADD `isAd` int DEFAULT 0;

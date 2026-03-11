@@ -122,9 +122,9 @@ export default function Home() {
       <div className="max-w-3xl mx-auto space-y-8">
         {/* Header */}
         <div className="space-y-2">
-          <h1 className="text-2xl font-bold">新しい分析を開始</h1>
+          <h1 className="text-2xl font-bold">TikTok SEO分析</h1>
           <p className="text-muted-foreground">
-            キーワードを入力して、VSEO分析を実行します
+            キーワードを入力して、TikTok SEO分析を実行します
           </p>
         </div>
 
