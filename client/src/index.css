@@ -186,6 +186,29 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  /* Interactive card hover */
+  .card-interactive {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .card-interactive:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+  }
+
+  /* Staggered entrance animation for lists */
+  .animate-list-item {
+    animation: list-enter 0.3s ease-out both;
+  }
+  @keyframes list-enter {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Slow spin for gradient ring */
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
 }
 
 @media print {

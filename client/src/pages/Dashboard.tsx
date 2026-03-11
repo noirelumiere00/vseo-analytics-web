@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, TrendingUp, Search, ArrowRight } from "lucide-react";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { DashboardSkeleton } from "@/components/PageSkeleton";
+import DashboardLayout from "@/components/DashboardLayout";
+import { BarChart3, TrendingUp, Search, ArrowRight, CheckCircle2, AlertTriangle, Layers } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
@@ -13,51 +16,70 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">読み込み中...</p>
-      </div>
+      <DashboardLayout>
+        <DashboardSkeleton />
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-5xl mx-auto p-4 space-y-6">
+    <DashboardLayout>
+      <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <BarChart3 className="h-6 w-6 text-blue-500" />
               ダッシュボード
             </h1>
             <p className="text-sm text-muted-foreground mt-1">全分析の俯瞰</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setLocation("/history")}>
-              履歴
-            </Button>
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/")}>
-              新規分析
-            </Button>
-          </div>
+          <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/")}>
+            <Search className="h-4 w-4 mr-1.5" />
+            新規分析
+          </Button>
         </div>
 
-        {/* サマリーカード */}
-        <div className="grid grid-cols-3 gap-4">
-          <Card>
+        {/* KPIカード */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="relative overflow-hidden">
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold">{data?.completedJobs || 0}</div>
-              <p className="text-sm text-muted-foreground mt-1">完了済み分析</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">完了済み分析</p>
+                  <div className="text-3xl font-bold mt-1">{data?.completedJobs || 0}</div>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-green-50 flex items-center justify-center">
+                  <CheckCircle2 className="h-6 w-6 text-green-500" />
+                </div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-green-400 to-green-500" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold">{data?.totalJobs || 0}</div>
-              <p className="text-sm text-muted-foreground mt-1">総ジョブ数</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">総ジョブ数</p>
+                  <div className="text-3xl font-bold mt-1">{data?.totalJobs || 0}</div>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <Layers className="h-6 w-6 text-blue-500" />
+                </div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-blue-500" />
             </CardContent>
           </Card>
-          <Card>
+          <Card className="relative overflow-hidden">
             <CardContent className="pt-6">
-              <div className="text-3xl font-bold text-red-500">{data?.failedJobs || 0}</div>
-              <p className="text-sm text-muted-foreground mt-1">失敗</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">失敗</p>
+                  <div className="text-3xl font-bold mt-1">{data?.failedJobs || 0}</div>
+                </div>
+                <div className="h-12 w-12 rounded-xl bg-red-50 flex items-center justify-center">
+                  <AlertTriangle className="h-6 w-6 text-red-500" />
+                </div>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-red-400 to-red-500" />
             </CardContent>
           </Card>
         </div>
@@ -95,28 +117,33 @@ export default function Dashboard() {
         {data?.recentSummaries && data.recentSummaries.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">最近の分析</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                最近の分析
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {data.recentSummaries.map(s => (
+              <div className="space-y-2">
+                {data.recentSummaries.map((s, i) => (
                   <div
                     key={s.jobId}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer"
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer card-interactive animate-list-item"
+                    style={{ animationDelay: `${i * 50}ms` }}
                     onClick={() => setLocation(`/analysis/${s.jobId}`)}
                   >
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium text-sm">{s.keyword}</div>
                       <div className="text-xs text-muted-foreground">
                         {format(new Date(s.date), "M月d日 HH:mm", { locale: ja })} / {s.totalVideos}本 / {s.totalViews.toLocaleString()}再生
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex gap-1.5">
-                        <span className="text-xs text-green-600 font-medium">{s.positivePercentage}% pos</span>
-                        <span className="text-xs text-red-500 font-medium">{s.negativePercentage}% neg</span>
+                      {/* Sentiment mini bar */}
+                      <div className="flex h-2 w-16 rounded-full overflow-hidden bg-muted">
+                        <div className="bg-green-500" style={{ width: `${s.positivePercentage}%` }} />
+                        <div className="bg-red-400" style={{ width: `${s.negativePercentage}%` }} />
                       </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
                     </div>
                   </div>
                 ))}
@@ -126,16 +153,20 @@ export default function Dashboard() {
         )}
 
         {(!data?.recentSummaries || data.recentSummaries.length === 0) && (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground mb-4">まだ分析結果がありません</p>
-              <Button onClick={() => setLocation("/")}>
-                最初の分析を始める
-              </Button>
-            </CardContent>
-          </Card>
+          <Empty className="py-16">
+            <EmptyHeader>
+              <EmptyMedia variant="icon"><BarChart3 className="h-6 w-6" /></EmptyMedia>
+              <EmptyTitle>まだ分析結果がありません</EmptyTitle>
+              <EmptyDescription>
+                キーワードを入力して最初のVSEO分析を始めましょう。上位動画の自動収集からAIレポート生成まで、約30分で完了します。
+              </EmptyDescription>
+            </EmptyHeader>
+            <Button onClick={() => setLocation("/")} className="gradient-primary text-white">
+              <Search className="mr-2 h-4 w-4" />最初の分析を始める
+            </Button>
+          </Empty>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }

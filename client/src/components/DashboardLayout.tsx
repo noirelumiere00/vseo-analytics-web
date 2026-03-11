@@ -21,10 +21,11 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Compass, History, LayoutDashboard, LogOut, PanelLeft, Search, Users } from "lucide-react";
+import { Compass, History, LayoutDashboard, LogOut, Megaphone, PanelLeft, Search, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Button } from "./ui/button";
 
 const menuItems = [
@@ -32,6 +33,7 @@ const menuItems = [
   { icon: History, label: "分析履歴", path: "/history" },
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Compass, label: "トレンド発掘", path: "/trend-discovery" },
+  { icon: Megaphone, label: "施策効果レポート", path: "/campaigns" },
 ];
 
 const adminMenuItems = [
@@ -186,8 +188,14 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {menuItems.map(item => {
-                const isActive = location === item.path;
+              {/* 分析セクション */}
+              {!isCollapsed && (
+                <div className="px-3 pt-2 pb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">分析</span>
+                </div>
+              )}
+              {menuItems.slice(0, 2).map(item => {
+                const isActive = location === item.path || (item.path === "/history" && location.startsWith("/analysis/"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -204,8 +212,18 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
-              {user?.role === "admin" && adminMenuItems.map(item => {
-                const isActive = location === item.path;
+
+              {/* インサイトセクション */}
+              {!isCollapsed && (
+                <div className="px-3 pt-4 pb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">インサイト</span>
+                </div>
+              )}
+              {isCollapsed && <div className="my-2 mx-2 border-t" />}
+              {menuItems.slice(2).map(item => {
+                const isActive = location === item.path
+                  || (item.path === "/trend-discovery" && location.startsWith("/trend-discovery/"))
+                  || (item.path === "/campaigns" && location.startsWith("/campaigns"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -222,6 +240,36 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
+
+              {/* 管理セクション */}
+              {user?.role === "admin" && (
+                <>
+                  {!isCollapsed && (
+                    <div className="px-3 pt-4 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">管理</span>
+                    </div>
+                  )}
+                  {isCollapsed && <div className="my-2 mx-2 border-t" />}
+                  {adminMenuItems.map(item => {
+                    const isActive = location === item.path;
+                    return (
+                      <SidebarMenuItem key={item.path}>
+                        <SidebarMenuButton
+                          isActive={isActive}
+                          onClick={() => setLocation(item.path)}
+                          tooltip={item.label}
+                          className={`h-10 transition-all font-normal`}
+                        >
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                          />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </>
+              )}
             </SidebarMenu>
           </SidebarContent>
 
@@ -281,7 +329,13 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        {/* Desktop breadcrumb bar */}
+        {!isMobile && (
+          <div className="border-b h-12 flex items-center px-6 bg-background/95 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+            <PageBreadcrumb />
+          </div>
+        )}
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </SidebarInset>
     </>
   );
