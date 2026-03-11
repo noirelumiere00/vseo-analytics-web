@@ -9,6 +9,7 @@ const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   "/history": { label: "分析履歴" },
   "/dashboard": { label: "ダッシュボード" },
   "/trend-discovery": { label: "TikTokトレンド分析" },
+  "/trend-insights": { label: "トレンド分析結果" },
   "/compare": { label: "比較分析", parent: "/history" },
   "/trend": { label: "トレンド推移", parent: "/dashboard" },
   "/admin": { label: "管理画面" },
