@@ -1,7 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +14,10 @@ export default function CampaignNew() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
-  const trendJobId = params.get("trendJobId");
+  const trendJobIdsParam = params.get("trendJobIds");
+  const trendJobIds = trendJobIdsParam
+    ? trendJobIdsParam.split(",").map(Number).filter(n => !isNaN(n))
+    : [];
 
   const [name, setName] = useState("");
   const [clientName, setClientName] = useState("");
@@ -27,31 +29,56 @@ export default function CampaignNew() {
   const [brandKeywords, setBrandKeywords] = useState("");
   const [prefilled, setPrefilled] = useState(false);
 
-  const trendJobQuery = trpc.trendDiscovery.getById.useQuery(
-    { jobId: Number(trendJobId) },
-    { enabled: !!trendJobId },
+  // Query each trendJob individually
+  const trendJob1Query = trpc.trendDiscovery.getById.useQuery(
+    { jobId: trendJobIds[0]! },
+    { enabled: trendJobIds.length >= 1 },
   );
+  const trendJob2Query = trpc.trendDiscovery.getById.useQuery(
+    { jobId: trendJobIds[1]! },
+    { enabled: trendJobIds.length >= 2 },
+  );
+
+  const allLoaded = trendJobIds.length === 0
+    || (trendJobIds.length === 1 && !!trendJob1Query.data)
+    || (trendJobIds.length >= 2 && !!trendJob1Query.data && !!trendJob2Query.data);
+
+  const isLoadingJobs = trendJobIds.length > 0 && !allLoaded && (trendJob1Query.isLoading || trendJob2Query.isLoading);
 
   // Prefill from trend discovery data
   useEffect(() => {
-    if (trendJobQuery.data && !prefilled) {
-      const job = trendJobQuery.data;
-      setPrefilled(true);
+    if (!allLoaded || prefilled) return;
+    if (trendJobIds.length === 0) return;
 
-      setName(`${job.persona} キャンペーン`);
+    const jobs = [trendJob1Query.data, trendJob2Query.data].filter(Boolean) as any[];
+    if (jobs.length === 0) return;
 
-      const expandedKws = (job.expandedKeywords as string[]) || [];
-      if (expandedKws.length > 0) {
-        setKeywords(expandedKws.join("\n"));
-      }
+    setPrefilled(true);
 
-      const trendingHTs = (job.crossAnalysis as any)?.trendingHashtags || [];
-      const topTags = trendingHTs.slice(0, 10).map((t: any) => `#${t.tag}`);
-      if (topTags.length > 0) {
-        setCampaignHashtags(topTags.join("\n"));
-      }
+    // Name
+    if (jobs.length === 1) {
+      setName(`${jobs[0].persona} キャンペーン`);
+    } else {
+      setName(`${jobs[0].persona} × ${jobs[1].persona} キャンペーン`);
     }
-  }, [trendJobQuery.data, prefilled]);
+
+    // Keywords: merge + dedupe
+    const allKws = jobs.flatMap(j => (j.expandedKeywords as string[]) || []);
+    const uniqueKws = [...new Set(allKws)];
+    if (uniqueKws.length > 0) {
+      setKeywords(uniqueKws.join("\n"));
+    }
+
+    // Hashtags: merge + dedupe
+    const allHTs = jobs.flatMap(j => {
+      const tags = (j.crossAnalysis as any)?.trendingHashtags || [];
+      return tags.slice(0, 10).map((t: any) => `#${t.tag}`);
+    });
+    const uniqueHTs = [...new Set(allHTs)];
+    if (uniqueHTs.length > 0) {
+      setCampaignHashtags(uniqueHTs.join("\n"));
+    }
+  }, [allLoaded, prefilled, trendJob1Query.data, trendJob2Query.data, trendJobIds.length]);
 
   const createMutation = trpc.campaign.create.useMutation({
     onSuccess: (data) => {
@@ -87,7 +114,21 @@ export default function CampaignNew() {
     });
   };
 
-  const keyCreators = (trendJobQuery.data?.crossAnalysis as any)?.keyCreators || [];
+  // Merge keyCreators from all jobs
+  const allKeyCreators = (() => {
+    const jobs = [trendJob1Query.data, trendJob2Query.data].filter(Boolean) as any[];
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const job of jobs) {
+      for (const c of ((job.crossAnalysis as any)?.keyCreators || [])) {
+        if (!seen.has(c.uniqueId)) {
+          seen.add(c.uniqueId);
+          merged.push(c);
+        }
+      }
+    }
+    return merged;
+  })();
 
   const formatCount = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -95,25 +136,33 @@ export default function CampaignNew() {
     return String(n);
   };
 
+  // Build subtitle from loaded jobs
+  const loadedJobs = [trendJob1Query.data, trendJob2Query.data].filter(Boolean) as any[];
+
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/campaigns")}>
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/trend-insights")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">新規キャンペーン作成</h1>
-            {trendJobQuery.data && (
+            {loadedJobs.length === 1 && (
               <p className="text-sm text-muted-foreground mt-0.5">
-                トレンド発掘「{trendJobQuery.data.persona}」からデータを引き継ぎ
+                トレンド発掘「{loadedJobs[0].persona}」からデータを引き継ぎ
+              </p>
+            )}
+            {loadedJobs.length === 2 && (
+              <p className="text-sm text-muted-foreground mt-0.5">
+                トレンド発掘「{loadedJobs[0].persona}」×「{loadedJobs[1].persona}」からデータをマージ
               </p>
             )}
           </div>
         </div>
 
-        {trendJobId && trendJobQuery.isLoading && (
+        {isLoadingJobs && (
           <Card>
             <CardContent className="flex items-center justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin mr-2 text-muted-foreground" />
@@ -180,7 +229,7 @@ export default function CampaignNew() {
         </Card>
 
         {/* Key Creators from trend discovery (read-only) */}
-        {keyCreators.length > 0 && (
+        {allKeyCreators.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -193,7 +242,7 @@ export default function CampaignNew() {
                 トレンド発掘で特定されたキークリエイターです。競合設定の参考にしてください。
               </p>
               <div className="grid gap-2 md:grid-cols-2">
-                {keyCreators.map((c: any) => (
+                {allKeyCreators.map((c: any) => (
                   <div
                     key={c.uniqueId}
                     className="flex items-center gap-3 border rounded-lg p-2.5"
@@ -221,7 +270,7 @@ export default function CampaignNew() {
 
         {/* Submit */}
         <div className="flex justify-end gap-3 pb-8">
-          <Button variant="outline" onClick={() => setLocation("/campaigns")}>キャンセル</Button>
+          <Button variant="outline" onClick={() => setLocation("/trend-insights")}>キャンセル</Button>
           <Button onClick={handleSubmit} disabled={createMutation.isPending} className="min-w-[120px]">
             {createMutation.isPending ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" />作成中...</>

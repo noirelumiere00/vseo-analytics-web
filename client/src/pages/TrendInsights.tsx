@@ -2,14 +2,28 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { Compass, ChevronRight, Eye, FileText, Hash, Loader2, Play, Share2, Users } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ChevronRight, Compass, Eye, FileText, Hash, Loader2,
+  Megaphone, Play, Share2, Trash2, Users,
+} from "lucide-react";
+import { useState } from "react";
 
 export default function TrendInsights() {
   const [, setLocation] = useLocation();
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const jobsQuery = trpc.trendDiscovery.list.useQuery();
+  const campaignsQuery = trpc.campaign.list.useQuery();
+  const deleteMutation = trpc.campaign.delete.useMutation({
+    onSuccess: () => {
+      campaignsQuery.refetch();
+      toast.success("キャンペーンを削除しました");
+    },
+  });
 
   const completedJobs = (jobsQuery.data || []).filter(j => j.status === "completed");
 
@@ -17,6 +31,29 @@ export default function TrendInsights() {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
     return String(n);
+  };
+
+  const toggleSelect = (jobId: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        if (next.size >= 2) {
+          toast.info("選択は2件までです");
+          return prev;
+        }
+        next.add(jobId);
+      }
+      return next;
+    });
+  };
+
+  const statusLabels: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
+    draft: { label: "下書き", variant: "outline" },
+    baseline_captured: { label: "ベースライン取得済", variant: "secondary" },
+    measurement_captured: { label: "効果測定済", variant: "secondary" },
+    report_ready: { label: "レポート完了", variant: "default" },
   };
 
   return (
@@ -58,22 +95,32 @@ export default function TrendInsights() {
             const keyCreators: any[] = cross?.keyCreators || [];
             const coOccurringTags: any[] = cross?.coOccurringTags || [];
             const expandedKeywords = (job.expandedKeywords as string[]) || [];
+            const isSelected = selectedIds.has(job.id);
 
             return (
-              <Card key={job.id}>
+              <Card
+                key={job.id}
+                className={`transition-colors ${isSelected ? "border-primary ring-2 ring-primary/30" : ""}`}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{job.persona}</CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(job.createdAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
-                        {" / "}KW: {expandedKeywords.length}件
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(job.id)}
+                      />
+                      <div>
+                        <CardTitle className="text-lg">{job.persona}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(job.createdAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
+                          {" / "}KW: {expandedKeywords.length}件
+                        </p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                         size="sm"
-                        onClick={() => setLocation(`/campaigns/new?trendJobId=${job.id}`)}
+                        onClick={() => setLocation(`/campaigns/new?trendJobIds=${job.id}`)}
                       >
                         <FileText className="h-3.5 w-3.5 mr-1.5" />
                         施策レポート作成
@@ -209,6 +256,75 @@ export default function TrendInsights() {
             );
           })}
         </div>
+
+        {/* Floating action bar for 2 selected */}
+        {selectedIds.size === 2 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+            <div className="flex items-center gap-4 rounded-xl border bg-background/95 backdrop-blur shadow-lg px-6 py-3">
+              <p className="text-sm font-medium">2件選択中</p>
+              <Button
+                onClick={() => {
+                  const ids = Array.from(selectedIds).join(",");
+                  setLocation(`/campaigns/new?trendJobIds=${ids}`);
+                }}
+              >
+                <Megaphone className="h-4 w-4 mr-2" />
+                2件からキャンペーン作成
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                クリア
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* 作成済みキャンペーン */}
+        {campaignsQuery.data && campaignsQuery.data.length > 0 && (
+          <div className="space-y-4 pt-4">
+            <h2 className="text-lg font-semibold tracking-tight">作成済みキャンペーン</h2>
+            <div className="space-y-3">
+              {campaignsQuery.data.map((campaign) => {
+                const status = statusLabels[campaign.status] || statusLabels.draft;
+                return (
+                  <Card
+                    key={campaign.id}
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => setLocation(`/campaigns/${campaign.id}`)}
+                  >
+                    <CardContent className="flex items-center justify-between py-4">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold truncate">{campaign.name}</h3>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          {campaign.clientName && <span>{campaign.clientName}</span>}
+                          <span>KW: {(campaign.keywords as string[])?.length || 0}件</span>
+                          <span>{new Date(campaign.createdAt).toLocaleDateString("ja-JP")}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("このキャンペーンを削除しますか？")) {
+                              deleteMutation.mutate({ id: campaign.id });
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

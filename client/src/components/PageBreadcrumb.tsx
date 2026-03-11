@@ -6,7 +6,7 @@ import { useLocation } from "wouter";
 
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   "/": { label: "TikTok SEO分析" },
-  "/history": { label: "分析履歴" },
+  "/history": { label: "SEO分析履歴" },
   "/dashboard": { label: "ダッシュボード" },
   "/trend-discovery": { label: "TikTokトレンド分析" },
   "/trend-insights": { label: "トレンド分析結果" },
@@ -27,19 +27,19 @@ export function PageBreadcrumb() {
   if (location.startsWith("/analysis/")) {
     currentLabel = "分析詳細";
     parentPath = "/history";
-    parentLabel = "分析履歴";
+    parentLabel = "SEO分析履歴";
   } else if (location.startsWith("/trend-discovery/") && location !== "/trend-discovery") {
     currentLabel = "トレンド詳細";
     parentPath = "/trend-discovery";
     parentLabel = "TikTokトレンド分析";
   } else if (location === "/campaigns/new") {
     currentLabel = "新規作成";
-    parentPath = "/campaigns";
-    parentLabel = "施策効果レポート";
+    parentPath = "/trend-insights";
+    parentLabel = "トレンド分析結果";
   } else if (location.startsWith("/campaigns/") && location !== "/campaigns") {
     currentLabel = "キャンペーン詳細";
-    parentPath = "/campaigns";
-    parentLabel = "施策効果レポート";
+    parentPath = "/trend-insights";
+    parentLabel = "トレンド分析結果";
   } else {
     const route = ROUTE_MAP[location];
     if (route) {

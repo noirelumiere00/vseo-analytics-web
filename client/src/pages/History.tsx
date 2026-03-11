@@ -170,7 +170,7 @@ export default function History() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">分析履歴</h1>
+            <h1 className="text-2xl font-bold">SEO分析履歴</h1>
             <p className="text-sm text-muted-foreground mt-1">
               過去に実行した分析ジョブの一覧
             </p>
