@@ -11,6 +11,6 @@ export const ENV = {
   awsRegion: process.env.AWS_REGION ?? "us-west-2",
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
-  bedrockModelId: process.env.BEDROCK_MODEL_ID ?? "us.anthropic.claude-sonnet-4-6",
+  bedrockModelId: process.env.BEDROCK_MODEL_ID ?? "us.anthropic.claude-haiku-4-5-20251001",
   adminName: process.env.ADMIN_NAME ?? "小俣翔碁",
 };

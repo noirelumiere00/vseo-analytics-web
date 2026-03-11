@@ -471,7 +471,7 @@ function analyzeHashtagCombinations(videosData: Array<{
   // 2タグの組み合わせごとに再生数を集計（avgER フィールドに平均再生数を格納）
   const combMap = new Map<string, { tags: string[]; count: number; viewsSum: number }>();
   for (const v of videosData) {
-    const tags = (v.hashtags || []).filter(t => t.length > 0).slice(0, 10);
+    const tags = filterAdHashtags((v.hashtags || []).filter(t => t.length > 0)).slice(0, 10);
     const views = Number(v.viewCount) || 0;
     for (let i = 0; i < tags.length; i++) {
       for (let j = i + 1; j < tags.length; j++) {
@@ -496,7 +496,7 @@ function analyzeHashtagCombinations(videosData: Array<{
   // 単体タグの再生数集計
   const tagMap = new Map<string, { count: number; viewsSum: number }>();
   for (const v of videosData) {
-    const tags = (v.hashtags || []).filter(t => t.length > 0);
+    const tags = filterAdHashtags((v.hashtags || []).filter(t => t.length > 0));
     const views = Number(v.viewCount) || 0;
     for (const tag of tags) {
       const existing = tagMap.get(tag);

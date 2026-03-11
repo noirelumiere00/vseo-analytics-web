@@ -12,6 +12,14 @@ type Video = {
   shareCount?: number | bigint | null;
   saveCount?: number | bigint | null;
   sentiment?: string | null;
+  videoId?: string | null;
+};
+
+type RankInfoItem = {
+  ranks: (number | null)[];
+  avgRank: number;
+  dominanceScore: number;
+  appearanceCount: number;
 };
 
 type AccountStat = {
@@ -23,6 +31,12 @@ type AccountStat = {
   totalViews: number;
   avgER: number;
   sentimentBreakdown: { positive: number; neutral: number; negative: number };
+  // rank fields
+  bestAvgRank: number;
+  totalAppearances: number;
+  totalDominance: number;
+  avgDominance: number;
+  videosInResults: number;
 };
 
 const COLORS = [
@@ -31,12 +45,20 @@ const COLORS = [
   "#a855f7", "#06b6d4", "#e11d48", "#22c55e", "#eab308",
 ];
 
-type TabKey = "videos" | "views" | "er";
+type TabKey = "videos" | "views" | "er" | "rank";
 
-export default function AccountAnalysis({ videos }: { videos: Video[] }) {
+type Props = {
+  videos: Video[];
+  rankInfo?: Record<string, RankInfoItem>;
+  numSessions?: number;
+};
+
+export default function AccountAnalysis({ videos, rankInfo, numSessions }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>("views");
 
   const accounts = useMemo(() => {
+    // Build a map of accountId -> list of videoIds
+    const accountVideoIds = new Map<string, string[]>();
     const map = new Map<string, AccountStat>();
     for (const v of videos) {
       const id = v.accountId || "unknown";
@@ -50,10 +72,17 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
           totalViews: 0,
           avgER: 0,
           sentimentBreakdown: { positive: 0, neutral: 0, negative: 0 },
+          bestAvgRank: 999,
+          totalAppearances: 0,
+          totalDominance: 0,
+          avgDominance: 0,
+          videosInResults: 0,
         });
+        accountVideoIds.set(id, []);
       }
       const acc = map.get(id)!;
       acc.videoCount++;
+      if (v.videoId) accountVideoIds.get(id)!.push(v.videoId);
       const views = Number(v.viewCount) || 0;
       acc.totalViews += views;
       if (views > 0) {
@@ -67,14 +96,31 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
     }
     for (const acc of map.values()) {
       if (acc.videoCount > 0) acc.avgER = Math.round((acc.avgER / acc.videoCount) * 100) / 100;
+
+      // Aggregate rank data
+      if (rankInfo) {
+        const vids = accountVideoIds.get(acc.accountId) || [];
+        let rankCount = 0;
+        for (const vid of vids) {
+          const ri = rankInfo[vid];
+          if (!ri) continue;
+          rankCount++;
+          if (ri.avgRank < acc.bestAvgRank) acc.bestAvgRank = ri.avgRank;
+          acc.totalAppearances += ri.appearanceCount;
+          acc.totalDominance += ri.dominanceScore;
+        }
+        acc.videosInResults = rankCount;
+        acc.avgDominance = rankCount > 0 ? acc.totalDominance / rankCount : 0;
+      }
     }
     return Array.from(map.values());
-  }, [videos]);
+  }, [videos, rankInfo]);
 
   const sorted = useMemo(() => {
     const arr = [...accounts];
     if (activeTab === "videos") arr.sort((a, b) => b.videoCount - a.videoCount);
     else if (activeTab === "views") arr.sort((a, b) => b.totalViews - a.totalViews);
+    else if (activeTab === "rank") arr.sort((a, b) => b.totalDominance - a.totalDominance);
     else arr.sort((a, b) => b.avgER - a.avgER);
     return arr;
   }, [accounts, activeTab]);
@@ -82,7 +128,11 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
   const pieData = useMemo(() => {
     return sorted.map((acc, i) => ({
       name: acc.accountName,
-      value: activeTab === "videos" ? acc.videoCount : activeTab === "views" ? acc.totalViews : acc.avgER,
+      value:
+        activeTab === "videos" ? acc.videoCount
+        : activeTab === "views" ? acc.totalViews
+        : activeTab === "rank" ? acc.totalDominance
+        : acc.avgER,
       color: COLORS[i % COLORS.length],
     }));
   }, [sorted, activeTab]);
@@ -103,9 +153,21 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
     { key: "views", label: "再生数" },
     { key: "videos", label: "投稿数" },
     { key: "er", label: "ER%" },
+    ...(rankInfo ? [{ key: "rank" as TabKey, label: "上位表示力" }] : []),
   ];
 
-  const unitLabel = activeTab === "videos" ? "本" : activeTab === "views" ? "再生" : "%";
+  const unitLabel =
+    activeTab === "videos" ? "本"
+    : activeTab === "views" ? "再生"
+    : activeTab === "rank" ? "pt"
+    : "%";
+
+  const maxDominance = useMemo(() => {
+    if (activeTab !== "rank") return 0;
+    return Math.max(...accounts.map(a => a.totalDominance), 1);
+  }, [accounts, activeTab]);
+
+  const MEDAL = ["🥇", "🥈", "🥉"];
 
   return (
     <div className="space-y-4">
@@ -149,6 +211,10 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
               <Tooltip
                 formatter={(value: number, name: string) => {
                   if (activeTab === "er") return [`${value}%`, name];
+                  if (activeTab === "rank") {
+                    const pct = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : "0";
+                    return [`${value.toFixed(1)}pt (${pct}%)`, name];
+                  }
                   const pct = totalValue > 0 ? ((value / totalValue) * 100).toFixed(1) : "0";
                   return [`${fmt(value)}${unitLabel} (${pct}%)`, name];
                 }}
@@ -167,6 +233,58 @@ export default function AccountAnalysis({ videos }: { videos: Video[] }) {
         {/* アカウント一覧 */}
         <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
           {sorted.map((acc, i) => {
+            if (activeTab === "rank") {
+              // 15位以下は非表示
+              if (i >= 15) return null;
+              // 上位表示力タブ: ランキング表示
+              const pct = totalValue > 0 ? ((acc.totalDominance / totalValue) * 100).toFixed(1) : "0";
+              const barWidth = maxDominance > 0 ? (acc.totalDominance / maxDominance) * 100 : 0;
+              return (
+                <div key={acc.accountId} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-muted/40 transition-colors">
+                  {/* ランキング番号/メダル */}
+                  <div className="w-6 text-center shrink-0">
+                    {i < 3 ? (
+                      <span className="text-base">{MEDAL[i]}</span>
+                    ) : (
+                      <span className="text-xs font-bold text-muted-foreground">{i + 1}</span>
+                    )}
+                  </div>
+                  {/* アバター */}
+                  {acc.avatarUrl ? (
+                    <img src={acc.avatarUrl} alt="" className="w-7 h-7 rounded-full shrink-0" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-[10px] shrink-0">?</div>
+                  )}
+                  {/* アカウント情報 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{acc.accountName}</div>
+                    <div className="text-[10px] text-muted-foreground flex items-center gap-2 flex-wrap">
+                      {acc.bestAvgRank < 999 && (
+                        <span>平均{acc.bestAvgRank.toFixed(1)}位</span>
+                      )}
+                      <span>{acc.videosInResults}本 × {acc.totalAppearances}回出現</span>
+                    </div>
+                    {/* スコアバー */}
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${barWidth}%`,
+                            backgroundColor: COLORS[i % COLORS.length],
+                          }}
+                        />
+                      </div>
+                      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">
+                        {acc.totalDominance.toFixed(1)}pt ({pct}%)
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // 既存タブ: 再生数 / 投稿数 / ER%
             const val = activeTab === "videos" ? acc.videoCount : activeTab === "views" ? acc.totalViews : acc.avgER;
             const pct = activeTab !== "er" && totalValue > 0 ? ((val / totalValue) * 100).toFixed(1) : null;
             return (

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare, BarChart3, TrendingUp, CheckSquare } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw, GitCompare, BarChart3, TrendingUp, CheckSquare, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -202,8 +202,8 @@ export default function History() {
                 ダッシュボード
               </Button>
               <Button variant="outline" onClick={() => setLocation("/")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                戻る
+                <Search className="h-4 w-4 mr-2" />
+                新規分析
               </Button>
             </div>
           </div>
