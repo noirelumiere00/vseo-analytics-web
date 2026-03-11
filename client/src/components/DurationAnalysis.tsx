@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 
 type Video = {
   duration?: number | null;
@@ -19,6 +19,12 @@ const RANGES = [
   { label: "180秒~", min: 181, max: Infinity },
 ];
 
+function formatViews(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
+}
+
 export default function DurationAnalysis({ videos }: { videos: Video[] }) {
   const data = useMemo(() => {
     return RANGES.map(range => {
@@ -27,66 +33,75 @@ export default function DurationAnalysis({ videos }: { videos: Video[] }) {
         return d >= range.min && d <= range.max;
       });
       const count = filtered.length;
-      let avgER = 0;
       let avgViews = 0;
       if (count > 0) {
-        let erSum = 0;
         let viewSum = 0;
         for (const v of filtered) {
-          const views = Number(v.viewCount) || 0;
-          viewSum += views;
-          if (views > 0) {
-            const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
-            erSum += (eng / views) * 100;
-          }
+          viewSum += Number(v.viewCount) || 0;
         }
-        avgER = erSum / count;
         avgViews = viewSum / count;
       }
       return {
         range: range.label,
         count,
-        avgER: Math.round(avgER * 100) / 100,
         avgViews: Math.round(avgViews),
       };
     }).filter(d => d.count > 0);
+  }, [videos]);
+
+  const median = useMemo(() => {
+    const views = videos.map(v => Number(v.viewCount) || 0).sort((a, b) => a - b);
+    if (views.length === 0) return 0;
+    const mid = Math.floor(views.length / 2);
+    return views.length % 2 === 0 ? Math.round((views[mid - 1] + views[mid]) / 2) : views[mid];
   }, [videos]);
 
   if (data.length === 0) {
     return <p className="text-sm text-muted-foreground">動画尺データがありません</p>;
   }
 
-  const maxER = Math.max(...data.map(d => d.avgER));
+  const maxViews = Math.max(...data.map(d => d.avgViews));
 
   return (
     <div className="space-y-4">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
           <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+          <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatViews(v)} />
           <Tooltip
-            formatter={(value: number, name: string) => {
-              if (name === "avgER") return [`${value}%`, "平均ER"];
-              return [value, name];
-            }}
+            formatter={(value: number) => [formatViews(value), "平均再生数"]}
             labelFormatter={l => `尺: ${l}`}
           />
-          <Bar dataKey="avgER" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="avgViews" radius={[4, 4, 0, 0]}>
             {data.map((d, i) => (
-              <Cell key={i} fill={d.avgER === maxER ? "#2563eb" : "#93c5fd"} />
+              <Cell key={i} fill={d.avgViews === maxViews ? "#2563eb" : "#93c5fd"} />
             ))}
           </Bar>
+          {median > 0 && (
+            <ReferenceLine
+              y={median}
+              stroke="#ef4444"
+              strokeDasharray="5 5"
+              label={{ value: `中央値: ${formatViews(median)}`, position: "right", fontSize: 11, fill: "#ef4444" }}
+            />
+          )}
         </BarChart>
       </ResponsiveContainer>
       <div className="grid grid-cols-3 gap-2 text-xs">
         {data.map(d => (
           <div key={d.range} className="p-2 rounded bg-muted/50 text-center">
             <div className="font-medium">{d.range}</div>
-            <div className="text-muted-foreground">{d.count}本 / ER {d.avgER}%</div>
+            <div className="text-muted-foreground">{d.count}本</div>
             <div className="text-muted-foreground">平均{d.avgViews.toLocaleString()}再生</div>
           </div>
         ))}
       </div>
+      {median > 0 && (
+        <p className="text-xs text-muted-foreground">
+          <span className="inline-block w-3 h-0.5 bg-red-500 mr-1 align-middle" />
+          全動画の再生数中央値: {median.toLocaleString()}回（{formatViews(median)}）
+        </p>
+      )}
     </div>
   );
 }

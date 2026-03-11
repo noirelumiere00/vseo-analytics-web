@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Search, Video, TrendingUp } from "lucide-react";
+import { BarChart3, History, Loader2, LogOut, Search, Video, TrendingUp } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useState } from "react";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 
 export default function Home() {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading, isAuthenticated, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [keyword, setKeyword] = useState("");
 
@@ -107,6 +107,27 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* ナビゲーションバー */}
+      <div className="border-b bg-background/95 backdrop-blur sticky top-0 z-40">
+        <div className="container flex items-center justify-between h-14">
+          <span className="font-semibold gradient-text">VSEO Analytics</span>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setLocation("/history")}>
+              <History className="h-4 w-4 mr-1.5" />
+              分析履歴
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setLocation("/dashboard")}>
+              <BarChart3 className="h-4 w-4 mr-1.5" />
+              ダッシュボード
+            </Button>
+            <Button variant="ghost" size="sm" onClick={logout} className="text-destructive hover:text-destructive">
+              <LogOut className="h-4 w-4 mr-1.5" />
+              ログアウト
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="container py-12">
         <div className="max-w-3xl mx-auto space-y-8">
           {/* Header */}
@@ -161,12 +182,6 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* Recent Analyses Link */}
-          <div className="text-center">
-            <Button variant="outline" onClick={() => setLocation("/history")}>
-              過去の分析履歴を見る
-            </Button>
-          </div>
         </div>
       </div>
     </div>
