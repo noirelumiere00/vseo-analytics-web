@@ -1,8 +1,8 @@
 import { eq, desc, inArray, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, 
-  users, 
+import {
+  InsertUser,
+  users,
   analysisJobs,
   videos,
   ocrResults,
@@ -10,13 +10,15 @@ import {
   analysisScores,
   analysisReports,
   tripleSearchResults,
+  trendDiscoveryJobs,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
   InsertTranscription,
   InsertAnalysisScore,
   InsertAnalysisReport,
-  InsertTripleSearchResult
+  InsertTripleSearchResult,
+  InsertTrendDiscoveryJob,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -388,6 +390,45 @@ export async function resetStuckProcessingJobs() {
     .where(eq(analysisJobs.status, "processing"));
   
   return result[0].affectedRows ?? 0;
+}
+
+// === Trend Discovery Jobs ===
+export async function createTrendDiscoveryJob(job: InsertTrendDiscoveryJob) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(trendDiscoveryJobs).values(job);
+  return result[0].insertId;
+}
+
+export async function getTrendDiscoveryJobById(jobId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.id, jobId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getTrendDiscoveryJobsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.userId, userId)).orderBy(desc(trendDiscoveryJobs.createdAt));
+}
+
+export async function updateTrendDiscoveryJob(jobId: number, data: Partial<InsertTrendDiscoveryJob>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(trendDiscoveryJobs).set(data).where(eq(trendDiscoveryJobs.id, jobId));
+}
+
+export async function updateTrendDiscoveryJobStatus(jobId: number, status: "pending" | "processing" | "completed" | "failed", completedAt?: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(trendDiscoveryJobs).set({ status, completedAt }).where(eq(trendDiscoveryJobs.id, jobId));
+}
+
+export async function deleteTrendDiscoveryJob(jobId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.id, jobId));
 }
 
 /**

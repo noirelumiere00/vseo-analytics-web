@@ -35,6 +35,7 @@ export interface TikTokVideo {
     collectCount: number;
   };
   hashtags: string[];
+  isAd: boolean;
 }
 
 export interface TikTokSearchResult {
@@ -124,6 +125,7 @@ function parseVideoData(item: any): TikTokVideo | null {
       collectCount: stats.collectCount || 0,
     },
     hashtags,
+    isAd: !!v.isAd,
   };
 }
 
@@ -141,8 +143,8 @@ async function searchInIncognitoContext(
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  // ページネーション安全装置: 最大10ページまで
-  const MAX_PAGES = 10;
+  // ページネーション安全装置: 最大15ページまで
+  const MAX_PAGES = 15;
 
   try {
     await page.setViewport({ width: 1280, height: 900 });
@@ -259,6 +261,19 @@ async function searchInIncognitoContext(
         }
 
         const json = JSON.parse(text);
+
+        // デバッグ: APIレスポンスのトップレベルキーを出力（meta keywords等の確認用）
+        if (pagesFetched === 0) {
+          const topKeys = Object.keys(json).filter(k => k !== 'data' && k !== 'item_list');
+          console.log(`[TikTok Session ${sessionIndex + 1}] API response keys (excl data):`, topKeys);
+          for (const k of topKeys) {
+            const val = json[k];
+            if (val !== null && val !== undefined && typeof val === 'object') {
+              console.log(`[TikTok Session ${sessionIndex + 1}]   ${k}:`, JSON.stringify(val).slice(0, 300));
+            }
+          }
+        }
+
         const items = json?.data || json?.item_list || [];
         const newVideos: TikTokVideo[] = [];
 
@@ -345,7 +360,7 @@ async function searchInIncognitoContext(
     const MAX_SCROLL_ATTEMPTS = 20;
     let noNewDataCount = 0;
     let hasMoreFalseRetries = 0;
-    const MAX_HAS_MORE_FALSE_RETRIES = 2; // has_more=false 後に2回までリトライ
+    const MAX_HAS_MORE_FALSE_RETRIES = 3; // has_more=false 後に3回までリトライ
 
     for (let scroll = 0; scroll < MAX_SCROLL_ATTEMPTS; scroll++) {
       if (allVideos.length >= maxVideos) {
@@ -745,6 +760,60 @@ export async function searchTikTokVideos(
 
 
 /**
+ * バッチ検索: 複数クエリを1ブラウザで順次処理
+ * トレンド発見用。各クエリごとにincognitoコンテキストを作成・破棄する。
+ */
+export async function searchTikTokBatch(
+  queries: Array<{ query: string; type: "keyword" | "hashtag" }>,
+  maxVideosPerQuery: number = 20,
+  onProgress?: (message: string, completedQueries: number, totalQueries: number) => void,
+): Promise<Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[] }>> {
+  const chromiumPath = findChromiumPath();
+  const browser = await puppeteer.launch({
+    executablePath: chromiumPath,
+    headless: true,
+    args: buildChromiumArgs(),
+  });
+
+  const results: Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[] }> = [];
+
+  try {
+    for (let i = 0; i < queries.length; i++) {
+      const { query, type } = queries[i];
+      const searchTerm = type === "hashtag" ? `#${query}` : query;
+
+      if (onProgress) {
+        onProgress(`クエリ ${i + 1}/${queries.length}: "${searchTerm}" を検索中...`, i, queries.length);
+      }
+
+      // クエリ間のディレイ（3〜5秒）
+      if (i > 0) {
+        const delay = 3000 + Math.random() * 2000;
+        await new Promise(r => setTimeout(r, delay));
+      }
+
+      try {
+        const result = await searchInIncognitoContext(
+          browser,
+          searchTerm,
+          maxVideosPerQuery,
+          i, // sessionIndex
+        );
+        results.push({ query, type, videos: result.videos });
+        console.log(`[TikTok Batch] Query ${i + 1}/${queries.length} "${searchTerm}": ${result.videos.length} videos`);
+      } catch (err) {
+        console.error(`[TikTok Batch] Query ${i + 1} "${searchTerm}" failed:`, err);
+        results.push({ query, type, videos: [] });
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+
+  return results;
+}
+
+/**
  * TikTok動画のコメントを取得する関数
  * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
  */
@@ -799,4 +868,62 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
   }
 
   return comments;
+}
+
+
+/**
+ * TikTok動画ページから <meta name="keywords" data-rh="true"> を取得する。
+ * TikTokがReact Helmetで動的に挿入するSEOキーワード（10個前後）。
+ * 例: "ホライゾンバルーン 予約 方法, ジャングリア 旅行 準備, ..."
+ */
+export async function scrapeTikTokMetaKeywords(
+  videoUrls: string[],
+  onProgress?: (message: string) => void,
+): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (videoUrls.length === 0) return result;
+
+  const browser = await puppeteer.launch({
+    executablePath: findChromiumPath(),
+    headless: true,
+    args: buildChromiumArgs(),
+  });
+
+  try {
+    for (let i = 0; i < videoUrls.length; i++) {
+      const url = videoUrls[i];
+      if (onProgress) onProgress(`meta keywords取得中 (${i + 1}/${videoUrls.length})...`);
+
+      const page = await browser.newPage();
+      try {
+        await page.setUserAgent(USER_AGENTS[i % USER_AGENTS.length]);
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+        await new Promise(r => setTimeout(r, 3000));
+
+        const keywords = await page.evaluate(() => {
+          const meta = document.querySelector('meta[name="keywords"]');
+          return meta ? meta.getAttribute("content") : null;
+        });
+
+        if (keywords) {
+          const parsed = keywords
+            .split(",")
+            .map(k => k.trim())
+            .filter(k => k.length > 0);
+          result.set(url, parsed);
+          console.log(`[TikTok Meta] ${url.slice(-30)}: ${parsed.length} keywords`);
+        } else {
+          console.log(`[TikTok Meta] ${url.slice(-30)}: no keywords found`);
+        }
+      } catch (e) {
+        console.warn(`[TikTok Meta] Failed for ${url}:`, (e as Error).message);
+      } finally {
+        await page.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+
+  return result;
 }

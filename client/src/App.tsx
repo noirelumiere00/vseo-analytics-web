@@ -1,7 +1,8 @@
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, useLocation } from "wouter";
+import { useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -14,10 +15,21 @@ import Admin from "./pages/Admin";
 import Comparison from "./pages/Comparison";
 import Trend from "./pages/Trend";
 import Dashboard from "./pages/Dashboard";
+import TrendDiscovery from "./pages/TrendDiscovery";
+import TrendDiscoveryDetail from "./pages/TrendDiscoveryDetail";
+
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location]);
+  return null;
+}
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
+    <>
+    <ScrollToTop />
     <Switch>
       <Route path="/login" component={Login} />
       <Route path={"/"} component={Home} />
@@ -26,6 +38,8 @@ function Router() {
       <Route path="/analysis/:id" component={AnalysisDetail} />
       <Route path="/compare" component={Comparison} />
       <Route path="/trend" component={Trend} />
+      <Route path="/trend-discovery" component={TrendDiscovery} />
+      <Route path="/trend-discovery/:id" component={TrendDiscoveryDetail} />
       <Route path="/report/view/:jobId" component={ReportView} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
@@ -33,6 +47,7 @@ function Router() {
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 
