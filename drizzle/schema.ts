@@ -264,3 +264,74 @@ export const tripleSearchResults = mysqlTable("triple_search_results", {
 
 export type TripleSearchResult = typeof tripleSearchResults.$inferSelect;
 export type InsertTripleSearchResult = typeof tripleSearchResults.$inferInsert;
+
+/**
+ * トレンド発見ジョブ（ペルソナ → KW/ハッシュタグ拡張 → 横断集計）
+ * 既存のVSEO分析とは完全分離。OCR/音声文字起こし不要のためJSONカラムに格納。
+ */
+export const trendDiscoveryJobs = mysqlTable("trend_discovery_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  persona: varchar("persona", { length: 255 }).notNull(),
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  expandedKeywords: json("expandedKeywords").$type<string[]>(),
+  expandedHashtags: json("expandedHashtags").$type<string[]>(),
+  scrapedVideos: json("scrapedVideos").$type<Array<{
+    query: string;
+    queryType: "keyword" | "hashtag";
+    videoId: string;
+    desc: string;
+    createTime: number;
+    duration: number;
+    coverUrl: string;
+    authorUniqueId: string;
+    authorNickname: string;
+    authorAvatarUrl: string;
+    followerCount: number;
+    playCount: number;
+    diggCount: number;
+    commentCount: number;
+    shareCount: number;
+    collectCount: number;
+    hashtags: string[];
+    isAd: boolean;
+  }>>(),
+  crossAnalysis: json("crossAnalysis").$type<{
+    trendingHashtags: Array<{
+      tag: string;
+      videoCount: number;
+      queryCount: number;
+      avgER: number;
+    }>;
+    topVideos: Array<{
+      videoId: string;
+      desc: string;
+      authorUniqueId: string;
+      authorNickname: string;
+      playCount: number;
+      er: number;
+      coverUrl: string;
+      hashtags: string[];
+    }>;
+    coOccurringTags: Array<{
+      tagA: string;
+      tagB: string;
+      count: number;
+    }>;
+    keyCreators: Array<{
+      uniqueId: string;
+      nickname: string;
+      avatarUrl: string;
+      followerCount: number;
+      videoCount: number;
+      queryCount: number;
+      totalPlays: number;
+    }>;
+    summary: string;
+  }>(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type TrendDiscoveryJob = typeof trendDiscoveryJobs.$inferSelect;
+export type InsertTrendDiscoveryJob = typeof trendDiscoveryJobs.$inferInsert;

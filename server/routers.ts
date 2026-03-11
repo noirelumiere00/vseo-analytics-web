@@ -1,4 +1,4 @@
-import { COOKIE_NAME, SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
+import { COOKIE_NAME, SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION, TREND_VIDEOS_PER_QUERY } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -7,7 +7,8 @@ import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeLosePatternCommonality, analyzeWinPatternCommonalityAd, analyzeLosePatternCommonalityAd, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
 import { LLMQuotaExhaustedError } from "./_core/llm";
-import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
+import { searchTikTokTriple, searchTikTokBatch, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
+import { expandPersonaToQueries, flattenTikTokVideo, computeCrossAnalysis, generateTrendSummary } from "./trendDiscovery";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 // pdfExporter: 全エンドポイントがコメントアウト済みのため import 削除（メモリ節約）
 // import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
@@ -75,7 +76,25 @@ setInterval(() => {
       console.log(`[ProgressStore] Evicted stale entry for job ${jobId}`);
     }
   }
+  for (const [jobId, entry] of trendProgressStore) {
+    if (entry.updatedAt < staleThreshold) {
+      trendProgressStore.delete(jobId);
+      console.log(`[TrendProgressStore] Evicted stale entry for job ${jobId}`);
+    }
+  }
 }, 5 * 60 * 1000).unref(); // .unref() でプロセス終了をブロックしない
+
+// トレンド発見用の進捗ストア（既存のprogressStoreとは分離）
+type TrendProgressEntry = {
+  message: string;
+  percent: number;
+  updatedAt: number;
+};
+const trendProgressStore = new Map<number, TrendProgressEntry>();
+
+function setTrendProgress(jobId: number, message: string, percent: number) {
+  trendProgressStore.set(jobId, { message, percent, updatedAt: Date.now() });
+}
 
 function setProgress(jobId: number, progress: { message: string; percent: number }) {
   const existing = progressStore.get(jobId);
@@ -1302,6 +1321,191 @@ export const appRouter = router({
         // ステータスをpendingにリセット
         await db.updateAnalysisJobStatus(input.jobId, "pending");
         return { success: true, jobId: input.jobId };
+      }),
+  }),
+
+  trendDiscovery: router({
+    create: protectedProcedure
+      .input(z.object({ persona: z.string().min(1).max(200) }))
+      .mutation(async ({ ctx, input }) => {
+        const jobId = await db.createTrendDiscoveryJob({
+          userId: ctx.user.id,
+          persona: input.persona,
+          status: "pending",
+        });
+        return { jobId };
+      }),
+
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getTrendDiscoveryJobsByUserId(ctx.user.id);
+    }),
+
+    getById: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "ジョブが見つかりません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return job;
+      }),
+
+    execute: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.status === "processing") return { success: true, message: "既に実行中です" };
+        if (job.status === "completed") return { success: true, message: "既に完了しています" };
+
+        await db.updateTrendDiscoveryJobStatus(input.jobId, "processing");
+        setTrendProgress(input.jobId, "処理を開始しています...", 0);
+
+        // バックグラウンド実行（共有キュー使用）
+        analysisQueue(async () => {
+          try {
+            // Step 1: LLM KW拡張 (5%)
+            setTrendProgress(input.jobId, "ペルソナからキーワードを拡張中...", 5);
+            const { keywords, hashtags } = await expandPersonaToQueries(job.persona);
+            console.log(`[TrendDiscovery] Job ${input.jobId}: expanded to ${keywords.length} KW + ${hashtags.length} HT`);
+
+            await db.updateTrendDiscoveryJob(input.jobId, {
+              expandedKeywords: keywords,
+              expandedHashtags: hashtags,
+            });
+
+            // Step 2: バッチスクレイピング (10-80%)
+            setTrendProgress(input.jobId, "TikTok検索を開始します...", 10);
+
+            const queries = [
+              ...keywords.map(k => ({ query: k, type: "keyword" as const })),
+              ...hashtags.map(h => ({ query: h, type: "hashtag" as const })),
+            ];
+
+            const batchResults = await searchTikTokBatch(
+              queries,
+              TREND_VIDEOS_PER_QUERY,
+              (msg, completed, total) => {
+                const pct = 10 + Math.floor((completed / total) * 70);
+                setTrendProgress(input.jobId, msg, pct);
+              },
+            );
+
+            // フラット化
+            const allVideos = batchResults.flatMap(r =>
+              r.videos.map(v => flattenTikTokVideo(v, r.query, r.type))
+            );
+            console.log(`[TrendDiscovery] Job ${input.jobId}: scraped ${allVideos.length} total videos`);
+
+            await db.updateTrendDiscoveryJob(input.jobId, {
+              scrapedVideos: allVideos,
+            });
+
+            // Step 3: 横断集計 (80-90%)
+            setTrendProgress(input.jobId, "横断集計を実行中...", 80);
+            const crossAnalysis = computeCrossAnalysis(allVideos);
+
+            // Step 4: LLMサマリー (90-95%)
+            setTrendProgress(input.jobId, "AIサマリーを生成中...", 90);
+            const summary = await generateTrendSummary(job.persona, crossAnalysis);
+            crossAnalysis.summary = summary;
+
+            // Step 5: DB保存・完了 (95-100%)
+            setTrendProgress(input.jobId, "結果を保存中...", 95);
+            await db.updateTrendDiscoveryJob(input.jobId, {
+              crossAnalysis,
+            });
+            await db.updateTrendDiscoveryJobStatus(input.jobId, "completed", new Date());
+            setTrendProgress(input.jobId, "完了", 100);
+            console.log(`[TrendDiscovery] Job ${input.jobId}: completed`);
+          } catch (error) {
+            console.error(`[TrendDiscovery] Job ${input.jobId} failed:`, error);
+            await db.updateTrendDiscoveryJobStatus(input.jobId, "failed");
+            setTrendProgress(input.jobId, `エラー: ${error instanceof Error ? error.message : "不明なエラー"}`, -1);
+          }
+        });
+
+        return { success: true, message: "実行を開始しました" };
+      }),
+
+    getProgress: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const progressInfo = trendProgressStore.get(input.jobId);
+        return {
+          status: job.status,
+          progress: progressInfo?.percent ?? 0,
+          currentStep: progressInfo?.message ?? (
+            job.status === "completed" ? "完了"
+            : job.status === "failed" ? "失敗"
+            : "待機中"
+          ),
+        };
+      }),
+
+    exportCsv: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+
+        const lines: string[] = [];
+
+        // トレンドハッシュタグ
+        lines.push("[トレンドハッシュタグ]");
+        lines.push("順位,ハッシュタグ,出現動画数,クエリ横断数,平均ER(%)");
+        const tags = (job.crossAnalysis as any)?.trendingHashtags || [];
+        tags.forEach((t: any, i: number) => {
+          lines.push(`${i + 1},#${t.tag},${t.videoCount},${t.queryCount},${t.avgER}`);
+        });
+        lines.push("");
+
+        // トップ動画
+        lines.push("[トップ動画（ER順）]");
+        lines.push("順位,動画ID,クリエイター,再生数,ER(%),説明文,ハッシュタグ");
+        const topVids = (job.crossAnalysis as any)?.topVideos || [];
+        topVids.forEach((v: any, i: number) => {
+          lines.push(`${i + 1},${v.videoId},@${v.authorUniqueId},${v.playCount},${v.er},${csvEscape(v.desc || "")},${csvEscape((v.hashtags || []).map((t: string) => "#" + t).join(" "))}`);
+        });
+        lines.push("");
+
+        // 共起タグ
+        lines.push("[共起タグペア]");
+        lines.push("順位,タグA,タグB,共起数");
+        const pairs = (job.crossAnalysis as any)?.coOccurringTags || [];
+        pairs.forEach((p: any, i: number) => {
+          lines.push(`${i + 1},#${p.tagA},#${p.tagB},${p.count}`);
+        });
+        lines.push("");
+
+        // キークリエイター
+        lines.push("[キークリエイター]");
+        lines.push("順位,ユーザーID,ニックネーム,フォロワー数,動画数,クエリ横断数,合計再生数");
+        const creators = (job.crossAnalysis as any)?.keyCreators || [];
+        creators.forEach((c: any, i: number) => {
+          lines.push(`${i + 1},@${c.uniqueId},${csvEscape(c.nickname || "")},${c.followerCount},${c.videoCount},${c.queryCount},${c.totalPlays}`);
+        });
+
+        return {
+          csv: lines.join("\n"),
+          filename: `トレンド発見_${job.persona}_${fmtDate(job.createdAt)}.csv`,
+        };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.status === "processing") throw new TRPCError({ code: "BAD_REQUEST", message: "処理中のジョブは削除できません" });
+        await db.deleteTrendDiscoveryJob(input.jobId);
+        return { success: true };
       }),
   }),
 

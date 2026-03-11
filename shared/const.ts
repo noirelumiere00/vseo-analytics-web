@@ -27,11 +27,31 @@ export const AD_HASHTAG_PATTERNS = [
   /^アンバサダー$/,
   /^案件$/,
   /^企業案件$/,
+  /^パートナーシップ$/,
+  /^partnership$/i,
+  /^partner$/i,
+  /^パートナー$/,
+  /^コラボ$/,
+  /^collab$/i,
+  /^collaboration$/i,
+  /^有償$/,
 ];
 
 export function filterAdHashtags(hashtags: string[]): string[] {
   return hashtags.filter(tag => {
     const cleanTag = tag.replace(/^#/, '').trim();
     return !AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
+  });
+}
+
+/** トレンド発見機能の設定 */
+export const TREND_MAX_KEYWORDS = 15;
+export const TREND_MAX_HASHTAGS = 15;
+export const TREND_VIDEOS_PER_QUERY = 20;
+
+export function isPromotionVideo(hashtags: string[]): boolean {
+  return hashtags.some(tag => {
+    const cleanTag = tag.replace(/^#/, '').trim();
+    return AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
   });
 }
