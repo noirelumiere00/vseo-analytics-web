@@ -21,19 +21,20 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Compass, History, LayoutDashboard, LogOut, Megaphone, PanelLeft, Search, Users } from "lucide-react";
+import { Compass, History, LayoutDashboard, LogOut, Megaphone, PanelLeft, Search, TrendingUp, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Button } from "./ui/button";
 
-// 分析セクション (index 0-1)
-// インサイトセクション (index 2+)
+// 分析セクション (index 0-2)
+// インサイトセクション (index 3+)
 const menuItems = [
   { icon: Search, label: "TikTok SEO分析", path: "/" },
-  { icon: Megaphone, label: "施策効果レポート", path: "/campaigns" },
   { icon: Compass, label: "TikTokトレンド分析", path: "/trend-discovery" },
+  { icon: Megaphone, label: "施策効果レポート", path: "/campaigns" },
+  { icon: TrendingUp, label: "トレンド分析結果", path: "/trend-insights" },
   { icon: History, label: "分析履歴", path: "/history" },
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
 ];
@@ -196,8 +197,9 @@ function DashboardLayoutContent({
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">分析</span>
                 </div>
               )}
-              {menuItems.slice(0, 2).map(item => {
+              {menuItems.slice(0, 3).map(item => {
                 const isActive = location === item.path
+                  || (item.path === "/trend-discovery" && location.startsWith("/trend-discovery/"))
                   || (item.path === "/campaigns" && location.startsWith("/campaigns"));
                 return (
                   <SidebarMenuItem key={item.path}>
@@ -223,9 +225,8 @@ function DashboardLayoutContent({
                 </div>
               )}
               {isCollapsed && <div className="my-2 mx-2 border-t" />}
-              {menuItems.slice(2).map(item => {
+              {menuItems.slice(3).map(item => {
                 const isActive = location === item.path
-                  || (item.path === "/trend-discovery" && location.startsWith("/trend-discovery/"))
                   || (item.path === "/history" && location.startsWith("/analysis/"));
                 return (
                   <SidebarMenuItem key={item.path}>

@@ -21,6 +21,7 @@ import CampaignList from "./pages/CampaignList";
 import CampaignNew from "./pages/CampaignNew";
 import CampaignDetail from "./pages/CampaignDetail";
 import CampaignReport from "./pages/CampaignReport";
+import TrendInsights from "./pages/TrendInsights";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/trend" component={Trend} />
       <Route path="/trend-discovery" component={TrendDiscovery} />
       <Route path="/trend-discovery/:id" component={TrendDiscoveryDetail} />
+      <Route path="/trend-insights" component={TrendInsights} />
       <Route path="/campaigns" component={CampaignList} />
       <Route path="/campaigns/new" component={CampaignNew} />
       <Route path="/campaigns/:id" component={CampaignDetail} />
