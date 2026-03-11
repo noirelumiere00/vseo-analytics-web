@@ -18,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import TrendDiscovery from "./pages/TrendDiscovery";
 import TrendDiscoveryDetail from "./pages/TrendDiscoveryDetail";
 import CampaignList from "./pages/CampaignList";
+import CampaignNew from "./pages/CampaignNew";
 import CampaignDetail from "./pages/CampaignDetail";
 import CampaignReport from "./pages/CampaignReport";
 
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/trend-discovery" component={TrendDiscovery} />
       <Route path="/trend-discovery/:id" component={TrendDiscoveryDetail} />
       <Route path="/campaigns" component={CampaignList} />
+      <Route path="/campaigns/new" component={CampaignNew} />
       <Route path="/campaigns/:id" component={CampaignDetail} />
       <Route path="/campaigns/:id/report" component={CampaignReport} />
       <Route path="/report/view/:jobId" component={ReportView} />

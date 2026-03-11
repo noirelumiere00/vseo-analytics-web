@@ -1,0 +1,1 @@
+ALTER TABLE `triple_search_results` ADD `losePatternAnalysis` json;

@@ -17,6 +17,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
 import pLimit from "p-limit";
+import { captureSnapshot, type SnapshotProgress } from "./campaignSnapshot";
+import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
 
 // グローバルジョブキュー: 同時実行を最大2に制限（RAM 1.9GB、1ジョブ≒600MB）
 const analysisQueue = pLimit(2);
@@ -82,6 +84,11 @@ setInterval(() => {
       console.log(`[TrendProgressStore] Evicted stale entry for job ${jobId}`);
     }
   }
+  for (const [id, entry] of campaignProgressStore) {
+    if (entry.updatedAt < staleThreshold) {
+      campaignProgressStore.delete(id);
+    }
+  }
 }, 5 * 60 * 1000).unref(); // .unref() でプロセス終了をブロックしない
 
 // トレンド発見用の進捗ストア（既存のprogressStoreとは分離）
@@ -94,6 +101,12 @@ const trendProgressStore = new Map<number, TrendProgressEntry>();
 
 function setTrendProgress(jobId: number, message: string, percent: number) {
   trendProgressStore.set(jobId, { message, percent, updatedAt: Date.now() });
+}
+
+// キャンペーンスナップショット用の進捗ストア
+const campaignProgressStore = new Map<number, { message: string; percent: number; phase: string; updatedAt: number }>();
+function setCampaignProgress(snapshotId: number, progress: SnapshotProgress) {
+  campaignProgressStore.set(snapshotId, { ...progress, updatedAt: Date.now() });
 }
 
 function setProgress(jobId: number, progress: { message: string; percent: number }) {
@@ -1583,6 +1596,234 @@ export const appRouter = router({
             message: `ログ取得エラー: ${errorMessage}`,
           };
         }
+      }),
+  }),
+
+  // ============================
+  // 施策効果レポート（キャンペーン）
+  // ============================
+  campaign: router({
+    // キャンペーン一覧
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getCampaignsByUserId(ctx.user.id);
+    }),
+
+    // キャンペーン作成
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(1, "キャンペーン名を入力してください"),
+        clientName: z.string().optional(),
+        keywords: z.array(z.string()).min(1, "キーワードを1つ以上入力してください"),
+        ownAccountIds: z.array(z.string()).min(1, "自社アカウントIDを1つ以上入力してください"),
+        ownVideoIds: z.array(z.string()).optional(),
+        campaignHashtags: z.array(z.string()).optional(),
+        competitors: z.array(z.object({
+          name: z.string(),
+          account_id: z.string(),
+        })).optional(),
+        brandKeywords: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createCampaign({
+          userId: ctx.user.id,
+          name: input.name,
+          clientName: input.clientName || null,
+          keywords: input.keywords,
+          ownAccountIds: input.ownAccountIds,
+          ownVideoIds: input.ownVideoIds || [],
+          campaignHashtags: input.campaignHashtags || [],
+          competitors: input.competitors || [],
+          brandKeywords: input.brandKeywords || [],
+        });
+        return { id };
+      }),
+
+    // キャンペーン詳細
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.id);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const snapshots = await db.getCampaignSnapshotsByCampaignId(input.id);
+        const report = await db.getCampaignReportByCampaignId(input.id);
+        return { campaign, snapshots, report };
+      }),
+
+    // キャンペーン更新
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        name: z.string().min(1).optional(),
+        clientName: z.string().optional(),
+        keywords: z.array(z.string()).optional(),
+        ownAccountIds: z.array(z.string()).optional(),
+        ownVideoIds: z.array(z.string()).optional(),
+        campaignHashtags: z.array(z.string()).optional(),
+        competitors: z.array(z.object({
+          name: z.string(),
+          account_id: z.string(),
+        })).optional(),
+        brandKeywords: z.array(z.string()).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.id);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const { id, ...updateData } = input;
+        await db.updateCampaign(id, updateData);
+        return { success: true };
+      }),
+
+    // キャンペーン削除
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.id);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        await db.deleteCampaign(input.id);
+        return { success: true };
+      }),
+
+    // スナップショット取得実行
+    captureSnapshot: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        type: z.enum(["baseline", "measurement"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+
+        // スナップショットレコードをpendingで作成
+        const snapshotId = await db.createCampaignSnapshot({
+          campaignId: input.campaignId,
+          snapshotType: input.type,
+          status: "pending",
+        });
+
+        // 非同期でスナップショット取得を実行
+        (async () => {
+          try {
+            await db.updateCampaignSnapshot(snapshotId, { status: "processing" });
+
+            const snapshotData = await captureSnapshot(
+              campaign,
+              input.type,
+              (progress) => setCampaignProgress(snapshotId, progress),
+            );
+
+            await db.updateCampaignSnapshot(snapshotId, {
+              status: "completed",
+              searchResults: snapshotData.searchResults,
+              competitorProfiles: snapshotData.competitorProfiles,
+              rippleEffect: snapshotData.rippleEffect,
+              capturedAt: new Date(),
+            });
+
+            // キャンペーンのステータスとスナップショットIDを更新
+            const updateData: Record<string, any> = {};
+            if (input.type === "baseline") {
+              updateData.baselineSnapshotId = snapshotId;
+              updateData.status = "baseline_captured";
+            } else {
+              updateData.measurementSnapshotId = snapshotId;
+              updateData.status = "measurement_captured";
+            }
+            await db.updateCampaign(input.campaignId, updateData);
+
+            // 両方のスナップショットが揃ったらレポート自動生成
+            const updatedCampaign = await db.getCampaignById(input.campaignId);
+            if (updatedCampaign?.baselineSnapshotId && updatedCampaign?.measurementSnapshotId) {
+              const baselineSnapshot = await db.getCampaignSnapshotById(updatedCampaign.baselineSnapshotId);
+              const measurementSnapshot = await db.getCampaignSnapshotById(updatedCampaign.measurementSnapshotId);
+              if (baselineSnapshot?.status === "completed" && measurementSnapshot?.status === "completed") {
+                const reportData = generateCampaignReport(updatedCampaign, baselineSnapshot, measurementSnapshot);
+                await db.upsertCampaignReport(reportData);
+                await db.updateCampaign(input.campaignId, { status: "report_ready" });
+              }
+            }
+
+            console.log(`[Campaign] Snapshot ${snapshotId} completed for campaign ${input.campaignId}`);
+          } catch (error) {
+            console.error(`[Campaign] Snapshot ${snapshotId} failed:`, error);
+            await db.updateCampaignSnapshot(snapshotId, { status: "failed" });
+          } finally {
+            campaignProgressStore.delete(snapshotId);
+          }
+        })();
+
+        return { snapshotId };
+      }),
+
+    // スナップショット進捗取得
+    getSnapshotProgress: protectedProcedure
+      .input(z.object({ snapshotId: z.number() }))
+      .query(async ({ input }) => {
+        const snapshot = await db.getCampaignSnapshotById(input.snapshotId);
+        const progress = campaignProgressStore.get(input.snapshotId);
+        return {
+          status: snapshot?.status || "pending",
+          progress: progress || null,
+        };
+      }),
+
+    // レポート取得
+    getReport: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが生成されていません" });
+        }
+        return report;
+      }),
+
+    // レポート手動生成
+    generateReport: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        if (!campaign.baselineSnapshotId || !campaign.measurementSnapshotId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "ベースラインと効果測定の両方のスナップショットが必要です" });
+        }
+        const baselineSnapshot = await db.getCampaignSnapshotById(campaign.baselineSnapshotId);
+        const measurementSnapshot = await db.getCampaignSnapshotById(campaign.measurementSnapshotId);
+        if (!baselineSnapshot || !measurementSnapshot) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
+        }
+        const reportData = generateCampaignReport(campaign, baselineSnapshot, measurementSnapshot);
+        await db.upsertCampaignReport(reportData);
+        await db.updateCampaign(input.campaignId, { status: "report_ready" });
+        return { success: true };
+      }),
+
+    // CSVエクスポート
+    exportCsv: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが生成されていません" });
+        }
+        return generateCampaignCsv(report);
       }),
   }),
 });

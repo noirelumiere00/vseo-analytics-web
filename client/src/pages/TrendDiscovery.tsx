@@ -49,7 +49,7 @@ export default function TrendDiscovery() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Compass className="h-6 w-6" />
-            トレンド発掘
+            TikTokトレンド分析
           </h1>
           <p className="text-muted-foreground mt-1">
             ペルソナや界隈名を入力すると、AIがキーワード・ハッシュタグに拡張し、TikTokの横断トレンドを分析します。
