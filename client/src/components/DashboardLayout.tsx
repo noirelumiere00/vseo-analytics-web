@@ -33,8 +33,8 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: Search, label: "TikTok SEO分析", path: "/" },
   { icon: Compass, label: "TikTokトレンド分析", path: "/trend-discovery" },
-  { icon: TrendingUp, label: "トレンド分析結果", path: "/trend-insights" },
   { icon: History, label: "SEO分析履歴", path: "/history" },
+  { icon: TrendingUp, label: "トレンド分析結果", path: "/trend-insights" },
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
 ];
 
