@@ -41,6 +41,8 @@ import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
 import HashtagStrategy from "@/components/HashtagStrategy";
+import DashboardLayout from "@/components/DashboardLayout";
+import { AnalysisDetailSkeleton } from "@/components/PageSkeleton";
 
 function WinPatternContent({ analysis }: { analysis: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string } }) {
   return (
@@ -711,20 +713,22 @@ export default function AnalysisDetail() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="animate-spin h-8 w-8 text-primary" />
-      </div>
+      <DashboardLayout>
+        <AnalysisDetailSkeleton />
+      </DashboardLayout>
     );
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <p className="text-muted-foreground">分析ジョブが見つかりません</p>
-          <Button onClick={() => setLocation("/")}>ホームに戻る</Button>
+      <DashboardLayout>
+        <div className="flex items-center justify-center py-32">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground">分析ジョブが見つかりません</p>
+            <Button onClick={() => setLocation("/")}>ホームに戻る</Button>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
@@ -733,36 +737,32 @@ export default function AnalysisDetail() {
 
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container py-12">
-        <div className="max-w-7xl mx-auto space-y-8">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold">
-                <span className="gradient-text">{job.keyword ? job.keyword.replace(/^#+/, "") : "手動URL分析"}</span>
-              </h1>
-              {job.status === "completed" && (
-                <p className="text-muted-foreground mt-2">分析完了</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {job.status === "completed" && (
-                <Button
-                  variant="outline"
-                  onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
-                  className="border-primary/50 text-primary hover:bg-primary/10"
-                >
-                  <GitCompare className="h-4 w-4 mr-2" />
-                  比較
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setLocation("/history")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                履歴に戻る
-              </Button>
-            </div>
+    <DashboardLayout>
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">
+              {job.keyword ? job.keyword.replace(/^#+/, "") : "手動URL分析"}
+            </h1>
+            {job.status === "completed" && (
+              <p className="text-sm text-muted-foreground mt-1">分析完了</p>
+            )}
           </div>
+          <div className="flex items-center gap-2">
+            {job.status === "completed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
+                className="border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <GitCompare className="h-4 w-4 mr-1.5" />
+                比較
+              </Button>
+            )}
+          </div>
+        </div>
 
           {/* 比較レポート選択 Dialog */}
           <Dialog open={compareDialogOpen} onOpenChange={setCompareDialogOpen}>
@@ -865,8 +865,10 @@ export default function AnalysisDetail() {
                       {/* メインステータス */}
                       <div className="flex flex-col items-center gap-3 text-center">
                         <div className="relative">
-                          <div className="h-16 w-16 rounded-full border-4 border-primary/20 flex items-center justify-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <div className="h-20 w-20 rounded-full p-[3px] bg-gradient-to-r from-primary via-purple-500 to-primary animate-spin-slow">
+                            <div className="h-full w-full rounded-full bg-background flex items-center justify-center">
+                              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
                           </div>
                         </div>
                         <div>
@@ -1662,8 +1664,7 @@ export default function AnalysisDetail() {
             </Card>
           )}
         </div>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 }
 
