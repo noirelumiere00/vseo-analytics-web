@@ -45,8 +45,8 @@ export function filterAdHashtags(hashtags: string[]): string[] {
 }
 
 /** トレンド発見機能の設定 */
-export const TREND_MAX_KEYWORDS = 15;
-export const TREND_MAX_HASHTAGS = 15;
+export const TREND_MAX_KEYWORDS = 10;
+export const TREND_MAX_HASHTAGS = 10;
 export const TREND_VIDEOS_PER_QUERY = 20;
 
 export function isPromotionVideo(hashtags: string[]): boolean {
