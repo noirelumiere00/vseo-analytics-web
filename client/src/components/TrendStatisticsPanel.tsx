@@ -156,17 +156,22 @@ function EngagementStatsTable({ stats, extremeVideos }: {
   stats: TrendStatistics["engagementStats"];
   extremeVideos?: ExtremeVideos;
 }) {
+  // 率系指標: 小数2桁固定 (例: "5.23%"), 再生数: 人間可読な略記 (例: "5万")
+  const fmtRate = (v: number) => `${Number(v.toFixed(2))}%`;
+
   const rows = [
     { label: "再生数", key: "playCount", data: stats.playCount, fmt: formatCount },
-    { label: "ER", key: "er", data: stats.er, fmt: (v: number) => `${v}%` },
-    { label: "いいね率", key: "likeRate", data: stats.likeRate, fmt: (v: number) => `${v}%` },
-    { label: "保存率", key: "saveRate", data: stats.saveRate, fmt: (v: number) => `${v}%` },
-    { label: "コメント率", key: "commentRate", data: stats.commentRate, fmt: (v: number) => `${v}%` },
-    { label: "シェア率", key: "shareRate", data: stats.shareRate, fmt: (v: number) => `${v}%` },
+    { label: "ER", key: "er", data: stats.er, fmt: fmtRate },
+    { label: "いいね率", key: "likeRate", data: stats.likeRate, fmt: fmtRate },
+    { label: "保存率", key: "saveRate", data: stats.saveRate, fmt: fmtRate },
+    { label: "コメント率", key: "commentRate", data: stats.commentRate, fmt: fmtRate },
+    { label: "シェア率", key: "shareRate", data: stats.shareRate, fmt: fmtRate },
   ];
 
   const videoLink = (ref?: VideoRef) =>
-    ref ? `https://www.tiktok.com/@${ref.authorUniqueId}/video/${ref.videoId}` : undefined;
+    ref && ref.videoId && ref.authorUniqueId
+      ? `https://www.tiktok.com/@${ref.authorUniqueId}/video/${ref.videoId}`
+      : undefined;
 
   return (
     <Card>
@@ -196,7 +201,10 @@ function EngagementStatsTable({ stats, extremeVideos }: {
                     <td className="py-2 pr-3 font-medium">{label}</td>
                     <td className="py-2 pr-3 text-right">
                       {minLink ? (
-                        <a href={minLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title="動画を開く">{fmt(data.min)}</a>
+                        <a href={minLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline" title="この動画をTikTokで開く">
+                          {fmt(data.min)}
+                          <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
                       ) : fmt(data.min)}
                     </td>
                     <td className="py-2 pr-3 text-right">{fmt(data.p25)}</td>
@@ -205,7 +213,10 @@ function EngagementStatsTable({ stats, extremeVideos }: {
                     <td className="py-2 pr-3 text-right">{fmt(data.p75)}</td>
                     <td className="py-2 text-right">
                       {maxLink ? (
-                        <a href={maxLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title="動画を開く">{fmt(data.max)}</a>
+                        <a href={maxLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline" title="この動画をTikTokで開く">
+                          {fmt(data.max)}
+                          <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
                       ) : fmt(data.max)}
                     </td>
                   </tr>
