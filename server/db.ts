@@ -416,7 +416,19 @@ export async function getTrendDiscoveryJobById(jobId: number) {
 export async function getTrendDiscoveryJobsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.userId, userId)).orderBy(desc(trendDiscoveryJobs.createdAt));
+  // scrapedVideos は一覧では不要かつ巨大（各700KB超）なので除外
+  // 全カラム SELECT + ORDER BY でMySQL sort_buffer_size を超過しエラーになる
+  return db.select({
+    id: trendDiscoveryJobs.id,
+    userId: trendDiscoveryJobs.userId,
+    persona: trendDiscoveryJobs.persona,
+    status: trendDiscoveryJobs.status,
+    expandedKeywords: trendDiscoveryJobs.expandedKeywords,
+    expandedHashtags: trendDiscoveryJobs.expandedHashtags,
+    crossAnalysis: trendDiscoveryJobs.crossAnalysis,
+    createdAt: trendDiscoveryJobs.createdAt,
+    completedAt: trendDiscoveryJobs.completedAt,
+  }).from(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.userId, userId)).orderBy(desc(trendDiscoveryJobs.createdAt));
 }
 
 export async function updateTrendDiscoveryJob(jobId: number, data: Partial<InsertTrendDiscoveryJob>) {
