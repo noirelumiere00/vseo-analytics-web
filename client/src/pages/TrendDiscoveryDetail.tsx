@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -36,6 +36,14 @@ export default function TrendDiscoveryDetail() {
   );
 
   const executeMutation = trpc.trendDiscovery.execute.useMutation({
+    onError: (error) => toast.error(error.message),
+  });
+
+  const recomputeMutation = trpc.trendDiscovery.recomputeStatistics.useMutation({
+    onSuccess: () => {
+      toast.success("統計を再計算しました");
+      jobQuery.refetch();
+    },
     onError: (error) => toast.error(error.message),
   });
 
@@ -112,6 +120,18 @@ export default function TrendDiscoveryDetail() {
               <Button onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
                 <FileText className="h-4 w-4 mr-2" />
                 施策レポート作成
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => recomputeMutation.mutate({ jobId })}
+                disabled={recomputeMutation.isPending}
+              >
+                {recomputeMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-4 w-4 mr-2" />
+                )}
+                統計再計算
               </Button>
               <Button variant="outline" onClick={handleExportCsv}>
                 <Download className="h-4 w-4 mr-2" />
