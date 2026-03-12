@@ -105,10 +105,318 @@ export function flattenTikTokVideo(
   };
 }
 
+// ---- 統計ヘルパー ----
+
+interface DescriptiveStats {
+  min: number; max: number; mean: number; median: number; stdDev: number; p25: number; p75: number;
+}
+
+function descriptiveStats(values: number[]): DescriptiveStats {
+  if (values.length === 0) return { min: 0, max: 0, mean: 0, median: 0, stdDev: 0, p25: 0, p75: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = sorted.length;
+  const mean = sorted.reduce((s, v) => s + v, 0) / n;
+  const variance = sorted.reduce((s, v) => s + (v - mean) ** 2, 0) / n;
+  const percentile = (p: number) => {
+    const idx = (p / 100) * (n - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  };
+  return {
+    min: sorted[0],
+    max: sorted[n - 1],
+    mean: round2(mean),
+    median: round2(percentile(50)),
+    stdDev: round2(Math.sqrt(variance)),
+    p25: round2(percentile(25)),
+    p75: round2(percentile(75)),
+  };
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+function percentileRanks(values: number[]): number[] {
+  const sorted = [...values].sort((a, b) => a - b);
+  return values.map(v => {
+    const below = sorted.filter(s => s < v).length;
+    return below / sorted.length;
+  });
+}
+
+type FollowerTier = "nano" | "micro" | "mid" | "macro" | "mega";
+function followerTier(count: number): FollowerTier {
+  if (count < 10_000) return "nano";
+  if (count < 100_000) return "micro";
+  if (count < 500_000) return "mid";
+  if (count < 1_000_000) return "macro";
+  return "mega";
+}
+
+/**
+ * uniqueVideos から統計データを計算
+ */
+function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVideoCountMap?: Map<string, number>) {
+  const completedTs = completedAt.getTime() / 1000;
+
+  // 基本計算: ER, 各rate, daysSincePosted, normalizedPlays
+  const enriched = uniqueVideos.map(v => {
+    const total = v.diggCount + v.commentCount + v.shareCount + v.collectCount;
+    const er = v.playCount > 0 ? (total / v.playCount) * 100 : 0;
+    const likeRate = v.playCount > 0 ? (v.diggCount / v.playCount) * 100 : 0;
+    const saveRate = v.playCount > 0 ? (v.collectCount / v.playCount) * 100 : 0;
+    const commentRate = v.playCount > 0 ? (v.commentCount / v.playCount) * 100 : 0;
+    const shareRate = v.playCount > 0 ? (v.shareCount / v.playCount) * 100 : 0;
+    const daysSincePosted = Math.max(1, (completedTs - v.createTime) / 86400);
+    const normalizedPlays = v.playCount / daysSincePosted;
+    return { ...v, er, likeRate, saveRate, commentRate, shareRate, daysSincePosted, normalizedPlays };
+  });
+
+  const totalVideos = enriched.length;
+  const adCount = enriched.filter(v => v.isAd).length;
+  const createTimes = enriched.map(v => v.createTime);
+
+  // 1. エンゲージメント基本統計
+  const engagementStats = {
+    playCount: descriptiveStats(enriched.map(v => v.playCount)),
+    er: descriptiveStats(enriched.map(v => v.er)),
+    likeRate: descriptiveStats(enriched.map(v => v.likeRate)),
+    saveRate: descriptiveStats(enriched.map(v => v.saveRate)),
+    commentRate: descriptiveStats(enriched.map(v => v.commentRate)),
+    shareRate: descriptiveStats(enriched.map(v => v.shareRate)),
+  };
+
+  // min/max に該当する動画の参照リンク
+  const findExtreme = (key: keyof typeof enriched[0], dir: "max" | "min") => {
+    if (enriched.length === 0) return undefined;
+    const sorted = [...enriched].sort((a, b) =>
+      dir === "max" ? (b[key] as number) - (a[key] as number) : (a[key] as number) - (b[key] as number)
+    );
+    const v = sorted[0];
+    return { videoId: v.videoId, authorUniqueId: v.authorUniqueId };
+  };
+  const extremeVideos = {
+    playCount: { max: findExtreme("playCount", "max"), min: findExtreme("playCount", "min") },
+    er: { max: findExtreme("er", "max"), min: findExtreme("er", "min") },
+    likeRate: { max: findExtreme("likeRate", "max"), min: findExtreme("likeRate", "min") },
+    saveRate: { max: findExtreme("saveRate", "max"), min: findExtreme("saveRate", "min") },
+    commentRate: { max: findExtreme("commentRate", "max"), min: findExtreme("commentRate", "min") },
+    shareRate: { max: findExtreme("shareRate", "max"), min: findExtreme("shareRate", "min") },
+  };
+
+  // パーセンタイルランク for trending判定
+  const npRanks = percentileRanks(enriched.map(v => v.normalizedPlays));
+  const erRanks = percentileRanks(enriched.map(v => v.er));
+  const compositeScores = enriched.map((_, i) => npRanks[i] * 0.5 + erRanks[i] * 0.5);
+
+  // 7. パフォーマンス分類
+  const indexed = enriched.map((v, i) => ({ ...v, score: compositeScores[i] }));
+  indexed.sort((a, b) => b.score - a.score);
+  const top20idx = Math.ceil(totalVideos * 0.2);
+  const bot20idx = Math.floor(totalVideos * 0.8);
+
+  const trendingVids = indexed.slice(0, top20idx);
+  const averageVids = indexed.slice(top20idx, bot20idx);
+  const underVids = indexed.slice(bot20idx);
+
+  const classBucket = (vids: typeof indexed) => ({
+    count: vids.length,
+    avgER: round2(vids.reduce((s, v) => s + v.er, 0) / (vids.length || 1)),
+    avgPlayCount: Math.round(vids.reduce((s, v) => s + v.playCount, 0) / (vids.length || 1)),
+    avgNormalizedPlays: Math.round(vids.reduce((s, v) => s + v.normalizedPlays, 0) / (vids.length || 1)),
+    topTags: topTagsFromVideos(vids, 5),
+  });
+
+  const performanceClassification = {
+    trending: classBucket(trendingVids),
+    average: classBucket(averageVids),
+    underperforming: classBucket(underVids),
+  };
+
+  // 2. フォロワー×ER散布図
+  const medianER = engagementStats.er.median;
+  const followerValues = enriched.map(v => v.followerCount).sort((a, b) => a - b);
+  const medianFollower = followerValues.length > 0
+    ? followerValues[Math.floor(followerValues.length / 2)]
+    : 0;
+
+  // 200点にサンプリング（均等間隔）
+  const step = Math.max(1, Math.floor(enriched.length / 200));
+  const sampled = enriched.filter((_, i) => i % step === 0).slice(0, 200);
+
+  const followerErScatter = sampled.map(v => ({
+    followerCount: v.followerCount,
+    er: round2(v.er),
+    playCount: v.playCount,
+    tier: followerTier(v.followerCount),
+    isHighPerformer: v.er > medianER && v.followerCount < medianFollower,
+    daysSincePosted: round2(v.daysSincePosted),
+  }));
+
+  // ティア別サマリー
+  const tierGroups = new Map<string, number[]>();
+  for (const v of enriched) {
+    const t = followerTier(v.followerCount);
+    if (!tierGroups.has(t)) tierGroups.set(t, []);
+    tierGroups.get(t)!.push(v.er);
+  }
+  const tierOrder: FollowerTier[] = ["nano", "micro", "mid", "macro", "mega"];
+  const followerTierSummary = tierOrder
+    .filter(t => tierGroups.has(t))
+    .map(t => {
+      const ers = tierGroups.get(t)!;
+      const stats = descriptiveStats(ers);
+      return { tier: t, count: ers.length, avgER: stats.mean, medianER: stats.median };
+    });
+
+  // 3. ハッシュタグ別パフォーマンス
+  const tagPerf = new Map<string, { ers: number[]; plays: number[]; normalizedPlays: number[] }>();
+  for (const v of enriched) {
+    for (const tag of v.hashtags) {
+      const lt = tag.toLowerCase();
+      if (BLACKLISTED_TAGS.has(lt)) continue;
+      if (!tagPerf.has(tag)) tagPerf.set(tag, { ers: [], plays: [], normalizedPlays: [] });
+      const tp = tagPerf.get(tag)!;
+      tp.ers.push(v.er);
+      tp.plays.push(v.playCount);
+      tp.normalizedPlays.push(v.normalizedPlays);
+    }
+  }
+  const globalMedianER = medianER;
+  const hashtagPerformance = Array.from(tagPerf.entries())
+    .filter(([, v]) => v.ers.length >= 2)
+    .map(([tag, v]) => {
+      const erStats = descriptiveStats(v.ers);
+      const totalPostCount = tagVideoCountMap?.get(tag);
+      return {
+        tag,
+        videoCount: v.ers.length,
+        avgER: erStats.mean,
+        medianER: erStats.median,
+        avgPlayCount: Math.round(v.plays.reduce((s, p) => s + p, 0) / v.plays.length),
+        avgNormalizedPlays: Math.round(v.normalizedPlays.reduce((s, p) => s + p, 0) / v.normalizedPlays.length),
+        isUnderrated: erStats.mean > globalMedianER * 1.5 && v.ers.length < 10,
+        ...(totalPostCount != null && { totalPostCount }),
+      };
+    })
+    .sort((a, b) => b.videoCount - a.videoCount)
+    .slice(0, 20);
+
+  // 4. 動画長×エンゲージメント (6バンド)
+  const durationRanges = [
+    { label: "~15秒", min: 0, max: 15 },
+    { label: "16-30秒", min: 16, max: 30 },
+    { label: "31-60秒", min: 31, max: 60 },
+    { label: "61-90秒", min: 61, max: 90 },
+    { label: "91-180秒", min: 91, max: 180 },
+    { label: "180秒~", min: 181, max: Infinity },
+  ];
+  const durationBands = durationRanges.map(r => {
+    const vids = enriched.filter(v => v.duration >= r.min && v.duration <= r.max);
+    if (vids.length === 0) return null;
+    const erStats = descriptiveStats(vids.map(v => v.er));
+    return {
+      label: r.label,
+      videoCount: vids.length,
+      avgER: erStats.mean,
+      medianER: erStats.median,
+      avgPlayCount: Math.round(vids.reduce((s, v) => s + v.playCount, 0) / vids.length),
+      isOptimal: false, // set below
+    };
+  }).filter((b): b is NonNullable<typeof b> => b !== null);
+  // 最適バンド = medianER最高
+  if (durationBands.length > 0) {
+    const maxMedianER = Math.max(...durationBands.map(b => b.medianER));
+    for (const b of durationBands) {
+      if (b.medianER === maxMedianER) b.isOptimal = true;
+    }
+  }
+
+  // 5. 投稿タイミングヒートマップ (JST = UTC+9)
+  const timeGrid = new Map<string, { count: number; totalER: number; totalPlays: number }>();
+  for (const v of enriched) {
+    const d = new Date((v.createTime + 9 * 3600) * 1000); // JST
+    const day = d.getUTCDay();
+    const hour = d.getUTCHours();
+    const key = `${day}-${hour}`;
+    if (!timeGrid.has(key)) timeGrid.set(key, { count: 0, totalER: 0, totalPlays: 0 });
+    const cell = timeGrid.get(key)!;
+    cell.count++;
+    cell.totalER += v.er;
+    cell.totalPlays += v.playCount;
+  }
+  const postingTimeGrid = Array.from(timeGrid.entries()).map(([key, cell]) => {
+    const [day, hour] = key.split("-").map(Number);
+    return {
+      day, hour,
+      videoCount: cell.count,
+      avgER: round2(cell.totalER / cell.count),
+      avgPlayCount: Math.round(cell.totalPlays / cell.count),
+    };
+  });
+  const bestTimeSlots = [...postingTimeGrid]
+    .filter(c => c.videoCount >= 2)
+    .sort((a, b) => b.avgER - a.avgER)
+    .slice(0, 5)
+    .map(c => ({ day: c.day, hour: c.hour, avgER: c.avgER, videoCount: c.videoCount }));
+
+  // 6. 再生数分布（対数バケット）
+  const buckets = [
+    { label: "~1K", min: 0, max: 1_000 },
+    { label: "1K-10K", min: 1_000, max: 10_000 },
+    { label: "10K-100K", min: 10_000, max: 100_000 },
+    { label: "100K-1M", min: 100_000, max: 1_000_000 },
+    { label: "1M-10M", min: 1_000_000, max: 10_000_000 },
+    { label: "10M~", min: 10_000_000, max: Infinity },
+  ];
+  const playCountDistribution = buckets.map(b => {
+    const vids = enriched.filter(v => v.playCount >= b.min && v.playCount < b.max);
+    return {
+      label: b.label,
+      count: vids.length,
+      percentage: round2((vids.length / totalVideos) * 100),
+      avgER: vids.length > 0 ? round2(vids.reduce((s, v) => s + v.er, 0) / vids.length) : 0,
+    };
+  }).filter(b => b.count > 0);
+
+  return {
+    totalVideos,
+    adCount,
+    dateRange: { min: Math.min(...createTimes), max: Math.max(...createTimes) },
+    engagementStats,
+    extremeVideos,
+    followerErScatter,
+    followerTierSummary,
+    hashtagPerformance,
+    durationBands,
+    postingTimeGrid,
+    bestTimeSlots,
+    playCountDistribution,
+    performanceClassification,
+  };
+}
+
+/** 動画リストからトップタグを抽出 */
+function topTagsFromVideos(videos: { hashtags: string[] }[], limit: number): string[] {
+  const counts = new Map<string, number>();
+  for (const v of videos) {
+    for (const tag of v.hashtags) {
+      if (BLACKLISTED_TAGS.has(tag.toLowerCase())) continue;
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
+
 /**
  * 横断集計: 全クエリから集めた動画データを分析
  */
-export function computeCrossAnalysis(videos: FlatVideo[]): NonNullable<TrendDiscoveryJob["crossAnalysis"]> {
+export function computeCrossAnalysis(videos: FlatVideo[], completedAt?: Date, tagVideoCountMap?: Map<string, number>): NonNullable<TrendDiscoveryJob["crossAnalysis"]> {
   // 動画をvideoIdで重複排除（最初の出現を優先）
   const uniqueMap = new Map<string, FlatVideo>();
   const videoQueries = new Map<string, Set<string>>(); // videoId → クエリ集合
@@ -158,25 +466,36 @@ export function computeCrossAnalysis(videos: FlatVideo[]): NonNullable<TrendDisc
     .sort((a, b) => b.videoCount - a.videoCount || b.queryCount - a.queryCount)
     .slice(0, 50);
 
-  // --- トップ動画（ER順） ---
-  const topVideos = uniqueVideos
-    .map(v => {
-      const er = v.playCount > 0
-        ? ((v.diggCount + v.commentCount + v.shareCount + v.collectCount) / v.playCount) * 100
-        : 0;
-      return {
-        videoId: v.videoId,
-        desc: v.desc,
-        authorUniqueId: v.authorUniqueId,
-        authorNickname: v.authorNickname,
-        playCount: v.playCount,
-        er: Math.round(er * 100) / 100,
-        coverUrl: v.coverUrl,
-        hashtags: v.hashtags,
-      };
-    })
-    .sort((a, b) => b.er - a.er)
-    .slice(0, 30);
+  // --- トップ動画（各指標上位の和集合） ---
+  const enrichedAll = uniqueVideos.map(v => {
+    const er = v.playCount > 0
+      ? ((v.diggCount + v.commentCount + v.shareCount + v.collectCount) / v.playCount) * 100
+      : 0;
+    return {
+      videoId: v.videoId,
+      desc: v.desc,
+      authorUniqueId: v.authorUniqueId,
+      authorNickname: v.authorNickname,
+      playCount: v.playCount,
+      diggCount: v.diggCount,
+      commentCount: v.commentCount,
+      shareCount: v.shareCount,
+      collectCount: v.collectCount,
+      er: Math.round(er * 100) / 100,
+      coverUrl: v.coverUrl,
+      hashtags: v.hashtags,
+    };
+  });
+  // 各指標の上位20を和集合で取得（重複排除）
+  const topVideoIds = new Set<string>();
+  const sortKeys = ["er", "playCount", "diggCount", "commentCount", "shareCount", "collectCount"] as const;
+  for (const key of sortKeys) {
+    const sorted = [...enrichedAll].sort((a, b) => (b[key] as number) - (a[key] as number));
+    for (const v of sorted.slice(0, 20)) topVideoIds.add(v.videoId);
+  }
+  const topVideos = enrichedAll
+    .filter(v => topVideoIds.has(v.videoId))
+    .sort((a, b) => b.er - a.er);
 
   // --- 共起タグペア ---
   const pairCounts = new Map<string, number>();
@@ -242,11 +561,15 @@ export function computeCrossAnalysis(videos: FlatVideo[]): NonNullable<TrendDisc
     .sort((a, b) => b.queryCount - a.queryCount || b.totalPlays - a.totalPlays)
     .slice(0, 20);
 
+  // 統計分析
+  const statistics = computeStatistics(uniqueVideos, completedAt ?? new Date(), tagVideoCountMap);
+
   return {
     trendingHashtags,
     topVideos,
     coOccurringTags,
     keyCreators,
+    statistics,
     summary: "", // LLMサマリーは別途生成
   };
 }

@@ -309,6 +309,10 @@ export const trendDiscoveryJobs = mysqlTable("trend_discovery_jobs", {
       authorUniqueId: string;
       authorNickname: string;
       playCount: number;
+      diggCount: number;
+      commentCount: number;
+      shareCount: number;
+      collectCount: number;
       er: number;
       coverUrl: string;
       hashtags: string[];
@@ -328,6 +332,7 @@ export const trendDiscoveryJobs = mysqlTable("trend_discovery_jobs", {
       totalPlays: number;
     }>;
     summary: string;
+    statistics?: Record<string, unknown>;
   }>(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),

@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import TrendStatisticsPanel from "@/components/TrendStatisticsPanel";
 
 export default function TrendDiscoveryDetail() {
   const params = useParams<{ id: string }>();
@@ -199,6 +200,11 @@ export default function TrendDiscoveryDetail() {
             {/* キークリエイター */}
             <KeyCreators data={(job.crossAnalysis as any)?.keyCreators || []} />
 
+            {/* 統計分析 */}
+            {(job.crossAnalysis as any)?.statistics && (
+              <TrendStatisticsPanel statistics={(job.crossAnalysis as any).statistics} />
+            )}
+
             {/* AIサマリー */}
             {(job.crossAnalysis as any)?.summary && (
               <Card>
@@ -259,7 +265,23 @@ function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: num
   );
 }
 
-function TopVideos({ data }: { data: Array<{ videoId: string; desc: string; authorUniqueId: string; authorNickname: string; playCount: number; er: number; coverUrl: string; hashtags: string[] }> }) {
+type SortKey = "er" | "playCount" | "diggCount" | "commentCount" | "shareCount" | "collectCount";
+const SORT_OPTIONS: Array<{ key: SortKey; label: string; icon: React.ReactNode }> = [
+  { key: "er", label: "ER%順", icon: <Play className="h-3 w-3" /> },
+  { key: "playCount", label: "再生数順", icon: <Eye className="h-3 w-3" /> },
+  { key: "diggCount", label: "いいね順", icon: <Heart className="h-3 w-3" /> },
+  { key: "commentCount", label: "コメント順", icon: <MessageCircle className="h-3 w-3" /> },
+  { key: "shareCount", label: "シェア順", icon: <Share2 className="h-3 w-3" /> },
+  { key: "collectCount", label: "保存順", icon: <Bookmark className="h-3 w-3" /> },
+];
+
+function TopVideos({ data }: { data: Array<{
+  videoId: string; desc: string; authorUniqueId: string; authorNickname: string;
+  playCount: number; diggCount?: number; commentCount?: number; shareCount?: number; collectCount?: number;
+  er: number; coverUrl: string; hashtags: string[];
+}> }) {
+  const [sortBy, setSortBy] = useState<SortKey>("er");
+  const [isOpen, setIsOpen] = useState(false);
   if (data.length === 0) return null;
 
   const formatCount = (n: number) => {
@@ -268,17 +290,51 @@ function TopVideos({ data }: { data: Array<{ videoId: string; desc: string; auth
     return String(n);
   };
 
+  const sorted = [...data].sort((a, b) => {
+    const aVal = sortBy === "er" ? a.er : ((a as any)[sortBy] ?? 0);
+    const bVal = sortBy === "er" ? b.er : ((b as any)[sortBy] ?? 0);
+    return bVal - aVal;
+  });
+
+  const currentOption = SORT_OPTIONS.find(o => o.key === sortBy)!;
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
-          <Play className="h-4 w-4" />
-          トップ動画（ER順）
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Play className="h-4 w-4" />
+            トップ動画
+          </CardTitle>
+          <div className="relative">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-accent transition-colors"
+            >
+              {currentOption.icon}
+              <span>{currentOption.label}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {isOpen && (
+              <div className="absolute right-0 top-full mt-1 z-10 bg-background border rounded-md shadow-lg py-1 min-w-[140px]">
+                {SORT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => { setSortBy(opt.key); setIsOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${sortBy === opt.key ? "font-medium bg-accent/50" : ""}`}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {data.slice(0, 12).map((v) => (
+          {sorted.slice(0, 12).map((v) => (
             <a
               key={v.videoId}
               href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
@@ -298,10 +354,10 @@ function TopVideos({ data }: { data: Array<{ videoId: string; desc: string; auth
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">@{v.authorUniqueId}</p>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{v.desc}</p>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Eye className="h-3 w-3" /> {formatCount(v.playCount)}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {formatCount(v.playCount)}</span>
+                    <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {formatCount(v.diggCount ?? 0)}</span>
+                    <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {formatCount(v.commentCount ?? 0)}</span>
                     <span className="font-medium text-primary">ER {v.er}%</span>
                   </div>
                 </div>
