@@ -595,7 +595,7 @@ export function computeCrossAnalysis(
   const uniqueVideos = Array.from(uniqueMap.values());
 
   // --- トレンドハッシュタグ集計 ---
-  const tagStats = new Map<string, { videoIds: Set<string>; queries: Set<string>; totalER: number; count: number }>();
+  const tagStats = new Map<string, { videoIds: Set<string>; queries: Set<string>; totalER: number; count: number; displayTag: string }>();
 
   for (const v of uniqueVideos) {
     const er = v.playCount > 0
@@ -606,10 +606,10 @@ export function computeCrossAnalysis(
       const lowerTag = tag.toLowerCase();
       if (BLACKLISTED_TAGS.has(lowerTag)) continue;
 
-      if (!tagStats.has(tag)) {
-        tagStats.set(tag, { videoIds: new Set(), queries: new Set(), totalER: 0, count: 0 });
+      if (!tagStats.has(lowerTag)) {
+        tagStats.set(lowerTag, { videoIds: new Set(), queries: new Set(), totalER: 0, count: 0, displayTag: tag });
       }
-      const stat = tagStats.get(tag)!;
+      const stat = tagStats.get(lowerTag)!;
       stat.videoIds.add(v.videoId);
       stat.queries.add(v.query);
       stat.totalER += er;
@@ -618,8 +618,8 @@ export function computeCrossAnalysis(
   }
 
   const trendingHashtags = Array.from(tagStats.entries())
-    .map(([tag, stat]) => ({
-      tag,
+    .map(([, stat]) => ({
+      tag: stat.displayTag,
       videoCount: stat.videoIds.size,
       queryCount: stat.queries.size,
       avgER: stat.count > 0 ? Math.round((stat.totalER / stat.count) * 100) / 100 : 0,

@@ -134,7 +134,7 @@ export default function TrendStatisticsPanel({ statistics }: { statistics: Trend
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold">統計分析</h2>
+      <h2 className="text-xl font-bold">統計分析</h2>
       <PerformanceClassification data={statistics.performanceClassification} total={statistics.totalVideos} />
       <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
       <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />

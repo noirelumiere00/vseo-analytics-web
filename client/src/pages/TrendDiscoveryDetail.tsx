@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Search, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -101,7 +101,7 @@ export default function TrendDiscoveryDetail() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -109,9 +109,10 @@ export default function TrendDiscoveryDetail() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold">{job.persona}</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-bold">{job.persona}</h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 {new Date(job.createdAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
+                {job.status === "completed" && " — 分析完了"}
               </p>
             </div>
           </div>
@@ -143,17 +144,58 @@ export default function TrendDiscoveryDetail() {
 
         {/* Processing */}
         {job.status === "processing" && (
-          <Card>
-            <CardContent className="py-8">
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                  <span className="font-medium">{progress?.currentStep || "処理中..."}</span>
+          <Card className="border-primary/20">
+            <CardContent className="py-10">
+              <div className="max-w-md mx-auto space-y-8">
+                {/* メインステータス */}
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <div className="relative">
+                    <div className="h-20 w-20 rounded-full p-[3px] bg-gradient-to-r from-primary via-purple-500 to-primary animate-spin-slow">
+                      <div className="h-full w-full rounded-full bg-background flex items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-lg">
+                      {progress?.currentStep || "分析を実行中..."}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">{Math.max(0, progress?.progress ?? 0)}%</p>
+                  </div>
+                  <Progress value={Math.max(0, progress?.progress ?? 0)} className="h-2 w-full" />
                 </div>
-                <Progress value={Math.max(0, progress?.progress ?? 0)} className="h-2" />
-                <p className="text-sm text-muted-foreground text-right">
-                  {progress?.progress ?? 0}%
-                </p>
+
+                {/* ステップインジケーター */}
+                <div className="space-y-3">
+                  {[
+                    { label: "キーワード拡張", desc: "ペルソナからKW・ハッシュタグを生成", startAt: 1, doneAt: 10 },
+                    { label: "TikTok検索・スクレイピング", desc: "検索結果から動画データを取得", startAt: 10, doneAt: 80 },
+                    { label: "SEOキーワード取得", desc: "上位動画のメタキーワードを解析", startAt: 80, doneAt: 85 },
+                    { label: "横断集計・統計分析", desc: "全クエリを横断して統計を算出", startAt: 85, doneAt: 90 },
+                    { label: "AIレポート生成", desc: "インサイト・戦略提案を自動生成", startAt: 90, doneAt: 99 },
+                  ].map((step, i) => {
+                    const pct = progress?.progress ?? 0;
+                    const isDone = pct >= step.doneAt;
+                    const isActive = pct >= step.startAt && !isDone;
+                    return (
+                      <div key={i} className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${isActive ? "bg-primary/5 border border-primary/20" : isDone ? "opacity-60" : "opacity-40"}`}>
+                        <div className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${isDone ? "bg-green-500" : isActive ? "bg-primary" : "bg-muted"}`}>
+                          {isDone ? (
+                            <CheckCircle className="h-3.5 w-3.5 text-white" />
+                          ) : isActive ? (
+                            <Loader2 className="h-3 w-3 animate-spin text-white" />
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">{i + 1}</span>
+                          )}
+                        </div>
+                        <div>
+                          <p className={`text-sm ${isDone ? "line-through" : isActive ? "font-medium" : ""}`}>{step.label}</p>
+                          <p className="text-xs text-muted-foreground">{step.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -161,21 +203,30 @@ export default function TrendDiscoveryDetail() {
 
         {/* Failed */}
         {job.status === "failed" && (
-          <Card className="border-destructive">
-            <CardContent className="py-6">
-              <p className="text-destructive font-medium">分析に失敗しました。</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                {progress?.currentStep || "再度お試しください。"}
-              </p>
-              <Button
-                className="mt-4"
-                onClick={() => {
-                  executedRef.current = false;
-                  executeMutation.mutate({ jobId });
-                }}
-              >
-                再実行
-              </Button>
+          <Card className="border-destructive/30">
+            <CardContent className="py-8">
+              <div className="flex flex-col items-center gap-4 text-center">
+                <AlertTriangle className="h-8 w-8 text-destructive" />
+                <div>
+                  <p className="font-medium text-destructive">分析に失敗しました</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {progress?.currentStep || "再実行してください"}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    executedRef.current = false;
+                    executeMutation.mutate({ jobId });
+                  }}
+                  disabled={executeMutation.isPending}
+                >
+                  {executeMutation.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />実行中...</>
+                  ) : (
+                    <><Play className="mr-2 h-4 w-4" />再実行</>
+                  )}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -183,10 +234,52 @@ export default function TrendDiscoveryDetail() {
         {/* Completed */}
         {job.status === "completed" && (
           <>
+            {/* 統計サマリーバナー */}
+            {(() => {
+              const stats = (job.crossAnalysis as any)?.statistics;
+              const kwCount = (job.expandedKeywords as string[] || []).length;
+              const htCount = (job.expandedHashtags as string[] || []).length;
+              return (
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
+                    <Search className="h-5 w-5 text-primary shrink-0" />
+                    <div>
+                      <p className="text-2xl font-bold">{kwCount + htCount}</p>
+                      <p className="text-xs text-muted-foreground">検索クエリ数</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                    <Play className="h-5 w-5 text-blue-500 shrink-0" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats?.totalVideos ?? "—"}</p>
+                      <p className="text-xs text-muted-foreground">分析動画数</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
+                    <TrendingUp className="h-5 w-5 text-amber-500 shrink-0" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats?.engagementStats?.er?.median != null ? `${stats.engagementStats.er.median}%` : "—"}</p>
+                      <p className="text-xs text-muted-foreground">中央値ER</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 border-l-4 border-rose-500 rounded-lg p-4 bg-rose-50 dark:bg-rose-950/20">
+                    <FileText className="h-5 w-5 text-rose-500 shrink-0" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats?.adInsight ? `${stats.adInsight.adRate}%` : "0%"}</p>
+                      <p className="text-xs text-muted-foreground">PR/Ad率</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* 拡張キーワード・ハッシュタグ */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">拡張されたクエリ</CardTitle>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  拡張されたクエリ
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div>
@@ -271,7 +364,7 @@ function AITrendReport({ report, fallbackSummary }: {
             <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div>
-            <h3 className="text-base font-bold">AIトレンドレポート</h3>
+            <h3 className="text-lg font-semibold">AIトレンドレポート</h3>
             <p className="text-xs text-muted-foreground">データに基づく{report.length}セクションの分析レポート</p>
           </div>
         </div>
@@ -332,7 +425,7 @@ function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: num
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Hash className="h-4 w-4" />
           トレンドハッシュタグ
         </CardTitle>
@@ -404,7 +497,7 @@ function TopVideos({ data }: { data: Array<{
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <Play className="h-4 w-4" />
             トップ動画
           </CardTitle>
@@ -484,7 +577,7 @@ function CoOccurringTags({ data }: { data: Array<{ tagA: string; tagB: string; c
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Share2 className="h-4 w-4" />
           共起タグペア
         </CardTitle>
@@ -520,7 +613,7 @@ function KeyCreators({ data }: { data: Array<{ uniqueId: string; nickname: strin
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Users className="h-4 w-4" />
           キークリエイター
         </CardTitle>
