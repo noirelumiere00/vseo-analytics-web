@@ -1485,6 +1485,69 @@ export const appRouter = router({
         return { success: true, message: "実行を開始しました" };
       }),
 
+    recomputeStatistics: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (!job.scrapedVideos || job.scrapedVideos.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "スクレイピングデータがありません" });
+        }
+
+        // scrapedVideos から統計を再計算（メタキーワードスクレイピングも実行）
+        setTrendProgress(input.jobId, "SEOキーワードを取得中...", 20);
+
+        let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
+        try {
+          const uniqueByVideoId = new Map<string, typeof job.scrapedVideos[number]>();
+          for (const v of job.scrapedVideos) {
+            if (!uniqueByVideoId.has(v.videoId)) uniqueByVideoId.set(v.videoId, v);
+          }
+          const top5 = Array.from(uniqueByVideoId.values())
+            .filter(v => v.authorUniqueId)
+            .sort((a, b) => b.playCount - a.playCount)
+            .slice(0, 5);
+
+          if (top5.length > 0) {
+            const urls = top5.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
+            const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
+              setTrendProgress(input.jobId, msg, 40)
+            );
+            for (const v of top5) {
+              const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
+              const kw = metaMap.get(url);
+              if (kw && kw.length > 0) {
+                trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn(`[TrendDiscovery] recompute meta keywords failed, skipping`, e);
+        }
+
+        setTrendProgress(input.jobId, "統計を再計算中...", 60);
+
+        // tagVideoCountMap は再構築不可（元データなし）なので undefined
+        const crossAnalysis = computeCrossAnalysis(
+          job.scrapedVideos,
+          job.completedAt ?? new Date(),
+          undefined,
+          trendMetaKeywords,
+        );
+
+        // 既存の summary / report を維持
+        const existing = job.crossAnalysis as any;
+        if (existing?.summary) crossAnalysis.summary = existing.summary;
+        if (existing?.report) (crossAnalysis as any).report = existing.report;
+
+        setTrendProgress(input.jobId, "保存中...", 90);
+        await db.updateTrendDiscoveryJob(input.jobId, { crossAnalysis });
+        setTrendProgress(input.jobId, "完了", 100);
+
+        return { success: true, message: "統計を再計算しました" };
+      }),
+
     getProgress: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .query(async ({ ctx, input }) => {
