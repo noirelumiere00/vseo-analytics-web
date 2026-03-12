@@ -1404,6 +1404,17 @@ export const appRouter = router({
               },
             );
 
+            // tagVideoCountマッピング構築（ハッシュタグ → 総投稿数）
+            const tagVideoCountMap = new Map<string, number>();
+            for (const r of batchResults) {
+              if (r.type === "hashtag" && r.tagVideoCount != null) {
+                tagVideoCountMap.set(r.query, r.tagVideoCount);
+              }
+            }
+            if (tagVideoCountMap.size > 0) {
+              console.log(`[TrendDiscovery] Job ${input.jobId}: tagVideoCount for ${tagVideoCountMap.size} hashtags`);
+            }
+
             // フラット化
             const allVideos = batchResults.flatMap(r =>
               r.videos.map(v => flattenTikTokVideo(v, r.query, r.type))
@@ -1416,7 +1427,7 @@ export const appRouter = router({
 
             // Step 3: 横断集計 (80-90%)
             setTrendProgress(input.jobId, "横断集計を実行中...", 80);
-            const crossAnalysis = computeCrossAnalysis(allVideos);
+            const crossAnalysis = computeCrossAnalysis(allVideos, new Date(), tagVideoCountMap);
 
             // Step 4: LLMサマリー (90-95%)
             setTrendProgress(input.jobId, "AIサマリーを生成中...", 90);

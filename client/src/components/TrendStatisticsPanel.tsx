@@ -1,0 +1,637 @@
+import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  Cell, ReferenceLine, ScatterChart, Scatter, ZAxis, CartesianGrid,
+} from "recharts";
+
+// ---- Types ----
+
+interface DescriptiveStats {
+  min: number; max: number; mean: number; median: number; stdDev: number; p25: number; p75: number;
+}
+
+interface VideoRef {
+  videoId: string;
+  authorUniqueId: string;
+}
+
+interface ExtremeVideos {
+  [key: string]: { max?: VideoRef; min?: VideoRef };
+}
+
+interface TrendStatistics {
+  totalVideos: number;
+  adCount: number;
+  dateRange: { min: number; max: number };
+  engagementStats: {
+    playCount: DescriptiveStats;
+    er: DescriptiveStats;
+    likeRate: DescriptiveStats;
+    saveRate: DescriptiveStats;
+    commentRate: DescriptiveStats;
+    shareRate: DescriptiveStats;
+  };
+  extremeVideos?: ExtremeVideos;
+  followerErScatter: Array<{
+    followerCount: number; er: number; playCount: number;
+    tier: string; isHighPerformer: boolean; daysSincePosted: number;
+  }>;
+  followerTierSummary: Array<{ tier: string; count: number; avgER: number; medianER: number }>;
+  hashtagPerformance: Array<{
+    tag: string; videoCount: number; avgER: number; medianER: number;
+    avgPlayCount: number; avgNormalizedPlays: number; isUnderrated: boolean;
+    totalPostCount?: number;
+  }>;
+  durationBands: Array<{
+    label: string; videoCount: number; avgER: number; medianER: number;
+    avgPlayCount: number; isOptimal: boolean;
+  }>;
+  postingTimeGrid: Array<{
+    day: number; hour: number; videoCount: number; avgER: number; avgPlayCount: number;
+  }>;
+  bestTimeSlots: Array<{ day: number; hour: number; avgER: number; videoCount: number }>;
+  playCountDistribution: Array<{ label: string; count: number; percentage: number; avgER: number }>;
+  performanceClassification: {
+    trending: ClassBucket;
+    average: ClassBucket;
+    underperforming: ClassBucket;
+  };
+}
+
+interface ClassBucket {
+  count: number; avgER: number; avgPlayCount: number; avgNormalizedPlays: number; topTags: string[];
+}
+
+// ---- Constants ----
+
+const TIER_COLORS: Record<string, string> = {
+  nano: "#10b981", micro: "#6366f1", mid: "#f59e0b", macro: "#ef4444", mega: "#8b5cf6",
+};
+const TIER_LABELS: Record<string, string> = {
+  nano: "ナノ (<10K)", micro: "マイクロ (10K-100K)", mid: "ミドル (100K-500K)",
+  macro: "マクロ (500K-1M)", mega: "メガ (1M+)",
+};
+const DAYS = ["日", "月", "火", "水", "木", "金", "土"];
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}万`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+// ---- Main Component ----
+
+export default function TrendStatisticsPanel({ statistics }: { statistics: TrendStatistics }) {
+  if (!statistics || statistics.totalVideos === 0) return null;
+
+  return (
+    <div className="space-y-6">
+      <h2 className="text-lg font-bold">統計分析</h2>
+      <PerformanceClassification data={statistics.performanceClassification} total={statistics.totalVideos} />
+      <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
+      <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
+      <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
+      <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
+      <PostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
+      <PlayCountDistribution data={statistics.playCountDistribution} />
+    </div>
+  );
+}
+
+// ---- 1. パフォーマンス分類カード ----
+
+function PerformanceClassification({ data, total }: { data: TrendStatistics["performanceClassification"]; total: number }) {
+  const items = [
+    { key: "trending" as const, label: "トレンド（上位20%）", color: "border-green-500 bg-green-50 dark:bg-green-950/30", textColor: "text-green-700 dark:text-green-400" },
+    { key: "average" as const, label: "平均的（中間60%）", color: "border-gray-300 bg-gray-50 dark:bg-gray-900/30", textColor: "text-gray-700 dark:text-gray-400" },
+    { key: "underperforming" as const, label: "低パフォーマンス（下位20%）", color: "border-red-500 bg-red-50 dark:bg-red-950/30", textColor: "text-red-700 dark:text-red-400" },
+  ];
+
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      {items.map(({ key, label, color, textColor }) => {
+        const bucket = data[key];
+        return (
+          <Card key={key} className={`border-l-4 ${color}`}>
+            <CardHeader className="pb-2">
+              <CardTitle className={`text-sm ${textColor}`}>{label}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">動画数</span>
+                <span className="font-medium">{bucket.count}本 ({total > 0 ? Math.round((bucket.count / total) * 100) : 0}%)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">平均ER</span>
+                <span className="font-medium">{bucket.avgER}%</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">平均再生数</span>
+                <span className="font-medium">{formatCount(bucket.avgPlayCount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">日次正規化再生</span>
+                <span className="font-medium">{formatCount(bucket.avgNormalizedPlays)}</span>
+              </div>
+              {bucket.topTags.length > 0 && (
+                <div className="pt-1">
+                  <span className="text-xs text-muted-foreground">頻出タグ: </span>
+                  <span className="text-xs">{bucket.topTags.map(t => `#${t}`).join(" ")}</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---- 2. エンゲージメント基本統計テーブル ----
+
+function EngagementStatsTable({ stats, extremeVideos }: {
+  stats: TrendStatistics["engagementStats"];
+  extremeVideos?: ExtremeVideos;
+}) {
+  const rows = [
+    { label: "再生数", key: "playCount", data: stats.playCount, fmt: formatCount },
+    { label: "ER", key: "er", data: stats.er, fmt: (v: number) => `${v}%` },
+    { label: "いいね率", key: "likeRate", data: stats.likeRate, fmt: (v: number) => `${v}%` },
+    { label: "保存率", key: "saveRate", data: stats.saveRate, fmt: (v: number) => `${v}%` },
+    { label: "コメント率", key: "commentRate", data: stats.commentRate, fmt: (v: number) => `${v}%` },
+    { label: "シェア率", key: "shareRate", data: stats.shareRate, fmt: (v: number) => `${v}%` },
+  ];
+
+  const videoLink = (ref?: VideoRef) =>
+    ref ? `https://www.tiktok.com/@${ref.authorUniqueId}/video/${ref.videoId}` : undefined;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">エンゲージメント基本統計</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="pb-2 pr-3 font-medium text-muted-foreground">指標</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">最小</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">P25</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">中央値</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">平均</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground text-right">P75</th>
+                <th className="pb-2 font-medium text-muted-foreground text-right">最大</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ label, key, data, fmt }) => {
+                const minLink = videoLink(extremeVideos?.[key]?.min);
+                const maxLink = videoLink(extremeVideos?.[key]?.max);
+                return (
+                  <tr key={label} className="border-b last:border-0">
+                    <td className="py-2 pr-3 font-medium">{label}</td>
+                    <td className="py-2 pr-3 text-right">
+                      {minLink ? (
+                        <a href={minLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title="動画を開く">{fmt(data.min)}</a>
+                      ) : fmt(data.min)}
+                    </td>
+                    <td className="py-2 pr-3 text-right">{fmt(data.p25)}</td>
+                    <td className="py-2 pr-3 text-right font-medium">{fmt(data.median)}</td>
+                    <td className="py-2 pr-3 text-right">{fmt(data.mean)}</td>
+                    <td className="py-2 pr-3 text-right">{fmt(data.p75)}</td>
+                    <td className="py-2 text-right">
+                      {maxLink ? (
+                        <a href={maxLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title="動画を開く">{fmt(data.max)}</a>
+                      ) : fmt(data.max)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 3. フォロワー×ER散布図 ----
+
+function FollowerErScatter({ data, tiers }: {
+  data: TrendStatistics["followerErScatter"];
+  tiers: TrendStatistics["followerTierSummary"];
+}) {
+  if (data.length === 0) return null;
+
+  // log(0) = -Infinity でチャートが壊れるため、followerCount=0 を除外
+  const validData = data.filter(d => d.followerCount > 0 && d.er >= 0);
+  if (validData.length === 0) return null;
+
+  const tierGroups = new Map<string, typeof validData>();
+  for (const d of validData) {
+    if (!tierGroups.has(d.tier)) tierGroups.set(d.tier, []);
+    tierGroups.get(d.tier)!.push(d);
+  }
+
+  // log scale 用の domain を明示的に計算（auto が効かないケース対策）
+  const followerValues = validData.map(d => d.followerCount);
+  const minFollower = Math.max(1, Math.min(...followerValues));
+  const maxFollower = Math.max(...followerValues);
+  const erValues = validData.map(d => d.er);
+  const maxER = Math.max(...erValues);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">フォロワー数 × ER 散布図</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          <ScatterChart margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="followerCount"
+              type="number"
+              scale="log"
+              domain={[minFollower, maxFollower]}
+              tick={{ fontSize: 11 }}
+              tickFormatter={formatCount}
+              name="フォロワー"
+              allowDataOverflow={false}
+            />
+            <YAxis
+              dataKey="er"
+              type="number"
+              domain={[0, Math.ceil(maxER * 1.1)]}
+              tick={{ fontSize: 11 }}
+              tickFormatter={v => `${v}%`}
+              name="ER"
+            />
+            <ZAxis dataKey="playCount" range={[30, 200]} name="再生数" />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                    <div>フォロワー: {formatCount(d.followerCount)}</div>
+                    <div>ER: {d.er}%</div>
+                    <div>再生数: {formatCount(d.playCount)}</div>
+                    <div>経過日数: {d.daysSincePosted}日</div>
+                    <div>ティア: {TIER_LABELS[d.tier] || d.tier}</div>
+                    {d.isHighPerformer && <div className="text-green-600 font-medium">高パフォーマー</div>}
+                  </div>
+                );
+              }}
+            />
+            {(["nano", "micro", "mid", "macro", "mega"] as const).map(tier => {
+              const points = tierGroups.get(tier);
+              if (!points || points.length === 0) return null;
+              return (
+                <Scatter
+                  key={tier}
+                  name={TIER_LABELS[tier] || tier}
+                  data={points}
+                  fill={TIER_COLORS[tier]}
+                  opacity={0.7}
+                />
+              );
+            })}
+          </ScatterChart>
+        </ResponsiveContainer>
+        {/* ティアサマリー */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">
+          {tiers.map(t => (
+            <div key={t.tier} className="p-2 rounded bg-muted/50 text-center text-xs">
+              <div className="flex items-center justify-center gap-1 mb-1">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: TIER_COLORS[t.tier] }} />
+                <span className="font-medium">{TIER_LABELS[t.tier]?.split(" ")[0] || t.tier}</span>
+              </div>
+              <div className="text-muted-foreground">{t.count}本</div>
+              <div className="text-muted-foreground">中央値ER {t.medianER}%</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 4. ハッシュタグ別ER比較 ----
+
+function HashtagPerformanceChart({ data, globalMedianER }: {
+  data: TrendStatistics["hashtagPerformance"];
+  globalMedianER: number;
+}) {
+  if (data.length === 0) return null;
+
+  const chartData = data.slice(0, 15).map(d => ({
+    tag: `#${d.tag}`,
+    avgER: d.avgER,
+    videoCount: d.videoCount,
+    isUnderrated: d.isUnderrated,
+    totalPostCount: d.totalPostCount,
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">ハッシュタグ別 平均ER</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28 + 40)}>
+          <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 80 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+            <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={75} />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                    <div className="font-medium">{d.tag}</div>
+                    <div>平均ER: {d.avgER}%</div>
+                    <div>動画数: {d.videoCount}本</div>
+                    {d.totalPostCount != null && (
+                      <div>総投稿数: {formatCount(d.totalPostCount)}本</div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="avgER" radius={[0, 4, 4, 0]}>
+              {chartData.map((d, i) => (
+                <Cell key={i} fill={d.isUnderrated ? "#10b981" : "#6366f1"} />
+              ))}
+            </Bar>
+            {globalMedianER > 0 && (
+              <ReferenceLine
+                x={globalMedianER}
+                stroke="#ef4444"
+                strokeDasharray="5 5"
+                label={{ value: `全体中央値 ${globalMedianER}%`, position: "top", fontSize: 10, fill: "#ef4444" }}
+              />
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded" style={{ backgroundColor: "#10b981" }} /> 穴場タグ（高ER・少数動画）
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-3 h-3 rounded" style={{ backgroundColor: "#6366f1" }} /> 通常
+          </span>
+        </div>
+        {/* 投稿数バッジ */}
+        {chartData.some(d => d.totalPostCount != null) && (
+          <div className="mt-3 pt-3 border-t">
+            <p className="text-xs font-medium mb-2 text-muted-foreground">TikTok総投稿数</p>
+            <div className="flex flex-wrap gap-2">
+              {chartData.filter(d => d.totalPostCount != null).map(d => (
+                <span key={d.tag} className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-2 py-1 rounded">
+                  <span className="font-medium">{d.tag}</span>
+                  <span className="text-muted-foreground">{formatCount(d.totalPostCount!)}本</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 5. 動画長×ER ----
+
+function DurationBandsChart({ data, globalMedianER }: {
+  data: TrendStatistics["durationBands"];
+  globalMedianER: number;
+}) {
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">動画長 × 平均ER</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+            <Tooltip
+              formatter={(value: number, name: string) => {
+                if (name === "avgER") return [`${value}%`, "平均ER"];
+                return [value, name];
+              }}
+              labelFormatter={l => `尺: ${l}`}
+            />
+            <Bar dataKey="avgER" radius={[4, 4, 0, 0]}>
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.isOptimal ? "#2563eb" : "#93c5fd"} />
+              ))}
+            </Bar>
+            {globalMedianER > 0 && (
+              <ReferenceLine
+                y={globalMedianER}
+                stroke="#ef4444"
+                strokeDasharray="5 5"
+                label={{ value: `中央値ER ${globalMedianER}%`, position: "right", fontSize: 11, fill: "#ef4444" }}
+              />
+            )}
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+          {data.map(d => (
+            <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800" : "bg-muted/50"}`}>
+              <div className="font-medium">{d.label} {d.isOptimal && "★"}</div>
+              <div className="text-muted-foreground">{d.videoCount}本</div>
+              <div className="text-muted-foreground">ER {d.avgER}%</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 6. 投稿タイミングヒートマップ ----
+
+function PostingTimeHeatmap({ grid, bestSlots }: {
+  grid: TrendStatistics["postingTimeGrid"];
+  bestSlots: TrendStatistics["bestTimeSlots"];
+}) {
+  const [mode, setMode] = useState<"er" | "count">("er");
+
+  // Build 7x24 lookup
+  const lookup = new Map<string, TrendStatistics["postingTimeGrid"][number]>();
+  let maxER = 0, maxCount = 0;
+  for (const cell of grid) {
+    lookup.set(`${cell.day}-${cell.hour}`, cell);
+    if (cell.avgER > maxER) maxER = cell.avgER;
+    if (cell.videoCount > maxCount) maxCount = cell.videoCount;
+  }
+
+  const getColor = (day: number, hour: number) => {
+    const cell = lookup.get(`${day}-${hour}`);
+    if (!cell) return "bg-muted";
+    if (mode === "er") {
+      if (maxER === 0) return "bg-muted";
+      const intensity = cell.avgER / maxER;
+      if (intensity > 0.75) return "bg-teal-600 text-white";
+      if (intensity > 0.5) return "bg-teal-400 text-white";
+      if (intensity > 0.25) return "bg-teal-200";
+      return "bg-teal-100";
+    } else {
+      if (maxCount === 0) return "bg-muted";
+      const intensity = cell.videoCount / maxCount;
+      if (intensity > 0.75) return "bg-blue-600 text-white";
+      if (intensity > 0.5) return "bg-blue-400 text-white";
+      if (intensity > 0.25) return "bg-blue-200";
+      return "bg-blue-100";
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">投稿タイミング分析（JST）</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {/* モード切替 */}
+        <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit mb-4">
+          <button
+            onClick={() => setMode("er")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === "er" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            平均ER
+          </button>
+          <button
+            onClick={() => setMode("count")}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === "count" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            投稿数
+          </button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, 28px)` }}>
+            <div />
+            {HOURS.map(h => (
+              <div key={h} className="text-[10px] text-center text-muted-foreground">{h}</div>
+            ))}
+            {DAYS.map((day, di) => (
+              <div key={`row-${di}`} className="contents">
+                <div className="text-xs font-medium flex items-center">{day}</div>
+                {HOURS.map(h => {
+                  const cell = lookup.get(`${di}-${h}`);
+                  const val = cell
+                    ? (mode === "er" ? `${cell.avgER}%` : String(cell.videoCount))
+                    : "";
+                  return (
+                    <div
+                      key={`${di}-${h}`}
+                      className={`w-7 h-7 rounded-sm flex items-center justify-center text-[8px] font-medium ${getColor(di, h)}`}
+                      title={`${day}曜 ${h}時: ${cell ? `${cell.videoCount}本 / ER ${cell.avgER}%` : "データなし"}`}
+                    >
+                      {val}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 凡例 */}
+        <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+          <span>低</span>
+          {mode === "er" ? (
+            <>
+              <div className="w-4 h-3 bg-teal-100 rounded-sm" />
+              <div className="w-4 h-3 bg-teal-200 rounded-sm" />
+              <div className="w-4 h-3 bg-teal-400 rounded-sm" />
+              <div className="w-4 h-3 bg-teal-600 rounded-sm" />
+            </>
+          ) : (
+            <>
+              <div className="w-4 h-3 bg-blue-100 rounded-sm" />
+              <div className="w-4 h-3 bg-blue-200 rounded-sm" />
+              <div className="w-4 h-3 bg-blue-400 rounded-sm" />
+              <div className="w-4 h-3 bg-blue-600 rounded-sm" />
+            </>
+          )}
+          <span>高</span>
+        </div>
+
+        {/* ベストタイムスロット */}
+        {bestSlots.length > 0 && (
+          <div className="mt-3 pt-3 border-t">
+            <p className="text-xs font-medium mb-1">おすすめ投稿タイミング（ER上位）</p>
+            <div className="flex flex-wrap gap-2">
+              {bestSlots.map((s, i) => (
+                <span key={i} className="text-xs bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 px-2 py-1 rounded">
+                  {DAYS[s.day]}曜 {s.hour}時 (ER {s.avgER}%, {s.videoCount}本)
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 7. 再生数分布 ----
+
+function PlayCountDistribution({ data }: { data: TrendStatistics["playCountDistribution"] }) {
+  if (data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">再生数分布</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+            <YAxis tick={{ fontSize: 11 }} />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                    <div className="font-medium">{d.label}</div>
+                    <div>{d.count}本 ({d.percentage}%)</div>
+                    <div>平均ER: {d.avgER}%</div>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]}>
+              {data.map((_, i) => (
+                <Cell key={i} fill="#6366f1" />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+          {data.map(d => (
+            <div key={d.label} className="p-2 rounded bg-muted/50 text-center">
+              <div className="font-medium">{d.label}</div>
+              <div className="text-muted-foreground">{d.count}本 ({d.percentage}%)</div>
+              <div className="text-muted-foreground">平均ER {d.avgER}%</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

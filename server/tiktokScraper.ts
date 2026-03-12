@@ -43,6 +43,7 @@ export interface TikTokSearchResult {
   keyword: string;
   totalFetched: number;
   sessionIndex: number;
+  tagVideoCount?: number;
 }
 
 // 複数回の検索結果と重複度分析を含む結果
@@ -137,7 +138,8 @@ async function searchInIncognitoContext(
   keyword: string,
   maxVideos: number,
   sessionIndex: number,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  isTagPage?: boolean,
 ): Promise<TikTokSearchResult> {
   // 新しいインコグニートコンテキストを作成（Cookie/履歴なし）
   const context = await browser.createBrowserContext();
@@ -246,10 +248,72 @@ async function searchInIncognitoContext(
     let latestCursor = 0;
     let latestHasMore = true;
     let pagesFetched = 0;
+    let tagVideoCount: number | undefined;
 
     // 【重要】page.goto の前にリスナーを設定し、初回APIレスポンスも確実にキャプチャする
     page.on('response', async (response) => {
       const url = response.url();
+
+      // タグページモード: challenge item_list API もキャプチャ
+      if (isTagPage && url.includes('/api/challenge/item_list/')) {
+        try {
+          const text = await response.text();
+          if (!text || text.includes('<html')) return;
+          const json = JSON.parse(text);
+          const items = json?.itemList || json?.item_list || [];
+          for (const item of items) {
+            // challenge API のアイテムは type ラッパーなしで直接動画オブジェクト
+            const v = item;
+            if (!v || !v.id) continue;
+            const stats = v.stats || {};
+            const author = v.author || {};
+            const authorStats = v.authorStats || v.author_stats || {};
+            const hashtags: string[] = [];
+            if (v.textExtra) {
+              v.textExtra.forEach((te: any) => { if (te.hashtagName) hashtags.push(te.hashtagName); });
+            }
+            const video: TikTokVideo = {
+              id: v.id,
+              desc: v.desc || "",
+              createTime: v.createTime || 0,
+              duration: v.video?.duration || 0,
+              coverUrl: v.video?.cover || "",
+              playUrl: v.video?.playAddr || v.video?.downloadAddr || "",
+              author: {
+                uniqueId: author.uniqueId || "",
+                nickname: author.nickname || "",
+                avatarUrl: author.avatarThumb || author.avatarMedium || "",
+                followerCount: author.followerCount || authorStats.followerCount || 0,
+                followingCount: author.followingCount || authorStats.followingCount || 0,
+                heartCount: author.heartCount || author.heart || authorStats.heartCount || 0,
+                videoCount: author.videoCount || authorStats.videoCount || 0,
+              },
+              stats: {
+                playCount: stats.playCount || 0,
+                diggCount: stats.diggCount || 0,
+                commentCount: stats.commentCount || 0,
+                shareCount: stats.shareCount || 0,
+                collectCount: stats.collectCount || 0,
+              },
+              hashtags,
+              isAd: !!v.isAd,
+            };
+            if (!allVideos.find(ev => ev.id === video.id)) {
+              allVideos.push(video);
+            }
+          }
+          const cursor = json.cursor ?? json.offset ?? 0;
+          const hasMore = json.has_more === true || json.has_more === 1 || json.hasMore === true;
+          pagesFetched++;
+          latestCursor = cursor;
+          latestHasMore = hasMore;
+          console.log(`[TikTok Session ${sessionIndex + 1}] Challenge API intercepted (page ${pagesFetched}): ${allVideos.length} total`);
+        } catch (e) {
+          // パース失敗は無視
+        }
+        return;
+      }
+
       // TikTok検索APIのレスポンスを検出（URLパターンは複数ありうる）
       if (!url.includes('/api/search/general/')) return;
 
@@ -303,18 +367,24 @@ async function searchInIncognitoContext(
     });
 
     // 検索ページに遷移（リスナーが初回APIレスポンスをキャプチャ）
-    console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to search page...`);
-    if (onProgress) onProgress(`検索${sessionIndex + 1}: 検索ページに遷移中...`);
+    const navUrl = isTagPage
+      ? `https://www.tiktok.com/tag/${encodeURIComponent(keyword)}`
+      : `https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`;
+    console.log(`[TikTok Session ${sessionIndex + 1}] Navigating to ${isTagPage ? 'tag' : 'search'} page: ${navUrl}`);
+    if (onProgress) onProgress(`検索${sessionIndex + 1}: ${isTagPage ? 'タグ' : '検索'}ページに遷移中...`);
 
-    await page.goto(`https://www.tiktok.com/search?q=${encodeURIComponent(keyword)}`, {
+    await page.goto(navUrl, {
       waitUntil: "domcontentloaded",
       timeout: 30000,
     });
 
     // 初回データ待機: TikTokのJSハイドレーション完了を待つ
     // 動画グリッドが描画されるまで最大15秒待機（domcontentloadedだけではJS未完了）
+    const waitSelectors = isTagPage
+      ? '[data-e2e="challenge-item"], [data-e2e="search_top-item-list"], [class*="DivItemContainerV2"]'
+      : '[data-e2e="search_top-item-list"], [data-e2e="search-common-link"], [class*="DivItemContainerV2"]';
     try {
-      await page.waitForSelector('[data-e2e="search_top-item-list"], [data-e2e="search-common-link"], [class*="DivItemContainerV2"]', {
+      await page.waitForSelector(waitSelectors, {
         timeout: 15000,
       });
       console.log(`[TikTok Session ${sessionIndex + 1}] Video grid detected in DOM`);
@@ -326,7 +396,81 @@ async function searchInIncognitoContext(
 
     // SSRフォールバック: XHRリスナーで初回データが取れなかった場合、
     // ページ埋め込みJSON（__UNIVERSAL_DATA_FOR_REHYDRATION__）から抽出
-    if (allVideos.length === 0) {
+    if (isTagPage) {
+      // タグページ: challengeDetail からvideoCountを抽出
+      console.log(`[TikTok Session ${sessionIndex + 1}] Extracting tag video count from SSR...`);
+      try {
+        const ssrResult = await page.evaluate(() => {
+          const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+          if (!el || !el.textContent) return null;
+          try {
+            const parsed = JSON.parse(el.textContent);
+            const challengeData = parsed?.['__DEFAULT_SCOPE__']?.['webapp.challenge-detail'];
+            const challengeInfo = challengeData?.challengeInfo?.challenge || challengeData?.challenge || {};
+            const videoCount = challengeInfo?.videoCount ?? challengeData?.stats?.videoCount ?? null;
+            const items = challengeData?.itemList || [];
+            return { videoCount, items };
+          } catch { return null; }
+        });
+        if (ssrResult) {
+          if (ssrResult.videoCount != null && ssrResult.videoCount > 0) {
+            tagVideoCount = ssrResult.videoCount;
+            console.log(`[TikTok Session ${sessionIndex + 1}] SSR tagVideoCount: ${tagVideoCount}`);
+          }
+          if (allVideos.length === 0 && Array.isArray(ssrResult.items)) {
+            for (const item of ssrResult.items) {
+              // challenge SSR の itemList は直接動画オブジェクト
+              if (!item || !item.id) continue;
+              const wrapped = { type: 1, item };
+              const video = parseVideoData(wrapped);
+              if (video && !allVideos.find(v => v.id === video.id)) {
+                allVideos.push(video);
+              }
+            }
+            console.log(`[TikTok Session ${sessionIndex + 1}] SSR tag extraction: ${allVideos.length} videos`);
+          }
+        }
+      } catch (e) {
+        console.log(`[TikTok Session ${sessionIndex + 1}] SSR tag extraction failed:`, e);
+      }
+
+      // DOM fallback: data-e2e="challenge-vvcount" or regex
+      if (tagVideoCount == null) {
+        try {
+          const domCount = await page.evaluate(() => {
+            const el = document.querySelector('[data-e2e="challenge-vvcount"]');
+            if (el?.textContent) {
+              const text = el.textContent.trim();
+              // Parse "12.3万本の動画" or "1234本の動画" or "1.2M"
+              const matchMan = text.match(/([\d.]+)\s*万/);
+              if (matchMan) return Math.round(parseFloat(matchMan[1]) * 10000);
+              const matchK = text.match(/([\d.]+)\s*K/i);
+              if (matchK) return Math.round(parseFloat(matchK[1]) * 1000);
+              const matchM = text.match(/([\d.]+)\s*M/i);
+              if (matchM) return Math.round(parseFloat(matchM[1]) * 1000000);
+              const matchB = text.match(/([\d.]+)\s*B/i);
+              if (matchB) return Math.round(parseFloat(matchB[1]) * 1000000000);
+              const matchNum = text.match(/([\d,]+)/);
+              if (matchNum) return parseInt(matchNum[1].replace(/,/g, ''), 10);
+            }
+            // 正規表現 fallback: ページ全体から「○本の動画」を探す
+            const bodyText = document.body.innerText || "";
+            const regMatch = bodyText.match(/([\d.]+)\s*万?\s*本の動画/);
+            if (regMatch) {
+              const val = parseFloat(regMatch[1]);
+              return regMatch[0].includes('万') ? Math.round(val * 10000) : Math.round(val);
+            }
+            return null;
+          });
+          if (domCount != null && domCount > 0) {
+            tagVideoCount = domCount;
+            console.log(`[TikTok Session ${sessionIndex + 1}] DOM tagVideoCount: ${tagVideoCount}`);
+          }
+        } catch (e) {
+          console.log(`[TikTok Session ${sessionIndex + 1}] DOM tagVideoCount extraction failed:`, e);
+        }
+      }
+    } else if (allVideos.length === 0) {
       console.log(`[TikTok Session ${sessionIndex + 1}] No XHR data yet, trying SSR extraction...`);
       try {
         const ssrVideos = await page.evaluate(() => {
@@ -450,6 +594,7 @@ async function searchInIncognitoContext(
       keyword,
       totalFetched: allVideos.length,
       sessionIndex,
+      ...(tagVideoCount != null && { tagVideoCount }),
     };
   } finally {
     await page.close();
@@ -767,7 +912,7 @@ export async function searchTikTokBatch(
   queries: Array<{ query: string; type: "keyword" | "hashtag" }>,
   maxVideosPerQuery: number = 20,
   onProgress?: (message: string, completedQueries: number, totalQueries: number) => void,
-): Promise<Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[] }>> {
+): Promise<Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[]; tagVideoCount?: number }>> {
   const chromiumPath = findChromiumPath();
   const browser = await puppeteer.launch({
     executablePath: chromiumPath,
@@ -775,15 +920,18 @@ export async function searchTikTokBatch(
     args: buildChromiumArgs(),
   });
 
-  const results: Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[] }> = [];
+  const results: Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[]; tagVideoCount?: number }> = [];
 
   try {
     for (let i = 0; i < queries.length; i++) {
       const { query, type } = queries[i];
-      const searchTerm = type === "hashtag" ? `#${query}` : query;
+      // ハッシュタグの場合はタグページに直接アクセス（#なしの生クエリ）
+      const isTag = type === "hashtag";
+      const searchTerm = isTag ? query : query;
 
       if (onProgress) {
-        onProgress(`クエリ ${i + 1}/${queries.length}: "${searchTerm}" を検索中...`, i, queries.length);
+        const displayTerm = isTag ? `#${query}` : query;
+        onProgress(`クエリ ${i + 1}/${queries.length}: "${displayTerm}" を${isTag ? 'タグページ' : '検索'}中...`, i, queries.length);
       }
 
       // クエリ間のディレイ（3〜5秒）
@@ -798,11 +946,17 @@ export async function searchTikTokBatch(
           searchTerm,
           maxVideosPerQuery,
           i, // sessionIndex
+          undefined,
+          isTag, // isTagPage
         );
-        results.push({ query, type, videos: result.videos });
-        console.log(`[TikTok Batch] Query ${i + 1}/${queries.length} "${searchTerm}": ${result.videos.length} videos`);
+        results.push({
+          query, type, videos: result.videos,
+          ...(result.tagVideoCount != null && { tagVideoCount: result.tagVideoCount }),
+        });
+        const countInfo = result.tagVideoCount != null ? ` (tagVideoCount: ${result.tagVideoCount})` : '';
+        console.log(`[TikTok Batch] Query ${i + 1}/${queries.length} "${isTag ? '#' + query : query}": ${result.videos.length} videos${countInfo}`);
       } catch (err) {
-        console.error(`[TikTok Batch] Query ${i + 1} "${searchTerm}" failed:`, err);
+        console.error(`[TikTok Batch] Query ${i + 1} "${isTag ? '#' + query : query}" failed:`, err);
         results.push({ query, type, videos: [] });
       }
     }
