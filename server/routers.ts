@@ -1429,10 +1429,11 @@ export const appRouter = router({
             setTrendProgress(input.jobId, "横断集計を実行中...", 80);
             const crossAnalysis = computeCrossAnalysis(allVideos, new Date(), tagVideoCountMap);
 
-            // Step 4: LLMサマリー (90-95%)
-            setTrendProgress(input.jobId, "AIサマリーを生成中...", 90);
-            const summary = await generateTrendSummary(job.persona, crossAnalysis);
+            // Step 4: LLMレポート生成 (90-95%)
+            setTrendProgress(input.jobId, "AIレポートを生成中...", 90);
+            const { summary, report } = await generateTrendSummary(job.persona, crossAnalysis);
             crossAnalysis.summary = summary;
+            (crossAnalysis as any).report = report;
 
             // Step 5: DB保存・完了 (95-100%)
             setTrendProgress(input.jobId, "結果を保存中...", 95);
