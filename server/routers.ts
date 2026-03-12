@@ -7,7 +7,7 @@ import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeLosePatternCommonality, analyzeWinPatternCommonalityAd, analyzeLosePatternCommonalityAd, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
 import { LLMQuotaExhaustedError } from "./_core/llm";
-import { searchTikTokTriple, searchTikTokBatch, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
+import { searchTikTokTriple, searchTikTokBatch, scrapeTikTokMetaKeywords, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { expandPersonaToQueries, flattenTikTokVideo, computeCrossAnalysis, generateTrendSummary } from "./trendDiscovery";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 // pdfExporter: 全エンドポイントがコメントアウト済みのため import 削除（メモリ節約）
@@ -1425,9 +1425,41 @@ export const appRouter = router({
               scrapedVideos: allVideos,
             });
 
-            // Step 3: 横断集計 (80-90%)
-            setTrendProgress(input.jobId, "横断集計を実行中...", 80);
-            const crossAnalysis = computeCrossAnalysis(allVideos, new Date(), tagVideoCountMap);
+            // Step 2.5: 上位動画のメタキーワード取得 (80-85%)
+            setTrendProgress(input.jobId, "上位動画のSEOキーワードを取得中...", 80);
+            let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
+            try {
+              // 重複排除して再生数上位5本を選出
+              const uniqueByVideoId = new Map<string, typeof allVideos[number]>();
+              for (const v of allVideos) {
+                if (!uniqueByVideoId.has(v.videoId)) uniqueByVideoId.set(v.videoId, v);
+              }
+              const top5 = Array.from(uniqueByVideoId.values())
+                .filter(v => v.authorUniqueId)
+                .sort((a, b) => b.playCount - a.playCount)
+                .slice(0, 5);
+
+              if (top5.length > 0) {
+                const urls = top5.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
+                const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
+                  setTrendProgress(input.jobId, msg, 82)
+                );
+                for (const v of top5) {
+                  const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
+                  const kw = metaMap.get(url);
+                  if (kw && kw.length > 0) {
+                    trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
+                  }
+                }
+                console.log(`[TrendDiscovery] Job ${input.jobId}: fetched meta keywords for ${trendMetaKeywords.length}/${top5.length} videos`);
+              }
+            } catch (e) {
+              console.warn(`[TrendDiscovery] Job ${input.jobId}: meta keywords scraping failed, skipping`, e);
+            }
+
+            // Step 3: 横断集計 (85-90%)
+            setTrendProgress(input.jobId, "横断集計を実行中...", 85);
+            const crossAnalysis = computeCrossAnalysis(allVideos, new Date(), tagVideoCountMap, trendMetaKeywords);
 
             // Step 4: LLMレポート生成 (90-95%)
             setTrendProgress(input.jobId, "AIレポートを生成中...", 90);
