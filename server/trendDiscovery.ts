@@ -158,7 +158,12 @@ function followerTier(count: number): FollowerTier {
 /**
  * uniqueVideos から統計データを計算
  */
-function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVideoCountMap?: Map<string, number>) {
+function computeStatistics(
+  uniqueVideos: FlatVideo[],
+  completedAt: Date,
+  tagVideoCountMap?: Map<string, number>,
+  trendMetaKeywords?: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>,
+) {
   const completedTs = completedAt.getTime() / 1000;
 
   // 基本計算: ER, 各rate, daysSincePosted, normalizedPlays
@@ -501,6 +506,34 @@ function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVide
     };
   }
 
+  // 10. TikTok SEOメタキーワード分析
+  let seoMetaKeywords: {
+    videos: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>;
+    keywordRanking: Array<{ keyword: string; count: number; videoIds: string[] }>;
+  } | undefined;
+
+  if (trendMetaKeywords && trendMetaKeywords.length > 0) {
+    // キーワードフレーズの頻出集計
+    const kwCounts = new Map<string, { count: number; videoIds: Set<string> }>();
+    for (const entry of trendMetaKeywords) {
+      for (const kw of entry.keywords) {
+        if (!kwCounts.has(kw)) kwCounts.set(kw, { count: 0, videoIds: new Set() });
+        const c = kwCounts.get(kw)!;
+        c.count++;
+        c.videoIds.add(entry.videoId);
+      }
+    }
+    const keywordRanking = Array.from(kwCounts.entries())
+      .map(([keyword, v]) => ({ keyword, count: v.count, videoIds: Array.from(v.videoIds) }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 30);
+
+    seoMetaKeywords = {
+      videos: trendMetaKeywords,
+      keywordRanking,
+    };
+  }
+
   return {
     totalVideos,
     adCount,
@@ -517,6 +550,7 @@ function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVide
     performanceClassification,
     queryFreshness,
     adInsight,
+    seoMetaKeywords,
   };
 }
 
@@ -538,7 +572,12 @@ function topTagsFromVideos(videos: { hashtags: string[] }[], limit: number): str
 /**
  * 横断集計: 全クエリから集めた動画データを分析
  */
-export function computeCrossAnalysis(videos: FlatVideo[], completedAt?: Date, tagVideoCountMap?: Map<string, number>): NonNullable<TrendDiscoveryJob["crossAnalysis"]> {
+export function computeCrossAnalysis(
+  videos: FlatVideo[],
+  completedAt?: Date,
+  tagVideoCountMap?: Map<string, number>,
+  trendMetaKeywords?: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>,
+): NonNullable<TrendDiscoveryJob["crossAnalysis"]> {
   // 動画をvideoIdで重複排除（最初の出現を優先）
   const uniqueMap = new Map<string, FlatVideo>();
   const videoQueries = new Map<string, Set<string>>(); // videoId → クエリ集合
@@ -684,7 +723,7 @@ export function computeCrossAnalysis(videos: FlatVideo[], completedAt?: Date, ta
     .slice(0, 20);
 
   // 統計分析
-  const statistics = computeStatistics(uniqueVideos, completedAt ?? new Date(), tagVideoCountMap);
+  const statistics = computeStatistics(uniqueVideos, completedAt ?? new Date(), tagVideoCountMap, trendMetaKeywords);
 
   return {
     trendingHashtags,

@@ -77,6 +77,10 @@ interface TrendStatistics {
       organic: { avgER: number; avgPlayCount: number; medianAgeDays: number };
     };
   };
+  seoMetaKeywords?: {
+    videos: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>;
+    keywordRanking: Array<{ keyword: string; count: number; videoIds: string[] }>;
+  };
 }
 
 interface ClassBucket {
@@ -139,6 +143,9 @@ export default function TrendStatisticsPanel({ statistics }: { statistics: Trend
       )}
       {statistics.adInsight && (
         <AdInsightSection data={statistics.adInsight} />
+      )}
+      {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
+        <SeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
       )}
       <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
       <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
@@ -596,6 +603,68 @@ function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["adInsig
 
 function round2Fmt(v: number): string {
   return (Math.round(v * 100) / 100).toFixed(2);
+}
+
+// ---- 3.8 TikTok SEOメタキーワード ----
+
+function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
+  const maxCount = data.keywordRanking[0]?.count ?? 1;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">TikTok SEOキーワード（上位動画のmeta keywords）</CardTitle>
+          <span className="text-xs text-muted-foreground">{data.videos.length}本の動画から取得</span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* キーワードランキング */}
+        <div className="space-y-1">
+          {data.keywordRanking.slice(0, 20).map((kw, i) => (
+            <div key={kw.keyword} className="flex items-center gap-2 text-xs">
+              <span className="w-5 text-right text-muted-foreground font-mono">{i + 1}</span>
+              <span className="font-medium w-48 truncate" title={kw.keyword}>{kw.keyword}</span>
+              <div className="flex-1 h-3.5 bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full"
+                  style={{ width: `${(kw.count / maxCount) * 100}%` }}
+                />
+              </div>
+              <span className="text-muted-foreground w-16 text-right">{kw.count}本に出現</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 動画別の生データ */}
+        <div className="pt-3 border-t">
+          <p className="text-xs font-medium text-muted-foreground mb-2">動画別メタキーワード</p>
+          <div className="space-y-2">
+            {data.videos.map(v => (
+              <div key={v.videoId} className="text-xs">
+                <a
+                  href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                >
+                  @{v.authorUniqueId}/{v.videoId.slice(-6)}
+                  <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </a>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {v.keywords.map((kw, i) => (
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-[10px]">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 // ---- 4. ハッシュタグ別ER比較 ----
