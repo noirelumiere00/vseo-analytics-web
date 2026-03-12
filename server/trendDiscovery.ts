@@ -577,12 +577,22 @@ export function computeCrossAnalysis(videos: FlatVideo[], completedAt?: Date, ta
 }
 
 /**
- * LLMでトレンドサマリーを生成
+ * レポートセクション型
+ */
+export interface TrendReportSection {
+  id: string;
+  title: string;
+  icon: string; // lucide icon name
+  content: string; // Markdown
+}
+
+/**
+ * LLMでトレンドレポートを複数セクションに分けて生成
  */
 export async function generateTrendSummary(
   persona: string,
   crossAnalysis: NonNullable<TrendDiscoveryJob["crossAnalysis"]>,
-): Promise<string> {
+): Promise<{ summary: string; report: TrendReportSection[] }> {
   const topTags = crossAnalysis.trendingHashtags.slice(0, 15)
     .map(t => `#${t.tag} (${t.videoCount}動画, ${t.queryCount}クエリ横断, ER ${t.avgER}%)`)
     .join("\n");
@@ -595,38 +605,153 @@ export async function generateTrendSummary(
     .map(p => `#${p.tagA} + #${p.tagB} (${p.count}回)`)
     .join("\n");
 
-  const result = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: "あなたはTikTokマーケティングの専門家です。トレンドデータを分析し、実用的なインサイトを提供してください。",
-      },
-      {
-        role: "user",
-        content: `以下のTikTokトレンド分析結果を基に、「${persona}」界隈のトレンドサマリーをMarkdown形式で生成してください。
+  const stats = crossAnalysis.statistics as any;
+  const statsContext = stats ? `
+## エンゲージメント統計
+- 平均ER: ${stats.engagementStats?.er?.mean ?? "N/A"}%, 中央値: ${stats.engagementStats?.er?.median ?? "N/A"}%
+- 平均再生数: ${stats.engagementStats?.playCount?.mean ?? "N/A"}
+- いいね率: ${stats.engagementStats?.likeRate?.mean ?? "N/A"}%, 保存率: ${stats.engagementStats?.saveRate?.mean ?? "N/A"}%
+
+## 動画長別パフォーマンス
+${stats.durationBands?.map((d: any) => `${d.label}: ${d.videoCount}本, ER ${d.avgER}%, 再生 ${d.avgPlayCount}`).join("\n") ?? "N/A"}
+
+## 投稿時間帯
+ベストタイム: ${stats.bestTimeSlots?.slice(0, 3).map((s: any) => `${["日","月","火","水","木","金","土"][s.day]}曜${s.hour}時(ER ${s.avgER}%)`).join(", ") ?? "N/A"}` : "";
+
+  const creatorsContext = crossAnalysis.keyCreators.slice(0, 5)
+    .map(c => `@${c.uniqueId} (${c.videoCount}動画, ${c.queryCount}クエリ横断, フォロワー${c.followerCount})`)
+    .join("\n");
+
+  const sharedSystemPrompt = `あなたはTikTokマーケティングの専門家です。「${persona}」界隈のトレンドデータを分析しています。Markdown形式で回答してください。箇条書き・太字を活用し、簡潔かつ具体的に書いてください。`;
+
+  // セクション定義: 各セクションを独立したプロンプトで生成
+  const sectionPrompts: { id: string; title: string; icon: string; prompt: string; maxTokens: number }[] = [
+    {
+      id: "overview",
+      title: "トレンド概況",
+      icon: "TrendingUp",
+      prompt: `以下のデータから「${persona}」界隈の現在のトレンド概況を3-4文で要約してください。数値を交えて、何が今盛り上がっていてどういう傾向があるかを簡潔に述べてください。
 
 ## トレンドハッシュタグ TOP15
 ${topTags}
 
-## エンゲージメント率が高い動画 TOP10
+## 高ER動画 TOP10
 ${topVids}
+${statsContext}`,
+      maxTokens: 512,
+    },
+    {
+      id: "hashtag_strategy",
+      title: "ハッシュタグ戦略",
+      icon: "Hash",
+      prompt: `以下のハッシュタグデータから、「${persona}」界隈で使うべきハッシュタグ戦略を提案してください。
+
+## トレンドハッシュタグ TOP15
+${topTags}
 
 ## 頻出タグ組み合わせ TOP10
 ${topPairs}
 
+以下の観点で具体的に5つ推奨してください:
+- 必ず使うべき鉄板タグ（理由付き）
+- 穴場タグ（ER高いが利用少ない）
+- 効果的なタグ組み合わせパターン
+各推奨は1-2文で簡潔に。`,
+      maxTokens: 768,
+    },
+    {
+      id: "content_insights",
+      title: "コンテンツ傾向分析",
+      icon: "Play",
+      prompt: `以下のデータから、「${persona}」界隈で伸びているコンテンツの傾向を分析してください。
+
+## 高ER動画 TOP10
+${topVids}
+
+## 動画長・投稿タイミング
+${statsContext}
+
+以下を含めてください:
+- **伸びている動画の共通点**（テーマ・フォーマット・構成）
+- **最適な動画尺**（データに基づく推奨）
+- **投稿タイミング**（ベストな曜日・時間帯）
+各項目2-3文で。`,
+      maxTokens: 768,
+    },
+    {
+      id: "creator_analysis",
+      title: "クリエイター動向",
+      icon: "Users",
+      prompt: `以下のデータから「${persona}」界隈のクリエイター動向を分析してください。
+
 ## キークリエイター
-${crossAnalysis.keyCreators.slice(0, 5).map(c => `@${c.uniqueId} (${c.videoCount}動画, ${c.queryCount}クエリ横断)`).join("\n")}
+${creatorsContext}
 
-以下の構成でサマリーを作成してください:
-1. **全体トレンド概要**（2-3文）
-2. **注目すべきハッシュタグ戦略**（3-5個の具体的な推奨）
-3. **コンテンツの傾向**（どんなコンテンツが伸びているか）
-4. **推奨アクション**（この界隈で動画を作る場合の具体的なアドバイス3つ）`,
-      },
-    ],
-    maxTokens: 2048,
-  });
+## 高ER動画 TOP10
+${topVids}
 
-  const content = result.choices[0]?.message?.content;
-  return typeof content === "string" ? content : "";
+以下を含めてください:
+- **注目クリエイターの特徴**（フォロワー規模・投稿傾向）
+- **参考にすべきポイント**（何を真似できるか）
+2-3項目、各1-2文で簡潔に。`,
+      maxTokens: 512,
+    },
+    {
+      id: "action_plan",
+      title: "推奨アクションプラン",
+      icon: "Sparkles",
+      prompt: `以下の全データを踏まえ、「${persona}」界隈でTikTok動画を投稿する場合の具体的なアクションプランを作成してください。
+
+## トレンドハッシュタグ
+${topTags}
+
+## 高ER動画
+${topVids}
+
+## タグ組み合わせ
+${topPairs}
+${statsContext}
+
+以下の形式で5つの具体的アクションを提案してください:
+1. **今すぐやるべきこと**（即実行可能な施策）
+2. **コンテンツ企画**（具体的な動画テーマ案2つ）
+3. **タグ設計**（推奨タグセット例）
+4. **投稿戦略**（頻度・タイミング）
+5. **差別化ポイント**（競合と差をつける方法）
+各項目2-3文で。`,
+      maxTokens: 768,
+    },
+  ];
+
+  // 全セクションを並列でLLM呼び出し
+  const sectionResults = await Promise.allSettled(
+    sectionPrompts.map(async (sec) => {
+      const result = await invokeLLM({
+        messages: [
+          { role: "system", content: sharedSystemPrompt },
+          { role: "user", content: sec.prompt },
+        ],
+        maxTokens: sec.maxTokens,
+      });
+      const content = result.choices[0]?.message?.content;
+      return {
+        id: sec.id,
+        title: sec.title,
+        icon: sec.icon,
+        content: typeof content === "string" ? content : "",
+      };
+    })
+  );
+
+  const report: TrendReportSection[] = [];
+  for (const r of sectionResults) {
+    if (r.status === "fulfilled" && r.value.content) {
+      report.push(r.value);
+    }
+  }
+
+  // 後方互換: summary は全セクションを連結したMarkdown
+  const summary = report.map(s => `## ${s.title}\n\n${s.content}`).join("\n\n---\n\n");
+
+  return { summary, report };
 }

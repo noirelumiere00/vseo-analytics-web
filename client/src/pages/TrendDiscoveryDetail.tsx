@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -205,31 +205,105 @@ export default function TrendDiscoveryDetail() {
               <TrendStatisticsPanel statistics={(job.crossAnalysis as any).statistics} />
             )}
 
-            {/* AIサマリー */}
-            {(job.crossAnalysis as any)?.summary && (
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-                      <Sparkles className="h-4 w-4 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
-                      <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
-                    </div>
-                  </div>
-                </div>
-                <CardContent className="pt-6 pb-6">
-                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{(job.crossAnalysis as any).summary}</ReactMarkdown>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* AIレポート (複数セクション) */}
+            {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
+              <AITrendReport
+                report={(job.crossAnalysis as any)?.report}
+                fallbackSummary={(job.crossAnalysis as any)?.summary}
+              />
             )}
           </>
         )}
       </div>
     </DashboardLayout>
+  );
+}
+
+// ---- AIレポート (複数セクション) ----
+
+const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
+  TrendingUp: <TrendingUp className="h-4 w-4" />,
+  Hash: <Hash className="h-4 w-4" />,
+  Play: <Play className="h-4 w-4" />,
+  Users: <Users className="h-4 w-4" />,
+  Sparkles: <Sparkles className="h-4 w-4" />,
+};
+
+const REPORT_SECTION_COLORS: Record<string, { gradient: string; badge: string }> = {
+  overview:          { gradient: "from-violet-600 to-purple-600", badge: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
+  hashtag_strategy:  { gradient: "from-blue-600 to-cyan-600", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  content_insights:  { gradient: "from-emerald-600 to-teal-600", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
+  creator_analysis:  { gradient: "from-amber-600 to-orange-600", badge: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
+  action_plan:       { gradient: "from-rose-600 to-pink-600", badge: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300" },
+};
+
+function AITrendReport({ report, fallbackSummary }: {
+  report?: Array<{ id: string; title: string; icon: string; content: string }>;
+  fallbackSummary?: string;
+}) {
+  // 新形式: report セクション配列がある場合
+  if (report && report.length > 0) {
+    return (
+      <div className="space-y-4">
+        {/* ヘッダー */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 shadow-sm">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold">AIトレンドレポート</h3>
+            <p className="text-xs text-muted-foreground">データに基づく{report.length}セクションの分析レポート</p>
+          </div>
+        </div>
+
+        {/* セクションカード */}
+        {report.map((section, idx) => {
+          const colors = REPORT_SECTION_COLORS[section.id] ?? { gradient: "from-gray-600 to-gray-700", badge: "bg-gray-100 text-gray-700" };
+          const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
+          return (
+            <Card key={section.id || idx} className="overflow-hidden border shadow-sm">
+              <div className={`bg-gradient-to-r ${colors.gradient} px-5 py-3`}>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/20 backdrop-blur-sm">
+                    <span className="text-white">{icon}</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-white">{section.title}</h4>
+                  <span className="ml-auto text-[10px] text-white/60 font-medium">{idx + 1}/{report.length}</span>
+                </div>
+              </div>
+              <CardContent className="pt-4 pb-4">
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // フォールバック: 旧形式の単一 summary
+  if (!fallbackSummary) return null;
+  return (
+    <Card className="overflow-hidden border-0 shadow-lg">
+      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
+            <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
+          </div>
+        </div>
+      </div>
+      <CardContent className="pt-6 pb-6">
+        <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

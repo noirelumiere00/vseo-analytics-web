@@ -63,6 +63,27 @@ interface ClassBucket {
   count: number; avgER: number; avgPlayCount: number; avgNormalizedPlays: number; topTags: string[];
 }
 
+// ---- Shared MetricToggle ----
+
+function MetricToggle({ value, onChange }: { value: "er" | "plays"; onChange: (v: "er" | "plays") => void }) {
+  return (
+    <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit">
+      <button
+        onClick={() => onChange("er")}
+        className={`px-3 py-1 text-xs rounded-md transition-colors ${value === "er" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+      >
+        平均ER
+      </button>
+      <button
+        onClick={() => onChange("plays")}
+        className={`px-3 py-1 text-xs rounded-md transition-colors ${value === "plays" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+      >
+        平均再生数
+      </button>
+    </div>
+  );
+}
+
 // ---- Constants ----
 
 const TIER_COLORS: Record<string, string> = {
@@ -338,26 +359,33 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
   data: TrendStatistics["hashtagPerformance"];
   globalMedianER: number;
 }) {
+  const [metric, setMetric] = useState<"er" | "plays">("er");
   if (data.length === 0) return null;
 
   const chartData = data.slice(0, 15).map(d => ({
     tag: `#${d.tag}`,
     avgER: d.avgER,
+    avgPlayCount: d.avgPlayCount,
     videoCount: d.videoCount,
     isUnderrated: d.isUnderrated,
     totalPostCount: d.totalPostCount,
   }));
 
+  const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">ハッシュタグ別 平均ER</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">ハッシュタグ別パフォーマンス</CardTitle>
+          <MetricToggle value={metric} onChange={setMetric} />
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28 + 40)}>
           <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 80 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
             <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={75} />
             <Tooltip
               content={({ active, payload }) => {
@@ -367,6 +395,7 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
                   <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
                     <div className="font-medium">{d.tag}</div>
                     <div>平均ER: {d.avgER}%</div>
+                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
                     <div>動画数: {d.videoCount}本</div>
                     {d.totalPostCount != null && (
                       <div>総投稿数: {formatCount(d.totalPostCount)}本</div>
@@ -375,12 +404,12 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
                 );
               }}
             />
-            <Bar dataKey="avgER" radius={[0, 4, 4, 0]}>
+            <Bar dataKey={dataKey} radius={[0, 4, 4, 0]}>
               {chartData.map((d, i) => (
                 <Cell key={i} fill={d.isUnderrated ? "#10b981" : "#6366f1"} />
               ))}
             </Bar>
-            {globalMedianER > 0 && (
+            {metric === "er" && globalMedianER > 0 && (
               <ReferenceLine
                 x={globalMedianER}
                 stroke="#ef4444"
@@ -398,7 +427,6 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
             <span className="w-3 h-3 rounded" style={{ backgroundColor: "#6366f1" }} /> 通常
           </span>
         </div>
-        {/* 投稿数バッジ */}
         {chartData.some(d => d.totalPostCount != null) && (
           <div className="mt-3 pt-3 border-t">
             <p className="text-xs font-medium mb-2 text-muted-foreground">TikTok総投稿数</p>
@@ -423,31 +451,44 @@ function DurationBandsChart({ data, globalMedianER }: {
   data: TrendStatistics["durationBands"];
   globalMedianER: number;
 }) {
+  const [metric, setMetric] = useState<"er" | "plays">("er");
   if (data.length === 0) return null;
+
+  const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">動画長 × 平均ER</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">動画長 × パフォーマンス</CardTitle>
+          <MetricToggle value={metric} onChange={setMetric} />
+        </div>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
             <Tooltip
-              formatter={(value: number, name: string) => {
-                if (name === "avgER") return [`${value}%`, "平均ER"];
-                return [value, name];
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                    <div className="font-medium">尺: {d.label}</div>
+                    <div>平均ER: {d.avgER}%</div>
+                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
+                    <div>動画数: {d.videoCount}本</div>
+                  </div>
+                );
               }}
-              labelFormatter={l => `尺: ${l}`}
             />
-            <Bar dataKey="avgER" radius={[4, 4, 0, 0]}>
+            <Bar dataKey={dataKey} radius={[4, 4, 0, 0]}>
               {data.map((d, i) => (
                 <Cell key={i} fill={d.isOptimal ? "#2563eb" : "#93c5fd"} />
               ))}
             </Bar>
-            {globalMedianER > 0 && (
+            {metric === "er" && globalMedianER > 0 && (
               <ReferenceLine
                 y={globalMedianER}
                 stroke="#ef4444"
@@ -462,7 +503,7 @@ function DurationBandsChart({ data, globalMedianER }: {
             <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800" : "bg-muted/50"}`}>
               <div className="font-medium">{d.label} {d.isOptimal && "★"}</div>
               <div className="text-muted-foreground">{d.videoCount}本</div>
-              <div className="text-muted-foreground">ER {d.avgER}%</div>
+              <div className="text-muted-foreground">ER {d.avgER}% / {formatCount(d.avgPlayCount)}再生</div>
             </div>
           ))}
         </div>
@@ -477,36 +518,50 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
   grid: TrendStatistics["postingTimeGrid"];
   bestSlots: TrendStatistics["bestTimeSlots"];
 }) {
-  const [mode, setMode] = useState<"er" | "count">("er");
+  const [mode, setMode] = useState<"er" | "count" | "plays">("er");
 
   // Build 7x24 lookup
   const lookup = new Map<string, TrendStatistics["postingTimeGrid"][number]>();
-  let maxER = 0, maxCount = 0;
+  let maxER = 0, maxCount = 0, maxPlays = 0;
   for (const cell of grid) {
     lookup.set(`${cell.day}-${cell.hour}`, cell);
     if (cell.avgER > maxER) maxER = cell.avgER;
     if (cell.videoCount > maxCount) maxCount = cell.videoCount;
+    if (cell.avgPlayCount > maxPlays) maxPlays = cell.avgPlayCount;
   }
+
+  const colorSchemes = {
+    er:    { colors: ["bg-teal-100", "bg-teal-200", "bg-teal-400", "bg-teal-600 text-white"] },
+    count: { colors: ["bg-blue-100", "bg-blue-200", "bg-blue-400", "bg-blue-600 text-white"] },
+    plays: { colors: ["bg-amber-100", "bg-amber-200", "bg-amber-400", "bg-amber-600 text-white"] },
+  };
 
   const getColor = (day: number, hour: number) => {
     const cell = lookup.get(`${day}-${hour}`);
     if (!cell) return "bg-muted";
-    if (mode === "er") {
-      if (maxER === 0) return "bg-muted";
-      const intensity = cell.avgER / maxER;
-      if (intensity > 0.75) return "bg-teal-600 text-white";
-      if (intensity > 0.5) return "bg-teal-400 text-white";
-      if (intensity > 0.25) return "bg-teal-200";
-      return "bg-teal-100";
-    } else {
-      if (maxCount === 0) return "bg-muted";
-      const intensity = cell.videoCount / maxCount;
-      if (intensity > 0.75) return "bg-blue-600 text-white";
-      if (intensity > 0.5) return "bg-blue-400 text-white";
-      if (intensity > 0.25) return "bg-blue-200";
-      return "bg-blue-100";
-    }
+    const maxVal = mode === "er" ? maxER : mode === "count" ? maxCount : maxPlays;
+    const val = mode === "er" ? cell.avgER : mode === "count" ? cell.videoCount : cell.avgPlayCount;
+    if (maxVal === 0) return "bg-muted";
+    const intensity = val / maxVal;
+    const scheme = colorSchemes[mode].colors;
+    if (intensity > 0.75) return scheme[3];
+    if (intensity > 0.5) return scheme[2];
+    if (intensity > 0.25) return scheme[1];
+    return scheme[0];
   };
+
+  const getCellText = (cell: TrendStatistics["postingTimeGrid"][number] | undefined) => {
+    if (!cell) return "";
+    if (mode === "er") return `${cell.avgER}%`;
+    if (mode === "count") return String(cell.videoCount);
+    return formatCount(cell.avgPlayCount);
+  };
+
+  const modeButtons: { key: typeof mode; label: string }[] = [
+    { key: "er", label: "平均ER" },
+    { key: "count", label: "投稿数" },
+    { key: "plays", label: "平均再生数" },
+  ];
 
   return (
     <Card>
@@ -516,22 +571,19 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
       <CardContent>
         {/* モード切替 */}
         <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit mb-4">
-          <button
-            onClick={() => setMode("er")}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === "er" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            平均ER
-          </button>
-          <button
-            onClick={() => setMode("count")}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === "count" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            投稿数
-          </button>
+          {modeButtons.map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setMode(key)}
+              className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === key ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         <div className="overflow-x-auto">
-          <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, 28px)` }}>
+          <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, ${mode === "plays" ? "36px" : "28px"})` }}>
             <div />
             {HOURS.map(h => (
               <div key={h} className="text-[10px] text-center text-muted-foreground">{h}</div>
@@ -541,16 +593,13 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
                 <div className="text-xs font-medium flex items-center">{day}</div>
                 {HOURS.map(h => {
                   const cell = lookup.get(`${di}-${h}`);
-                  const val = cell
-                    ? (mode === "er" ? `${cell.avgER}%` : String(cell.videoCount))
-                    : "";
                   return (
                     <div
                       key={`${di}-${h}`}
-                      className={`w-7 h-7 rounded-sm flex items-center justify-center text-[8px] font-medium ${getColor(di, h)}`}
-                      title={`${day}曜 ${h}時: ${cell ? `${cell.videoCount}本 / ER ${cell.avgER}%` : "データなし"}`}
+                      className={`${mode === "plays" ? "w-9" : "w-7"} h-7 rounded-sm flex items-center justify-center text-[8px] font-medium ${getColor(di, h)}`}
+                      title={`${day}曜 ${h}時: ${cell ? `${cell.videoCount}本 / ER ${cell.avgER}% / ${formatCount(cell.avgPlayCount)}再生` : "データなし"}`}
                     >
-                      {val}
+                      {getCellText(cell)}
                     </div>
                   );
                 })}
@@ -562,21 +611,9 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
         {/* 凡例 */}
         <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
           <span>低</span>
-          {mode === "er" ? (
-            <>
-              <div className="w-4 h-3 bg-teal-100 rounded-sm" />
-              <div className="w-4 h-3 bg-teal-200 rounded-sm" />
-              <div className="w-4 h-3 bg-teal-400 rounded-sm" />
-              <div className="w-4 h-3 bg-teal-600 rounded-sm" />
-            </>
-          ) : (
-            <>
-              <div className="w-4 h-3 bg-blue-100 rounded-sm" />
-              <div className="w-4 h-3 bg-blue-200 rounded-sm" />
-              <div className="w-4 h-3 bg-blue-400 rounded-sm" />
-              <div className="w-4 h-3 bg-blue-600 rounded-sm" />
-            </>
-          )}
+          {colorSchemes[mode].colors.map((cls, i) => (
+            <div key={i} className={`w-4 h-3 rounded-sm ${cls.split(" ")[0]}`} />
+          ))}
           <span>高</span>
         </div>
 
