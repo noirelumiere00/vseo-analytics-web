@@ -124,8 +124,8 @@ function descriptiveStats(values: number[]): DescriptiveStats {
     return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
   };
   return {
-    min: sorted[0],
-    max: sorted[n - 1],
+    min: round2(sorted[0]),
+    max: round2(sorted[n - 1]),
     mean: round2(mean),
     median: round2(percentile(50)),
     stdDev: round2(Math.sqrt(variance)),
@@ -194,7 +194,9 @@ function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVide
     const sorted = [...enriched].sort((a, b) =>
       dir === "max" ? (b[key] as number) - (a[key] as number) : (a[key] as number) - (b[key] as number)
     );
-    const v = sorted[0];
+    // authorUniqueId が空の動画はリンクできないのでスキップ
+    const v = sorted.find(item => item.videoId && item.authorUniqueId);
+    if (!v) return undefined;
     return { videoId: v.videoId, authorUniqueId: v.authorUniqueId };
   };
   const extremeVideos = {

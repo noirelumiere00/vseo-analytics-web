@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
+import { ArrowLeft, Bookmark, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Sparkles, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -207,12 +207,20 @@ export default function TrendDiscoveryDetail() {
 
             {/* AIサマリー */}
             {(job.crossAnalysis as any)?.summary && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">AIサマリー</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
+              <Card className="overflow-hidden border-0 shadow-lg">
+                <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+                      <Sparkles className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
+                      <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
+                    </div>
+                  </div>
+                </div>
+                <CardContent className="pt-6 pb-6">
+                  <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{(job.crossAnalysis as any).summary}</ReactMarkdown>
                   </div>
                 </CardContent>
