@@ -383,6 +383,124 @@ function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVide
     };
   }).filter(b => b.count > 0);
 
+  // 8. クエリ別鮮度分析
+  const queryGroups = new Map<string, typeof enriched>();
+  for (const v of enriched) {
+    if (!queryGroups.has(v.query)) queryGroups.set(v.query, []);
+    queryGroups.get(v.query)!.push(v);
+  }
+
+  const queryFreshness = Array.from(queryGroups.entries()).map(([query, vids]) => {
+    const within2w = vids.filter(v => v.daysSincePosted <= 14).length;
+    const within1m = vids.filter(v => v.daysSincePosted > 14 && v.daysSincePosted <= 30).length;
+    const within2m = vids.filter(v => v.daysSincePosted > 30 && v.daysSincePosted <= 60).length;
+    const within3m = vids.filter(v => v.daysSincePosted > 60 && v.daysSincePosted <= 90).length;
+    const within6m = vids.filter(v => v.daysSincePosted > 90 && v.daysSincePosted <= 180).length;
+    const older = vids.filter(v => v.daysSincePosted > 180).length;
+
+    const totalVids = vids.length;
+    const freshnessScore = round2(((within2w + within1m + within2m) / totalVids) * 100);
+
+    const sortedDays = vids.map(v => v.daysSincePosted).sort((a, b) => a - b);
+    const mid = Math.floor(sortedDays.length / 2);
+    const medianAgeDays = round2(
+      sortedDays.length % 2 === 0
+        ? (sortedDays[mid - 1] + sortedDays[mid]) / 2
+        : sortedDays[mid]
+    );
+
+    const avgER = round2(vids.reduce((s, v) => s + v.er, 0) / totalVids);
+    const avgPlayCount = Math.round(vids.reduce((s, v) => s + v.playCount, 0) / totalVids);
+
+    return {
+      query,
+      totalVideos: totalVids,
+      buckets: { within2w, within1m, within2m, within3m, within6m, older },
+      freshnessScore,
+      medianAgeDays,
+      avgER,
+      avgPlayCount,
+    };
+  }).sort((a, b) => b.freshnessScore - a.freshnessScore);
+
+  // 9. PR/Ad動画インサイト
+  const adVideos = enriched.filter(v => v.isAd);
+  let adInsight: {
+    adRate: number;
+    adCount: number;
+    organicCount: number;
+    perQuery: Array<{ query: string; adCount: number; totalCount: number; adRate: number }>;
+    topAdHashtags: Array<{ tag: string; count: number; avgER: number; avgPlayCount: number }>;
+    comparison: {
+      ad: { avgER: number; avgPlayCount: number; medianAgeDays: number };
+      organic: { avgER: number; avgPlayCount: number; medianAgeDays: number };
+    };
+  } | undefined;
+
+  if (adVideos.length >= 2) {
+    const organicVideos = enriched.filter(v => !v.isAd);
+    const adRate = round2((adVideos.length / totalVideos) * 100);
+
+    // クエリ別PR率
+    const perQuery = Array.from(queryGroups.entries()).map(([query, vids]) => {
+      const qAd = vids.filter(v => v.isAd).length;
+      return { query, adCount: qAd, totalCount: vids.length, adRate: round2((qAd / vids.length) * 100) };
+    }).filter(q => q.adCount > 0).sort((a, b) => b.adRate - a.adRate);
+
+    // PR動画の頻出ハッシュタグ
+    const adTagPerf = new Map<string, { count: number; totalER: number; totalPlays: number }>();
+    for (const v of adVideos) {
+      for (const tag of v.hashtags) {
+        const lt = tag.toLowerCase();
+        if (BLACKLISTED_TAGS.has(lt)) continue;
+        if (lt === "pr") continue; // #PR自体は自明なので除外
+        if (!adTagPerf.has(tag)) adTagPerf.set(tag, { count: 0, totalER: 0, totalPlays: 0 });
+        const tp = adTagPerf.get(tag)!;
+        tp.count++;
+        tp.totalER += v.er;
+        tp.totalPlays += v.playCount;
+      }
+    }
+    const topAdHashtags = Array.from(adTagPerf.entries())
+      .filter(([, v]) => v.count >= 2)
+      .map(([tag, v]) => ({
+        tag,
+        count: v.count,
+        avgER: round2(v.totalER / v.count),
+        avgPlayCount: Math.round(v.totalPlays / v.count),
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 15);
+
+    // PR vs オーガニック比較
+    const median = (arr: number[]) => {
+      const s = [...arr].sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length === 0 ? 0 : s.length % 2 === 0 ? (s[m - 1] + s[m]) / 2 : s[m];
+    };
+    const comparison = {
+      ad: {
+        avgER: round2(adVideos.reduce((s, v) => s + v.er, 0) / adVideos.length),
+        avgPlayCount: Math.round(adVideos.reduce((s, v) => s + v.playCount, 0) / adVideos.length),
+        medianAgeDays: round2(median(adVideos.map(v => v.daysSincePosted))),
+      },
+      organic: {
+        avgER: round2(organicVideos.reduce((s, v) => s + v.er, 0) / (organicVideos.length || 1)),
+        avgPlayCount: Math.round(organicVideos.reduce((s, v) => s + v.playCount, 0) / (organicVideos.length || 1)),
+        medianAgeDays: round2(median(organicVideos.map(v => v.daysSincePosted))),
+      },
+    };
+
+    adInsight = {
+      adRate,
+      adCount: adVideos.length,
+      organicCount: organicVideos.length,
+      perQuery,
+      topAdHashtags,
+      comparison,
+    };
+  }
+
   return {
     totalVideos,
     adCount,
@@ -397,6 +515,8 @@ function computeStatistics(uniqueVideos: FlatVideo[], completedAt: Date, tagVide
     bestTimeSlots,
     playCountDistribution,
     performanceClassification,
+    queryFreshness,
+    adInsight,
   };
 }
 
