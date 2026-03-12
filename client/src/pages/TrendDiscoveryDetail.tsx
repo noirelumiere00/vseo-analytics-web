@@ -9,6 +9,8 @@ import { useParams } from "wouter";
 import { ArrowLeft, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, Share2, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function TrendDiscoveryDetail() {
   const params = useParams<{ id: string }>();
@@ -204,8 +206,8 @@ export default function TrendDiscoveryDetail() {
                   <CardTitle className="text-base">AIサマリー</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap">
-                    {(job.crossAnalysis as any).summary}
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{(job.crossAnalysis as any).summary}</ReactMarkdown>
                   </div>
                 </CardContent>
               </Card>

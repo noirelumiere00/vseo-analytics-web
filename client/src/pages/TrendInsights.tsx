@@ -11,6 +11,8 @@ import {
   Megaphone, Play, Share2, Trash2, Users,
 } from "lucide-react";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function TrendInsights() {
   const [, setLocation] = useLocation();
@@ -248,7 +250,9 @@ export default function TrendInsights() {
                   {cross?.summary && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground mb-2">AIサマリー</p>
-                      <p className="text-sm text-muted-foreground line-clamp-3 whitespace-pre-wrap">{cross.summary}</p>
+                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{cross.summary}</ReactMarkdown>
+                      </div>
                     </div>
                   )}
                 </CardContent>
