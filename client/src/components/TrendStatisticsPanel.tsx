@@ -57,6 +57,26 @@ interface TrendStatistics {
     average: ClassBucket;
     underperforming: ClassBucket;
   };
+  queryFreshness?: Array<{
+    query: string;
+    totalVideos: number;
+    buckets: { within2w: number; within1m: number; within2m: number; within3m: number; within6m: number; older: number };
+    freshnessScore: number;
+    medianAgeDays: number;
+    avgER: number;
+    avgPlayCount: number;
+  }>;
+  adInsight?: {
+    adRate: number;
+    adCount: number;
+    organicCount: number;
+    perQuery: Array<{ query: string; adCount: number; totalCount: number; adRate: number }>;
+    topAdHashtags: Array<{ tag: string; count: number; avgER: number; avgPlayCount: number }>;
+    comparison: {
+      ad: { avgER: number; avgPlayCount: number; medianAgeDays: number };
+      organic: { avgER: number; avgPlayCount: number; medianAgeDays: number };
+    };
+  };
 }
 
 interface ClassBucket {
@@ -114,6 +134,12 @@ export default function TrendStatisticsPanel({ statistics }: { statistics: Trend
       <PerformanceClassification data={statistics.performanceClassification} total={statistics.totalVideos} />
       <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
       <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
+      {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
+        <QueryFreshnessChart data={statistics.queryFreshness} />
+      )}
+      {statistics.adInsight && (
+        <AdInsightSection data={statistics.adInsight} />
+      )}
       <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
       <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
       <PostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
@@ -351,6 +377,225 @@ function FollowerErScatter({ data, tiers }: {
       </CardContent>
     </Card>
   );
+}
+
+// ---- 3.5 クエリ別鮮度分析 ----
+
+const FRESHNESS_BUCKETS = [
+  { key: "within2w" as const, label: "2週間以内", color: "#059669" },
+  { key: "within1m" as const, label: "1ヶ月以内", color: "#10b981" },
+  { key: "within2m" as const, label: "2ヶ月以内", color: "#84cc16" },
+  { key: "within3m" as const, label: "3ヶ月以内", color: "#eab308" },
+  { key: "within6m" as const, label: "6ヶ月以内", color: "#f97316" },
+  { key: "older" as const, label: "6ヶ月超", color: "#9ca3af" },
+];
+
+function freshnessLabel(score: number): { text: string; className: string } {
+  if (score >= 80) return { text: "急上昇", className: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400" };
+  if (score >= 50) return { text: "トレンド中", className: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" };
+  if (score >= 20) return { text: "安定", className: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" };
+  return { text: "定番・低調", className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" };
+}
+
+function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["queryFreshness"]> }) {
+  const chartData = data.map(d => ({
+    query: d.query,
+    ...d.buckets,
+    freshnessScore: d.freshnessScore,
+    medianAgeDays: d.medianAgeDays,
+    totalVideos: d.totalVideos,
+    avgER: d.avgER,
+    avgPlayCount: d.avgPlayCount,
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">クエリ別 鮮度分析</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 36 + 40)}>
+          <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 100 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "動画数", position: "insideBottomRight", offset: -5, fontSize: 11 }} />
+            <YAxis type="category" dataKey="query" tick={{ fontSize: 11 }} width={95} />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.[0]) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                    <div className="font-medium">{d.query}</div>
+                    <div>鮮度スコア: {d.freshnessScore}%</div>
+                    <div>中央値経過日数: {d.medianAgeDays}日</div>
+                    <div>平均ER: {d.avgER}%</div>
+                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
+                    <div>動画数: {d.totalVideos}本</div>
+                    <hr className="my-1 border-border" />
+                    {FRESHNESS_BUCKETS.map(b => (
+                      <div key={b.key} className="flex justify-between gap-3">
+                        <span>{b.label}</span>
+                        <span>{d[b.key]}本</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            {FRESHNESS_BUCKETS.map(b => (
+              <Bar key={b.key} dataKey={b.key} stackId="freshness" fill={b.color} />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+
+        {/* 凡例 */}
+        <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
+          {FRESHNESS_BUCKETS.map(b => (
+            <span key={b.key} className="flex items-center gap-1">
+              <span className="w-3 h-3 rounded" style={{ backgroundColor: b.color }} />
+              {b.label}
+            </span>
+          ))}
+        </div>
+
+        {/* 鮮度スコアバッジ一覧 */}
+        <div className="mt-3 pt-3 border-t space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">鮮度スコア（直近2ヶ月以内の動画比率）</p>
+          <div className="flex flex-wrap gap-2">
+            {data.map(d => {
+              const label = freshnessLabel(d.freshnessScore);
+              return (
+                <div key={d.query} className="flex items-center gap-1.5 text-xs">
+                  <span className="font-medium">{d.query}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${label.className}`}>
+                    {label.text} {d.freshnessScore}%
+                  </span>
+                  <span className="text-muted-foreground">中央値{Math.round(d.medianAgeDays)}日</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- 3.7 PR/Ad動画インサイト ----
+
+function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["adInsight"]> }) {
+  const { comparison } = data;
+  const erDiff = round2Fmt(comparison.ad.avgER - comparison.organic.avgER);
+  const erSign = comparison.ad.avgER >= comparison.organic.avgER ? "+" : "";
+
+  const chartData = data.topAdHashtags.map(d => ({
+    tag: `#${d.tag}`,
+    count: d.count,
+    avgER: d.avgER,
+    avgPlayCount: d.avgPlayCount,
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">PR/Ad動画インサイト</CardTitle>
+          <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-medium">
+            PR率 {data.adRate}%（{data.adCount}/{data.adCount + data.organicCount}本）
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* PR vs オーガニック比較 */}
+        <div className="grid grid-cols-2 gap-3">
+          {([
+            { key: "ad" as const, label: "PR/Ad動画", color: "border-amber-500 bg-amber-50 dark:bg-amber-950/20" },
+            { key: "organic" as const, label: "オーガニック動画", color: "border-blue-500 bg-blue-50 dark:bg-blue-950/20" },
+          ] as const).map(({ key, label, color }) => {
+            const d = comparison[key];
+            return (
+              <div key={key} className={`border-l-4 rounded-lg p-3 text-sm space-y-1 ${color}`}>
+                <div className="font-medium text-xs mb-2">{label}</div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">平均ER</span>
+                  <span className="font-medium">{d.avgER}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">平均再生数</span>
+                  <span className="font-medium">{formatCount(d.avgPlayCount)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">中央値経過日数</span>
+                  <span className="font-medium">{Math.round(d.medianAgeDays)}日</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          ER差: <span className={`font-medium ${comparison.ad.avgER >= comparison.organic.avgER ? "text-green-600" : "text-red-600"}`}>
+            {erSign}{erDiff}%
+          </span>（PR動画がオーガニックより{comparison.ad.avgER >= comparison.organic.avgER ? "高い" : "低い"}）
+        </div>
+
+        {/* クエリ別PR率 */}
+        {data.perQuery.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">クエリ別PR率</p>
+            <div className="space-y-1.5">
+              {data.perQuery.map(q => (
+                <div key={q.query} className="flex items-center gap-2 text-xs">
+                  <span className="font-medium w-32 truncate" title={q.query}>{q.query}</span>
+                  <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-amber-400 dark:bg-amber-500 rounded-full"
+                      style={{ width: `${q.adRate}%` }}
+                    />
+                  </div>
+                  <span className="text-muted-foreground w-24 text-right">
+                    {q.adRate}%（{q.adCount}/{q.totalCount}本）
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PR頻出ハッシュタグ */}
+        {chartData.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">PR動画の頻出ハッシュタグ</p>
+            <ResponsiveContainer width="100%" height={Math.max(160, chartData.length * 26 + 40)}>
+              <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 90 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={85} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null;
+                    const d = payload[0].payload;
+                    return (
+                      <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                        <div className="font-medium">{d.tag}</div>
+                        <div>PR動画数: {d.count}本</div>
+                        <div>平均ER: {d.avgER}%</div>
+                        <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function round2Fmt(v: number): string {
+  return (Math.round(v * 100) / 100).toFixed(2);
 }
 
 // ---- 4. ハッシュタグ別ER比較 ----
