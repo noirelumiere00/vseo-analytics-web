@@ -1,4 +1,4 @@
-import { eq, desc, inArray, and, or } from "drizzle-orm";
+import { eq, desc, inArray, and, or, gte, sql, ne, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -14,6 +14,8 @@ import {
   campaigns,
   campaignSnapshots,
   campaignReports,
+  subscriptions,
+  passwordResetTokens,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
@@ -25,6 +27,7 @@ import {
   InsertCampaign,
   InsertCampaignSnapshot,
   InsertCampaignReport,
+  InsertSubscription,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -647,4 +650,206 @@ export async function upsertCampaignReport(data: InsertCampaignReport) {
       notes: data.notes,
     },
   });
+}
+
+// === User Lookup (email / Google ID) ===
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function getUserByGoogleId(googleId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.googleId, googleId)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function createUser(data: {
+  openId: string;
+  name: string;
+  email: string;
+  passwordHash?: string;
+  googleId?: string;
+  emailVerified?: number;
+  loginMethod: string;
+  tosAcceptedAt?: Date;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(users).values({
+    openId: data.openId,
+    name: data.name,
+    email: data.email,
+    passwordHash: data.passwordHash ?? null,
+    googleId: data.googleId ?? null,
+    emailVerified: data.emailVerified ?? 0,
+    loginMethod: data.loginMethod,
+    tosAcceptedAt: data.tosAcceptedAt ?? null,
+    lastSignedIn: new Date(),
+  });
+  return result[0].insertId;
+}
+
+export async function linkGoogleAccount(userId: number, googleId: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ googleId, emailVerified: 1 }).where(eq(users.id, userId));
+}
+
+export async function setTosAccepted(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ tosAcceptedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function setEmailVerified(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ emailVerified: 1 }).where(eq(users.id, userId));
+}
+
+export async function updateUserPassword(userId: number, passwordHash: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(users).set({ passwordHash }).where(eq(users.id, userId));
+}
+
+// === Subscriptions ===
+
+export async function getSubscriptionByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function upsertSubscription(data: InsertSubscription) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(subscriptions).values(data).onDuplicateKeyUpdate({
+    set: {
+      plan: data.plan,
+      stripeCustomerId: data.stripeCustomerId,
+      stripeSubscriptionId: data.stripeSubscriptionId,
+      status: data.status,
+      currentPeriodStart: data.currentPeriodStart,
+      currentPeriodEnd: data.currentPeriodEnd,
+      cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+    },
+  });
+}
+
+export async function getSubscriptionByStripeCustomerId(customerId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, customerId)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function getSubscriptionByStripeSubscriptionId(subId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(subscriptions).where(eq(subscriptions.stripeSubscriptionId, subId)).limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function updateSubscriptionByStripeSubId(stripeSubId: string, data: Partial<InsertSubscription>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(subscriptions).set(data).where(eq(subscriptions.stripeSubscriptionId, stripeSubId));
+}
+
+// === Password Reset Tokens ===
+
+export async function createPasswordResetToken(userId: number, token: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.insert(passwordResetTokens).values({ userId, token, expiresAt });
+}
+
+export async function consumePasswordResetToken(token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Atomic: UPDATE ... SET usedAt=NOW() WHERE token=? AND usedAt IS NULL AND expiresAt > NOW()
+  const result = await db.update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(and(
+      eq(passwordResetTokens.token, token),
+      isNull(passwordResetTokens.usedAt),
+      gte(passwordResetTokens.expiresAt, new Date()),
+    ));
+  if (result[0].affectedRows === 0) return null;
+  // Return the token record to get userId
+  const record = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, token)).limit(1);
+  return record[0] ?? null;
+}
+
+export async function invalidateUserResetTokens(userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(passwordResetTokens)
+    .set({ usedAt: new Date() })
+    .where(and(eq(passwordResetTokens.userId, userId), isNull(passwordResetTokens.usedAt)));
+}
+
+// === Quota ===
+
+export async function countMonthlyJobs(userId: number, since: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+
+  // Count analysis_jobs (exclude pending)
+  const [a] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(analysisJobs)
+    .where(and(
+      eq(analysisJobs.userId, userId),
+      gte(analysisJobs.createdAt, since),
+      ne(analysisJobs.status, "pending"),
+    ));
+
+  // Count trend_discovery_jobs (exclude pending)
+  const [t] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(trendDiscoveryJobs)
+    .where(and(
+      eq(trendDiscoveryJobs.userId, userId),
+      gte(trendDiscoveryJobs.createdAt, since),
+      ne(trendDiscoveryJobs.status, "pending"),
+    ));
+
+  // Count campaign_snapshots (exclude pending)
+  const [c] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(campaignSnapshots)
+    .innerJoin(campaigns, eq(campaignSnapshots.campaignId, campaigns.id))
+    .where(and(
+      eq(campaigns.userId, userId),
+      gte(campaignSnapshots.createdAt, since),
+      ne(campaignSnapshots.status, "pending"),
+    ));
+
+  return (a?.count ?? 0) + (t?.count ?? 0) + (c?.count ?? 0);
+}
+
+// === Admin: Users with subscriptions ===
+
+export async function getAllUsersWithSubscriptions() {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select({
+    id: users.id,
+    openId: users.openId,
+    name: users.name,
+    email: users.email,
+    role: users.role,
+    createdAt: users.createdAt,
+    lastSignedIn: users.lastSignedIn,
+    plan: subscriptions.plan,
+    subscriptionStatus: subscriptions.status,
+  }).from(users)
+    .leftJoin(subscriptions, eq(users.id, subscriptions.userId))
+    .orderBy(desc(users.createdAt));
 }
