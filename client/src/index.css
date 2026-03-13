@@ -209,6 +209,36 @@
   .animate-spin-slow {
     animation: spin 3s linear infinite;
   }
+
+  /* Logo background removal & dark mode adaptation */
+  .logo-blend {
+    mix-blend-mode: multiply;
+    filter: contrast(1.15);
+  }
+  .dark .logo-blend {
+    mix-blend-mode: screen;
+    filter: invert(1) contrast(1.15) brightness(1.05);
+  }
+
+  /* Subtle watermark variant */
+  .logo-watermark {
+    mix-blend-mode: multiply;
+    pointer-events: none;
+    user-select: none;
+  }
+  .dark .logo-watermark {
+    mix-blend-mode: screen;
+    filter: invert(1);
+  }
+
+  /* Logo pulse animation for loading states */
+  .animate-logo-pulse {
+    animation: logo-pulse 2s ease-in-out infinite;
+  }
+  @keyframes logo-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.05); }
+  }
 }
 
 @media print {

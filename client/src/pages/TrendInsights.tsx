@@ -61,7 +61,7 @@ export default function TrendInsights() {
 
   const selectAllDeletable = () => {
     if (!jobsQuery.data) return;
-    const deletableIds = jobsQuery.data.filter((j) => j.status !== "processing").map((j) => j.id);
+    const deletableIds = jobsQuery.data.filter((j) => j.status !== "processing" && j.status !== "queued").map((j) => j.id);
     setDeleteSelectedIds((prev) =>
       prev.length === deletableIds.length ? [] : deletableIds
     );
@@ -100,6 +100,8 @@ export default function TrendInsights() {
         return <Badge className="bg-green-500"><CheckCircle2 className="h-3 w-3 mr-1" />完了</Badge>;
       case "processing":
         return <Badge className="bg-blue-500"><LoaderIcon className="h-3 w-3 mr-1 animate-spin" />処理中</Badge>;
+      case "queued":
+        return <Badge className="bg-yellow-500"><Clock className="h-3 w-3 mr-1" />キュー中</Badge>;
       case "failed":
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />失敗</Badge>;
       default:
@@ -144,7 +146,7 @@ export default function TrendInsights() {
           <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/30 bg-destructive/5">
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={selectAllDeletable}>
-                {jobs.length > 0 && deleteSelectedIds.length === jobs.filter((j) => j.status !== "processing").length
+                {jobs.length > 0 && deleteSelectedIds.length === jobs.filter((j) => j.status !== "processing" && j.status !== "queued").length
                   ? "全解除"
                   : "全選択"}
               </Button>
@@ -172,7 +174,7 @@ export default function TrendInsights() {
         {/* Loading */}
         {jobsQuery.isLoading && (
           <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <img src="/favicon.png" alt="" className="h-12 w-12 object-contain logo-blend animate-logo-pulse" />
           </div>
         )}
 
@@ -180,7 +182,7 @@ export default function TrendInsights() {
         {!jobsQuery.isLoading && jobs.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <Compass className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <img src="/favicon.png" alt="" className="h-16 w-16 object-contain logo-blend opacity-30 mb-4" />
               <h3 className="font-semibold text-lg">まだ分析履歴がありません</h3>
               <p className="text-muted-foreground text-sm mt-1">
                 TikTokトレンド分析を実行すると、ここに結果が表示されます
@@ -198,7 +200,7 @@ export default function TrendInsights() {
           <div className="space-y-3">
             {jobs.map((job, i) => {
               const isDeleteSelected = deleteSelectedIds.includes(job.id);
-              const isProcessing = job.status === "processing";
+              const isProcessing = job.status === "processing" || job.status === "queued";
               const cross = job.crossAnalysis as any;
               const videoCount = cross?.topVideos?.length
                 ? cross.uniqueVideoCount ?? cross.topVideos.length

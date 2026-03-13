@@ -10,6 +10,11 @@ import { serveStatic, setupVite } from "./vite";
 
 import { logBuffer } from "../logBuffer";
 
+const MODE = process.env.SERVER_MODE || "all";
+// "web"    → Webサーバーのみ
+// "worker" → ワーカーのみ
+// "all"    → 両方（後方互換、シングルサーバー構成用）
+
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -32,7 +37,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   // インメモリログバッファを初期化（console.log/error/warn をキャプチャ）
   logBuffer.init();
-  
+
   const app = express();
   const server = createServer(app);
   // Configure body parser with larger size limit for file uploads
@@ -63,22 +68,21 @@ async function startServer() {
   }
 
   server.listen(port, async () => {
-    console.log(`Server running on http://localhost:${port}/`);
-    
+    console.log(`Server running on http://localhost:${port}/ (mode: ${MODE})`);
+
     // Puppeteer ブラウザは必要な時だけ起動（メモリ節約）
     console.log("[Startup] Puppeteer browser will be initialized on-demand (memory-saving mode)");
-    
-    // サーバー起動時にスタックしたprocessingジョブをリセット
-    try {
-      const { resetStuckProcessingJobs } = await import("../db");
-      const resetCount = await resetStuckProcessingJobs();
-      if (resetCount > 0) {
-        console.log(`[Startup] Reset ${resetCount} stuck processing jobs to failed`);
-      }
-    } catch (e) {
-      console.warn("[Startup] Failed to reset stuck jobs:", e);
-    }
   });
 }
 
-startServer().catch(console.error);
+async function main() {
+  if (MODE !== "worker") {
+    await startServer();
+  }
+  if (MODE !== "web") {
+    const { startWorker } = await import("./worker");
+    await startWorker();
+  }
+}
+
+main().catch(console.error);

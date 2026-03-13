@@ -1,44 +1,16 @@
-import { COOKIE_NAME, SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION, TREND_VIDEOS_PER_QUERY } from "@shared/const";
+import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
-import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeLosePatternCommonality, analyzeWinPatternCommonalityAd, analyzeLosePatternCommonalityAd, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
-import { LLMQuotaExhaustedError } from "./_core/llm";
-import { searchTikTokTriple, searchTikTokBatch, scrapeTikTokMetaKeywords, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
-import { expandPersonaToQueries, flattenTikTokVideo, computeCrossAnalysis, generateTrendSummary } from "./trendDiscovery";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
-// pdfExporter: 全エンドポイントがコメントアウト済みのため import 削除（メモリ節約）
-// import { generatePdfFromUrl, generatePdfFromSnapshot } from "./pdfExporter";
 import { generateExportToken } from "./_core/exportToken";
 import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
-import pLimit from "p-limit";
-import { captureSnapshot, type SnapshotProgress } from "./campaignSnapshot";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
-
-// グローバルジョブキュー: 同時実行を最大2に制限（RAM 1.9GB、1ジョブ≒600MB）
-const analysisQueue = pLimit(2);
-let analysisQueuePending = 0; // キュー待ち数をトラッキング
-
-// キャンセル管理: jobId → true でキャンセルフラグを保持
-const cancelledJobs = new Set<number>();
-
-class JobCancelledError extends Error {
-  constructor(jobId: number) {
-    super(`Job ${jobId} was cancelled by user`);
-    this.name = "JobCancelledError";
-  }
-}
-
-function checkCancelled(jobId: number) {
-  if (cancelledJobs.has(jobId)) {
-    throw new JobCancelledError(jobId);
-  }
-}
 
 // CSV出力ヘルパー: ダブルクォートエスケープ
 function csvEscape(val: string): string {
@@ -56,76 +28,6 @@ function fmtDate(d: Date | string | null | undefined): string {
 function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return "";
   return new Date(d).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
-}
-
-// 進捗状態を保持するインメモリストア（進捗は一時的なものなのでインメモリでOK）
-type ProgressEntry = {
-  message: string;
-  percent: number;
-  updatedAt: number;
-  failedVideos: Array<{ tiktokVideoId: string; error: string }>;
-  totalTarget: number;
-  processedCount: number;
-};
-const progressStore = new Map<number, ProgressEntry>();
-
-// メモリ管理: 10分以上更新のないエントリを定期的に削除
-setInterval(() => {
-  const staleThreshold = Date.now() - 10 * 60 * 1000;
-  for (const [jobId, entry] of progressStore) {
-    if (entry.updatedAt < staleThreshold) {
-      progressStore.delete(jobId);
-      console.log(`[ProgressStore] Evicted stale entry for job ${jobId}`);
-    }
-  }
-  for (const [jobId, entry] of trendProgressStore) {
-    if (entry.updatedAt < staleThreshold) {
-      trendProgressStore.delete(jobId);
-      console.log(`[TrendProgressStore] Evicted stale entry for job ${jobId}`);
-    }
-  }
-  for (const [id, entry] of campaignProgressStore) {
-    if (entry.updatedAt < staleThreshold) {
-      campaignProgressStore.delete(id);
-    }
-  }
-}, 5 * 60 * 1000).unref(); // .unref() でプロセス終了をブロックしない
-
-// トレンド発見用の進捗ストア（既存のprogressStoreとは分離）
-type TrendProgressEntry = {
-  message: string;
-  percent: number;
-  updatedAt: number;
-};
-const trendProgressStore = new Map<number, TrendProgressEntry>();
-
-function setTrendProgress(jobId: number, message: string, percent: number) {
-  trendProgressStore.set(jobId, { message, percent, updatedAt: Date.now() });
-}
-
-// キャンペーンスナップショット用の進捗ストア
-const campaignProgressStore = new Map<number, { message: string; percent: number; phase: string; updatedAt: number }>();
-function setCampaignProgress(snapshotId: number, progress: SnapshotProgress) {
-  campaignProgressStore.set(snapshotId, { ...progress, updatedAt: Date.now() });
-}
-
-function setProgress(jobId: number, progress: { message: string; percent: number }) {
-  const existing = progressStore.get(jobId);
-  progressStore.set(jobId, {
-    ...progress,
-    updatedAt: Date.now(),
-    failedVideos: existing?.failedVideos ?? [],
-    totalTarget: existing?.totalTarget ?? 0,
-    processedCount: existing?.processedCount ?? 0,
-  });
-}
-
-function addFailedVideo(jobId: number, tiktokVideoId: string, error: string) {
-  const entry = progressStore.get(jobId);
-  if (entry) {
-    entry.failedVideos.push({ tiktokVideoId, error: error.substring(0, 200) });
-    entry.updatedAt = Date.now();
-  }
 }
 
 
@@ -309,7 +211,7 @@ export const appRouter = router({
         }
       }),
 
-    // 分析を実行（バックグラウンド処理）- 5シークレットブラウザ検索方式
+    // 分析を実行（ワーカーキューに投入）
     execute: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -330,336 +232,23 @@ export const appRouter = router({
           });
         }
 
-        // ステータスを処理中に更新
-        await db.updateAnalysisJobStatus(input.jobId, "processing");
+        // ステータスを queued に設定してワーカーに任せる
+        await db.updateAnalysisJobStatus(input.jobId, "queued");
+        await db.setCancelRequested(input.jobId, 0);
+        await db.updateJobProgress("analysis", input.jobId, { message: "ワーカーの処理待ち中...", percent: 0 });
 
-        // 検索データが既に存在するかチェック（途中再開判定）
-        const existingSearchResult = await db.getTripleSearchResultByJobId(input.jobId);
-        const existingVideos = await db.getVideosByJobId(input.jobId);
-        const canResume = !!(job.keyword && existingSearchResult && existingVideos.length > 0);
-
-        if (!canResume) {
-          // 新規実行: 古い動画データをクリア（重複防止）
-          await db.clearJobVideoData(input.jobId);
+        // queuedAction を設定
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          const { analysisJobs } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await dbInstance.update(analysisJobs).set({ queuedAction: "execute" }).where(eq(analysisJobs.id, input.jobId));
         }
 
-        // ジョブキューに投入（グローバル同時実行制限）
-        analysisQueuePending++;
-        const queuePosition = analysisQueuePending;
-        if (analysisQueue.activeCount >= 2) {
-          setProgress(input.jobId, { message: `キュー待ち中...（${queuePosition}番目）`, percent: 0 });
-          console.log(`[Analysis] Job ${input.jobId} queued (position: ${queuePosition}, active: ${analysisQueue.activeCount})`);
-        } else {
-          setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
-        }
-
-        // キャンセルフラグをクリア（再実行に備える）
-        cancelledJobs.delete(input.jobId);
-
-        // ジョブキュー経由で非同期実行
-        analysisQueue(async () => {
-          analysisQueuePending--;
-          setProgress(input.jobId, { message: "分析を開始しています...", percent: 0 });
-          try {
-            checkCancelled(input.jobId);
-            if (job.keyword) {
-              if (canResume) {
-                // === 途中再開モード: 検索スキップ、未分析動画のみ再処理 ===
-                console.log(`[Analysis] Resuming job ${input.jobId} - skipping search (${existingVideos.length} videos in DB)`);
-                setProgress(input.jobId, { message: `途中から再開中...（${existingVideos.length}件の動画データを再利用）`, percent: 42 });
-
-                // センチメント未分析の動画を抽出
-                const videosNeedingSentiment = existingVideos.filter(v => !v.sentiment);
-
-                if (videosNeedingSentiment.length > 0) {
-                  const BATCH_SIZE = 5;
-                  const total = videosNeedingSentiment.length;
-                  {
-                    const entry = progressStore.get(input.jobId);
-                    if (entry) {
-                      entry.totalTarget = existingVideos.length;
-                      entry.processedCount = existingVideos.length - total;
-                    }
-                  }
-
-                  for (let i = 0; i < total; i += BATCH_SIZE) {
-                    checkCancelled(input.jobId);
-                    const batch = videosNeedingSentiment.slice(i, i + BATCH_SIZE);
-                    const done = Math.min(i + BATCH_SIZE, total);
-
-                    setProgress(input.jobId, {
-                      message: `センチメント分析中... (${done}/${total})`,
-                      percent: 42 + Math.floor((done / total) * 36),
-                    });
-
-                    // DBからSentimentInputを復元
-                    const sentimentInputs: SentimentInput[] = await Promise.all(
-                      batch.map(async (v) => {
-                        const ocrData = await db.getOcrResultsByVideoId(v.id);
-                        const transcription = await db.getTranscriptionByVideoId(v.id);
-                        return {
-                          title: v.title || "",
-                          description: v.description || "",
-                          hashtags: (v.hashtags as string[]) || [],
-                          ocrTexts: ocrData.map((o: any) => o.extractedText || ""),
-                          transcriptionText: transcription?.fullText || "",
-                        };
-                      })
-                    );
-
-                    const sentimentResults = await analyzeSentimentAndKeywordsBatch(sentimentInputs);
-
-                    await Promise.all(
-                      batch.map((v, j) => db.updateVideo(v.id, {
-                        sentiment: sentimentResults[j]?.sentiment ?? "neutral",
-                        keyHook: sentimentResults[j]?.keyHook ?? "",
-                        keywords: sentimentResults[j]?.keywords ?? [],
-                      }))
-                    );
-
-                    const entry = progressStore.get(input.jobId);
-                    if (entry) entry.processedCount = existingVideos.length - total + done;
-                  }
-                }
-
-                // レポート再生成のため既存レポートを削除
-                await db.deleteAnalysisReportByJobId(input.jobId);
-
-              } else {
-              // === 新規実行: 複数シークレットブラウザでTikTok検索 ===
-              checkCancelled(input.jobId);
-              console.log(`[Analysis] Starting triple TikTok search for keyword: ${job.keyword}`);
-              setProgress(input.jobId, { message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始...`, percent: 5 });
-
-              const tripleResult = await searchTikTokTriple(
-                job.keyword,
-                SCRAPER_VIDEOS_PER_SESSION,
-                SCRAPER_SESSION_COUNT,
-                (msg: string, scraperPct: number) => {
-                  // スクレイパーの進捗(5-90%)を全体の検索フェーズ(5-40%)にマッピング
-                  const pct = Math.min(40, Math.round(5 + ((scraperPct - 5) / 85) * 35));
-                  setProgress(input.jobId, { message: msg, percent: pct });
-                }
-              );
-
-              // 検索結果をDBに永続化
-              // DB列: appearedInAll3Ids=全セッション出現, appearedIn2Ids=2回以上(全未満), appearedIn1OnlyIds=1回のみ
-              const { videosByAppearanceCount, numSessions } = tripleResult.duplicateAnalysis;
-              const allSessionVideos = videosByAppearanceCount[numSessions] ?? [];
-              const oneOnlyVideos = videosByAppearanceCount[1] ?? [];
-              // 2回以上〜全セッション未満の動画を結合
-              const midVideos: typeof allSessionVideos = [];
-              for (let c = numSessions - 1; c >= 2; c--) {
-                midVideos.push(...(videosByAppearanceCount[c] ?? []));
-              }
-
-              await db.saveTripleSearchResult({
-                jobId: input.jobId,
-                searchData: tripleResult.searches.map(s => ({
-                  sessionIndex: s.sessionIndex,
-                  totalFetched: s.totalFetched,
-                  videoIds: s.videos.map(v => v.id),
-                })),
-                appearedInAll3Ids: allSessionVideos.map(v => v.id),
-                appearedIn2Ids: midVideos.map(v => v.id),
-                appearedIn1OnlyIds: oneOnlyVideos.map(v => v.id),
-                overlapRate: Math.round(tripleResult.duplicateAnalysis.overlapRate * 10),
-              });
-
-              const countSummary = Object.entries(videosByAppearanceCount)
-                .sort(([a], [b]) => Number(b) - Number(a))
-                .map(([count, videos]) => `${count}回出現=${videos.length}`)
-                .join(", ");
-              console.log(`[Analysis] Search complete (${numSessions}sessions): ${countSummary}, 重複率=${tripleResult.duplicateAnalysis.overlapRate.toFixed(1)}%`);
-
-              // 全ユニーク動画を分析対象にする（重複度情報付き）
-              const allUniqueVideos = tripleResult.duplicateAnalysis.allUniqueVideos;
-              
-              setProgress(input.jobId, {
-                message: `${allUniqueVideos.length}件のユニーク動画を分析中...`,
-                percent: 42,
-              });
-
-              // 各動画を分析（重複度情報も含めてDB保存）
-              // 5本ずつバッチ処理: Phase1=並列OCR+DB登録, Phase2=センチメント1回LLM, Phase3=DB更新
-              const BATCH_SIZE = 5;
-              const total = allUniqueVideos.length;
-              {
-                const entry = progressStore.get(input.jobId);
-                if (entry) { entry.totalTarget = total; entry.processedCount = 0; }
-              }
-
-              for (let i = 0; i < total; i += BATCH_SIZE) {
-                checkCancelled(input.jobId);
-                const batch = allUniqueVideos.slice(i, i + BATCH_SIZE);
-                const done = Math.min(i + BATCH_SIZE, total);
-
-                // Phase1: 並列でOCR・DB登録（センチメントLLMはスキップ）
-                const p1Pct = 42 + Math.floor((i / total) * 36);
-                setProgress(input.jobId, {
-                  message: `動画登録中... (${done}/${total})`,
-                  percent: p1Pct,
-                });
-
-                const batchSettled = await Promise.allSettled(
-                  batch.map(tiktokVideo => analyzeVideoFromTikTok(input.jobId, tiktokVideo, { skipSentiment: true }))
-                );
-                const batchResults = batchSettled
-                  .filter((r): r is PromiseFulfilledResult<{ dbVideoId: number; sentimentInput: SentimentInput }> => r.status === "fulfilled")
-                  .map(r => r.value);
-                // 失敗した動画を記録
-                batchSettled.forEach((r, idx) => {
-                  if (r.status === "rejected") {
-                    const vid = batch[idx];
-                    const errMsg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-                    console.error(`[Analysis] Video ${vid.id} failed:`, errMsg);
-                    addFailedVideo(input.jobId, vid.id, errMsg);
-                  }
-                });
-
-                if (batchResults.length === 0) {
-                  const entry = progressStore.get(input.jobId);
-                  if (entry) entry.processedCount = done;
-                  continue;
-                }
-
-                // Phase2: センチメント分析（1回のLLM）
-                const p2Pct = 42 + Math.floor(((i + BATCH_SIZE * 0.5) / total) * 36);
-                setProgress(input.jobId, {
-                  message: `センチメント分析中... (${done}/${total})`,
-                  percent: p2Pct,
-                });
-
-                const sentimentResults = await analyzeSentimentAndKeywordsBatch(
-                  batchResults.map(r => r.sentimentInput)
-                );
-
-                // Phase3: DB更新
-                await Promise.all(
-                  batchResults.map((r, j) => db.updateVideo(r.dbVideoId, {
-                    sentiment: sentimentResults[j]?.sentiment ?? "neutral",
-                    keyHook: sentimentResults[j]?.keyHook ?? "",
-                    keywords: sentimentResults[j]?.keywords ?? [],
-                  }))
-                );
-
-                const entry = progressStore.get(input.jobId);
-                if (entry) entry.processedCount = done;
-
-                const p3Pct = 42 + Math.floor((done / total) * 36);
-                setProgress(input.jobId, {
-                  message: `動画分析中... (${done}/${total}${entry?.failedVideos.length ? ` / ${entry.failedVideos.length}件失敗` : ""})`,
-                  percent: p3Pct,
-                });
-              }
-
-              } // end of else (new execution with search)
-            } else if (job.manualUrls && job.manualUrls.length > 0) {
-              // === 手動URL指定の場合 ===
-              for (let i = 0; i < job.manualUrls.length; i++) {
-                const url = job.manualUrls[i];
-                const percent = Math.floor(((i + 1) / job.manualUrls.length) * 85);
-                setProgress(input.jobId, {
-                  message: `動画分析中... (${i + 1}/${job.manualUrls.length})`,
-                  percent,
-                });
-                await analyzeVideoFromUrl(input.jobId, url);
-              }
-            }
-
-            // レポート生成
-            checkCancelled(input.jobId);
-            setProgress(input.jobId, { message: "分析レポート生成中...", percent: 85 });
-            await generateAnalysisReport(input.jobId);
-
-            // 勝ちパターン動画の共通点をLLMで分析（オーガニック）
-            checkCancelled(input.jobId);
-            setProgress(input.jobId, { message: "勝ちパターン（オーガニック）を分析中...", percent: 88 });
-            if (job.keyword) {
-              await analyzeWinPatternCommonality(input.jobId, job.keyword);
-            }
-
-            // 勝ちパターン動画の共通点をLLMで分析（Ad）
-            checkCancelled(input.jobId);
-            setProgress(input.jobId, { message: "勝ちパターン（Ad）を分析中...", percent: 91 });
-            if (job.keyword) {
-              await analyzeWinPatternCommonalityAd(input.jobId, job.keyword);
-            }
-
-            // 負けパターン動画のBadポイント分析（オーガニック）
-            checkCancelled(input.jobId);
-            setProgress(input.jobId, { message: "負けパターン（オーガニック）を分析中...", percent: 94 });
-            if (job.keyword) {
-              await analyzeLosePatternCommonality(input.jobId, job.keyword);
-            }
-
-            // 負けパターン動画のBadポイント分析（Ad）
-            checkCancelled(input.jobId);
-            setProgress(input.jobId, { message: "負けパターン（Ad）を分析中...", percent: 97 });
-            if (job.keyword) {
-              await analyzeLosePatternCommonalityAd(input.jobId, job.keyword);
-            }
-
-            // ステータスを完了に更新
-            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
-            setProgress(input.jobId, { message: "分析完了", percent: 100 });
-            // メモリリーク対策: 完了後に進捗情報を削除
-            setTimeout(() => {
-              progressStore.delete(input.jobId);
-              console.log(`[Analysis] Progress store cleaned for job ${input.jobId}`);
-            }, 5000);
-            console.log(`[Analysis] Completed analysis for job ${input.jobId}`);
-          } catch (error) {
-            // キャンセル処理
-            if (error instanceof JobCancelledError) {
-              cancelledJobs.delete(input.jobId);
-              await db.updateAnalysisJobStatus(input.jobId, "failed");
-              setProgress(input.jobId, { message: "分析がキャンセルされました。収集済みデータは保持されています。", percent: -1 });
-              console.log(`[Analysis] Job ${input.jobId} cancelled by user`);
-              return;
-            }
-
-            const errorMessage = error instanceof Error ? error.message : "不明なエラー";
-            const isLLMQuotaError = error instanceof LLMQuotaExhaustedError
-              || errorMessage.includes("usage exhausted")
-              || errorMessage.includes("412 Precondition Failed")
-              || errorMessage.includes("quota");
-            console.error("[Analysis] Error:", errorMessage);
-            console.error("[Analysis] Full error:", error);
-
-            await db.updateAnalysisJobStatus(input.jobId, "failed");
-
-            let userMessage = "分析に失敗しました。";
-            if (isLLMQuotaError) {
-              userMessage = "分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。";
-            } else if (errorMessage.includes("empty response")) {
-              userMessage = "TikTokがアクセスを制限しています。しばらく待ってから再度お試しください。";
-            } else if (errorMessage.includes("CAPTCHA")) {
-              userMessage = "TikTokのCAPTCHA認証が必要です。しばらく待ってから再度お試しください。";
-            } else if (errorMessage.includes("JSON Parse Error")) {
-              userMessage = "TikTokからのデータ取得に失敗しました。ネットワークを確認してから再度お試しください。";
-            } else if (errorMessage.includes("Puppeteer")) {
-              userMessage = "ブラウザの起動に失敗しました。サーバーリソースが不足している可能性があります。";
-            }
-
-            setProgress(input.jobId, {
-              message: `分析失敗: ${userMessage}`,
-              percent: -1,
-            });
-            // メモリリーク対策: エラー時は5分後に進捗情報を削除（エラーメッセージを保持するため長めに設定）
-            setTimeout(() => {
-              progressStore.delete(input.jobId);
-              console.log(`[Analysis] Progress store cleaned after error for job ${input.jobId}`);
-            }, 5 * 60 * 1000);
-          }
-        }).catch(err => {
-          console.error(`[Analysis] Queue error for job ${input.jobId}:`, err);
-        });
-
-        return { success: true, message: `${SCRAPER_SESSION_COUNT}つのシークレットブラウザでTikTok検索を開始しました。` };
+        return { success: true, message: "分析をキューに追加しました。ワーカーが処理を開始します。" };
       }),
 
-    // LLM再分析（既存動画データに対してLLM部分だけ再実行）
+    // LLM再分析（ワーカーキューに投入）
     reAnalyzeLLM: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -679,106 +268,22 @@ export const appRouter = router({
           });
         }
 
-        // ステータスをprocessingに
-        await db.updateAnalysisJobStatus(input.jobId, "processing");
+        // ステータスを queued に設定
+        await db.updateAnalysisJobStatus(input.jobId, "queued");
+        await db.updateJobProgress("analysis", input.jobId, { message: "ワーカーの処理待ち中...", percent: 0 });
 
-        // ジョブキューに投入
-        analysisQueuePending++;
-        if (analysisQueue.activeCount >= 2) {
-          setProgress(input.jobId, { message: "キュー待ち中...", percent: 0 });
-        } else {
-          setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
+        // queuedAction を reAnalyzeLLM に設定
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          const { analysisJobs } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await dbInstance.update(analysisJobs).set({ queuedAction: "reAnalyzeLLM" }).where(eq(analysisJobs.id, input.jobId));
         }
 
-        analysisQueue(async () => {
-          analysisQueuePending--;
-          setProgress(input.jobId, { message: "LLM再分析を開始...", percent: 5 });
-          try {
-            const BATCH_SIZE = 5;
-            const total = videos.length;
-
-            // Phase1: センチメント再分析
-            for (let i = 0; i < total; i += BATCH_SIZE) {
-              const batch = videos.slice(i, i + BATCH_SIZE);
-              const done = Math.min(i + BATCH_SIZE, total);
-              setProgress(input.jobId, {
-                message: `センチメント再分析中... (${done}/${total})`,
-                percent: Math.floor((done / total) * 60),
-              });
-
-              // 各動画のOCR/Transcriptionデータを取得
-              const sentimentInputs: SentimentInput[] = await Promise.all(
-                batch.map(async (v) => {
-                  const ocrResults = await db.getOcrResultsByVideoId(v.id);
-                  const transcription = await db.getTranscriptionByVideoId(v.id);
-                  return {
-                    title: v.title || "",
-                    description: v.description || "",
-                    hashtags: (v.hashtags as string[]) || [],
-                    ocrTexts: ocrResults.map((o: any) => o.extractedText || ""),
-                    transcriptionText: transcription?.fullText || "",
-                  };
-                })
-              );
-
-              const sentimentResults = await analyzeSentimentAndKeywordsBatch(sentimentInputs);
-
-              await Promise.all(
-                batch.map((v, j) => db.updateVideo(v.id, {
-                  sentiment: sentimentResults[j]?.sentiment ?? "neutral",
-                  keyHook: sentimentResults[j]?.keyHook ?? "",
-                  keywords: sentimentResults[j]?.keywords ?? [],
-                }))
-              );
-            }
-
-            // Phase2: 既存レポート削除 → レポート再生成
-            setProgress(input.jobId, { message: "レポート再生成中...", percent: 70 });
-            await db.deleteAnalysisReportByJobId(input.jobId);
-            await generateAnalysisReport(input.jobId);
-
-            // Phase3: 勝ちパターン共通点分析（オーガニック）
-            setProgress(input.jobId, { message: "勝ちパターン（オーガニック）を再分析中...", percent: 80 });
-            if (job.keyword) {
-              await analyzeWinPatternCommonality(input.jobId, job.keyword);
-            }
-
-            // Phase4: 勝ちパターン共通点分析（Ad）
-            setProgress(input.jobId, { message: "勝ちパターン（Ad）を再分析中...", percent: 85 });
-            if (job.keyword) {
-              await analyzeWinPatternCommonalityAd(input.jobId, job.keyword);
-            }
-
-            // Phase5: 負けパターン分析（オーガニック）
-            setProgress(input.jobId, { message: "負けパターン（オーガニック）を再分析中...", percent: 90 });
-            if (job.keyword) {
-              await analyzeLosePatternCommonality(input.jobId, job.keyword);
-            }
-
-            // Phase6: 負けパターン分析（Ad）
-            setProgress(input.jobId, { message: "負けパターン（Ad）を再分析中...", percent: 95 });
-            if (job.keyword) {
-              await analyzeLosePatternCommonalityAd(input.jobId, job.keyword);
-            }
-
-            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
-            setProgress(input.jobId, { message: "LLM再分析完了", percent: 100 });
-            setTimeout(() => progressStore.delete(input.jobId), 5000);
-            console.log(`[ReAnalyze] Completed LLM re-analysis for job ${input.jobId}`);
-          } catch (error) {
-            console.error("[ReAnalyze] Error:", error);
-            await db.updateAnalysisJobStatus(input.jobId, "completed", new Date());
-            setProgress(input.jobId, { message: "LLM再分析でエラー発生", percent: -1 });
-            setTimeout(() => progressStore.delete(input.jobId), 5 * 60 * 1000);
-          }
-        }).catch(err => {
-          console.error(`[ReAnalyze] Queue error for job ${input.jobId}:`, err);
-        });
-
-        return { success: true, message: "LLM再分析を開始しました" };
+        return { success: true, message: "LLM再分析をキューに追加しました" };
       }),
 
-    // 分析の進捗状況を取得
+    // 分析の進捗状況を取得（DBベース）
     getProgress: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -790,29 +295,28 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
-        // インメモリの進捗情報を取得
-        const progressInfo = progressStore.get(input.jobId);
+        // DB の progress カラムから進捗を取得
+        const progressInfo = (job as any).progress as {
+          message?: string;
+          percent?: number;
+          failedVideos?: Array<{ tiktokVideoId: string; error: string }>;
+          totalTarget?: number;
+          processedCount?: number;
+        } | null;
 
         const videosData = await db.getVideosByJobId(input.jobId);
         const totalVideos = videosData.length;
-        
-        // 各動画の分析完了状況をチェック
-        let completedVideos = 0;
-        for (const video of videosData) {
-          const score = await db.getAnalysisScoreByVideoId(video.id);
-          if (score) {
-            completedVideos++;
-          }
-        }
 
         return {
           status: job.status,
           totalVideos,
-          completedVideos,
-          progress: progressInfo?.percent ?? (totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0),
+          completedVideos: totalVideos,
+          progress: progressInfo?.percent ?? 0,
           currentStep: progressInfo?.message ?? (
-            job.status === "processing"
-              ? `動画分析中... (${completedVideos}/${totalVideos})`
+            job.status === "queued"
+              ? "ワーカーの処理待ち中..."
+              : job.status === "processing"
+              ? "処理中..."
               : job.status === "completed"
               ? "分析完了"
               : job.status === "failed"
@@ -820,10 +324,7 @@ export const appRouter = router({
               : "待機中"
           ),
           failedVideos: progressInfo?.failedVideos ?? [],
-          queue: {
-            activeJobs: analysisQueue.activeCount,
-            pendingJobs: analysisQueue.pendingCount,
-          },
+          queue: { activeJobs: 0, pendingJobs: 0 },
         };
       }),
     // CSVエクスポート（動画一覧）
@@ -956,8 +457,8 @@ export const appRouter = router({
         if (job.userId !== ctx.user.id) {
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
-        if (job.status === "processing") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "処理中のジョブは削除できません" });
+        if (job.status === "processing" || job.status === "queued") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "処理中またはキュー中のジョブは削除できません" });
         }
         await db.deleteAnalysisJob(input.jobId);
         return { success: true };
@@ -975,7 +476,7 @@ export const appRouter = router({
             skipped.push(jobId);
             continue;
           }
-          if (job.status === "processing") {
+          if (job.status === "processing" || job.status === "queued") {
             skipped.push(jobId);
             continue;
           }
@@ -1110,7 +611,7 @@ export const appRouter = router({
     //     }
     //   }),
 
-    // 分析をキャンセル
+    // 分析をキャンセル（DB経由でワーカーに通知）
     cancel: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -1118,17 +619,12 @@ export const appRouter = router({
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
 
-        // 既にキャンセル済みの場合は重複リクエストを無視
-        if (cancelledJobs.has(input.jobId)) {
-          return { success: true, message: "キャンセル処理中です" };
+        if (job.status !== "processing" && job.status !== "queued") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "実行中またはキュー中のジョブのみキャンセルできます" });
         }
 
-        if (job.status !== "processing") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "実行中のジョブのみキャンセルできます" });
-        }
-
-        cancelledJobs.add(input.jobId);
-        setProgress(input.jobId, { message: "キャンセル中...（次のチェックポイントで停止します）", percent: -1 });
+        await db.setCancelRequested(input.jobId, 1);
+        await db.updateJobProgress("analysis", input.jobId, { message: "キャンセル中...（次のチェックポイントで停止します）", percent: -1 });
         console.log(`[Analysis] Cancel requested for job ${input.jobId}`);
         return { success: true, message: "キャンセルリクエストを受け付けました" };
       }),
@@ -1368,131 +864,30 @@ export const appRouter = router({
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
-        if (job.status === "processing") return { success: true, message: "既に実行中です" };
+        if (job.status === "processing" || job.status === "queued") return { success: true, message: "既に実行中です" };
         if (job.status === "completed") return { success: true, message: "既に完了しています" };
 
-        await db.updateTrendDiscoveryJobStatus(input.jobId, "processing");
-        setTrendProgress(input.jobId, "処理を開始しています...", 0);
+        // failed ジョブのリトライ時はデータをリセット
+        if (job.status === "failed") {
+          await db.updateTrendDiscoveryJob(input.jobId, {
+            scrapedVideos: null as any,
+            crossAnalysis: null as any,
+          });
+        }
 
-        // バックグラウンド実行（共有キュー使用）
-        analysisQueue(async () => {
-          try {
-            // Step 1: LLM KW拡張 (5%)
-            setTrendProgress(input.jobId, "ペルソナからキーワードを拡張中...", 5);
-            const { keywords, hashtags } = await expandPersonaToQueries(job.persona);
-            console.log(`[TrendDiscovery] Job ${input.jobId}: expanded to ${keywords.length} KW + ${hashtags.length} HT`);
+        // ステータスを queued に設定してワーカーに任せる
+        await db.updateTrendDiscoveryJobStatus(input.jobId, "queued");
+        await db.updateJobProgress("trend", input.jobId, { message: "ワーカーの処理待ち中...", percent: 0 });
 
-            await db.updateTrendDiscoveryJob(input.jobId, {
-              expandedKeywords: keywords,
-              expandedHashtags: hashtags,
-            });
+        // queuedAction を設定
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          const { trendDiscoveryJobs } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await dbInstance.update(trendDiscoveryJobs).set({ queuedAction: "execute" }).where(eq(trendDiscoveryJobs.id, input.jobId));
+        }
 
-            // Step 2: バッチスクレイピング (10-80%)
-            setTrendProgress(input.jobId, "TikTok検索を開始します...", 10);
-
-            const queries = [
-              ...keywords.map(k => ({ query: k, type: "keyword" as const })),
-              ...hashtags.map(h => ({ query: h, type: "hashtag" as const })),
-            ];
-
-            const batchResults = await searchTikTokBatch(
-              queries,
-              TREND_VIDEOS_PER_QUERY,
-              (msg, completed, total) => {
-                const pct = 10 + Math.floor((completed / total) * 70);
-                setTrendProgress(input.jobId, msg, pct);
-              },
-            );
-
-            // tagVideoCountマッピング構築（ハッシュタグ → 総投稿数）
-            const tagVideoCountMap = new Map<string, number>();
-            for (const r of batchResults) {
-              if (r.type === "hashtag" && r.tagVideoCount != null) {
-                tagVideoCountMap.set(r.query, r.tagVideoCount);
-              }
-            }
-            if (tagVideoCountMap.size > 0) {
-              console.log(`[TrendDiscovery] Job ${input.jobId}: tagVideoCount for ${tagVideoCountMap.size} hashtags`);
-            }
-
-            // フラット化
-            const allVideos = batchResults.flatMap(r =>
-              r.videos.map(v => flattenTikTokVideo(v, r.query, r.type))
-            );
-            console.log(`[TrendDiscovery] Job ${input.jobId}: scraped ${allVideos.length} total videos`);
-
-            await db.updateTrendDiscoveryJob(input.jobId, {
-              scrapedVideos: allVideos,
-            });
-
-            // Step 2.5: クエリ別上位動画のメタキーワード取得 (80-85%)
-            setTrendProgress(input.jobId, "上位動画のSEOキーワードを取得中...", 80);
-            let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
-            try {
-              // クエリごとに重複排除して再生数上位5本を選出
-              const queryGroups = new Map<string, typeof allVideos>();
-              for (const v of allVideos) {
-                const group = queryGroups.get(v.query) ?? [];
-                group.push(v);
-                queryGroups.set(v.query, group);
-              }
-              const selectedVideos: typeof allVideos[number][] = [];
-              const seenVideoIds = new Set<string>();
-              for (const [, videos] of queryGroups) {
-                const sorted = videos
-                  .filter(v => v.authorUniqueId && !seenVideoIds.has(v.videoId))
-                  .sort((a, b) => b.playCount - a.playCount)
-                  .slice(0, 5);
-                for (const v of sorted) {
-                  seenVideoIds.add(v.videoId);
-                  selectedVideos.push(v);
-                }
-              }
-
-              if (selectedVideos.length > 0) {
-                const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
-                const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
-                  setTrendProgress(input.jobId, msg, 82)
-                );
-                for (const v of selectedVideos) {
-                  const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
-                  const kw = metaMap.get(url);
-                  if (kw && kw.length > 0) {
-                    trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
-                  }
-                }
-                console.log(`[TrendDiscovery] Job ${input.jobId}: fetched meta keywords for ${trendMetaKeywords.length}/${selectedVideos.length} videos`);
-              }
-            } catch (e) {
-              console.warn(`[TrendDiscovery] Job ${input.jobId}: meta keywords scraping failed, skipping`, e);
-            }
-
-            // Step 3: 横断集計 (85-90%)
-            setTrendProgress(input.jobId, "横断集計を実行中...", 85);
-            const crossAnalysis = computeCrossAnalysis(allVideos, new Date(), tagVideoCountMap, trendMetaKeywords);
-
-            // Step 4: LLMレポート生成 (90-95%)
-            setTrendProgress(input.jobId, "AIレポートを生成中...", 90);
-            const { summary, report } = await generateTrendSummary(job.persona, crossAnalysis);
-            crossAnalysis.summary = summary;
-            (crossAnalysis as any).report = report;
-
-            // Step 5: DB保存・完了 (95-100%)
-            setTrendProgress(input.jobId, "結果を保存中...", 95);
-            await db.updateTrendDiscoveryJob(input.jobId, {
-              crossAnalysis,
-            });
-            await db.updateTrendDiscoveryJobStatus(input.jobId, "completed", new Date());
-            setTrendProgress(input.jobId, "完了", 100);
-            console.log(`[TrendDiscovery] Job ${input.jobId}: completed`);
-          } catch (error) {
-            console.error(`[TrendDiscovery] Job ${input.jobId} failed:`, error);
-            await db.updateTrendDiscoveryJobStatus(input.jobId, "failed");
-            setTrendProgress(input.jobId, `エラー: ${error instanceof Error ? error.message : "不明なエラー"}`, -1);
-          }
-        });
-
-        return { success: true, message: "実行を開始しました" };
+        return { success: true, message: "実行をキューに追加しました" };
       }),
 
     recomputeStatistics: protectedProcedure
@@ -1505,68 +900,19 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "スクレイピングデータがありません" });
         }
 
-        // scrapedVideos から統計を再計算（メタキーワードスクレイピングも実行）
-        setTrendProgress(input.jobId, "SEOキーワードを取得中...", 20);
+        // ステータスを queued に設定してワーカーに任せる
+        await db.updateTrendDiscoveryJobStatus(input.jobId, "queued");
+        await db.updateJobProgress("trend", input.jobId, { message: "ワーカーの処理待ち中...", percent: 0 });
 
-        let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
-        try {
-          // クエリごとに上位5本を選出
-          const queryGroups = new Map<string, typeof job.scrapedVideos>();
-          for (const v of job.scrapedVideos) {
-            const group = queryGroups.get(v.query) ?? [];
-            group.push(v);
-            queryGroups.set(v.query, group);
-          }
-          const selectedVideos: typeof job.scrapedVideos[number][] = [];
-          const seenVideoIds = new Set<string>();
-          for (const [, videos] of queryGroups) {
-            const sorted = videos
-              .filter(v => v.authorUniqueId && !seenVideoIds.has(v.videoId))
-              .sort((a, b) => b.playCount - a.playCount)
-              .slice(0, 5);
-            for (const v of sorted) {
-              seenVideoIds.add(v.videoId);
-              selectedVideos.push(v);
-            }
-          }
-
-          if (selectedVideos.length > 0) {
-            const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
-            const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
-              setTrendProgress(input.jobId, msg, 40)
-            );
-            for (const v of selectedVideos) {
-              const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
-              const kw = metaMap.get(url);
-              if (kw && kw.length > 0) {
-                trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
-              }
-            }
-          }
-        } catch (e) {
-          console.warn(`[TrendDiscovery] recompute meta keywords failed, skipping`, e);
+        // queuedAction を recompute に設定
+        const dbInstance = await db.getDb();
+        if (dbInstance) {
+          const { trendDiscoveryJobs } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          await dbInstance.update(trendDiscoveryJobs).set({ queuedAction: "recompute" }).where(eq(trendDiscoveryJobs.id, input.jobId));
         }
 
-        setTrendProgress(input.jobId, "統計を再計算中...", 60);
-
-        // tagVideoCountMap は再構築不可（元データなし）なので undefined
-        const crossAnalysis = computeCrossAnalysis(
-          job.scrapedVideos,
-          job.completedAt ?? new Date(),
-          undefined,
-          trendMetaKeywords,
-        );
-
-        // 既存の summary / report を維持
-        const existing = job.crossAnalysis as any;
-        if (existing?.summary) crossAnalysis.summary = existing.summary;
-        if (existing?.report) (crossAnalysis as any).report = existing.report;
-
-        setTrendProgress(input.jobId, "保存中...", 90);
-        await db.updateTrendDiscoveryJob(input.jobId, { crossAnalysis });
-        setTrendProgress(input.jobId, "完了", 100);
-
-        return { success: true, message: "統計を再計算しました" };
+        return { success: true, message: "統計再計算をキューに追加しました" };
       }),
 
     getProgress: protectedProcedure
@@ -1576,12 +922,14 @@ export const appRouter = router({
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
 
-        const progressInfo = trendProgressStore.get(input.jobId);
+        // DB の progress カラムから進捗を取得
+        const progressInfo = (job as any).progress as { message?: string; percent?: number } | null;
         return {
           status: job.status,
           progress: progressInfo?.percent ?? 0,
           currentStep: progressInfo?.message ?? (
-            job.status === "completed" ? "完了"
+            job.status === "queued" ? "ワーカーの処理待ち中..."
+            : job.status === "completed" ? "完了"
             : job.status === "failed" ? "失敗"
             : "待機中"
           ),
@@ -1644,7 +992,7 @@ export const appRouter = router({
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
-        if (job.status === "processing") throw new TRPCError({ code: "BAD_REQUEST", message: "処理中のジョブは削除できません" });
+        if (job.status === "processing" || job.status === "queued") throw new TRPCError({ code: "BAD_REQUEST", message: "処理中またはキュー中のジョブは削除できません" });
         await db.deleteTrendDiscoveryJob(input.jobId);
         return { success: true };
       }),
@@ -1817,7 +1165,7 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // スナップショット取得実行
+    // スナップショット取得実行（ワーカーキューに投入）
     captureSnapshot: protectedProcedure
       .input(z.object({
         campaignId: z.number(),
@@ -1829,76 +1177,27 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
         }
 
-        // スナップショットレコードをpendingで作成
+        // スナップショットレコードを queued で作成
         const snapshotId = await db.createCampaignSnapshot({
           campaignId: input.campaignId,
           snapshotType: input.type,
-          status: "pending",
+          status: "queued",
         });
 
-        // 非同期でスナップショット取得を実行
-        (async () => {
-          try {
-            await db.updateCampaignSnapshot(snapshotId, { status: "processing" });
-
-            const snapshotData = await captureSnapshot(
-              campaign,
-              input.type,
-              (progress) => setCampaignProgress(snapshotId, progress),
-            );
-
-            await db.updateCampaignSnapshot(snapshotId, {
-              status: "completed",
-              searchResults: snapshotData.searchResults,
-              competitorProfiles: snapshotData.competitorProfiles,
-              rippleEffect: snapshotData.rippleEffect,
-              capturedAt: new Date(),
-            });
-
-            // キャンペーンのステータスとスナップショットIDを更新
-            const updateData: Record<string, any> = {};
-            if (input.type === "baseline") {
-              updateData.baselineSnapshotId = snapshotId;
-              updateData.status = "baseline_captured";
-            } else {
-              updateData.measurementSnapshotId = snapshotId;
-              updateData.status = "measurement_captured";
-            }
-            await db.updateCampaign(input.campaignId, updateData);
-
-            // 両方のスナップショットが揃ったらレポート自動生成
-            const updatedCampaign = await db.getCampaignById(input.campaignId);
-            if (updatedCampaign?.baselineSnapshotId && updatedCampaign?.measurementSnapshotId) {
-              const baselineSnapshot = await db.getCampaignSnapshotById(updatedCampaign.baselineSnapshotId);
-              const measurementSnapshot = await db.getCampaignSnapshotById(updatedCampaign.measurementSnapshotId);
-              if (baselineSnapshot?.status === "completed" && measurementSnapshot?.status === "completed") {
-                const reportData = generateCampaignReport(updatedCampaign, baselineSnapshot, measurementSnapshot);
-                await db.upsertCampaignReport(reportData);
-                await db.updateCampaign(input.campaignId, { status: "report_ready" });
-              }
-            }
-
-            console.log(`[Campaign] Snapshot ${snapshotId} completed for campaign ${input.campaignId}`);
-          } catch (error) {
-            console.error(`[Campaign] Snapshot ${snapshotId} failed:`, error);
-            await db.updateCampaignSnapshot(snapshotId, { status: "failed" });
-          } finally {
-            campaignProgressStore.delete(snapshotId);
-          }
-        })();
+        await db.updateJobProgress("campaign", snapshotId, { message: "ワーカーの処理待ち中...", percent: 0 });
 
         return { snapshotId };
       }),
 
-    // スナップショット進捗取得
+    // スナップショット進捗取得（DBベース）
     getSnapshotProgress: protectedProcedure
       .input(z.object({ snapshotId: z.number() }))
       .query(async ({ input }) => {
         const snapshot = await db.getCampaignSnapshotById(input.snapshotId);
-        const progress = campaignProgressStore.get(input.snapshotId);
+        const progressInfo = (snapshot as any)?.progress as { message?: string; percent?: number; phase?: string } | null;
         return {
           status: snapshot?.status || "pending",
-          progress: progress || null,
+          progress: progressInfo || null,
         };
       }),
 

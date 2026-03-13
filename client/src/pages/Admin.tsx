@@ -18,7 +18,7 @@ export default function Admin() {
   if (!me) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <img src="/favicon.png" alt="" className="h-12 w-12 object-contain logo-blend animate-logo-pulse" />
       </div>
     );
   }

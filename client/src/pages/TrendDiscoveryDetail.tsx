@@ -24,14 +24,14 @@ export default function TrendDiscoveryDetail() {
     { jobId },
     { enabled: !!jobId, refetchInterval: (query) => {
       const data = query.state.data;
-      return data?.status === "processing" ? 3000 : false;
+      return (data?.status === "processing" || data?.status === "queued") ? 3000 : false;
     }},
   );
 
   const progressQuery = trpc.trendDiscovery.getProgress.useQuery(
     { jobId },
     {
-      enabled: !!jobId && jobQuery.data?.status === "processing",
+      enabled: !!jobId && (jobQuery.data?.status === "processing" || jobQuery.data?.status === "queued"),
       refetchInterval: 2000,
     },
   );
@@ -86,7 +86,7 @@ export default function TrendDiscoveryDetail() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <img src="/favicon.png" alt="" className="h-12 w-12 object-contain logo-blend animate-logo-pulse" />
         </div>
       </DashboardLayout>
     );
@@ -143,8 +143,8 @@ export default function TrendDiscoveryDetail() {
           )}
         </div>
 
-        {/* Processing */}
-        {job.status === "processing" && (
+        {/* Processing / Queued */}
+        {(job.status === "processing" || job.status === "queued") && (
           <Card className="border-primary/20">
             <CardContent className="py-10">
               <div className="max-w-md mx-auto space-y-8">
@@ -290,24 +290,22 @@ export default function TrendDiscoveryDetail() {
             {/* トレンドハッシュタグ */}
             <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
 
-            {/* トップ動画 */}
-            <TopVideos data={(job.crossAnalysis as any)?.topVideos || []} />
-
-            {/* キークリエイター */}
-            <KeyCreators data={(job.crossAnalysis as any)?.keyCreators || []} />
+            {/* トップ動画 + キークリエイター（タブ切替） */}
+            <TopVideosAndCreators
+              videos={(job.crossAnalysis as any)?.topVideos || []}
+              creators={(job.crossAnalysis as any)?.keyCreators || []}
+            />
 
             {/* 共起タグ */}
             <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
 
-            {/* 拡張キーワード・ハッシュタグ (参考データ — 末尾へ) */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                  <Search className="h-4 w-4" />
-                  拡張されたクエリ
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            {/* 拡張キーワード・ハッシュタグ */}
+            <CollapsibleSection
+              icon={<Search className="h-4 w-4" />}
+              title="拡張されたクエリ"
+              subtitle={`${((job.expandedKeywords as string[]) || []).length + ((job.expandedHashtags as string[]) || []).length}件`}
+            >
+              <div className="space-y-3">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground mb-2">キーワード</p>
                   <div className="flex flex-wrap gap-2">
@@ -324,8 +322,8 @@ export default function TrendDiscoveryDetail() {
                     ))}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CollapsibleSection>
           </>
         )}
       </div>
@@ -540,14 +538,18 @@ const SORT_OPTIONS: Array<{ key: SortKey; label: string; icon: React.ReactNode }
   { key: "collectCount", label: "保存順", icon: <Bookmark className="h-3 w-3" /> },
 ];
 
-function TopVideos({ data }: { data: Array<{
-  videoId: string; desc: string; authorUniqueId: string; authorNickname: string;
-  playCount: number; diggCount?: number; commentCount?: number; shareCount?: number; collectCount?: number;
-  er: number; coverUrl: string; hashtags: string[];
-}> }) {
+function TopVideosAndCreators({ videos, creators }: {
+  videos: Array<{
+    videoId: string; desc: string; authorUniqueId: string; authorNickname: string;
+    playCount: number; diggCount?: number; commentCount?: number; shareCount?: number; collectCount?: number;
+    er: number; coverUrl: string; hashtags: string[];
+  }>;
+  creators: Array<{ uniqueId: string; nickname: string; avatarUrl: string; followerCount: number; videoCount: number; queryCount: number; totalPlays: number }>;
+}) {
+  const [tab, setTab] = useState<"videos" | "creators">("videos");
   const [sortBy, setSortBy] = useState<SortKey>("er");
-  const [isOpen, setIsOpen] = useState(false);
-  if (data.length === 0) return null;
+  const [sortOpen, setSortOpen] = useState(false);
+  if (videos.length === 0 && creators.length === 0) return null;
 
   const formatCount = (n: number) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -555,85 +557,134 @@ function TopVideos({ data }: { data: Array<{
     return String(n);
   };
 
-  const sorted = [...data].sort((a, b) => {
+  const sorted = [...videos].sort((a, b) => {
     const aVal = sortBy === "er" ? a.er : ((a as any)[sortBy] ?? 0);
     const bVal = sortBy === "er" ? b.er : ((b as any)[sortBy] ?? 0);
     return bVal - aVal;
   });
-
   const currentOption = SORT_OPTIONS.find(o => o.key === sortBy)!;
 
   return (
     <CollapsibleSection
-      icon={<Play className="h-4 w-4" />}
-      title="トップ動画"
-      subtitle={`${data.length}件`}
+      icon={tab === "videos" ? <Play className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+      title="トップ動画 / キークリエイター"
+      subtitle={tab === "videos" ? `${videos.length}件` : `${creators.length}件`}
     >
-      <div className="mb-3 flex justify-end">
-        <div className="relative">
+      {/* タブ切替 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex gap-1 p-0.5 bg-muted rounded-lg">
           <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-accent transition-colors"
+            onClick={() => setTab("videos")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${tab === "videos" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
           >
-            {currentOption.icon}
-            <span>{currentOption.label}</span>
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            <Play className="h-3 w-3" />
+            トップ動画
           </button>
-          {isOpen && (
-            <div className="absolute right-0 top-full mt-1 z-10 bg-background border rounded-md shadow-lg py-1 min-w-[140px]">
-              {SORT_OPTIONS.map(opt => (
-                <button
-                  key={opt.key}
-                  onClick={() => { setSortBy(opt.key); setIsOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${sortBy === opt.key ? "font-medium bg-accent/50" : ""}`}
-                >
-                  {opt.icon}
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {sorted.slice(0, 12).map((v) => (
-          <a
-            key={v.videoId}
-            href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+          <button
+            onClick={() => setTab("creators")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors ${tab === "creators" ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
           >
-            <div className="flex gap-3">
-              {v.coverUrl && (
-                <img
-                  src={v.coverUrl}
-                  alt=""
-                  className="w-16 h-20 object-cover rounded flex-shrink-0"
-                  loading="lazy"
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">@{v.authorUniqueId}</p>
-                <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{v.desc}</p>
-                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {formatCount(v.playCount)}</span>
-                  <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {formatCount(v.diggCount ?? 0)}</span>
-                  <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {formatCount(v.commentCount ?? 0)}</span>
-                  <span className="font-medium text-primary">ER {v.er}%</span>
-                </div>
-              </div>
-            </div>
-            {v.hashtags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {v.hashtags.slice(0, 5).map(tag => (
-                  <span key={tag} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">#{tag}</span>
+            <Users className="h-3 w-3" />
+            キークリエイター
+          </button>
+        </div>
+        {tab === "videos" && (
+          <div className="relative">
+            <button
+              onClick={() => setSortOpen(!sortOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-accent transition-colors"
+            >
+              {currentOption.icon}
+              <span>{currentOption.label}</span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
+            </button>
+            {sortOpen && (
+              <div className="absolute right-0 top-full mt-1 z-10 bg-background border rounded-md shadow-lg py-1 min-w-[140px]">
+                {SORT_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    onClick={() => { setSortBy(opt.key); setSortOpen(false); }}
+                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${sortBy === opt.key ? "font-medium bg-accent/50" : ""}`}
+                  >
+                    {opt.icon}
+                    {opt.label}
+                  </button>
                 ))}
               </div>
             )}
-          </a>
-        ))}
+          </div>
+        )}
       </div>
+
+      {/* 動画タブ */}
+      {tab === "videos" && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {sorted.slice(0, 12).map((v) => (
+            <a
+              key={v.videoId}
+              href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+            >
+              <div className="flex gap-3">
+                {v.coverUrl && (
+                  <img src={v.coverUrl} alt="" className="w-16 h-20 object-cover rounded flex-shrink-0" loading="lazy" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">@{v.authorUniqueId}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{v.desc}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {formatCount(v.playCount)}</span>
+                    <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {formatCount(v.diggCount ?? 0)}</span>
+                    <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {formatCount(v.commentCount ?? 0)}</span>
+                    <span className="font-medium text-primary">ER {v.er}%</span>
+                  </div>
+                </div>
+              </div>
+              {v.hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {v.hashtags.slice(0, 5).map(tag => (
+                    <span key={tag} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">#{tag}</span>
+                  ))}
+                </div>
+              )}
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* クリエイタータブ */}
+      {tab === "creators" && (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {creators.map((c) => (
+            <a
+              key={c.uniqueId}
+              href={`https://www.tiktok.com/@${c.uniqueId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
+            >
+              {c.avatarUrl ? (
+                <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" loading="lazy" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">@{c.uniqueId}</p>
+                <p className="text-xs text-muted-foreground truncate">{c.nickname}</p>
+                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                  <span>{formatCount(c.followerCount)} followers</span>
+                  <span>{c.videoCount}動画</span>
+                  <span>{c.queryCount}クエリ</span>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
     </CollapsibleSection>
   );
 }
@@ -641,73 +692,22 @@ function TopVideos({ data }: { data: Array<{
 function CoOccurringTags({ data }: { data: Array<{ tagA: string; tagB: string; count: number }> }) {
   if (data.length === 0) return null;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Share2 className="h-4 w-4" />
-          共起タグペア
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-          {data.slice(0, 15).map((p, i) => (
-            <div key={`${p.tagA}-${p.tagB}`} className="flex items-center justify-between border rounded-lg px-3 py-2">
-              <div className="flex items-center gap-1.5 text-sm">
-                <span className="text-muted-foreground">{i + 1}.</span>
-                <Badge variant="secondary" className="text-xs">#{p.tagA}</Badge>
-                <span className="text-muted-foreground">+</span>
-                <Badge variant="secondary" className="text-xs">#{p.tagB}</Badge>
-              </div>
-              <span className="text-sm font-medium">{p.count}</span>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function KeyCreators({ data }: { data: Array<{ uniqueId: string; nickname: string; avatarUrl: string; followerCount: number; videoCount: number; queryCount: number; totalPlays: number }> }) {
-  if (data.length === 0) return null;
-
-  const formatCount = (n: number) => {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return String(n);
-  };
-
-  return (
     <CollapsibleSection
-      icon={<Users className="h-4 w-4" />}
-      title="キークリエイター"
+      icon={<Share2 className="h-4 w-4" />}
+      title="共起タグペア"
       subtitle={`${data.length}件`}
     >
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-        {data.map((c) => (
-          <a
-            key={c.uniqueId}
-            href={`https://www.tiktok.com/@${c.uniqueId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
-          >
-            {c.avatarUrl ? (
-              <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" loading="lazy" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium truncate">@{c.uniqueId}</p>
-              <p className="text-xs text-muted-foreground truncate">{c.nickname}</p>
-              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                <span>{formatCount(c.followerCount)} followers</span>
-                <span>{c.videoCount}動画</span>
-                <span>{c.queryCount}クエリ</span>
-              </div>
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+        {data.slice(0, 15).map((p, i) => (
+          <div key={`${p.tagA}-${p.tagB}`} className="flex items-center justify-between border rounded-lg px-3 py-2">
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">{i + 1}.</span>
+              <Badge variant="secondary" className="text-xs">#{p.tagA}</Badge>
+              <span className="text-muted-foreground">+</span>
+              <Badge variant="secondary" className="text-xs">#{p.tagB}</Badge>
             </div>
-          </a>
+            <span className="text-sm font-medium">{p.count}</span>
+          </div>
         ))}
       </div>
     </CollapsibleSection>

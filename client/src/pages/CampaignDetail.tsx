@@ -17,6 +17,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 
 const snapshotStatusIcons: Record<string, React.ReactNode> = {
   pending: <Clock className="h-4 w-4 text-muted-foreground" />,
+  queued: <Clock className="h-4 w-4 text-yellow-500" />,
   processing: <Loader2 className="h-4 w-4 animate-spin text-blue-500" />,
   completed: <CheckCircle2 className="h-4 w-4 text-green-500" />,
   failed: <XCircle className="h-4 w-4 text-destructive" />,
@@ -57,7 +58,7 @@ export default function CampaignDetail() {
   const latestBaseline = baselineSnapshots[0];
   const latestMeasurement = measurementSnapshots[0];
 
-  const isCapturing = snapshots.some(s => s.status === "processing");
+  const isCapturing = snapshots.some(s => s.status === "processing" || s.status === "queued");
   const status = campaign ? statusConfig[campaign.status] || statusConfig.draft : statusConfig.draft;
 
   if (!campaign && !detailQuery.isLoading) {
@@ -156,6 +157,8 @@ export default function CampaignDetail() {
                       ? `取得完了: ${latestBaseline.capturedAt ? new Date(latestBaseline.capturedAt).toLocaleString("ja-JP") : "-"}`
                       : latestBaseline.status === "processing"
                       ? "取得中..."
+                      : latestBaseline.status === "queued"
+                      ? "キュー待ち中..."
                       : latestBaseline.status === "failed"
                       ? "取得失敗"
                       : "待機中"}
@@ -164,7 +167,7 @@ export default function CampaignDetail() {
               ) : (
                 <p className="text-sm text-muted-foreground">未取得</p>
               )}
-              {latestBaseline?.status === "processing" && (
+              {(latestBaseline?.status === "processing" || latestBaseline?.status === "queued") && (
                 <SnapshotProgressBar snapshotId={latestBaseline.id} />
               )}
               <Button
@@ -201,6 +204,8 @@ export default function CampaignDetail() {
                       ? `取得完了: ${latestMeasurement.capturedAt ? new Date(latestMeasurement.capturedAt).toLocaleString("ja-JP") : "-"}`
                       : latestMeasurement.status === "processing"
                       ? "取得中..."
+                      : latestMeasurement.status === "queued"
+                      ? "キュー待ち中..."
                       : latestMeasurement.status === "failed"
                       ? "取得失敗"
                       : "待機中"}
@@ -209,7 +214,7 @@ export default function CampaignDetail() {
               ) : (
                 <p className="text-sm text-muted-foreground">未取得</p>
               )}
-              {latestMeasurement?.status === "processing" && (
+              {(latestMeasurement?.status === "processing" || latestMeasurement?.status === "queued") && (
                 <SnapshotProgressBar snapshotId={latestMeasurement.id} />
               )}
               <Button

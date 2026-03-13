@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Cell, ReferenceLine, ScatterChart, Scatter, ZAxis, CartesianGrid,
@@ -80,6 +82,12 @@ interface TrendStatistics {
   seoMetaKeywords?: {
     videos: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>;
     keywordRanking: Array<{ keyword: string; count: number; videoIds: string[] }>;
+    keywordClusters?: Array<{
+      label: string;
+      keywords: string[];
+      videoCount: number;
+      totalMentions: number;
+    }>;
   };
 }
 
@@ -125,6 +133,31 @@ function formatCount(n: number): string {
   if (n >= 10_000) return `${(n / 10_000).toFixed(1)}万`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(Math.round(n));
+}
+
+// ---- Stat Collapsible Section ----
+
+function StatCollapsibleSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none hover:bg-accent/30 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">{title}</CardTitle>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            {children}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
 }
 
 // ---- Main Component ----
@@ -914,17 +947,54 @@ function round2Fmt(v: number): string {
 // ---- 3.8 TikTok SEOメタキーワード ----
 
 function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
+  const [videoDataOpen, setVideoDataOpen] = useState(false);
+  const CLUSTER_BORDER_COLORS = [
+    "border-l-blue-400", "border-l-violet-400", "border-l-emerald-400", "border-l-amber-400",
+    "border-l-rose-400", "border-l-cyan-400", "border-l-fuchsia-400", "border-l-lime-400",
+  ];
+
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">TikTok SEOキーワード（上位動画のmeta keywords）</CardTitle>
+          <CardTitle className="text-base">TikTok SEOキーワード分析</CardTitle>
           <span className="text-xs text-muted-foreground">{data.videos.length}本の動画から取得</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* キーワードランキング */}
+        {/* クラスターグリッド */}
+        {data.keywordClusters && data.keywordClusters.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2">文脈クラスター（同一動画に共起するキーワード群）</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {data.keywordClusters.map((cluster, ci) => (
+                <div key={cluster.label} className={`rounded-lg border border-l-4 ${CLUSTER_BORDER_COLORS[ci % CLUSTER_BORDER_COLORS.length]} bg-muted/20 p-3`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold truncate">{cluster.label}</span>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium">{cluster.videoCount}本</span>
+                      <span>{cluster.totalMentions}回</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {cluster.keywords.slice(0, 6).map((kw, ki) => (
+                      <span key={kw} className={`px-1.5 py-0.5 rounded text-[11px] border ${ki === 0 ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 font-medium" : "bg-background border-border"}`}>
+                        {kw}
+                      </span>
+                    ))}
+                    {cluster.keywords.length > 6 && (
+                      <span className="text-[11px] text-muted-foreground px-1">+{cluster.keywords.length - 6}件</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* キーワードランキング (15件) */}
         <div className="overflow-x-auto">
+          <p className="text-xs font-medium text-muted-foreground mb-2">キーワードランキング</p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left">
@@ -934,7 +1004,7 @@ function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["s
               </tr>
             </thead>
             <tbody>
-              {data.keywordRanking.slice(0, 20).map((kw, i) => (
+              {data.keywordRanking.slice(0, 15).map((kw, i) => (
                 <tr key={kw.keyword} className="border-b last:border-0">
                   <td className="py-1.5 pr-3 text-muted-foreground">{i + 1}</td>
                   <td className="py-1.5 pr-3 font-medium">{kw.keyword}</td>
@@ -945,32 +1015,39 @@ function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["s
           </table>
         </div>
 
-        {/* 動画別の生データ */}
-        <div className="pt-3 border-t">
-          <p className="text-xs font-medium text-muted-foreground mb-2">動画別メタキーワード</p>
-          <div className="space-y-2">
-            {data.videos.map(v => (
-              <div key={v.videoId} className="text-xs">
-                <a
-                  href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
-                >
-                  @{v.authorUniqueId}/{v.videoId.slice(-6)}
-                  <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </a>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {v.keywords.map((kw, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[10px]">
-                      {kw}
-                    </span>
-                  ))}
+        {/* 動画別メタキーワード (アコーディオン) */}
+        <Collapsible open={videoDataOpen} onOpenChange={setVideoDataOpen}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors pt-2 border-t w-full">
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${videoDataOpen ? "rotate-180" : ""}`} />
+              動画別メタキーワード（{data.videos.length}本）
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="space-y-2 mt-2">
+              {data.videos.map(v => (
+                <div key={v.videoId} className="text-xs">
+                  <a
+                    href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                  >
+                    @{v.authorUniqueId}/{v.videoId.slice(-6)}
+                    <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </a>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {v.keywords.map((kw, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[10px]">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
@@ -997,74 +1074,69 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
   const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">ハッシュタグ別パフォーマンス</CardTitle>
-          <MetricToggle value={metric} onChange={setMetric} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28 + 40)}>
-          <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 80 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
-            <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={75} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.[0]) return null;
-                const d = payload[0].payload;
-                return (
-                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
-                    <div className="font-medium">{d.tag}</div>
-                    <div>平均ER: {d.avgER}%</div>
-                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
-                    <div>動画数: {d.videoCount}本</div>
-                    {d.totalPostCount != null && (
-                      <div>総投稿数: {formatCount(d.totalPostCount)}本</div>
-                    )}
-                  </div>
-                );
-              }}
+    <StatCollapsibleSection title="ハッシュタグ別パフォーマンス">
+      <div className="flex justify-end mb-3">
+        <MetricToggle value={metric} onChange={setMetric} />
+      </div>
+      <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 28 + 40)}>
+        <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 80 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
+          <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={75} />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const d = payload[0].payload;
+              return (
+                <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                  <div className="font-medium">{d.tag}</div>
+                  <div>平均ER: {d.avgER}%</div>
+                  <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
+                  <div>動画数: {d.videoCount}本</div>
+                  {d.totalPostCount != null && (
+                    <div>総投稿数: {formatCount(d.totalPostCount)}本</div>
+                  )}
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey={dataKey} radius={[0, 4, 4, 0]}>
+            {chartData.map((d, i) => (
+              <Cell key={i} fill={d.isUnderrated ? "#10b981" : "#6366f1"} />
+            ))}
+          </Bar>
+          {metric === "er" && globalMedianER > 0 && (
+            <ReferenceLine
+              x={globalMedianER}
+              stroke="#ef4444"
+              strokeDasharray="5 5"
+              label={{ value: `全体中央値 ${globalMedianER}%`, position: "top", fontSize: 10, fill: "#ef4444" }}
             />
-            <Bar dataKey={dataKey} radius={[0, 4, 4, 0]}>
-              {chartData.map((d, i) => (
-                <Cell key={i} fill={d.isUnderrated ? "#10b981" : "#6366f1"} />
-              ))}
-            </Bar>
-            {metric === "er" && globalMedianER > 0 && (
-              <ReferenceLine
-                x={globalMedianER}
-                stroke="#ef4444"
-                strokeDasharray="5 5"
-                label={{ value: `全体中央値 ${globalMedianER}%`, position: "top", fontSize: 10, fill: "#ef4444" }}
-              />
-            )}
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded" style={{ backgroundColor: "#10b981" }} /> 穴場タグ（高ER・少数動画）
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded" style={{ backgroundColor: "#6366f1" }} /> 通常
-          </span>
-        </div>
-        {chartData.some(d => d.totalPostCount != null) && (
-          <div className="mt-3 pt-3 border-t">
-            <p className="text-xs font-medium mb-2 text-muted-foreground">TikTok総投稿数</p>
-            <div className="flex flex-wrap gap-2">
-              {chartData.filter(d => d.totalPostCount != null).map(d => (
-                <span key={d.tag} className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-2 py-1 rounded">
-                  <span className="font-medium">{d.tag}</span>
-                  <span className="text-muted-foreground">{formatCount(d.totalPostCount!)}本</span>
-                </span>
-              ))}
-            </div>
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded" style={{ backgroundColor: "#10b981" }} /> 穴場タグ（高ER・少数動画）
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded" style={{ backgroundColor: "#6366f1" }} /> 通常
+        </span>
+      </div>
+      {chartData.some(d => d.totalPostCount != null) && (
+        <div className="mt-3 pt-3 border-t">
+          <p className="text-xs font-medium mb-2 text-muted-foreground">TikTok総投稿数</p>
+          <div className="flex flex-wrap gap-2">
+            {chartData.filter(d => d.totalPostCount != null).map(d => (
+              <span key={d.tag} className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-2 py-1 rounded">
+                <span className="font-medium">{d.tag}</span>
+                <span className="text-muted-foreground">{formatCount(d.totalPostCount!)}本</span>
+              </span>
+            ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </StatCollapsibleSection>
   );
 }
 
@@ -1080,58 +1152,53 @@ function DurationBandsChart({ data, globalMedianER }: {
   const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">動画長 × パフォーマンス</CardTitle>
-          <MetricToggle value={metric} onChange={setMetric} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.[0]) return null;
-                const d = payload[0].payload;
-                return (
-                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
-                    <div className="font-medium">尺: {d.label}</div>
-                    <div>平均ER: {d.avgER}%</div>
-                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
-                    <div>動画数: {d.videoCount}本</div>
-                  </div>
-                );
-              }}
+    <StatCollapsibleSection title="動画長 × パフォーマンス">
+      <div className="flex justify-end mb-3">
+        <MetricToggle value={metric} onChange={setMetric} />
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} tickFormatter={metric === "er" ? (v => `${v}%`) : formatCount} />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const d = payload[0].payload;
+              return (
+                <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                  <div className="font-medium">尺: {d.label}</div>
+                  <div>平均ER: {d.avgER}%</div>
+                  <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
+                  <div>動画数: {d.videoCount}本</div>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey={dataKey} radius={[4, 4, 0, 0]}>
+            {data.map((d, i) => (
+              <Cell key={i} fill={d.isOptimal ? "#2563eb" : "#93c5fd"} />
+            ))}
+          </Bar>
+          {metric === "er" && globalMedianER > 0 && (
+            <ReferenceLine
+              y={globalMedianER}
+              stroke="#ef4444"
+              strokeDasharray="5 5"
+              label={{ value: `中央値ER ${globalMedianER}%`, position: "right", fontSize: 11, fill: "#ef4444" }}
             />
-            <Bar dataKey={dataKey} radius={[4, 4, 0, 0]}>
-              {data.map((d, i) => (
-                <Cell key={i} fill={d.isOptimal ? "#2563eb" : "#93c5fd"} />
-              ))}
-            </Bar>
-            {metric === "er" && globalMedianER > 0 && (
-              <ReferenceLine
-                y={globalMedianER}
-                stroke="#ef4444"
-                strokeDasharray="5 5"
-                label={{ value: `中央値ER ${globalMedianER}%`, position: "right", fontSize: 11, fill: "#ef4444" }}
-              />
-            )}
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-          {data.map(d => (
-            <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800" : "bg-muted/50"}`}>
-              <div className="font-medium">{d.label} {d.isOptimal && "★"}</div>
-              <div className="text-muted-foreground">{d.videoCount}本</div>
-              <div className="text-muted-foreground">ER {d.avgER}% / {formatCount(d.avgPlayCount)}再生</div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          )}
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+        {data.map(d => (
+          <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800" : "bg-muted/50"}`}>
+            <div className="font-medium">{d.label} {d.isOptimal && "★"}</div>
+            <div className="text-muted-foreground">{d.videoCount}本</div>
+            <div className="text-muted-foreground">ER {d.avgER}% / {formatCount(d.avgPlayCount)}再生</div>
+          </div>
+        ))}
+      </div>
+    </StatCollapsibleSection>
   );
 }
 
@@ -1187,74 +1254,69 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">投稿タイミング分析（JST）</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* モード切替 */}
-        <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit mb-4">
-          {modeButtons.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setMode(key)}
-              className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === key ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              {label}
-            </button>
+    <StatCollapsibleSection title="投稿タイミング分析（JST）">
+      {/* モード切替 */}
+      <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit mb-4">
+        {modeButtons.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setMode(key)}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${mode === key ? "bg-background shadow-sm font-medium" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, ${mode === "plays" ? "36px" : "28px"})` }}>
+          <div />
+          {HOURS.map(h => (
+            <div key={h} className="text-[10px] text-center text-muted-foreground">{h}</div>
           ))}
-        </div>
-
-        <div className="overflow-x-auto">
-          <div className="inline-grid gap-[2px]" style={{ gridTemplateColumns: `40px repeat(24, ${mode === "plays" ? "36px" : "28px"})` }}>
-            <div />
-            {HOURS.map(h => (
-              <div key={h} className="text-[10px] text-center text-muted-foreground">{h}</div>
-            ))}
-            {DAYS.map((day, di) => (
-              <div key={`row-${di}`} className="contents">
-                <div className="text-xs font-medium flex items-center">{day}</div>
-                {HOURS.map(h => {
-                  const cell = lookup.get(`${di}-${h}`);
-                  return (
-                    <div
-                      key={`${di}-${h}`}
-                      className={`${mode === "plays" ? "w-9" : "w-7"} h-7 rounded-sm flex items-center justify-center text-[8px] font-medium ${getColor(di, h)}`}
-                      title={`${day}曜 ${h}時: ${cell ? `${cell.videoCount}本 / ER ${cell.avgER}% / ${formatCount(cell.avgPlayCount)}再生` : "データなし"}`}
-                    >
-                      {getCellText(cell)}
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 凡例 */}
-        <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-          <span>低</span>
-          {colorSchemes[mode].colors.map((cls, i) => (
-            <div key={i} className={`w-4 h-3 rounded-sm ${cls.split(" ")[0]}`} />
-          ))}
-          <span>高</span>
-        </div>
-
-        {/* ベストタイムスロット */}
-        {bestSlots.length > 0 && (
-          <div className="mt-3 pt-3 border-t">
-            <p className="text-xs font-medium mb-1">おすすめ投稿タイミング（ER上位）</p>
-            <div className="flex flex-wrap gap-2">
-              {bestSlots.map((s, i) => (
-                <span key={i} className="text-xs bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 px-2 py-1 rounded">
-                  {DAYS[s.day]}曜 {s.hour}時 (ER {s.avgER}%, {s.videoCount}本)
-                </span>
-              ))}
+          {DAYS.map((day, di) => (
+            <div key={`row-${di}`} className="contents">
+              <div className="text-xs font-medium flex items-center">{day}</div>
+              {HOURS.map(h => {
+                const cell = lookup.get(`${di}-${h}`);
+                return (
+                  <div
+                    key={`${di}-${h}`}
+                    className={`${mode === "plays" ? "w-9" : "w-7"} h-7 rounded-sm flex items-center justify-center text-[8px] font-medium ${getColor(di, h)}`}
+                    title={`${day}曜 ${h}時: ${cell ? `${cell.videoCount}本 / ER ${cell.avgER}% / ${formatCount(cell.avgPlayCount)}再生` : "データなし"}`}
+                  >
+                    {getCellText(cell)}
+                  </div>
+                );
+              })}
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 凡例 */}
+      <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
+        <span>低</span>
+        {colorSchemes[mode].colors.map((cls, i) => (
+          <div key={i} className={`w-4 h-3 rounded-sm ${cls.split(" ")[0]}`} />
+        ))}
+        <span>高</span>
+      </div>
+
+      {/* ベストタイムスロット */}
+      {bestSlots.length > 0 && (
+        <div className="mt-3 pt-3 border-t">
+          <p className="text-xs font-medium mb-1">おすすめ投稿タイミング（ER上位）</p>
+          <div className="flex flex-wrap gap-2">
+            {bestSlots.map((s, i) => (
+              <span key={i} className="text-xs bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 px-2 py-1 rounded">
+                {DAYS[s.day]}曜 {s.hour}時 (ER {s.avgER}%, {s.videoCount}本)
+              </span>
+            ))}
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </StatCollapsibleSection>
   );
 }
 
@@ -1264,45 +1326,40 @@ function PlayCountDistribution({ data }: { data: TrendStatistics["playCountDistr
   if (data.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">再生数分布</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.[0]) return null;
-                const d = payload[0].payload;
-                return (
-                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
-                    <div className="font-medium">{d.label}</div>
-                    <div>{d.count}本 ({d.percentage}%)</div>
-                    <div>平均ER: {d.avgER}%</div>
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]}>
-              {data.map((_, i) => (
-                <Cell key={i} fill="#6366f1" />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-        <div className="grid grid-cols-3 gap-2 text-xs mt-2">
-          {data.map(d => (
-            <div key={d.label} className="p-2 rounded bg-muted/50 text-center">
-              <div className="font-medium">{d.label}</div>
-              <div className="text-muted-foreground">{d.count}本 ({d.percentage}%)</div>
-              <div className="text-muted-foreground">平均ER {d.avgER}%</div>
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <StatCollapsibleSection title="再生数分布">
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+          <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload?.[0]) return null;
+              const d = payload[0].payload;
+              return (
+                <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
+                  <div className="font-medium">{d.label}</div>
+                  <div>{d.count}本 ({d.percentage}%)</div>
+                  <div>平均ER: {d.avgER}%</div>
+                </div>
+              );
+            }}
+          />
+          <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]}>
+            {data.map((_, i) => (
+              <Cell key={i} fill="#6366f1" />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div className="grid grid-cols-3 gap-2 text-xs mt-2">
+        {data.map(d => (
+          <div key={d.label} className="p-2 rounded bg-muted/50 text-center">
+            <div className="font-medium">{d.label}</div>
+            <div className="text-muted-foreground">{d.count}本 ({d.percentage}%)</div>
+            <div className="text-muted-foreground">平均ER {d.avgER}%</div>
+          </div>
+        ))}
+      </div>
+    </StatCollapsibleSection>
   );
 }

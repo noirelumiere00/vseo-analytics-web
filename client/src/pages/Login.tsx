@@ -61,15 +61,25 @@ export default function Login() {
       {/* Left: Branding Panel */}
       <div className="hidden lg:flex flex-col justify-center px-12 bg-gradient-to-br from-primary/5 via-primary/10 to-primary/5 relative overflow-hidden">
         {/* Background decoration */}
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute top-1/4 left-1/4 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
           <div className="absolute bottom-1/4 right-1/4 h-48 w-48 rounded-full bg-primary/5 blur-3xl" />
+          {/* Logo watermark */}
+          <img
+            src="/favicon.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute -bottom-16 -right-16 h-[500px] w-[500px] object-contain opacity-[0.04] dark:opacity-[0.06] logo-watermark select-none"
+          />
         </div>
 
         <div className="relative space-y-8 max-w-md">
-          <h1 className="text-4xl font-bold tracking-tight">
-            <span className="gradient-text">VSEO Analytics</span>
-          </h1>
+          <div className="space-y-4">
+            <img src="/favicon.png" alt="VSEO Analytics" className="h-20 w-20 object-contain logo-blend" />
+            <h1 className="text-4xl font-bold tracking-tight">
+              <span className="gradient-text">VSEO Analytics</span>
+            </h1>
+          </div>
           <p className="text-lg text-muted-foreground leading-relaxed">
             ショート動画時代のPR革命ツール。個人の「感覚」と「バイアス」を排除し、AIが導き出す「正解」。
           </p>
@@ -92,7 +102,8 @@ export default function Login() {
         <Card className="w-full max-w-sm border-0 shadow-none lg:border lg:shadow-sm">
           <CardHeader className="text-center space-y-2">
             {/* Mobile-only branding */}
-            <div className="lg:hidden mb-4">
+            <div className="lg:hidden mb-4 flex flex-col items-center gap-3">
+              <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
               <h1 className="text-2xl font-bold">
                 <span className="gradient-text">VSEO Analytics</span>
               </h1>

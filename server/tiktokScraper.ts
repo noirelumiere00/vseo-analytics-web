@@ -237,7 +237,7 @@ async function searchInIncognitoContext(
       timeout: 30000,
     });
     // セッションごとに異なる待機時間（人間的なブラウジングを模倣）
-    await humanDelay(3000, 6000);
+    await humanDelay(2000, 4000);
 
     // ========================================================
     // プランB: ネットワークインターセプト + スクロールトリガー方式
@@ -392,7 +392,7 @@ async function searchInIncognitoContext(
       console.warn(`[TikTok Session ${sessionIndex + 1}] Video grid selector not found within 15s, continuing with fallback...`);
     }
     // 追加の安定待機（IntersectionObserver初期化完了 + 人間的な閲覧時間）
-    await humanDelay(4000, 7000);
+    await humanDelay(3000, 5000);
 
     // SSRフォールバック: XHRリスナーで初回データが取れなかった場合、
     // ページ埋め込みJSON（__UNIVERSAL_DATA_FOR_REHYDRATION__）から抽出
@@ -523,7 +523,7 @@ async function searchInIncognitoContext(
         }
         hasMoreFalseRetries++;
         console.log(`[TikTok Session ${sessionIndex + 1}] has_more=false, retry ${hasMoreFalseRetries}/${MAX_HAS_MORE_FALSE_RETRIES} after long wait...`);
-        await humanDelay(5000, 8000); // ロングウェイトしてからリトライ
+        await humanDelay(3000, 5000); // ロングウェイトしてからリトライ
       }
 
       const prevCount = allVideos.length;
@@ -558,8 +558,8 @@ async function searchInIncognitoContext(
         return container?.scrollHeight || document.body.scrollHeight;
       }, scroll);
 
-      // 人間的なスクロール間隔: 4〜7秒（ランダム）
-      await humanDelay(4000, 7000);
+      // 人間的なスクロール間隔: 3〜5秒（ランダム）
+      await humanDelay(3000, 5000);
 
       if (onProgress) {
         onProgress(`検索${sessionIndex + 1}: 動画取得中 (${allVideos.length}/${maxVideos}) [スクロール${scroll + 1}]`);
@@ -580,7 +580,7 @@ async function searchInIncognitoContext(
         }
         // 空振り時は追加で少し長く待つ（TikTok側の応答待ち）
         if (noNewDataCount >= 2) {
-          await humanDelay(3000, 5000);
+          await humanDelay(2000, 3000);
         }
       }
     }
@@ -920,51 +920,70 @@ export async function searchTikTokBatch(
     args: buildChromiumArgs(),
   });
 
-  const results: Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[]; tagVideoCount?: number }> = [];
+  const BATCH_CONCURRENCY = 3; // 3並列でクエリを処理
+  // 結果を順序通りに格納するための配列
+  const results: Array<{ query: string; type: "keyword" | "hashtag"; videos: TikTokVideo[]; tagVideoCount?: number }> = new Array(queries.length);
+  let completedCount = 0;
 
   try {
-    for (let i = 0; i < queries.length; i++) {
-      const { query, type } = queries[i];
-      // ハッシュタグの場合はタグページに直接アクセス（#なしの生クエリ）
-      const isTag = type === "hashtag";
-      const searchTerm = isTag ? query : query;
+    // BATCH_CONCURRENCY個ずつ並列実行
+    for (let batchStart = 0; batchStart < queries.length; batchStart += BATCH_CONCURRENCY) {
+      const batch = queries.slice(batchStart, batchStart + BATCH_CONCURRENCY);
 
-      if (onProgress) {
-        const displayTerm = isTag ? `#${query}` : query;
-        onProgress(`クエリ ${i + 1}/${queries.length}: "${displayTerm}" を${isTag ? 'タグページ' : '検索'}中...`, i, queries.length);
-      }
-
-      // クエリ間のディレイ（3〜5秒）
-      if (i > 0) {
-        const delay = 3000 + Math.random() * 2000;
+      // バッチ間のディレイ（初回以外）
+      if (batchStart > 0) {
+        const delay = 2000 + Math.random() * 2000;
         await new Promise(r => setTimeout(r, delay));
       }
 
-      try {
-        const result = await searchInIncognitoContext(
-          browser,
-          searchTerm,
-          maxVideosPerQuery,
-          i, // sessionIndex
-          undefined,
-          isTag, // isTagPage
-        );
-        results.push({
-          query, type, videos: result.videos,
-          ...(result.tagVideoCount != null && { tagVideoCount: result.tagVideoCount }),
-        });
-        const countInfo = result.tagVideoCount != null ? ` (tagVideoCount: ${result.tagVideoCount})` : '';
-        console.log(`[TikTok Batch] Query ${i + 1}/${queries.length} "${isTag ? '#' + query : query}": ${result.videos.length} videos${countInfo}`);
-      } catch (err) {
-        console.error(`[TikTok Batch] Query ${i + 1} "${isTag ? '#' + query : query}" failed:`, err);
-        results.push({ query, type, videos: [] });
+      const promises = batch.map(async ({ query, type }, batchIdx) => {
+        const globalIdx = batchStart + batchIdx;
+        const isTag = type === "hashtag";
+        const searchTerm = query;
+
+        if (onProgress) {
+          const displayTerm = isTag ? `#${query}` : query;
+          onProgress(`クエリ ${globalIdx + 1}/${queries.length}: "${displayTerm}" を${isTag ? 'タグページ' : '検索'}中...`, completedCount, queries.length);
+        }
+
+        // 同一バッチ内で少しずらして開始（bot検出回避）
+        if (batchIdx > 0) {
+          await new Promise(r => setTimeout(r, batchIdx * 1500));
+        }
+
+        try {
+          const result = await searchInIncognitoContext(
+            browser,
+            searchTerm,
+            maxVideosPerQuery,
+            globalIdx, // sessionIndex
+            undefined,
+            isTag, // isTagPage
+          );
+          results[globalIdx] = {
+            query, type, videos: result.videos,
+            ...(result.tagVideoCount != null && { tagVideoCount: result.tagVideoCount }),
+          };
+          const countInfo = result.tagVideoCount != null ? ` (tagVideoCount: ${result.tagVideoCount})` : '';
+          console.log(`[TikTok Batch] Query ${globalIdx + 1}/${queries.length} "${isTag ? '#' + query : query}": ${result.videos.length} videos${countInfo}`);
+        } catch (err) {
+          console.error(`[TikTok Batch] Query ${globalIdx + 1} "${isTag ? '#' + query : query}" failed:`, err);
+          results[globalIdx] = { query, type, videos: [] };
+        }
+      });
+
+      await Promise.allSettled(promises);
+      completedCount += batch.length;
+
+      if (onProgress) {
+        onProgress(`${completedCount}/${queries.length} クエリ完了`, completedCount, queries.length);
       }
     }
   } finally {
     await browser.close();
   }
 
-  return results;
+  return results.filter(r => r != null);
 }
 
 /**
@@ -1043,37 +1062,47 @@ export async function scrapeTikTokMetaKeywords(
     args: buildChromiumArgs(),
   });
 
+  const CONCURRENCY = 3; // 3並列でメタキーワードを取得
+  let completed = 0;
+
   try {
-    for (let i = 0; i < videoUrls.length; i++) {
-      const url = videoUrls[i];
-      if (onProgress) onProgress(`meta keywords取得中 (${i + 1}/${videoUrls.length})...`);
+    // 並列処理: CONCURRENCY個ずつバッチ実行
+    for (let batchStart = 0; batchStart < videoUrls.length; batchStart += CONCURRENCY) {
+      const batch = videoUrls.slice(batchStart, batchStart + CONCURRENCY);
+      const promises = batch.map(async (url, batchIdx) => {
+        const globalIdx = batchStart + batchIdx;
+        const page = await browser.newPage();
+        try {
+          await page.setUserAgent(USER_AGENTS[globalIdx % USER_AGENTS.length]);
+          // domcontentloaded + 短い待機で十分（meta タグは SSR で挿入済み）
+          await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+          await new Promise(r => setTimeout(r, 1500));
 
-      const page = await browser.newPage();
-      try {
-        await page.setUserAgent(USER_AGENTS[i % USER_AGENTS.length]);
-        await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
-        await new Promise(r => setTimeout(r, 3000));
+          const keywords = await page.evaluate(() => {
+            const meta = document.querySelector('meta[name="keywords"]');
+            return meta ? meta.getAttribute("content") : null;
+          });
 
-        const keywords = await page.evaluate(() => {
-          const meta = document.querySelector('meta[name="keywords"]');
-          return meta ? meta.getAttribute("content") : null;
-        });
-
-        if (keywords) {
-          const parsed = keywords
-            .split(",")
-            .map(k => k.trim())
-            .filter(k => k.length > 0);
-          result.set(url, parsed);
-          console.log(`[TikTok Meta] ${url.slice(-30)}: ${parsed.length} keywords`);
-        } else {
-          console.log(`[TikTok Meta] ${url.slice(-30)}: no keywords found`);
+          if (keywords) {
+            const parsed = keywords
+              .split(",")
+              .map(k => k.trim())
+              .filter(k => k.length > 0);
+            result.set(url, parsed);
+            console.log(`[TikTok Meta] ${url.slice(-30)}: ${parsed.length} keywords`);
+          } else {
+            console.log(`[TikTok Meta] ${url.slice(-30)}: no keywords found`);
+          }
+        } catch (e) {
+          console.warn(`[TikTok Meta] Failed for ${url}:`, (e as Error).message);
+        } finally {
+          await page.close();
         }
-      } catch (e) {
-        console.warn(`[TikTok Meta] Failed for ${url}:`, (e as Error).message);
-      } finally {
-        await page.close();
-      }
+      });
+
+      await Promise.allSettled(promises);
+      completed += batch.length;
+      if (onProgress) onProgress(`meta keywords取得中 (${completed}/${videoUrls.length})...`);
     }
   } finally {
     await browser.close();
