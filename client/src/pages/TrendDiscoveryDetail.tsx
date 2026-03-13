@@ -6,7 +6,8 @@ import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Search, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, ChevronRight, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Search, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -332,6 +333,43 @@ export default function TrendDiscoveryDetail() {
   );
 }
 
+// ---- 汎用アコーディオンセクション ----
+
+function CollapsibleSection({ icon, title, subtitle, defaultOpen = false, children }: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer select-none hover:bg-accent/30 transition-colors">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                {icon}
+                {title}
+                {subtitle && (
+                  <span className="text-xs font-normal text-muted-foreground ml-1">{subtitle}</span>
+                )}
+              </CardTitle>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+            </div>
+          </CardHeader>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-0">
+            {children}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
 // ---- AIレポート (複数セクション) ----
 
 const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
@@ -354,109 +392,140 @@ function AITrendReport({ report, fallbackSummary }: {
   report?: Array<{ id: string; title: string; icon: string; content: string }>;
   fallbackSummary?: string;
 }) {
+  const [open, setOpen] = useState(false);
+
   // 新形式: report セクション配列がある場合
   if (report && report.length > 0) {
     return (
-      <div className="space-y-4">
-        {/* ヘッダー */}
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 shadow-sm">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold">AIトレンドレポート</h3>
-            <p className="text-xs text-muted-foreground">データに基づく{report.length}セクションの分析レポート</p>
-          </div>
-        </div>
-
-        {/* セクションカード */}
-        {report.map((section, idx) => {
-          const colors = REPORT_SECTION_COLORS[section.id] ?? { gradient: "from-gray-600 to-gray-700", badge: "bg-gray-100 text-gray-700" };
-          const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
-          return (
-            <Card key={section.id || idx} className="overflow-hidden border shadow-sm">
-              <div className={`bg-gradient-to-r ${colors.gradient} px-5 py-3`}>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/20 backdrop-blur-sm">
-                    <span className="text-white">{icon}</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white">{section.title}</h4>
-                  <span className="ml-auto text-[10px] text-white/60 font-medium">{idx + 1}/{report.length}</span>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <Card className="overflow-hidden">
+          <CollapsibleTrigger asChild>
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 cursor-pointer hover:from-violet-700 hover:to-indigo-700 transition-colors">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+                  <Sparkles className="h-4 w-4 text-white" />
                 </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-white">AIトレンドレポート</h3>
+                  <p className="text-xs text-white/70">データに基づく{report.length}セクションの分析レポート</p>
+                </div>
+                <ChevronDown className={`h-5 w-5 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
               </div>
-              <CardContent className="pt-4 pb-4">
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="divide-y">
+              {report.map((section, idx) => {
+                const colors = REPORT_SECTION_COLORS[section.id] ?? { gradient: "from-gray-600 to-gray-700", badge: "bg-gray-100 text-gray-700" };
+                const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
+                return (
+                  <ReportSection key={section.id || idx} section={section} colors={colors} icon={icon} idx={idx} total={report.length} />
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
     );
   }
 
   // フォールバック: 旧形式の単一 summary
   if (!fallbackSummary) return null;
   return (
-    <Card className="overflow-hidden border-0 shadow-lg">
-      <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-            <Sparkles className="h-4 w-4 text-white" />
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <Card className="overflow-hidden shadow-lg">
+        <CollapsibleTrigger asChild>
+          <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4 cursor-pointer hover:from-violet-700 hover:via-purple-700 hover:to-indigo-700 transition-colors">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
+                <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
-            <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <CardContent className="pt-6 pb-6">
+            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
+            </div>
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
+function ReportSection({ section, colors, icon, idx, total }: {
+  section: { id: string; title: string; content: string };
+  colors: { gradient: string; badge: string };
+  icon: React.ReactNode;
+  idx: number;
+  total: number;
+}) {
+  const [open, setOpen] = useState(idx === 0);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <div className={`bg-gradient-to-r ${colors.gradient} px-5 py-3 cursor-pointer hover:brightness-110 transition-all`}>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/20 backdrop-blur-sm">
+              <span className="text-white">{icon}</span>
+            </div>
+            <h4 className="text-sm font-bold text-white flex-1">{section.title}</h4>
+            <span className="text-[10px] text-white/60 font-medium mr-2">{idx + 1}/{total}</span>
+            <ChevronDown className={`h-4 w-4 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
           </div>
         </div>
-      </div>
-      <CardContent className="pt-6 pb-6">
-        <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
-        </div>
-      </CardContent>
-    </Card>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <CardContent className="pt-4 pb-4">
+          <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
+          </div>
+        </CardContent>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
 function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> }) {
   if (data.length === 0) return null;
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Hash className="h-4 w-4" />
-          トレンドハッシュタグ
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2 pr-4 font-medium text-muted-foreground">#</th>
-                <th className="pb-2 pr-4 font-medium text-muted-foreground">タグ</th>
-                <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">出現動画数</th>
-                <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">クエリ横断数</th>
-                <th className="pb-2 font-medium text-muted-foreground text-right">平均ER(%)</th>
+    <CollapsibleSection
+      icon={<Hash className="h-4 w-4" />}
+      title="トレンドハッシュタグ"
+      subtitle={`${data.length}件`}
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left">
+              <th className="pb-2 pr-4 font-medium text-muted-foreground">#</th>
+              <th className="pb-2 pr-4 font-medium text-muted-foreground">タグ</th>
+              <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">出現動画数</th>
+              <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">クエリ横断数</th>
+              <th className="pb-2 font-medium text-muted-foreground text-right">平均ER(%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.slice(0, 30).map((t, i) => (
+              <tr key={t.tag} className="border-b last:border-0">
+                <td className="py-2 pr-4 text-muted-foreground">{i + 1}</td>
+                <td className="py-2 pr-4 font-medium">#{t.tag}</td>
+                <td className="py-2 pr-4 text-right">{t.videoCount}</td>
+                <td className="py-2 pr-4 text-right">{t.queryCount}</td>
+                <td className="py-2 text-right">{t.avgER}%</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.slice(0, 30).map((t, i) => (
-                <tr key={t.tag} className="border-b last:border-0">
-                  <td className="py-2 pr-4 text-muted-foreground">{i + 1}</td>
-                  <td className="py-2 pr-4 font-medium">#{t.tag}</td>
-                  <td className="py-2 pr-4 text-right">{t.videoCount}</td>
-                  <td className="py-2 pr-4 text-right">{t.queryCount}</td>
-                  <td className="py-2 text-right">{t.avgER}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CardContent>
-    </Card>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </CollapsibleSection>
   );
 }
 
@@ -494,81 +563,77 @@ function TopVideos({ data }: { data: Array<{
   const currentOption = SORT_OPTIONS.find(o => o.key === sortBy)!;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold flex items-center gap-2">
-            <Play className="h-4 w-4" />
-            トップ動画
-          </CardTitle>
-          <div className="relative">
-            <button
-              onClick={() => setIsOpen(!isOpen)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-accent transition-colors"
-            >
-              {currentOption.icon}
-              <span>{currentOption.label}</span>
-              <ChevronDown className="h-3 w-3 text-muted-foreground" />
-            </button>
-            {isOpen && (
-              <div className="absolute right-0 top-full mt-1 z-10 bg-background border rounded-md shadow-lg py-1 min-w-[140px]">
-                {SORT_OPTIONS.map(opt => (
-                  <button
-                    key={opt.key}
-                    onClick={() => { setSortBy(opt.key); setIsOpen(false); }}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${sortBy === opt.key ? "font-medium bg-accent/50" : ""}`}
-                  >
-                    {opt.icon}
-                    {opt.label}
-                  </button>
+    <CollapsibleSection
+      icon={<Play className="h-4 w-4" />}
+      title="トップ動画"
+      subtitle={`${data.length}件`}
+    >
+      <div className="mb-3 flex justify-end">
+        <div className="relative">
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs border rounded-md hover:bg-accent transition-colors"
+          >
+            {currentOption.icon}
+            <span>{currentOption.label}</span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </button>
+          {isOpen && (
+            <div className="absolute right-0 top-full mt-1 z-10 bg-background border rounded-md shadow-lg py-1 min-w-[140px]">
+              {SORT_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => { setSortBy(opt.key); setIsOpen(false); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent transition-colors ${sortBy === opt.key ? "font-medium bg-accent/50" : ""}`}
+                >
+                  {opt.icon}
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {sorted.slice(0, 12).map((v) => (
+          <a
+            key={v.videoId}
+            href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+          >
+            <div className="flex gap-3">
+              {v.coverUrl && (
+                <img
+                  src={v.coverUrl}
+                  alt=""
+                  className="w-16 h-20 object-cover rounded flex-shrink-0"
+                  loading="lazy"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">@{v.authorUniqueId}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{v.desc}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {formatCount(v.playCount)}</span>
+                  <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {formatCount(v.diggCount ?? 0)}</span>
+                  <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {formatCount(v.commentCount ?? 0)}</span>
+                  <span className="font-medium text-primary">ER {v.er}%</span>
+                </div>
+              </div>
+            </div>
+            {v.hashtags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {v.hashtags.slice(0, 5).map(tag => (
+                  <span key={tag} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">#{tag}</span>
                 ))}
               </div>
             )}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {sorted.slice(0, 12).map((v) => (
-            <a
-              key={v.videoId}
-              href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-lg border p-3 hover:bg-accent/50 transition-colors"
-            >
-              <div className="flex gap-3">
-                {v.coverUrl && (
-                  <img
-                    src={v.coverUrl}
-                    alt=""
-                    className="w-16 h-20 object-cover rounded flex-shrink-0"
-                    loading="lazy"
-                  />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">@{v.authorUniqueId}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{v.desc}</p>
-                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" /> {formatCount(v.playCount)}</span>
-                    <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" /> {formatCount(v.diggCount ?? 0)}</span>
-                    <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" /> {formatCount(v.commentCount ?? 0)}</span>
-                    <span className="font-medium text-primary">ER {v.er}%</span>
-                  </div>
-                </div>
-              </div>
-              {v.hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {v.hashtags.slice(0, 5).map(tag => (
-                    <span key={tag} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">#{tag}</span>
-                  ))}
-                </div>
-              )}
-            </a>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          </a>
+        ))}
+      </div>
+    </CollapsibleSection>
   );
 }
 
@@ -611,43 +676,39 @@ function KeyCreators({ data }: { data: Array<{ uniqueId: string; nickname: strin
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Users className="h-4 w-4" />
-          キークリエイター
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {data.map((c) => (
-            <a
-              key={c.uniqueId}
-              href={`https://www.tiktok.com/@${c.uniqueId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
-            >
-              {c.avatarUrl ? (
-                <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" loading="lazy" />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">@{c.uniqueId}</p>
-                <p className="text-xs text-muted-foreground truncate">{c.nickname}</p>
-                <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                  <span>{formatCount(c.followerCount)} followers</span>
-                  <span>{c.videoCount}動画</span>
-                  <span>{c.queryCount}クエリ</span>
-                </div>
+    <CollapsibleSection
+      icon={<Users className="h-4 w-4" />}
+      title="キークリエイター"
+      subtitle={`${data.length}件`}
+    >
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {data.map((c) => (
+          <a
+            key={c.uniqueId}
+            href={`https://www.tiktok.com/@${c.uniqueId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors"
+          >
+            {c.avatarUrl ? (
+              <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0" loading="lazy" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                <Users className="h-4 w-4 text-muted-foreground" />
               </div>
-            </a>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium truncate">@{c.uniqueId}</p>
+              <p className="text-xs text-muted-foreground truncate">{c.nickname}</p>
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                <span>{formatCount(c.followerCount)} followers</span>
+                <span>{c.videoCount}動画</span>
+                <span>{c.queryCount}クエリ</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </CollapsibleSection>
   );
 }
