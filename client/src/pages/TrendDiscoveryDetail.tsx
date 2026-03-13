@@ -105,7 +105,7 @@ export default function TrendDiscoveryDetail() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => setLocation("/trend-discovery")}>
+            <Button variant="ghost" size="icon" onClick={() => setLocation("/trend-insights")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div>
@@ -273,7 +273,32 @@ export default function TrendDiscoveryDetail() {
               );
             })()}
 
-            {/* 拡張キーワード・ハッシュタグ */}
+            {/* AIレポート (最重要 — 高レベルインサイトを最初に) */}
+            {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
+              <AITrendReport
+                report={(job.crossAnalysis as any)?.report}
+                fallbackSummary={(job.crossAnalysis as any)?.summary}
+              />
+            )}
+
+            {/* 統計分析 (鮮度・PR/Adインサイト・SEOキーワード) */}
+            {(job.crossAnalysis as any)?.statistics && (
+              <TrendStatisticsPanel statistics={(job.crossAnalysis as any).statistics} />
+            )}
+
+            {/* トレンドハッシュタグ */}
+            <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
+
+            {/* トップ動画 */}
+            <TopVideos data={(job.crossAnalysis as any)?.topVideos || []} />
+
+            {/* キークリエイター */}
+            <KeyCreators data={(job.crossAnalysis as any)?.keyCreators || []} />
+
+            {/* 共起タグ */}
+            <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
+
+            {/* 拡張キーワード・ハッシュタグ (参考データ — 末尾へ) */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -300,31 +325,6 @@ export default function TrendDiscoveryDetail() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* トレンドハッシュタグ */}
-            <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
-
-            {/* トップ動画 */}
-            <TopVideos data={(job.crossAnalysis as any)?.topVideos || []} />
-
-            {/* 共起タグ */}
-            <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
-
-            {/* キークリエイター */}
-            <KeyCreators data={(job.crossAnalysis as any)?.keyCreators || []} />
-
-            {/* 統計分析 */}
-            {(job.crossAnalysis as any)?.statistics && (
-              <TrendStatisticsPanel statistics={(job.crossAnalysis as any).statistics} />
-            )}
-
-            {/* AIレポート (複数セクション) */}
-            {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
-              <AITrendReport
-                report={(job.crossAnalysis as any)?.report}
-                fallbackSummary={(job.crossAnalysis as any)?.summary}
-              />
-            )}
           </>
         )}
       </div>

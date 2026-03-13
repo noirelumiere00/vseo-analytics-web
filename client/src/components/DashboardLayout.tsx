@@ -28,13 +28,18 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Button } from "./ui/button";
 
-// 分析セクション (index 0-1)
-// インサイトセクション (index 2+)
-const menuItems = [
-  { icon: Search, label: "TikTok SEO分析", path: "/" },
-  { icon: Compass, label: "TikTokトレンド分析", path: "/trend-discovery" },
+// SEO分析セクション (index 0-1)
+// トレンド分析セクション (index 2-3)
+// その他 (index 4+)
+const seoItems = [
+  { icon: Search, label: "SEO分析", path: "/" },
   { icon: History, label: "SEO分析履歴", path: "/history" },
-  { icon: TrendingUp, label: "トレンド分析結果", path: "/trend-insights" },
+];
+const trendItems = [
+  { icon: Compass, label: "トレンド分析", path: "/trend-discovery" },
+  { icon: TrendingUp, label: "トレンド分析履歴", path: "/trend-insights" },
+];
+const otherItems = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
 ];
 
@@ -122,7 +127,8 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location);
+  const allMenuItems = [...seoItems, ...trendItems, ...otherItems];
+  const activeMenuItem = allMenuItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -190,15 +196,15 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {/* 分析セクション */}
+              {/* SEO分析セクション */}
               {!isCollapsed && (
                 <div className="px-3 pt-2 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">分析</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">SEO分析</span>
                 </div>
               )}
-              {menuItems.slice(0, 2).map(item => {
+              {seoItems.map(item => {
                 const isActive = location === item.path
-                  || (item.path === "/trend-discovery" && location.startsWith("/trend-discovery/"));
+                  || (item.path === "/history" && location.startsWith("/analysis/"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -216,17 +222,42 @@ function DashboardLayoutContent({
                 );
               })}
 
-              {/* インサイトセクション */}
+              {/* トレンド分析セクション */}
               {!isCollapsed && (
                 <div className="px-3 pt-4 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">インサイト</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">トレンド分析</span>
                 </div>
               )}
               {isCollapsed && <div className="my-2 mx-2 border-t" />}
-              {menuItems.slice(2).map(item => {
+              {trendItems.map(item => {
                 const isActive = location === item.path
-                  || (item.path === "/trend-insights" && location.startsWith("/campaigns"))
-                  || (item.path === "/history" && location.startsWith("/analysis/"));
+                  || (item.path === "/trend-insights" && (location.startsWith("/campaigns") || location.startsWith("/trend-discovery/")));
+                return (
+                  <SidebarMenuItem key={item.path}>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      onClick={() => setLocation(item.path)}
+                      tooltip={item.label}
+                      className={`h-10 transition-all font-normal`}
+                    >
+                      <item.icon
+                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                      />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+
+              {/* その他 */}
+              {!isCollapsed && (
+                <div className="px-3 pt-4 pb-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">その他</span>
+                </div>
+              )}
+              {isCollapsed && <div className="my-2 mx-2 border-t" />}
+              {otherItems.map(item => {
+                const isActive = location === item.path;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
