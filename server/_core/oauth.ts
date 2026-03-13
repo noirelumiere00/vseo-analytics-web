@@ -13,7 +13,10 @@ import { getGoogleAuthUrl, exchangeCodeForTokens, getGoogleUserInfo } from "./go
 import { SignJWT, jwtVerify } from "jose";
 
 function getStateSecret() {
-  return new TextEncoder().encode(ENV.cookieSecret || "vseo-default-secret");
+  if (!ENV.cookieSecret) {
+    throw new Error("FATAL: JWT_SECRET environment variable is required");
+  }
+  return new TextEncoder().encode(ENV.cookieSecret);
 }
 
 async function signState(payload: Record<string, unknown>): Promise<string> {
@@ -85,7 +88,7 @@ export function registerOAuthRoutes(app: Express) {
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      res.json({ success: true, openId: existingUser.openId });
+      res.json({ success: true });
     } catch (error) {
       console.error("[Auth] Login failed", error);
       res.status(500).json({ error: "ログインに失敗しました" });
@@ -101,16 +104,17 @@ export function registerOAuthRoutes(app: Express) {
       const { email, name, password, tosAccepted } = req.body ?? {};
 
       // Validation
-      if (!email || typeof email !== "string" || !email.includes("@")) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!email || typeof email !== "string" || !emailRegex.test(email) || email.length > 320) {
         res.status(400).json({ error: "有効なメールアドレスを入力してください" });
         return;
       }
-      if (!name || typeof name !== "string" || name.trim().length === 0) {
-        res.status(400).json({ error: "名前を入力してください" });
+      if (!name || typeof name !== "string" || name.trim().length === 0 || name.trim().length > 100) {
+        res.status(400).json({ error: "名前を1〜100文字で入力してください" });
         return;
       }
-      if (!password || typeof password !== "string" || password.length < 8) {
-        res.status(400).json({ error: "パスワードは8文字以上にしてください" });
+      if (!password || typeof password !== "string" || password.length < 8 || password.length > 128) {
+        res.status(400).json({ error: "パスワードは8〜128文字にしてください" });
         return;
       }
       if (!tosAccepted) {
@@ -201,8 +205,8 @@ export function registerOAuthRoutes(app: Express) {
         res.status(400).json({ error: "無効なリセットリンクです" });
         return;
       }
-      if (!password || typeof password !== "string" || password.length < 8) {
-        res.status(400).json({ error: "パスワードは8文字以上にしてください" });
+      if (!password || typeof password !== "string" || password.length < 8 || password.length > 128) {
+        res.status(400).json({ error: "パスワードは8〜128文字にしてください" });
         return;
       }
 

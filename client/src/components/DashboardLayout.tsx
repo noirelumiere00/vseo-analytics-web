@@ -44,9 +44,6 @@ const otherItems = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
 ];
 
-const adminMenuItems = [
-  { icon: Users, label: "管理画面", path: "/admin" },
-];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
@@ -298,35 +295,6 @@ function DashboardLayoutContent({
                 );
               })}
 
-              {/* 管理セクション */}
-              {user?.role === "admin" && (
-                <>
-                  {!isCollapsed && (
-                    <div className="px-3 pt-4 pb-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">管理</span>
-                    </div>
-                  )}
-                  {isCollapsed && <div className="my-2 mx-2 border-t" />}
-                  {adminMenuItems.map(item => {
-                    const isActive = location === item.path;
-                    return (
-                      <SidebarMenuItem key={item.path}>
-                        <SidebarMenuButton
-                          isActive={isActive}
-                          onClick={() => setLocation(item.path)}
-                          tooltip={item.label}
-                          className={`h-10 transition-all font-normal`}
-                        >
-                          <item.icon
-                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                          />
-                          <span>{item.label}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </>
-              )}
             </SidebarMenu>
           </SidebarContent>
 

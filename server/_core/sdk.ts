@@ -26,8 +26,10 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret || "vseo-default-secret";
-    return new TextEncoder().encode(secret);
+    if (!ENV.cookieSecret) {
+      throw new Error("FATAL: JWT_SECRET environment variable is required");
+    }
+    return new TextEncoder().encode(ENV.cookieSecret);
   }
 
   async createSessionToken(

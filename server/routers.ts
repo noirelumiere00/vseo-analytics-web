@@ -37,7 +37,11 @@ function fmtDateTime(d: Date | string | null | undefined): string {
 export const appRouter = router({
   system: systemRouter,
   auth: router({
-    me: publicProcedure.query(opts => opts.ctx.user),
+    me: publicProcedure.query(opts => {
+      if (!opts.ctx.user) return null;
+      const { passwordHash, openId, googleId, ...safeUser } = opts.ctx.user;
+      return safeUser;
+    }),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
@@ -832,7 +836,7 @@ export const appRouter = router({
         if (job.status !== "failed" && job.status !== "pending") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "失敗または待機中のジョブのみ再実行できます" });
         }
-        // ステータスをpendingにリセット
+        await checkQuota(ctx.user.id);
         await db.updateAnalysisJobStatus(input.jobId, "pending");
         return { success: true, jobId: input.jobId };
       }),
@@ -1042,32 +1046,15 @@ export const appRouter = router({
   admin: router({
     // ユーザー一覧（サブスクリプション情報付き）
     listUsers: adminProcedure.query(async () => {
-      return db.getAllUsersWithSubscriptions();
+      const users = await db.getAllUsersWithSubscriptions();
+      // センシティブ情報をAPIレスポンスから除外
+      return users.map(({ role, passwordHash, openId, googleId, ...rest }: any) => rest);
     }),
-
-    // ユーザーのrole変更
-    updateUserRole: adminProcedure
-      .input(z.object({ userId: z.number(), role: z.enum(["user", "admin"]) }))
-      .mutation(async ({ input }) => {
-        await db.updateUserRole(input.userId, input.role);
-        return { success: true };
-      }),
-
-    // ユーザー削除
-    deleteUser: adminProcedure
-      .input(z.object({ userId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        if (input.userId === ctx.user.id) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "自分自身は削除できません" });
-        }
-        await db.deleteUserById(input.userId);
-        return { success: true };
-      }),
 
     // デバッグ用: サーバーログを取得
     getLogs: adminProcedure
       .input(z.object({
-        lines: z.number().default(500),
+        lines: z.number().min(1).max(5000).default(500),
       }))
       .query(async ({ input }) => {
         try {
@@ -1235,8 +1222,13 @@ export const appRouter = router({
     // スナップショット進捗取得（DBベース）
     getSnapshotProgress: protectedProcedure
       .input(z.object({ snapshotId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const snapshot = await db.getCampaignSnapshotById(input.snapshotId);
+        if (!snapshot) throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
+        const campaign = await db.getCampaignById(snapshot.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
+        }
         const progressInfo = (snapshot as any)?.progress as { message?: string; percent?: number; phase?: string } | null;
         return {
           status: snapshot?.status || "pending",

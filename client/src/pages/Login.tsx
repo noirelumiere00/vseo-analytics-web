@@ -63,7 +63,7 @@ export default function Login() {
               <span className="gradient-text">VSEO Analytics</span>
             </h1>
           </div>
-          <CardTitle className="text-xl font-semibold">サインイン</CardTitle>
+          <CardTitle className="text-xl font-semibold">ログイン</CardTitle>
           <p className="text-sm text-muted-foreground">
             登録済みのアカウントでログイン
           </p>
@@ -110,7 +110,7 @@ export default function Login() {
                   ログイン中...
                 </>
               ) : (
-                "サインイン"
+                "ログイン"
               )}
             </Button>
             <div className="relative my-4">

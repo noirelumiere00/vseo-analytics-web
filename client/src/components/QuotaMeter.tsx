@@ -5,7 +5,17 @@ import { Link } from "wouter";
 export default function QuotaMeter() {
   const { plan, used, limit, isExceeded, isLoading } = useQuota();
 
-  if (isLoading) return null;
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border p-3 space-y-2 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-muted-foreground">月間利用状況</span>
+          <span className="h-4 w-16 bg-muted rounded animate-pulse" />
+        </div>
+        <div className="h-2 bg-muted rounded animate-pulse" />
+      </div>
+    );
+  }
 
   const percentage = limit === Infinity ? 0 : Math.min((used / limit) * 100, 100);
   const limitLabel = limit === Infinity ? "無制限" : `${limit}`;
