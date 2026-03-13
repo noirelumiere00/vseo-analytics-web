@@ -25,5 +25,17 @@ export const ENV = {
   sesFromAddress: process.env.SES_FROM_ADDRESS ?? "",
   appUrl: process.env.APP_URL ?? "http://localhost:3001",
   // Admin
-  adminEmail: process.env.ADMIN_EMAIL ?? "s-komata@vectorinc.co.jp",
+  adminEmail: process.env.ADMIN_EMAIL ?? "",
 };
+
+/** 起動時に必須環境変数をバリデーション */
+export function validateRequiredEnv() {
+  const required: [string, string][] = [
+    ["JWT_SECRET", ENV.cookieSecret],
+    ["DATABASE_URL", ENV.databaseUrl],
+  ];
+  const missing = required.filter(([, v]) => !v).map(([k]) => k);
+  if (missing.length > 0) {
+    throw new Error(`FATAL: Missing required environment variables: ${missing.join(", ")}`);
+  }
+}

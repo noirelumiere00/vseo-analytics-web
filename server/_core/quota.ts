@@ -20,6 +20,10 @@ export async function getMonthlyUsage(userId: number) {
 }
 
 export async function checkQuota(userId: number): Promise<void> {
+  // admin ロールは無制限
+  const user = await db.getUserById(userId);
+  if (user?.role === "admin") return;
+
   const { used, limit, plan } = await getMonthlyUsage(userId);
 
   if (used >= limit) {

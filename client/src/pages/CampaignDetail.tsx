@@ -33,7 +33,14 @@ export default function CampaignDetail() {
 
   const detailQuery = trpc.campaign.getById.useQuery(
     { id: campaignId },
-    { enabled: campaignId > 0, refetchInterval: 5000 },
+    {
+      enabled: campaignId > 0,
+      refetchInterval: (query) => {
+        const snapshots = query.state.data?.snapshots || [];
+        const hasActive = snapshots.some((s: any) => s.status === "processing" || s.status === "queued");
+        return hasActive ? 5000 : false;
+      },
+    },
   );
 
   const captureMutation = trpc.campaign.captureSnapshot.useMutation({

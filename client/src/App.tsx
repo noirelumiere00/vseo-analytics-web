@@ -2,9 +2,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { Loader2 } from "lucide-react";
+
+// Lightweight pages - static import
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -12,22 +15,32 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
-import Pricing from "./pages/Pricing";
-import History from "./pages/History";
-import AnalysisDetail from "./pages/AnalysisDetail";
-import ReportView from "./pages/ReportView";
-import { AdminLogs } from "./pages/AdminLogs";
-import Admin from "./pages/Admin";
-import Comparison from "./pages/Comparison";
-import Trend from "./pages/Trend";
-import Dashboard from "./pages/Dashboard";
-import TrendDiscovery from "./pages/TrendDiscovery";
-import TrendDiscoveryDetail from "./pages/TrendDiscoveryDetail";
-import CampaignList from "./pages/CampaignList";
-import CampaignNew from "./pages/CampaignNew";
-import CampaignDetail from "./pages/CampaignDetail";
-import CampaignReport from "./pages/CampaignReport";
-import TrendInsights from "./pages/TrendInsights";
+
+// Heavy pages - lazy import
+const History = lazy(() => import("./pages/History"));
+const AnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
+const ReportView = lazy(() => import("./pages/ReportView"));
+const Admin = lazy(() => import("./pages/Admin"));
+const AdminLogs = lazy(() => import("./pages/AdminLogs").then(m => ({ default: m.AdminLogs })));
+const Comparison = lazy(() => import("./pages/Comparison"));
+const Trend = lazy(() => import("./pages/Trend"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Pricing = lazy(() => import("./pages/Pricing"));
+const TrendDiscovery = lazy(() => import("./pages/TrendDiscovery"));
+const TrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetail"));
+const CampaignList = lazy(() => import("./pages/CampaignList"));
+const CampaignNew = lazy(() => import("./pages/CampaignNew"));
+const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
+const CampaignReport = lazy(() => import("./pages/CampaignReport"));
+const TrendInsights = lazy(() => import("./pages/TrendInsights"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -41,6 +54,7 @@ function Router() {
   return (
     <>
     <ScrollToTop />
+    <Suspense fallback={<PageLoader />}>
     <Switch>
       {/* Public routes */}
       <Route path="/login" component={Login} />
@@ -67,26 +81,18 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
-      <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
     </>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
           <Toaster />
           <Router />

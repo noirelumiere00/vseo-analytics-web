@@ -1,5 +1,8 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
@@ -8,7 +11,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { handleWebhookEvent } from "./stripe";
-import { ENV } from "./env";
+import { ENV, validateRequiredEnv } from "./env";
 
 import { logBuffer } from "../logBuffer";
 
@@ -41,6 +44,9 @@ async function startServer() {
   logBuffer.init();
 
   const app = express();
+  app.set("trust proxy", 1);
+  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(cors({ origin: ENV.appUrl, credentials: true }));
   const server = createServer(app);
 
   // Stripe webhook (must be before express.json to get raw body)
@@ -60,14 +66,21 @@ async function startServer() {
     );
   }
 
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // Body parser
+  app.use(express.json({ limit: "2mb" }));
+  app.use(express.urlencoded({ limit: "2mb", extended: true }));
   // Auth routes
   registerOAuthRoutes(app);
-  // tRPC API
+  // tRPC API (with rate limiting)
+  const apiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
   app.use(
     "/api/trpc",
+    apiLimiter,
     createExpressMiddleware({
       router: appRouter,
       createContext,
@@ -89,10 +102,23 @@ async function startServer() {
 
   server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/ (mode: ${MODE})`);
-
-    // Puppeteer ブラウザは必要な時だけ起動（メモリ節約）
     console.log("[Startup] Puppeteer browser will be initialized on-demand (memory-saving mode)");
   });
+
+  // Graceful shutdown
+  const shutdown = (signal: string) => {
+    console.log(`[Shutdown] Received ${signal}, closing server...`);
+    server.close(() => {
+      console.log("[Shutdown] HTTP server closed");
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.error("[Shutdown] Forced exit after timeout");
+      process.exit(1);
+    }, 30_000);
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 async function main() {
@@ -105,4 +131,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+validateRequiredEnv();
+main().catch((err) => {
+  console.error("[Fatal] Server startup failed:", err);
+  process.exit(1);
+});
