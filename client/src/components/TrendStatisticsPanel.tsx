@@ -914,8 +914,6 @@ function round2Fmt(v: number): string {
 // ---- 3.8 TikTok SEOメタキーワード ----
 
 function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
-  const maxCount = data.keywordRanking[0]?.count ?? 1;
-
   return (
     <Card>
       <CardHeader>
@@ -926,20 +924,25 @@ function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["s
       </CardHeader>
       <CardContent className="space-y-4">
         {/* キーワードランキング */}
-        <div className="space-y-1">
-          {data.keywordRanking.slice(0, 20).map((kw, i) => (
-            <div key={kw.keyword} className="flex items-center gap-2 text-xs">
-              <span className="w-5 text-right text-muted-foreground font-mono">{i + 1}</span>
-              <span className="font-medium w-48 truncate" title={kw.keyword}>{kw.keyword}</span>
-              <div className="flex-1 h-3.5 bg-muted rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full"
-                  style={{ width: `${(kw.count / maxCount) * 100}%` }}
-                />
-              </div>
-              <span className="text-muted-foreground w-16 text-right">{kw.count}本に出現</span>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="pb-2 pr-3 font-medium text-muted-foreground w-8">#</th>
+                <th className="pb-2 pr-3 font-medium text-muted-foreground">キーワード</th>
+                <th className="pb-2 font-medium text-muted-foreground text-right">出現数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.keywordRanking.slice(0, 20).map((kw, i) => (
+                <tr key={kw.keyword} className="border-b last:border-0">
+                  <td className="py-1.5 pr-3 text-muted-foreground">{i + 1}</td>
+                  <td className="py-1.5 pr-3 font-medium">{kw.keyword}</td>
+                  <td className="py-1.5 text-right text-muted-foreground">{kw.count}本</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
 
         {/* 動画別の生データ */}
@@ -959,7 +962,7 @@ function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["s
                 </a>
                 <div className="flex flex-wrap gap-1 mt-1">
                   {v.keywords.map((kw, i) => (
-                    <span key={i} className="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-[10px]">
+                    <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[10px]">
                       {kw}
                     </span>
                   ))}

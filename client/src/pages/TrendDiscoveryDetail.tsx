@@ -380,12 +380,13 @@ const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
   Sparkles: <Sparkles className="h-4 w-4" />,
 };
 
+// SEOレポートと統一したblue基調のトーン
 const REPORT_SECTION_COLORS: Record<string, { gradient: string; badge: string }> = {
-  overview:          { gradient: "from-violet-600 to-purple-600", badge: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300" },
-  hashtag_strategy:  { gradient: "from-blue-600 to-cyan-600", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  content_insights:  { gradient: "from-emerald-600 to-teal-600", badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300" },
-  creator_analysis:  { gradient: "from-amber-600 to-orange-600", badge: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
-  action_plan:       { gradient: "from-rose-600 to-pink-600", badge: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300" },
+  overview:          { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  hashtag_strategy:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  content_insights:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  creator_analysis:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
+  action_plan:       { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
 };
 
 function AITrendReport({ report, fallbackSummary }: {
@@ -400,7 +401,7 @@ function AITrendReport({ report, fallbackSummary }: {
       <Collapsible open={open} onOpenChange={setOpen}>
         <Card className="overflow-hidden">
           <CollapsibleTrigger asChild>
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-3 cursor-pointer hover:from-violet-700 hover:to-indigo-700 transition-colors">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3 cursor-pointer hover:from-blue-700 hover:to-blue-800 transition-colors">
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
                   <Sparkles className="h-4 w-4 text-white" />
@@ -435,7 +436,7 @@ function AITrendReport({ report, fallbackSummary }: {
     <Collapsible open={open} onOpenChange={setOpen}>
       <Card className="overflow-hidden shadow-lg">
         <CollapsibleTrigger asChild>
-          <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-6 py-4 cursor-pointer hover:from-violet-700 hover:via-purple-700 hover:to-indigo-700 transition-colors">
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 cursor-pointer hover:from-blue-700 hover:to-blue-800 transition-colors">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
                 <Sparkles className="h-4 w-4 text-white" />
