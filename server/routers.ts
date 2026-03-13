@@ -1425,33 +1425,43 @@ export const appRouter = router({
               scrapedVideos: allVideos,
             });
 
-            // Step 2.5: 上位動画のメタキーワード取得 (80-85%)
+            // Step 2.5: クエリ別上位動画のメタキーワード取得 (80-85%)
             setTrendProgress(input.jobId, "上位動画のSEOキーワードを取得中...", 80);
             let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
             try {
-              // 重複排除して再生数上位5本を選出
-              const uniqueByVideoId = new Map<string, typeof allVideos[number]>();
+              // クエリごとに重複排除して再生数上位5本を選出
+              const queryGroups = new Map<string, typeof allVideos>();
               for (const v of allVideos) {
-                if (!uniqueByVideoId.has(v.videoId)) uniqueByVideoId.set(v.videoId, v);
+                const group = queryGroups.get(v.query) ?? [];
+                group.push(v);
+                queryGroups.set(v.query, group);
               }
-              const top5 = Array.from(uniqueByVideoId.values())
-                .filter(v => v.authorUniqueId)
-                .sort((a, b) => b.playCount - a.playCount)
-                .slice(0, 5);
+              const selectedVideos: typeof allVideos[number][] = [];
+              const seenVideoIds = new Set<string>();
+              for (const [, videos] of queryGroups) {
+                const sorted = videos
+                  .filter(v => v.authorUniqueId && !seenVideoIds.has(v.videoId))
+                  .sort((a, b) => b.playCount - a.playCount)
+                  .slice(0, 5);
+                for (const v of sorted) {
+                  seenVideoIds.add(v.videoId);
+                  selectedVideos.push(v);
+                }
+              }
 
-              if (top5.length > 0) {
-                const urls = top5.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
+              if (selectedVideos.length > 0) {
+                const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
                 const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
                   setTrendProgress(input.jobId, msg, 82)
                 );
-                for (const v of top5) {
+                for (const v of selectedVideos) {
                   const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
                   const kw = metaMap.get(url);
                   if (kw && kw.length > 0) {
                     trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
                   }
                 }
-                console.log(`[TrendDiscovery] Job ${input.jobId}: fetched meta keywords for ${trendMetaKeywords.length}/${top5.length} videos`);
+                console.log(`[TrendDiscovery] Job ${input.jobId}: fetched meta keywords for ${trendMetaKeywords.length}/${selectedVideos.length} videos`);
               }
             } catch (e) {
               console.warn(`[TrendDiscovery] Job ${input.jobId}: meta keywords scraping failed, skipping`, e);
@@ -1500,21 +1510,32 @@ export const appRouter = router({
 
         let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
         try {
-          const uniqueByVideoId = new Map<string, typeof job.scrapedVideos[number]>();
+          // クエリごとに上位5本を選出
+          const queryGroups = new Map<string, typeof job.scrapedVideos>();
           for (const v of job.scrapedVideos) {
-            if (!uniqueByVideoId.has(v.videoId)) uniqueByVideoId.set(v.videoId, v);
+            const group = queryGroups.get(v.query) ?? [];
+            group.push(v);
+            queryGroups.set(v.query, group);
           }
-          const top5 = Array.from(uniqueByVideoId.values())
-            .filter(v => v.authorUniqueId)
-            .sort((a, b) => b.playCount - a.playCount)
-            .slice(0, 5);
+          const selectedVideos: typeof job.scrapedVideos[number][] = [];
+          const seenVideoIds = new Set<string>();
+          for (const [, videos] of queryGroups) {
+            const sorted = videos
+              .filter(v => v.authorUniqueId && !seenVideoIds.has(v.videoId))
+              .sort((a, b) => b.playCount - a.playCount)
+              .slice(0, 5);
+            for (const v of sorted) {
+              seenVideoIds.add(v.videoId);
+              selectedVideos.push(v);
+            }
+          }
 
-          if (top5.length > 0) {
-            const urls = top5.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
+          if (selectedVideos.length > 0) {
+            const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
             const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
               setTrendProgress(input.jobId, msg, 40)
             );
-            for (const v of top5) {
+            for (const v of selectedVideos) {
               const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
               const kw = metaMap.get(url);
               if (kw && kw.length > 0) {
