@@ -27,7 +27,10 @@ export const analysisJobs = mysqlTable("analysis_jobs", {
   userId: int("userId").notNull(),
   keyword: varchar("keyword", { length: 255 }),
   manualUrls: json("manualUrls").$type<string[]>(), // 手動入力されたURL配列
-  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "queued", "processing", "completed", "failed"]).default("pending").notNull(),
+  queuedAction: varchar("queuedAction", { length: 32 }), // "execute" | "reAnalyzeLLM"
+  progress: json("progress").$type<{ message: string; percent: number; failedVideos?: Array<{tiktokVideoId: string; error: string}>; totalTarget?: number; processedCount?: number; phase?: string }>(),
+  cancelRequested: int("cancelRequested").default(0),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),
 });
@@ -273,7 +276,9 @@ export const trendDiscoveryJobs = mysqlTable("trend_discovery_jobs", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull(),
   persona: varchar("persona", { length: 255 }).notNull(),
-  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "queued", "processing", "completed", "failed"]).default("pending").notNull(),
+  queuedAction: varchar("queuedAction", { length: 32 }), // "execute" | "recompute"
+  progress: json("progress").$type<{ message: string; percent: number; phase?: string }>(),
   expandedKeywords: json("expandedKeywords").$type<string[]>(),
   expandedHashtags: json("expandedHashtags").$type<string[]>(),
   scrapedVideos: json("scrapedVideos").$type<Array<{
@@ -388,7 +393,8 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
   id: int("id").autoincrement().primaryKey(),
   campaignId: int("campaignId").notNull(),
   snapshotType: mysqlEnum("snapshotType", ["baseline", "measurement"]).notNull(),
-  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "queued", "processing", "completed", "failed"]).default("pending").notNull(),
+  progress: json("progress").$type<{ message: string; percent: number; phase?: string }>(),
 
   // KW別検索結果
   searchResults: json("searchResults").$type<Record<string, {

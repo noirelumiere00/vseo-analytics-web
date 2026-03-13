@@ -132,7 +132,8 @@ export default function AnalysisDetail() {
     {
       enabled: user !== undefined && jobId > 0,
       refetchInterval: (query) => {
-        return query.state.data?.status === "processing" ? 2000 : false;
+        const s = query.state.data?.status;
+        return (s === "processing" || s === "queued") ? 2000 : false;
       }
     }
   );
@@ -143,7 +144,7 @@ export default function AnalysisDetail() {
 
   useEffect(() => {
     const pct = progressData?.progress ?? 0;
-    if (pct <= 0 || pct >= 100 || progressData?.status !== "processing") {
+    if (pct <= 0 || pct >= 100 || (progressData?.status !== "processing" && progressData?.status !== "queued")) {
       progressStartRef.current = null;
       setEstimatedRemaining(null);
       return;
@@ -873,7 +874,7 @@ export default function AnalysisDetail() {
                         </div>
                         <div>
                           <p className="font-semibold text-lg">
-                            {progressData?.currentStep || (job.status === "pending" ? "分析を準備中..." : "分析を実行中...")}
+                            {progressData?.currentStep || (job.status === "pending" ? "分析を準備中..." : job.status === "queued" ? "ワーカーの処理待ち中..." : "分析を実行中...")}
                           </p>
                           {progressData && (
                             <div className="text-sm text-muted-foreground mt-1">

@@ -86,6 +86,8 @@ export default function History() {
         return <Badge className="bg-green-500"><CheckCircle2 className="h-3 w-3 mr-1" />完了</Badge>;
       case "processing":
         return <Badge className="bg-blue-500"><LoaderIcon className="h-3 w-3 mr-1 animate-spin" />処理中</Badge>;
+      case "queued":
+        return <Badge className="bg-yellow-500"><Clock className="h-3 w-3 mr-1" />キュー中</Badge>;
       case "failed":
         return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />失敗</Badge>;
       default:
@@ -138,7 +140,7 @@ export default function History() {
 
   const selectAllDeletable = () => {
     if (!jobs) return;
-    const deletableIds = jobs.filter((j) => j.status !== "processing").map((j) => j.id);
+    const deletableIds = jobs.filter((j) => j.status !== "processing" && j.status !== "queued").map((j) => j.id);
     setDeleteSelectedIds((prev) =>
       prev.length === deletableIds.length ? [] : deletableIds
     );
@@ -210,7 +212,7 @@ export default function History() {
           <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/30 bg-destructive/5">
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" onClick={selectAllDeletable}>
-                {jobs && deleteSelectedIds.length === jobs.filter((j) => j.status !== "processing").length
+                {jobs && deleteSelectedIds.length === jobs.filter((j) => j.status !== "processing" && j.status !== "queued").length
                   ? "全解除"
                   : "全選択"}
               </Button>
@@ -270,7 +272,7 @@ export default function History() {
         {!jobs || jobs.length === 0 ? (
           <Empty className="py-16">
             <EmptyHeader>
-              <EmptyMedia variant="icon"><Search className="h-6 w-6" /></EmptyMedia>
+              <EmptyMedia><img src="/favicon.png" alt="" className="h-16 w-16 object-contain logo-blend opacity-30" /></EmptyMedia>
               <EmptyTitle>まだ分析履歴がありません</EmptyTitle>
               <EmptyDescription>
                 キーワードを入力して最初のVSEO分析を開始しましょう。
@@ -286,7 +288,7 @@ export default function History() {
               const isSelected = selectedIds.includes(job.id);
               const isDeleteSelected = deleteSelectedIds.includes(job.id);
               const isCompleted = job.status === "completed";
-              const isProcessing = job.status === "processing";
+              const isProcessing = job.status === "processing" || job.status === "queued";
               const isDisabled = compareMode && !isCompleted;
               const isDeleteDisabled = deleteMode && isProcessing;
               return (

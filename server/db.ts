@@ -1,4 +1,4 @@
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -182,7 +182,10 @@ export async function getProcessingJobByUserId(userId: number) {
   if (!db) return null;
   try {
     const [result] = await db.select().from(analysisJobs)
-      .where(and(eq(analysisJobs.userId, userId), eq(analysisJobs.status, "processing")))
+      .where(and(
+        eq(analysisJobs.userId, userId),
+        or(eq(analysisJobs.status, "processing"), eq(analysisJobs.status, "queued"))
+      ))
       .limit(1);
     return result ?? null;
   } catch (error) {
@@ -199,10 +202,10 @@ export async function getAnalysisJobById(jobId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateAnalysisJobStatus(jobId: number, status: "pending" | "processing" | "completed" | "failed", completedAt?: Date) {
+export async function updateAnalysisJobStatus(jobId: number, status: "pending" | "queued" | "processing" | "completed" | "failed", completedAt?: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  
+
   await db.update(analysisJobs).set({ status, completedAt }).where(eq(analysisJobs.id, jobId));
 }
 
@@ -390,12 +393,66 @@ export async function getTripleSearchResultByJobId(jobId: number) {
 export async function resetStuckProcessingJobs() {
   const db = await getDb();
   if (!db) return 0;
-  
-  const result = await db.update(analysisJobs)
-    .set({ status: "failed" })
+
+  const result1 = await db.update(analysisJobs)
+    .set({ status: "queued" })
     .where(eq(analysisJobs.status, "processing"));
-  
-  return result[0].affectedRows ?? 0;
+
+  const result2 = await db.update(trendDiscoveryJobs)
+    .set({ status: "queued" })
+    .where(eq(trendDiscoveryJobs.status, "processing"));
+
+  const result3 = await db.update(campaignSnapshots)
+    .set({ status: "queued" })
+    .where(eq(campaignSnapshots.status, "processing"));
+
+  return (result1[0].affectedRows ?? 0) + (result2[0].affectedRows ?? 0) + (result3[0].affectedRows ?? 0);
+}
+
+// === Worker Queue Helpers ===
+
+export async function getQueuedAnalysisJobs() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(analysisJobs).where(eq(analysisJobs.status, "queued")).orderBy(analysisJobs.id);
+}
+
+export async function getQueuedTrendDiscoveryJobs() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.status, "queued")).orderBy(trendDiscoveryJobs.id);
+}
+
+export async function getQueuedCampaignSnapshots() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignSnapshots).where(eq(campaignSnapshots.status, "queued")).orderBy(campaignSnapshots.id);
+}
+
+export async function updateJobProgress(table: "analysis" | "trend" | "campaign", id: number, progress: Record<string, unknown>) {
+  const db = await getDb();
+  if (!db) return;
+
+  if (table === "analysis") {
+    await db.update(analysisJobs).set({ progress: progress as any }).where(eq(analysisJobs.id, id));
+  } else if (table === "trend") {
+    await db.update(trendDiscoveryJobs).set({ progress: progress as any }).where(eq(trendDiscoveryJobs.id, id));
+  } else if (table === "campaign") {
+    await db.update(campaignSnapshots).set({ progress: progress as any }).where(eq(campaignSnapshots.id, id));
+  }
+}
+
+export async function setCancelRequested(jobId: number, value: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(analysisJobs).set({ cancelRequested: value }).where(eq(analysisJobs.id, jobId));
+}
+
+export async function getCancelRequested(jobId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db.select({ cancelRequested: analysisJobs.cancelRequested }).from(analysisJobs).where(eq(analysisJobs.id, jobId)).limit(1);
+  return (row?.cancelRequested ?? 0) === 1;
 }
 
 // === Trend Discovery Jobs ===
@@ -437,7 +494,7 @@ export async function updateTrendDiscoveryJob(jobId: number, data: Partial<Inser
   await db.update(trendDiscoveryJobs).set(data).where(eq(trendDiscoveryJobs.id, jobId));
 }
 
-export async function updateTrendDiscoveryJobStatus(jobId: number, status: "pending" | "processing" | "completed" | "failed", completedAt?: Date) {
+export async function updateTrendDiscoveryJobStatus(jobId: number, status: "pending" | "queued" | "processing" | "completed" | "failed", completedAt?: Date) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(trendDiscoveryJobs).set({ status, completedAt }).where(eq(trendDiscoveryJobs.id, jobId));

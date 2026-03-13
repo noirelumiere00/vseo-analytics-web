@@ -512,10 +512,16 @@ function computeStatistics(
     };
   }
 
-  // 10. TikTok SEOメタキーワード分析
+  // 10. TikTok SEOメタキーワード分析 + 共起クラスタリング
   let seoMetaKeywords: {
     videos: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }>;
     keywordRanking: Array<{ keyword: string; count: number; videoIds: string[] }>;
+    keywordClusters?: Array<{
+      label: string;
+      keywords: string[];
+      videoCount: number;
+      totalMentions: number;
+    }>;
   } | undefined;
 
   if (trendMetaKeywords && trendMetaKeywords.length > 0) {
@@ -534,9 +540,68 @@ function computeStatistics(
       .sort((a, b) => b.count - a.count)
       .slice(0, 30);
 
+    // 共起クラスタリング (Union-Find)
+    const coMatrix = new Map<string, Map<string, number>>();
+    for (const entry of trendMetaKeywords) {
+      const kws = entry.keywords;
+      for (let i = 0; i < kws.length; i++) {
+        for (let j = i + 1; j < kws.length; j++) {
+          const a = kws[i], b = kws[j];
+          if (!coMatrix.has(a)) coMatrix.set(a, new Map());
+          if (!coMatrix.has(b)) coMatrix.set(b, new Map());
+          coMatrix.get(a)!.set(b, (coMatrix.get(a)!.get(b) ?? 0) + 1);
+          coMatrix.get(b)!.set(a, (coMatrix.get(b)!.get(a) ?? 0) + 1);
+        }
+      }
+    }
+
+    const parent = new Map<string, string>();
+    const allKws = Array.from(kwCounts.keys());
+    for (const k of allKws) parent.set(k, k);
+    function find(x: string): string {
+      if (parent.get(x) !== x) parent.set(x, find(parent.get(x)!));
+      return parent.get(x)!;
+    }
+    function union(x: string, y: string) { parent.set(find(x), find(y)); }
+
+    const COOC_THRESHOLD = 2;
+    for (const [a, neighbors] of coMatrix) {
+      for (const [b, count] of neighbors) {
+        if (count >= COOC_THRESHOLD) union(a, b);
+      }
+    }
+
+    const clusterMap = new Map<string, string[]>();
+    for (const kw of allKws) {
+      const root = find(kw);
+      if (!clusterMap.has(root)) clusterMap.set(root, []);
+      clusterMap.get(root)!.push(kw);
+    }
+
+    const keywordClusters = Array.from(clusterMap.values())
+      .filter(members => members.length >= 2)
+      .map(members => {
+        const sorted = members.sort((a, b) =>
+          (kwCounts.get(b)?.count ?? 0) - (kwCounts.get(a)?.count ?? 0)
+        );
+        const clusterVideoIds = new Set<string>();
+        for (const kw of members) {
+          for (const vid of kwCounts.get(kw)?.videoIds ?? []) clusterVideoIds.add(vid);
+        }
+        return {
+          label: sorted[0],
+          keywords: sorted,
+          videoCount: clusterVideoIds.size,
+          totalMentions: members.reduce((s, kw) => s + (kwCounts.get(kw)?.count ?? 0), 0),
+        };
+      })
+      .sort((a, b) => b.videoCount - a.videoCount || b.totalMentions - a.totalMentions)
+      .slice(0, 10);
+
     seoMetaKeywords = {
       videos: trendMetaKeywords,
       keywordRanking,
+      keywordClusters: keywordClusters.length > 0 ? keywordClusters : undefined,
     };
   }
 
