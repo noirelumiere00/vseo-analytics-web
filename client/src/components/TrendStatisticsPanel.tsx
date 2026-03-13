@@ -389,99 +389,290 @@ function FollowerErScatter({ data, tiers }: {
 // ---- 3.5 クエリ別鮮度分析 ----
 
 const FRESHNESS_BUCKETS = [
-  { key: "within2w" as const, label: "2週間以内", color: "#059669" },
-  { key: "within1m" as const, label: "1ヶ月以内", color: "#10b981" },
-  { key: "within2m" as const, label: "2ヶ月以内", color: "#84cc16" },
-  { key: "within3m" as const, label: "3ヶ月以内", color: "#eab308" },
-  { key: "within6m" as const, label: "6ヶ月以内", color: "#f97316" },
-  { key: "older" as const, label: "6ヶ月超", color: "#9ca3af" },
+  { key: "within2w" as const, label: "2週間以内", shortLabel: "2W", color: "#059669" },
+  { key: "within1m" as const, label: "1ヶ月以内", shortLabel: "1M", color: "#10b981" },
+  { key: "within2m" as const, label: "2ヶ月以内", shortLabel: "2M", color: "#84cc16" },
+  { key: "within3m" as const, label: "3ヶ月以内", shortLabel: "3M", color: "#eab308" },
+  { key: "within6m" as const, label: "6ヶ月以内", shortLabel: "6M", color: "#f97316" },
+  { key: "older" as const, label: "6ヶ月超", shortLabel: "古", color: "#d1d5db" },
 ];
 
-function freshnessLabel(score: number): { text: string; className: string } {
-  if (score >= 80) return { text: "急上昇", className: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400" };
-  if (score >= 50) return { text: "トレンド中", className: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400" };
-  if (score >= 20) return { text: "安定", className: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" };
-  return { text: "定番・低調", className: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" };
+interface FreshnessSignal {
+  text: string;
+  subtext: string;
+  badgeClass: string;
+  gaugeColor: string;
+  borderClass: string;
+  glowClass: string;
+  icon: string;
+}
+
+function getFreshnessSignal(score: number): FreshnessSignal {
+  if (score >= 80) return {
+    text: "急上昇",
+    subtext: "今まさに需要が集中",
+    badgeClass: "bg-red-500 text-white",
+    gaugeColor: "#ef4444",
+    borderClass: "border-l-red-500",
+    glowClass: "shadow-red-100 dark:shadow-red-950/40",
+    icon: "🔥",
+  };
+  if (score >= 60) return {
+    text: "トレンド中",
+    subtext: "活発な投稿が続いている",
+    badgeClass: "bg-orange-500 text-white",
+    gaugeColor: "#f97316",
+    borderClass: "border-l-orange-500",
+    glowClass: "shadow-orange-100 dark:shadow-orange-950/30",
+    icon: "📈",
+  };
+  if (score >= 35) return {
+    text: "安定需要",
+    subtext: "継続的な関心がある",
+    badgeClass: "bg-blue-500 text-white",
+    gaugeColor: "#3b82f6",
+    borderClass: "border-l-blue-500",
+    glowClass: "",
+    icon: "〜",
+  };
+  return {
+    text: "低調・定番",
+    subtext: "新規投稿が少ない",
+    badgeClass: "bg-gray-400 text-white dark:bg-gray-600",
+    gaugeColor: "#9ca3af",
+    borderClass: "border-l-gray-400",
+    glowClass: "",
+    icon: "↓",
+  };
+}
+
+function FreshnessRing({ score, color }: { score: number; color: string }) {
+  // Arc gauge: draws a 270-degree arc (from 225deg to -45deg, i.e. bottom-left to bottom-right)
+  const size = 72;
+  const cx = size / 2;
+  const cy = size / 2;
+  const r = 28;
+  const strokeW = 6;
+  // 270-degree sweep: start at 135deg (bottom-left), sweep clockwise
+  const startAngleDeg = 135;
+  const sweepDeg = 270;
+  const endAngleDeg = startAngleDeg + sweepDeg;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+
+  // Full track arc path
+  const trackStart = {
+    x: cx + r * Math.cos(toRad(startAngleDeg)),
+    y: cy + r * Math.sin(toRad(startAngleDeg)),
+  };
+  const trackEnd = {
+    x: cx + r * Math.cos(toRad(endAngleDeg)),
+    y: cy + r * Math.sin(toRad(endAngleDeg)),
+  };
+
+  // Progress arc path (clamped)
+  const clampedScore = Math.max(0, Math.min(100, score));
+  const progressSweep = (clampedScore / 100) * sweepDeg;
+  const progressEndDeg = startAngleDeg + progressSweep;
+  const progressEnd = {
+    x: cx + r * Math.cos(toRad(progressEndDeg)),
+    y: cy + r * Math.sin(toRad(progressEndDeg)),
+  };
+  const largeArcTrack = sweepDeg > 180 ? 1 : 0;
+  const largeArcProgress = progressSweep > 180 ? 1 : 0;
+
+  const trackPath = `M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 ${largeArcTrack} 1 ${trackEnd.x} ${trackEnd.y}`;
+  const progressPath = clampedScore > 0
+    ? `M ${trackStart.x} ${trackStart.y} A ${r} ${r} 0 ${largeArcProgress} 1 ${progressEnd.x} ${progressEnd.y}`
+    : "";
+
+  return (
+    <div className="relative flex items-center justify-center flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} style={{ overflow: "visible" }}>
+        {/* Track */}
+        <path
+          d={trackPath}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeW}
+          strokeLinecap="round"
+          className="text-muted-foreground/20"
+        />
+        {/* Progress */}
+        {progressPath && (
+          <path
+            d={progressPath}
+            fill="none"
+            stroke={color}
+            strokeWidth={strokeW}
+            strokeLinecap="round"
+          />
+        )}
+      </svg>
+      {/* Center text */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ paddingBottom: 6 }}>
+        <span className="text-base font-bold leading-none tabular-nums" style={{ color }}>{score}</span>
+        <span className="text-[9px] text-muted-foreground leading-none mt-0.5">/ 100</span>
+      </div>
+    </div>
+  );
+}
+
+function FreshnessDistributionBar({ buckets, totalVideos }: {
+  buckets: { within2w: number; within1m: number; within2m: number; within3m: number; within6m: number; older: number };
+  totalVideos: number;
+}) {
+  if (totalVideos === 0) return null;
+
+  // Only show buckets with data; compute percentages
+  const segments = FRESHNESS_BUCKETS.map(b => ({
+    ...b,
+    count: buckets[b.key],
+    pct: totalVideos > 0 ? (buckets[b.key] / totalVideos) * 100 : 0,
+  })).filter(s => s.count > 0);
+
+  // "Recent" = within2w + within1m combined for the highlight label
+  const recentCount = (buckets.within2w ?? 0) + (buckets.within1m ?? 0);
+  const recentPct = totalVideos > 0 ? Math.round((recentCount / totalVideos) * 100) : 0;
+
+  return (
+    <div className="space-y-1.5">
+      {/* Label row */}
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">投稿時期の分布</span>
+        {recentPct > 0 && (
+          <span className="text-[10px] font-semibold" style={{ color: "#059669" }}>
+            直近1ヶ月 {recentPct}%
+          </span>
+        )}
+      </div>
+      {/* Bar */}
+      <div className="flex w-full h-2 rounded-full overflow-hidden gap-px">
+        {segments.map(s => (
+          <div
+            key={s.key}
+            className="h-full transition-all"
+            style={{ width: `${s.pct}%`, backgroundColor: s.color, minWidth: 3 }}
+            title={`${s.label}: ${s.count}本 (${Math.round(s.pct)}%)`}
+          />
+        ))}
+      </div>
+      {/* Compact legend: only non-zero buckets */}
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+        {segments.map(s => (
+          <span key={s.key} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span className="w-1.5 h-1.5 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="font-medium" style={{ color: s.color }}>{s.shortLabel}</span>
+            <span>{Math.round(s.pct)}%</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["queryFreshness"]> }) {
-  const chartData = data.map(d => ({
-    query: d.query,
-    ...d.buckets,
-    freshnessScore: d.freshnessScore,
-    medianAgeDays: d.medianAgeDays,
-    totalVideos: d.totalVideos,
-    avgER: d.avgER,
-    avgPlayCount: d.avgPlayCount,
-  }));
+  const sorted = [...data].sort((a, b) => b.freshnessScore - a.freshnessScore);
+
+  // Rank context: hottest item gets a crown indicator
+  const maxScore = sorted[0]?.freshnessScore ?? 0;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">クエリ別 鮮度分析</CardTitle>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between flex-wrap gap-2">
+          <div>
+            <CardTitle className="text-base">クエリ別 需要トレンド分析</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              鮮度スコアが高い = 直近の投稿が多い = 今まさに需要がある
+            </p>
+          </div>
+          {/* Legend pills */}
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {[
+              { label: "急上昇", color: "bg-red-500" },
+              { label: "トレンド中", color: "bg-orange-500" },
+              { label: "安定需要", color: "bg-blue-500" },
+              { label: "低調・定番", color: "bg-gray-400" },
+            ].map(l => (
+              <span key={l.label} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className={`w-2 h-2 rounded-sm ${l.color}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 36 + 40)}>
-          <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 100 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: "動画数", position: "insideBottomRight", offset: -5, fontSize: 11 }} />
-            <YAxis type="category" dataKey="query" tick={{ fontSize: 11 }} width={95} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.[0]) return null;
-                const d = payload[0].payload;
-                return (
-                  <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
-                    <div className="font-medium">{d.query}</div>
-                    <div>鮮度スコア: {d.freshnessScore}%</div>
-                    <div>中央値経過日数: {d.medianAgeDays}日</div>
-                    <div>平均ER: {d.avgER}%</div>
-                    <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
-                    <div>動画数: {d.totalVideos}本</div>
-                    <hr className="my-1 border-border" />
-                    {FRESHNESS_BUCKETS.map(b => (
-                      <div key={b.key} className="flex justify-between gap-3">
-                        <span>{b.label}</span>
-                        <span>{d[b.key]}本</span>
-                      </div>
-                    ))}
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {sorted.map((d, idx) => {
+            const signal = getFreshnessSignal(d.freshnessScore);
+            const isTop = d.freshnessScore === maxScore && idx === 0;
+
+            return (
+              <div
+                key={d.query}
+                className={`
+                  relative border-l-[3px] rounded-r-xl rounded-l-sm border border-border bg-card
+                  p-3.5 flex flex-col gap-3
+                  shadow-sm ${signal.glowClass}
+                  ${signal.borderClass}
+                  ${isTop ? "ring-1 ring-red-200 dark:ring-red-900/50" : ""}
+                `}
+              >
+                {/* Top ribbon for rank-1 */}
+                {isTop && (
+                  <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-lg rounded-tr-xl leading-none">
+                    TOP
                   </div>
-                );
-              }}
-            />
-            {FRESHNESS_BUCKETS.map(b => (
-              <Bar key={b.key} dataKey={b.key} stackId="freshness" fill={b.color} />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
+                )}
 
-        {/* 凡例 */}
-        <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-muted-foreground">
-          {FRESHNESS_BUCKETS.map(b => (
-            <span key={b.key} className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded" style={{ backgroundColor: b.color }} />
-              {b.label}
-            </span>
-          ))}
-        </div>
-
-        {/* 鮮度スコアバッジ一覧 */}
-        <div className="mt-3 pt-3 border-t space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">鮮度スコア（直近2ヶ月以内の動画比率）</p>
-          <div className="flex flex-wrap gap-2">
-            {data.map(d => {
-              const label = freshnessLabel(d.freshnessScore);
-              return (
-                <div key={d.query} className="flex items-center gap-1.5 text-xs">
-                  <span className="font-medium">{d.query}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${label.className}`}>
-                    {label.text} {d.freshnessScore}%
+                {/* ── Row 1: Query name + demand badge ── */}
+                <div className="flex items-start justify-between gap-2 pr-6">
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-muted-foreground leading-none mb-0.5">#{idx + 1}</p>
+                    <h3 className="text-sm font-bold leading-snug break-words">{d.query}</h3>
+                  </div>
+                  <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold leading-tight ${signal.badgeClass}`}>
+                    {signal.text}
                   </span>
-                  <span className="text-muted-foreground">中央値{Math.round(d.medianAgeDays)}日</span>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* ── Row 2: Ring gauge + metrics ── */}
+                <div className="flex items-center gap-3">
+                  {/* Arc gauge */}
+                  <FreshnessRing score={d.freshnessScore} color={signal.gaugeColor} />
+
+                  {/* Metric grid: 2x2 */}
+                  <div className="flex-1 grid grid-cols-2 gap-x-3 gap-y-2">
+                    <div>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">動画数</p>
+                      <p className="text-xs font-semibold tabular-nums">{d.totalVideos}<span className="font-normal text-muted-foreground">本</span></p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">中央値経過</p>
+                      <p className="text-xs font-semibold tabular-nums">{Math.round(d.medianAgeDays)}<span className="font-normal text-muted-foreground">日</span></p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">平均 ER</p>
+                      <p className="text-xs font-semibold tabular-nums">{d.avgER}<span className="font-normal text-muted-foreground">%</span></p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-muted-foreground uppercase tracking-wide leading-none mb-0.5">平均再生</p>
+                      <p className="text-xs font-semibold tabular-nums">{formatCount(d.avgPlayCount)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Row 3: Demand signal subtext ── */}
+                <p className="text-[10px] text-muted-foreground italic leading-snug -mt-1">
+                  {signal.icon} {signal.subtext}
+                </p>
+
+                {/* ── Row 4: Time distribution bar ── */}
+                <FreshnessDistributionBar buckets={d.buckets} totalVideos={d.totalVideos} />
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
@@ -492,110 +683,225 @@ function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["quer
 
 function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["adInsight"]> }) {
   const { comparison } = data;
-  const erDiff = round2Fmt(comparison.ad.avgER - comparison.organic.avgER);
-  const erSign = comparison.ad.avgER >= comparison.organic.avgER ? "+" : "";
+  const adRateNum = data.adRate;
+  const total = data.adCount + data.organicCount;
 
-  const chartData = data.topAdHashtags.map(d => ({
-    tag: `#${d.tag}`,
-    count: d.count,
-    avgER: d.avgER,
-    avgPlayCount: d.avgPlayCount,
-  }));
+  // ---- Monetization tier ----
+  type AdTier = "hot" | "active" | "moderate" | "low" | "none";
+  const tier: AdTier =
+    adRateNum >= 30 ? "hot"
+    : adRateNum >= 15 ? "active"
+    : adRateNum >= 5  ? "moderate"
+    : adRateNum > 0   ? "low"
+    : "none";
+
+  const tierConfig: Record<AdTier, {
+    verdict: string;
+    sub: string;
+    dot: string;
+    heroBg: string;
+    heroText: string;
+    heroSubText: string;
+    barFill: string;
+  }> = {
+    hot: {
+      verdict: "広告主の投資が非常に活発",
+      sub: "収益化チャンス大 — ブランドがこの市場に積極投資中",
+      dot: "bg-amber-500",
+      heroBg: "bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30 border-amber-300 dark:border-amber-600",
+      heroText: "text-amber-700 dark:text-amber-300",
+      heroSubText: "text-amber-600/80 dark:text-amber-400/80",
+      barFill: "bg-gradient-to-r from-amber-400 to-yellow-400 dark:from-amber-500 dark:to-yellow-500",
+    },
+    active: {
+      verdict: "広告主の投資が活発なジャンル",
+      sub: "スポンサー案件を狙えるニッチ",
+      dot: "bg-amber-400",
+      heroBg: "bg-amber-50/70 dark:bg-amber-950/25 border-amber-200 dark:border-amber-700",
+      heroText: "text-amber-700 dark:text-amber-300",
+      heroSubText: "text-amber-600/70 dark:text-amber-400/70",
+      barFill: "bg-gradient-to-r from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600",
+    },
+    moderate: {
+      verdict: "一定のPR需要あり",
+      sub: "新興市場または特定ブランドが参入中",
+      dot: "bg-blue-400",
+      heroBg: "bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
+      heroText: "text-blue-700 dark:text-blue-300",
+      heroSubText: "text-blue-600/70 dark:text-blue-400/70",
+      barFill: "bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-600",
+    },
+    low: {
+      verdict: "PR少数 — オーガニック中心",
+      sub: "クリエイター主導の市場。広告参入余地あり",
+      dot: "bg-gray-400",
+      heroBg: "bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-700",
+      heroText: "text-gray-700 dark:text-gray-300",
+      heroSubText: "text-gray-500 dark:text-gray-500",
+      barFill: "bg-gray-400 dark:bg-gray-500",
+    },
+    none: {
+      verdict: "PR動画なし — 完全オーガニック",
+      sub: "ブランド未参入。先行者優位を狙える可能性",
+      dot: "bg-gray-300",
+      heroBg: "bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-700",
+      heroText: "text-gray-600 dark:text-gray-400",
+      heroSubText: "text-gray-400 dark:text-gray-600",
+      barFill: "bg-gray-300",
+    },
+  };
+
+  const cfg = tierConfig[tier];
+
+  // ---- PR vs Organic diff values ----
+  const erDiff = comparison.ad.avgER - comparison.organic.avgER;
+  const erSign = erDiff >= 0 ? "+" : "";
+  const erDiffStr = `${erSign}${round2Fmt(erDiff)}%`;
+  const erDiffColor = erDiff >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400";
+
+  const playDiff = comparison.ad.avgPlayCount - comparison.organic.avgPlayCount;
+  const playDiffColor = playDiff >= 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400";
+  const playDiffStr = `${playDiff >= 0 ? "+" : ""}${formatCount(playDiff)}`;
+
+  // ---- Hashtag intensity ----
+  const maxAdHashtagCount = data.topAdHashtags.length > 0
+    ? Math.max(...data.topAdHashtags.map(h => h.count))
+    : 1;
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">PR/Ad動画インサイト</CardTitle>
-          <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 font-medium">
-            PR率 {data.adRate}%（{data.adCount}/{data.adCount + data.organicCount}本）
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* PR vs オーガニック比較 */}
-        <div className="grid grid-cols-2 gap-3">
-          {([
-            { key: "ad" as const, label: "PR/Ad動画", color: "border-amber-500 bg-amber-50 dark:bg-amber-950/20" },
-            { key: "organic" as const, label: "オーガニック動画", color: "border-blue-500 bg-blue-50 dark:bg-blue-950/20" },
-          ] as const).map(({ key, label, color }) => {
-            const d = comparison[key];
-            return (
-              <div key={key} className={`border-l-4 rounded-lg p-3 text-sm space-y-1 ${color}`}>
-                <div className="font-medium text-xs mb-2">{label}</div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">平均ER</span>
-                  <span className="font-medium">{d.avgER}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">平均再生数</span>
-                  <span className="font-medium">{formatCount(d.avgPlayCount)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">中央値経過日数</span>
-                  <span className="font-medium">{Math.round(d.medianAgeDays)}日</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          ER差: <span className={`font-medium ${comparison.ad.avgER >= comparison.organic.avgER ? "text-green-600" : "text-red-600"}`}>
-            {erSign}{erDiff}%
-          </span>（PR動画がオーガニックより{comparison.ad.avgER >= comparison.organic.avgER ? "高い" : "低い"}）
-        </div>
+      <CardContent className="pt-5 space-y-4">
 
-        {/* クエリ別PR率 */}
-        {data.perQuery.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">クエリ別PR率</p>
-            <div className="space-y-1.5">
-              {data.perQuery.map(q => (
-                <div key={q.query} className="flex items-center gap-2 text-xs">
-                  <span className="font-medium w-32 truncate" title={q.query}>{q.query}</span>
-                  <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-amber-400 dark:bg-amber-500 rounded-full"
-                      style={{ width: `${q.adRate}%` }}
-                    />
-                  </div>
-                  <span className="text-muted-foreground w-24 text-right">
-                    {q.adRate}%（{q.adCount}/{q.totalCount}本）
-                  </span>
-                </div>
-              ))}
+        {/* ── Hero KPI strip ── */}
+        <div className={`rounded-xl border px-4 py-3 flex items-center gap-4 ${cfg.heroBg}`}>
+          {/* Big PR rate number */}
+          <div className="flex-shrink-0 text-center min-w-[4.5rem]">
+            <div className={`text-4xl font-extrabold tracking-tight leading-none ${cfg.heroText}`}>
+              {adRateNum}%
+            </div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-0.5">
+              PR率
             </div>
           </div>
-        )}
 
-        {/* PR頻出ハッシュタグ */}
-        {chartData.length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2">PR動画の頻出ハッシュタグ</p>
-            <ResponsiveContainer width="100%" height={Math.max(160, chartData.length * 26 + 40)}>
-              <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, bottom: 5, left: 90 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="tag" tick={{ fontSize: 11 }} width={85} />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.[0]) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-background border rounded-lg shadow-lg p-2 text-xs space-y-0.5">
-                        <div className="font-medium">{d.tag}</div>
-                        <div>PR動画数: {d.count}本</div>
-                        <div>平均ER: {d.avgER}%</div>
-                        <div>平均再生数: {formatCount(d.avgPlayCount)}</div>
-                      </div>
-                    );
-                  }}
+          {/* Vertical divider */}
+          <div className="w-px self-stretch bg-border/60" />
+
+          {/* Verdict + sub-copy + proportion bar */}
+          <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+              <span className={`text-sm font-bold leading-tight ${cfg.heroText}`}>{cfg.verdict}</span>
+            </div>
+            <p className={`text-xs leading-snug ${cfg.heroSubText}`}>{cfg.sub}</p>
+            {/* Ad vs organic proportion mini-bar */}
+            <div className="flex items-center gap-2">
+              <div className="flex h-1.5 w-full max-w-[160px] rounded-full overflow-hidden bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all ${cfg.barFill}`}
+                  style={{ width: `${Math.max(adRateNum, 1)}%` }}
                 />
-                <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+              </div>
+              <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                PR {data.adCount}本 / 計 {total}本
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Query-level PR rates — slim inline bars, no section header ── */}
+        {data.perQuery.length > 0 && (
+          <div className="space-y-2">
+            {[...data.perQuery].sort((a, b) => b.adRate - a.adRate).map(q => (
+              <div key={q.query} className="flex items-center gap-3">
+                <span
+                  className="text-xs font-medium truncate shrink-0"
+                  style={{ width: "38%" }}
+                  title={q.query}
+                >
+                  {q.query}
+                </span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${cfg.barFill}`}
+                    style={{ width: `${Math.max(q.adRate, 1)}%` }}
+                  />
+                </div>
+                <div className="text-xs tabular-nums text-right shrink-0 w-20">
+                  <span className="font-bold">{q.adRate}%</span>
+                  <span className="text-muted-foreground ml-1">({q.adCount}/{q.totalCount})</span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
+
+        {/* ── PR vs Organic: compact table-style comparison ── */}
+        <div className="rounded-lg border bg-muted/30 overflow-hidden">
+          {/* Column header row */}
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <span>指標</span>
+            <span className="text-right text-amber-600 dark:text-amber-400 w-16">PR/Ad</span>
+            <span className="text-right text-slate-500 dark:text-slate-400 w-16">オーガニック</span>
+            <span className="text-right w-14">差分</span>
+          </div>
+          {/* ER */}
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
+            <span className="text-muted-foreground">平均ER</span>
+            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{comparison.ad.avgER}%</span>
+            <span className="font-medium text-right w-16">{comparison.organic.avgER}%</span>
+            <span className={`font-bold text-right w-14 ${erDiffColor}`}>{erDiffStr}</span>
+          </div>
+          {/* Plays */}
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
+            <span className="text-muted-foreground">平均再生数</span>
+            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{formatCount(comparison.ad.avgPlayCount)}</span>
+            <span className="font-medium text-right w-16">{formatCount(comparison.organic.avgPlayCount)}</span>
+            <span className={`font-bold text-right w-14 ${playDiffColor}`}>{playDiffStr}</span>
+          </div>
+          {/* Age */}
+          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
+            <span className="text-muted-foreground">中央値投稿日数</span>
+            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{Math.round(comparison.ad.medianAgeDays)}日</span>
+            <span className="font-medium text-right w-16">{Math.round(comparison.organic.medianAgeDays)}日</span>
+            <span className="text-right w-14 text-muted-foreground text-[10px]">—</span>
+          </div>
+        </div>
+
+        {/* ── PR hashtag badge cloud ── */}
+        {data.topAdHashtags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {data.topAdHashtags.map(h => {
+              const intensity = h.count / maxAdHashtagCount;
+              // Three visual weight tiers: strong / mid / faint
+              const badgeCls =
+                intensity >= 0.66
+                  ? "bg-amber-200 dark:bg-amber-800/70 border-amber-400 dark:border-amber-600 text-amber-900 dark:text-amber-200"
+                  : intensity >= 0.33
+                  ? "bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
+                  : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400";
+              return (
+                <span
+                  key={h.tag}
+                  className={`inline-flex items-center gap-1 border rounded-full px-2.5 py-1 text-[11px] font-medium leading-none ${badgeCls}`}
+                  title={`PR動画数: ${h.count}本 / 平均ER: ${h.avgER}% / 平均再生数: ${formatCount(h.avgPlayCount)}`}
+                >
+                  <span className="opacity-50">#</span>
+                  <span>{h.tag}</span>
+                  {/* Count bubble */}
+                  <span className="ml-0.5 bg-amber-500/25 dark:bg-amber-400/20 text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                    {h.count}
+                  </span>
+                  {/* ER chip */}
+                  <span className="text-[10px] font-normal opacity-70">
+                    {h.avgER}%
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+
       </CardContent>
     </Card>
   );

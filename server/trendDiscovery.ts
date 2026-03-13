@@ -25,7 +25,12 @@ export async function expandPersonaToQueries(
       {
         role: "system",
         content:
-          "あなたはTikTokのトレンドリサーチの専門家です。ユーザーが入力したペルソナや界隈名から、TikTokで検索すべきキーワードとハッシュタグを提案してください。",
+          `あなたはTikTokのトレンドリサーチの専門家です。ユーザーが入力したペルソナや界隈名から、TikTokで検索すべきキーワードとハッシュタグを提案してください。
+
+重要ルール:
+- 西暦年を使う場合は必ず「${new Date().getFullYear()}」（今年）を使うこと。過去の年（${new Date().getFullYear() - 1}年以前）は使わないこと
+- 「おすすめ」「人気」「ランキング」等の一般的な修飾語はキーワードとして有効なので積極的に使ってよい
+- 製品の機能・用途・比較・課題解決・選び方・トレンド等、多角的な検索クエリを生成すること`,
       },
       {
         role: "user",
@@ -37,7 +42,8 @@ export async function expandPersonaToQueries(
 - keywords: このペルソナが興味を持つトピックの検索キーワード（日本語メイン、必要に応じて英語も可）を最大${TREND_MAX_KEYWORDS}個
 - hashtags: 関連するハッシュタグ（#なし、日本語メイン）を最大${TREND_MAX_HASHTAGS}個
 - 具体的で検索ボリュームがありそうなクエリを優先
-- 汎用的すぎるもの（#fyp, #おすすめ 等）は除外`,
+- 汎用的すぎるもの（#fyp 等）は除外。ただし「おすすめ」「人気」等はOK
+- 西暦を使う場合は今年（${new Date().getFullYear()}年）のみ使用可`,
       },
     ],
     maxTokens: 2048,
