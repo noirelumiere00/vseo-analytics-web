@@ -2,14 +2,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import PublicLayout from "@/components/PublicLayout";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Link } from "wouter";
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [tosAccepted, setTosAccepted] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,30 +21,39 @@ export default function Login() {
     e.preventDefault();
     setError("");
 
-    if (!email.trim()) {
-      setError("メールアドレスを入力してください");
+    if (!email.includes("@")) {
+      setError("有効なメールアドレスを入力してください");
       return;
     }
-    if (!password) {
-      setError("パスワードを入力してください");
+    if (!name.trim()) {
+      setError("名前を入力してください");
+      return;
+    }
+    if (password.length < 8) {
+      setError("パスワードは8文字以上にしてください");
+      return;
+    }
+    if (password !== passwordConfirm) {
+      setError("パスワードが一致しません");
+      return;
+    }
+    if (!tosAccepted) {
+      setError("利用規約に同意してください");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          name: email.trim(),
-          password,
-        }),
+        body: JSON.stringify({ email, name: name.trim(), password, tosAccepted }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "ログインに失敗しました");
+        setError(data.error || "登録に失敗しました");
         return;
       }
 
@@ -52,20 +65,27 @@ export default function Login() {
     }
   };
 
+  const handleGoogleRegister = () => {
+    if (!tosAccepted) {
+      setError("利用規約に同意してください");
+      return;
+    }
+    window.location.href = `/api/auth/google?tosAccepted=true`;
+  };
+
   return (
     <PublicLayout>
       <Card className="w-full max-w-sm border-0 shadow-none lg:border lg:shadow-sm">
         <CardHeader className="text-center space-y-2">
-          {/* Mobile-only branding */}
           <div className="lg:hidden mb-4 flex flex-col items-center gap-3">
             <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
             <h1 className="text-2xl font-bold">
               <span className="gradient-text">VSEO Analytics</span>
             </h1>
           </div>
-          <CardTitle className="text-xl font-semibold">サインイン</CardTitle>
+          <CardTitle className="text-xl font-semibold">アカウント作成</CardTitle>
           <p className="text-sm text-muted-foreground">
-            登録済みのアカウントでログイン
+            無料でアカウントを作成
           </p>
         </CardHeader>
         <CardContent>
@@ -83,20 +103,51 @@ export default function Login() {
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">パスワード</Label>
-                <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                  パスワードを忘れた方
-                </Link>
-              </div>
+              <Label htmlFor="name">名前</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="例: 田中太郎"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">パスワード</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="パスワード"
+                placeholder="8文字以上"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="passwordConfirm">パスワード（確認）</Label>
+              <Input
+                id="passwordConfirm"
+                type="password"
+                placeholder="もう一度入力"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="tos"
+                checked={tosAccepted}
+                onCheckedChange={(v) => setTosAccepted(v === true)}
+                disabled={loading}
+              />
+              <Label htmlFor="tos" className="text-xs text-muted-foreground leading-snug cursor-pointer">
+                <Link href="/terms" className="text-primary hover:underline">利用規約</Link>
+                と
+                <Link href="/privacy" className="text-primary hover:underline">プライバシーポリシー</Link>
+                に同意します
+              </Label>
             </div>
             {error && (
               <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -107,10 +158,10 @@ export default function Login() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ログイン中...
+                  登録中...
                 </>
               ) : (
-                "サインイン"
+                "アカウントを作成"
               )}
             </Button>
             <div className="relative my-4">
@@ -125,7 +176,7 @@ export default function Login() {
               type="button"
               variant="outline"
               className="w-full"
-              onClick={() => { window.location.href = "/api/auth/google?tosAccepted=true"; }}
+              onClick={handleGoogleRegister}
               disabled={loading}
             >
               <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -134,13 +185,13 @@ export default function Login() {
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
-              Googleでログイン
+              Googleで登録
             </Button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            アカウントをお持ちでない方は{" "}
-            <Link href="/register" className="text-primary hover:underline font-medium">
-              アカウント作成
+            既にアカウントをお持ちの方は{" "}
+            <Link href="/login" className="text-primary hover:underline font-medium">
+              サインイン
             </Link>
           </p>
         </CardContent>

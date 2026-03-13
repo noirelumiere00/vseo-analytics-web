@@ -12,6 +12,8 @@ import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
+import QuotaMeter from "@/components/QuotaMeter";
+import { useQuota } from "@/hooks/useQuota";
 
 const STEPS = [
   { icon: Search, label: "キーワード入力", desc: "分析対象を設定" },
@@ -24,6 +26,8 @@ export default function Home() {
   const { user, loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   const [keyword, setKeyword] = useState("");
+
+  const { isExceeded } = useQuota();
 
   const dashboardQuery = trpc.analysis.dashboard.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -167,10 +171,11 @@ export default function Home() {
                 </div>
               )}
 
+              <QuotaMeter />
               <Button
                 type="submit"
                 className="w-full gradient-primary text-white"
-                disabled={createAnalysis.isPending}
+                disabled={createAnalysis.isPending || isExceeded}
               >
                 {createAnalysis.isPending ? (
                   <>

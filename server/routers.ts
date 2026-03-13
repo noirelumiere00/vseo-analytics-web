@@ -11,6 +11,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
+import { checkQuota, PLAN_LIMITS } from "./_core/quota";
+import { createCheckoutSession, createPortalSession } from "./_core/stripe";
+import { ENV } from "./_core/env";
 
 // CSV出力ヘルパー: ダブルクォートエスケープ
 function csvEscape(val: string): string {
@@ -50,6 +53,8 @@ export const appRouter = router({
         manualUrls: z.array(z.string().url()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        await checkQuota(ctx.user.id);
+
         if (!input.keyword && (!input.manualUrls || input.manualUrls.length === 0)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -837,6 +842,8 @@ export const appRouter = router({
     create: protectedProcedure
       .input(z.object({ persona: z.string().min(1).max(200) }))
       .mutation(async ({ ctx, input }) => {
+        await checkQuota(ctx.user.id);
+
         const jobId = await db.createTrendDiscoveryJob({
           userId: ctx.user.id,
           persona: input.persona,
@@ -998,10 +1005,44 @@ export const appRouter = router({
       }),
   }),
 
+  subscription: router({
+    // プラン + 利用状況
+    status: protectedProcedure.query(async ({ ctx }) => {
+      const sub = await db.getSubscriptionByUserId(ctx.user.id);
+      const plan = sub?.plan ?? "free";
+      const limit = PLAN_LIMITS[plan] ?? 3;
+      const now = new Date();
+      const since = new Date(now.getFullYear(), now.getMonth(), 1);
+      const used = await db.countMonthlyJobs(ctx.user.id, since);
+      return { plan, used, limit, isExceeded: used >= limit, sub: sub ?? null };
+    }),
+
+    // Stripe Checkout Session作成
+    createCheckout: protectedProcedure
+      .input(z.object({ plan: z.enum(["pro", "business"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const successUrl = `${ENV.appUrl}/pricing?success=true`;
+        const cancelUrl = `${ENV.appUrl}/pricing?canceled=true`;
+        const session = await createCheckoutSession(ctx.user.id, input.plan, successUrl, cancelUrl);
+        return { url: session.url };
+      }),
+
+    // Stripe Customer Portal Session作成
+    createPortal: protectedProcedure.mutation(async ({ ctx }) => {
+      const sub = await db.getSubscriptionByUserId(ctx.user.id);
+      if (!sub?.stripeCustomerId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "サブスクリプションが見つかりません" });
+      }
+      const returnUrl = `${ENV.appUrl}/pricing`;
+      const session = await createPortalSession(sub.stripeCustomerId, returnUrl);
+      return { url: session.url };
+    }),
+  }),
+
   admin: router({
-    // ユーザー一覧
+    // ユーザー一覧（サブスクリプション情報付き）
     listUsers: adminProcedure.query(async () => {
-      return db.getAllUsers();
+      return db.getAllUsersWithSubscriptions();
     }),
 
     // ユーザーのrole変更
@@ -1172,6 +1213,8 @@ export const appRouter = router({
         type: z.enum(["baseline", "measurement"]),
       }))
       .mutation(async ({ ctx, input }) => {
+        await checkQuota(ctx.user.id);
+
         const campaign = await db.getCampaignById(input.campaignId);
         if (!campaign || campaign.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });

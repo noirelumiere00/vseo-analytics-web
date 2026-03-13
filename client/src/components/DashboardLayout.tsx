@@ -21,12 +21,13 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Compass, History, LayoutDashboard, LogOut, Search, TrendingUp, Users } from "lucide-react";
+import { Compass, CreditCard, History, LayoutDashboard, LogOut, Search, TrendingUp, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Button } from "./ui/button";
+import { useQuota } from "@/hooks/useQuota";
 
 // SEO分析セクション (index 0-1)
 // トレンド分析セクション (index 2-3)
@@ -116,6 +117,28 @@ type DashboardLayoutContentProps = {
   children: React.ReactNode;
   setSidebarWidth: (width: number) => void;
 };
+
+function PlanBadge() {
+  const { plan, used, limit, isExceeded } = useQuota();
+  const limitLabel = limit === Infinity ? "無制限" : `${limit}`;
+  const colors: Record<string, string> = {
+    free: "bg-muted text-muted-foreground",
+    pro: "bg-primary/10 text-primary",
+    business: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  };
+  return (
+    <div className="px-1 py-1 group-data-[collapsible=icon]:hidden">
+      <div className="flex items-center justify-between text-xs">
+        <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${colors[plan] ?? colors.free}`}>
+          {plan}
+        </span>
+        <span className={`${isExceeded ? "text-destructive" : "text-muted-foreground"}`}>
+          {used}/{limitLabel}回
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function DashboardLayoutContent({
   children,
@@ -308,6 +331,7 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            <PlanBadge />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -327,6 +351,13 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem
+                  onClick={() => setLocation("/pricing")}
+                  className="cursor-pointer"
+                >
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  <span>プラン・利用状況</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

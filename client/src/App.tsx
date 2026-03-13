@@ -7,6 +7,12 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Pricing from "./pages/Pricing";
 import History from "./pages/History";
 import AnalysisDetail from "./pages/AnalysisDetail";
 import ReportView from "./pages/ReportView";
@@ -36,7 +42,14 @@ function Router() {
     <>
     <ScrollToTop />
     <Switch>
+      {/* Public routes */}
       <Route path="/login" component={Login} />
+      <Route path="/register" component={Register} />
+      <Route path="/forgot-password" component={ForgotPassword} />
+      <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
+      {/* Protected routes */}
       <Route path={"/"} component={Home} />
       <Route path="/history" component={History} />
       <Route path="/dashboard" component={Dashboard} />
@@ -51,6 +64,7 @@ function Router() {
       <Route path="/campaigns/:id" component={CampaignDetail} />
       <Route path="/campaigns/:id/report" component={CampaignReport} />
       <Route path="/report/view/:jobId" component={ReportView} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
       <Route path={"/404"} component={NotFound} />
