@@ -3,16 +3,28 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
-import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, ChevronRight, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Search, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, Download, Eye, FileText, Hash, Heart, Loader2, MessageCircle, Play, RefreshCcw, Search, Share2, Sparkles, TrendingUp, Users } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import TrendStatisticsPanel from "@/components/TrendStatisticsPanel";
+import {
+  PerformanceClassification,
+  EngagementStatsTable,
+  FollowerErScatter,
+  QueryFreshnessChart,
+  AdInsightSection,
+  TrendSeoMetaKeywordsSection,
+  HashtagPerformanceChart,
+  DurationBandsChart,
+  TrendPostingTimeHeatmap,
+  PlayCountDistribution,
+  type TrendStatistics,
+} from "@/components/TrendStatisticsPanel";
 
 export default function TrendDiscoveryDetail() {
   const params = useParams<{ id: string }>();
@@ -274,7 +286,7 @@ export default function TrendDiscoveryDetail() {
               );
             })()}
 
-            {/* AIレポート (最重要 — 高レベルインサイトを最初に) */}
+            {/* AIレポート (デフォルト展開) */}
             {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
               <AITrendReport
                 report={(job.crossAnalysis as any)?.report}
@@ -282,48 +294,97 @@ export default function TrendDiscoveryDetail() {
               />
             )}
 
-            {/* 統計分析 (鮮度・PR/Adインサイト・SEOキーワード) */}
-            {(job.crossAnalysis as any)?.statistics && (
-              <TrendStatisticsPanel statistics={(job.crossAnalysis as any).statistics} />
+            {/* パフォーマンス分類 (常時表示) */}
+            {(job.crossAnalysis as any)?.statistics?.performanceClassification && (
+              <PerformanceClassification
+                data={(job.crossAnalysis as any).statistics.performanceClassification}
+                total={(job.crossAnalysis as any).statistics.totalVideos}
+              />
             )}
 
-            {/* トレンドハッシュタグ */}
-            <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
+            {/* 5グループのAccordion */}
+            {(job.crossAnalysis as any)?.statistics && (() => {
+              const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
+              return (
+                <Accordion type="multiple" className="space-y-2">
+                  {/* 1. 需要トレンド分析 */}
+                  {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
+                    <AccordionItem value="demand-trend" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        需要トレンド分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <QueryFreshnessChart data={statistics.queryFreshness} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
 
-            {/* トップ動画 + キークリエイター（タブ切替） */}
-            <TopVideosAndCreators
-              videos={(job.crossAnalysis as any)?.topVideos || []}
-              creators={(job.crossAnalysis as any)?.keyCreators || []}
-            />
+                  {/* 2. ハッシュタグ分析 */}
+                  <AccordionItem value="hashtag-analysis" className="border rounded-xl">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                      ハッシュタグ分析
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4 space-y-6">
+                      <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
+                      {statistics.hashtagPerformance.length > 0 && (
+                        <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
+                      )}
+                      <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
+                    </AccordionContent>
+                  </AccordionItem>
 
-            {/* 共起タグ */}
-            <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
+                  {/* 3. エンゲージメント詳細 */}
+                  <AccordionItem value="engagement-detail" className="border rounded-xl">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                      エンゲージメント詳細
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4 space-y-6">
+                      <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
+                      <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
+                      {statistics.durationBands.length > 0 && (
+                        <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
+                      )}
+                      <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
+                      {statistics.playCountDistribution.length > 0 && (
+                        <PlayCountDistribution data={statistics.playCountDistribution} />
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
 
-            {/* 拡張キーワード・ハッシュタグ */}
-            <CollapsibleSection
-              icon={<Search className="h-4 w-4" />}
-              title="拡張されたクエリ"
-              subtitle={`${((job.expandedKeywords as string[]) || []).length + ((job.expandedHashtags as string[]) || []).length}件`}
-            >
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">キーワード</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(job.expandedKeywords as string[] || []).map((kw) => (
-                      <Badge key={kw} variant="secondary">{kw}</Badge>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground mb-2">ハッシュタグ</p>
-                  <div className="flex flex-wrap gap-2">
-                    {(job.expandedHashtags as string[] || []).map((ht) => (
-                      <Badge key={ht} variant="outline">#{ht}</Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CollapsibleSection>
+                  {/* 4. PR/Ad・SEO分析 */}
+                  {(statistics.adInsight || (statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0)) && (
+                    <AccordionItem value="pr-seo" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        PR/Ad・SEO分析
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4 space-y-6">
+                        {statistics.adInsight && (
+                          <AdInsightSection data={statistics.adInsight} />
+                        )}
+                        {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
+                          <TrendSeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* 5. トップ動画・クリエイター */}
+                  {(((job.crossAnalysis as any)?.topVideos?.length > 0) || ((job.crossAnalysis as any)?.keyCreators?.length > 0)) && (
+                    <AccordionItem value="top-videos-creators" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        トップ動画・クリエイター
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <TopVideosAndCreators
+                          videos={(job.crossAnalysis as any)?.topVideos || []}
+                          creators={(job.crossAnalysis as any)?.keyCreators || []}
+                        />
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+                </Accordion>
+              );
+            })()}
           </>
         )}
       </div>
@@ -331,44 +392,7 @@ export default function TrendDiscoveryDetail() {
   );
 }
 
-// ---- 汎用アコーディオンセクション ----
-
-function CollapsibleSection({ icon, title, subtitle, defaultOpen = false, children }: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle?: string;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer select-none hover:bg-accent/30 transition-colors">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                {icon}
-                {title}
-                {subtitle && (
-                  <span className="text-xs font-normal text-muted-foreground ml-1">{subtitle}</span>
-                )}
-              </CardTitle>
-              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-            </div>
-          </CardHeader>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="pt-0">
-            {children}
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
-  );
-}
-
-// ---- AIレポート (複数セクション) ----
+// ---- AIレポート (デフォルト展開, inline表示) ----
 
 const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
   TrendingUp: <TrendingUp className="h-4 w-4" />,
@@ -378,128 +402,83 @@ const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
   Sparkles: <Sparkles className="h-4 w-4" />,
 };
 
-// SEOレポートと統一したblue基調のトーン
-const REPORT_SECTION_COLORS: Record<string, { gradient: string; badge: string }> = {
-  overview:          { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  hashtag_strategy:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  content_insights:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  creator_analysis:  { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  action_plan:       { gradient: "from-blue-600 to-blue-700", badge: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-};
-
 function AITrendReport({ report, fallbackSummary }: {
   report?: Array<{ id: string; title: string; icon: string; content: string }>;
   fallbackSummary?: string;
 }) {
-  const [open, setOpen] = useState(false);
-
-  // 新形式: report セクション配列がある場合
+  // 新形式: report セクション配列がある場合 — デフォルト展開、inline表示
   if (report && report.length > 0) {
     return (
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <Card className="overflow-hidden">
-          <CollapsibleTrigger asChild>
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3 cursor-pointer hover:from-blue-700 hover:to-blue-800 transition-colors">
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-                  <Sparkles className="h-4 w-4 text-white" />
+      <Card className="overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-base font-bold text-white">AIトレンドレポート</h3>
+              <p className="text-xs text-white/70">データに基づく{report.length}セクションの分析レポート</p>
+            </div>
+          </div>
+        </div>
+        <div className="divide-y">
+          {report.map((section, idx) => {
+            const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
+            return (
+              <div key={section.id || idx} className="px-5 py-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-100 dark:bg-blue-950/50">
+                    <span className="text-blue-600 dark:text-blue-400">{icon}</span>
+                  </div>
+                  <h4 className="text-sm font-bold">{section.title}</h4>
+                  <span className="text-[10px] text-muted-foreground ml-auto">{idx + 1}/{report.length}</span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-base font-bold text-white">AIトレンドレポート</h3>
-                  <p className="text-xs text-white/70">データに基づく{report.length}セクションの分析レポート</p>
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
                 </div>
-                <ChevronDown className={`h-5 w-5 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
               </div>
-            </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="divide-y">
-              {report.map((section, idx) => {
-                const colors = REPORT_SECTION_COLORS[section.id] ?? { gradient: "from-gray-600 to-gray-700", badge: "bg-gray-100 text-gray-700" };
-                const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
-                return (
-                  <ReportSection key={section.id || idx} section={section} colors={colors} icon={icon} idx={idx} total={report.length} />
-                );
-              })}
-            </div>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
+            );
+          })}
+        </div>
+      </Card>
     );
   }
 
   // フォールバック: 旧形式の単一 summary
   if (!fallbackSummary) return null;
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card className="overflow-hidden shadow-lg">
-        <CollapsibleTrigger asChild>
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 cursor-pointer hover:from-blue-700 hover:to-blue-800 transition-colors">
-            <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-                <Sparkles className="h-4 w-4 text-white" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
-                <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
-              </div>
-              <ChevronDown className={`h-5 w-5 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-            </div>
+    <Card className="overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
+            <Sparkles className="h-4 w-4 text-white" />
           </div>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="pt-6 pb-6">
-            <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
-            </div>
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
+          <div className="flex-1">
+            <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
+            <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
+          </div>
+        </div>
+      </div>
+      <CardContent className="pt-6 pb-6">
+        <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
-function ReportSection({ section, colors, icon, idx, total }: {
-  section: { id: string; title: string; content: string };
-  colors: { gradient: string; badge: string };
-  icon: React.ReactNode;
-  idx: number;
-  total: number;
-}) {
-  const [open, setOpen] = useState(idx === 0);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <div className={`bg-gradient-to-r ${colors.gradient} px-5 py-3 cursor-pointer hover:brightness-110 transition-all`}>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white/20 backdrop-blur-sm">
-              <span className="text-white">{icon}</span>
-            </div>
-            <h4 className="text-sm font-bold text-white flex-1">{section.title}</h4>
-            <span className="text-[10px] text-white/60 font-medium mr-2">{idx + 1}/{total}</span>
-            <ChevronDown className={`h-4 w-4 text-white/70 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-          </div>
-        </div>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <CardContent className="pt-4 pb-4">
-          <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
-          </div>
-        </CardContent>
-      </CollapsibleContent>
-    </Collapsible>
-  );
-}
+// ---- トレンドハッシュタグ (inline) ----
 
 function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> }) {
   if (data.length === 0) return null;
   return (
-    <CollapsibleSection
-      icon={<Hash className="h-4 w-4" />}
-      title="トレンドハッシュタグ"
-      subtitle={`${data.length}件`}
-    >
+    <div>
+      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+        <Hash className="h-4 w-4" />
+        トレンドハッシュタグ
+        <span className="text-xs font-normal text-muted-foreground">{data.length}件</span>
+      </h4>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -524,9 +503,11 @@ function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: num
           </tbody>
         </table>
       </div>
-    </CollapsibleSection>
+    </div>
   );
 }
+
+// ---- トップ動画 / キークリエイター (inline, タブ切替) ----
 
 type SortKey = "er" | "playCount" | "diggCount" | "commentCount" | "shareCount" | "collectCount";
 const SORT_OPTIONS: Array<{ key: SortKey; label: string; icon: React.ReactNode }> = [
@@ -565,11 +546,7 @@ function TopVideosAndCreators({ videos, creators }: {
   const currentOption = SORT_OPTIONS.find(o => o.key === sortBy)!;
 
   return (
-    <CollapsibleSection
-      icon={tab === "videos" ? <Play className="h-4 w-4" /> : <Users className="h-4 w-4" />}
-      title="トップ動画 / キークリエイター"
-      subtitle={tab === "videos" ? `${videos.length}件` : `${creators.length}件`}
-    >
+    <div>
       {/* タブ切替 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-1 p-0.5 bg-muted rounded-lg">
@@ -685,18 +662,21 @@ function TopVideosAndCreators({ videos, creators }: {
           ))}
         </div>
       )}
-    </CollapsibleSection>
+    </div>
   );
 }
+
+// ---- 共起タグ (inline) ----
 
 function CoOccurringTags({ data }: { data: Array<{ tagA: string; tagB: string; count: number }> }) {
   if (data.length === 0) return null;
   return (
-    <CollapsibleSection
-      icon={<Share2 className="h-4 w-4" />}
-      title="共起タグペア"
-      subtitle={`${data.length}件`}
-    >
+    <div>
+      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
+        <Share2 className="h-4 w-4" />
+        共起タグペア
+        <span className="text-xs font-normal text-muted-foreground">{data.length}件</span>
+      </h4>
       <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
         {data.slice(0, 15).map((p, i) => (
           <div key={`${p.tagA}-${p.tagB}`} className="flex items-center justify-between border rounded-lg px-3 py-2">
@@ -710,6 +690,6 @@ function CoOccurringTags({ data }: { data: Array<{ tagA: string; tagB: string; c
           </div>
         ))}
       </div>
-    </CollapsibleSection>
+    </div>
   );
 }

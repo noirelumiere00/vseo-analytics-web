@@ -22,7 +22,7 @@ interface ExtremeVideos {
   [key: string]: { max?: VideoRef; min?: VideoRef };
 }
 
-interface TrendStatistics {
+export interface TrendStatistics {
   totalVideos: number;
   adCount: number;
   dateRange: { min: number; max: number };
@@ -135,34 +135,9 @@ function formatCount(n: number): string {
   return String(Math.round(n));
 }
 
-// ---- Stat Collapsible Section ----
-
-function StatCollapsibleSection({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <Card>
-        <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer select-none hover:bg-accent/30 transition-colors">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{title}</CardTitle>
-              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-            </div>
-          </CardHeader>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <CardContent className="pt-0">
-            {children}
-          </CardContent>
-        </CollapsibleContent>
-      </Card>
-    </Collapsible>
-  );
-}
-
 // ---- Main Component ----
 
-export default function TrendStatisticsPanel({ statistics }: { statistics: TrendStatistics }) {
+export function TrendStatisticsPanel({ statistics }: { statistics: TrendStatistics }) {
   if (!statistics || statistics.totalVideos === 0) return null;
 
   return (
@@ -178,11 +153,11 @@ export default function TrendStatisticsPanel({ statistics }: { statistics: Trend
         <AdInsightSection data={statistics.adInsight} />
       )}
       {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
-        <SeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
+        <TrendSeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
       )}
       <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
       <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
-      <PostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
+      <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
       <PlayCountDistribution data={statistics.playCountDistribution} />
     </div>
   );
@@ -190,7 +165,7 @@ export default function TrendStatisticsPanel({ statistics }: { statistics: Trend
 
 // ---- 1. パフォーマンス分類カード ----
 
-function PerformanceClassification({ data, total }: { data: TrendStatistics["performanceClassification"]; total: number }) {
+export function PerformanceClassification({ data, total }: { data: TrendStatistics["performanceClassification"]; total: number }) {
   const items = [
     { key: "trending" as const, label: "トレンド（上位20%）", color: "border-green-500 bg-green-50 dark:bg-green-950/30", textColor: "text-green-700 dark:text-green-400" },
     { key: "average" as const, label: "平均的（中間60%）", color: "border-gray-300 bg-gray-50 dark:bg-gray-900/30", textColor: "text-gray-700 dark:text-gray-400" },
@@ -239,7 +214,7 @@ function PerformanceClassification({ data, total }: { data: TrendStatistics["per
 
 // ---- 2. エンゲージメント基本統計テーブル ----
 
-function EngagementStatsTable({ stats, extremeVideos }: {
+export function EngagementStatsTable({ stats, extremeVideos }: {
   stats: TrendStatistics["engagementStats"];
   extremeVideos?: ExtremeVideos;
 }) {
@@ -319,7 +294,7 @@ function EngagementStatsTable({ stats, extremeVideos }: {
 
 // ---- 3. フォロワー×ER散布図 ----
 
-function FollowerErScatter({ data, tiers }: {
+export function FollowerErScatter({ data, tiers }: {
   data: TrendStatistics["followerErScatter"];
   tiers: TrendStatistics["followerTierSummary"];
 }) {
@@ -603,7 +578,7 @@ function FreshnessDistributionBar({ buckets, totalVideos }: {
   );
 }
 
-function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["queryFreshness"]> }) {
+export function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["queryFreshness"]> }) {
   const sorted = [...data].sort((a, b) => b.freshnessScore - a.freshnessScore);
 
   // Rank context: hottest item gets a crown indicator
@@ -714,7 +689,7 @@ function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistics["quer
 
 // ---- 3.7 PR/Ad動画インサイト ----
 
-function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["adInsight"]> }) {
+export function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["adInsight"]> }) {
   const { comparison } = data;
   const adRateNum = data.adRate;
   const total = data.adCount + data.organicCount;
@@ -946,7 +921,7 @@ function round2Fmt(v: number): string {
 
 // ---- 3.8 TikTok SEOメタキーワード ----
 
-function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
+export function TrendSeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
   const [videoDataOpen, setVideoDataOpen] = useState(false);
   const CLUSTER_BORDER_COLORS = [
     "border-l-blue-400", "border-l-violet-400", "border-l-emerald-400", "border-l-amber-400",
@@ -1055,7 +1030,7 @@ function SeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["s
 
 // ---- 4. ハッシュタグ別ER比較 ----
 
-function HashtagPerformanceChart({ data, globalMedianER }: {
+export function HashtagPerformanceChart({ data, globalMedianER }: {
   data: TrendStatistics["hashtagPerformance"];
   globalMedianER: number;
 }) {
@@ -1074,7 +1049,7 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
   const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
 
   return (
-    <StatCollapsibleSection title="ハッシュタグ別パフォーマンス">
+    <div className="space-y-3">
       <div className="flex justify-end mb-3">
         <MetricToggle value={metric} onChange={setMetric} />
       </div>
@@ -1136,13 +1111,13 @@ function HashtagPerformanceChart({ data, globalMedianER }: {
           </div>
         </div>
       )}
-    </StatCollapsibleSection>
+    </div>
   );
 }
 
 // ---- 5. 動画長×ER ----
 
-function DurationBandsChart({ data, globalMedianER }: {
+export function DurationBandsChart({ data, globalMedianER }: {
   data: TrendStatistics["durationBands"];
   globalMedianER: number;
 }) {
@@ -1152,7 +1127,7 @@ function DurationBandsChart({ data, globalMedianER }: {
   const dataKey = metric === "er" ? "avgER" : "avgPlayCount";
 
   return (
-    <StatCollapsibleSection title="動画長 × パフォーマンス">
+    <div className="space-y-3">
       <div className="flex justify-end mb-3">
         <MetricToggle value={metric} onChange={setMetric} />
       </div>
@@ -1198,13 +1173,13 @@ function DurationBandsChart({ data, globalMedianER }: {
           </div>
         ))}
       </div>
-    </StatCollapsibleSection>
+    </div>
   );
 }
 
 // ---- 6. 投稿タイミングヒートマップ ----
 
-function PostingTimeHeatmap({ grid, bestSlots }: {
+export function TrendPostingTimeHeatmap({ grid, bestSlots }: {
   grid: TrendStatistics["postingTimeGrid"];
   bestSlots: TrendStatistics["bestTimeSlots"];
 }) {
@@ -1254,7 +1229,7 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
   ];
 
   return (
-    <StatCollapsibleSection title="投稿タイミング分析（JST）">
+    <div className="space-y-3">
       {/* モード切替 */}
       <div className="flex gap-1 p-0.5 bg-muted rounded-lg w-fit mb-4">
         {modeButtons.map(({ key, label }) => (
@@ -1316,17 +1291,17 @@ function PostingTimeHeatmap({ grid, bestSlots }: {
           </div>
         </div>
       )}
-    </StatCollapsibleSection>
+    </div>
   );
 }
 
 // ---- 7. 再生数分布 ----
 
-function PlayCountDistribution({ data }: { data: TrendStatistics["playCountDistribution"] }) {
+export function PlayCountDistribution({ data }: { data: TrendStatistics["playCountDistribution"] }) {
   if (data.length === 0) return null;
 
   return (
-    <StatCollapsibleSection title="再生数分布">
+    <div className="space-y-3">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
           <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -1360,6 +1335,6 @@ function PlayCountDistribution({ data }: { data: TrendStatistics["playCountDistr
           </div>
         ))}
       </div>
-    </StatCollapsibleSection>
+    </div>
   );
 }
