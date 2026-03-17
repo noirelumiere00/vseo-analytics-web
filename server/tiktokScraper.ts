@@ -987,6 +987,115 @@ export async function searchTikTokBatch(
 }
 
 /**
+ * ハッシュタグのTikTok総投稿数を軽量取得（動画収集なし）
+ * タグページのSSR/DOMから videoCount のみ抽出する
+ */
+export async function fetchTagVideoCountsBatch(
+  tags: string[],
+  onProgress?: (message: string) => void,
+): Promise<Map<string, number>> {
+  if (tags.length === 0) return new Map();
+
+  const chromiumPath = findChromiumPath();
+  const browser = await puppeteer.launch({
+    executablePath: chromiumPath,
+    headless: true,
+    args: buildChromiumArgs(),
+  });
+
+  const result = new Map<string, number>();
+  const CONCURRENCY = 3;
+
+  try {
+    for (let i = 0; i < tags.length; i += CONCURRENCY) {
+      const batch = tags.slice(i, i + CONCURRENCY);
+
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500));
+      }
+
+      const promises = batch.map(async (tag, batchIdx) => {
+        const context = await browser.createBrowserContext();
+        const page = await context.newPage();
+        try {
+          await page.setViewport({ width: 1280, height: 900 });
+          await page.setUserAgent(USER_AGENTS[(i + batchIdx) % USER_AGENTS.length]);
+          await page.setExtraHTTPHeaders({ "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7" });
+
+          if (batchIdx > 0) {
+            await new Promise(r => setTimeout(r, batchIdx * 800));
+          }
+
+          const url = `https://www.tiktok.com/tag/${encodeURIComponent(tag)}`;
+          if (onProgress) onProgress(`#${tag} の投稿数を取得中... (${i + batchIdx + 1}/${tags.length})`);
+
+          await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+          await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+
+          // SSR extraction
+          let count: number | null = null;
+          try {
+            count = await page.evaluate(() => {
+              const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+              if (!el?.textContent) return null;
+              try {
+                const parsed = JSON.parse(el.textContent);
+                const cd = parsed?.['__DEFAULT_SCOPE__']?.['webapp.challenge-detail'];
+                return cd?.challengeInfo?.challenge?.videoCount ?? cd?.stats?.videoCount ?? null;
+              } catch { return null; }
+            });
+          } catch { /* ignore */ }
+
+          // DOM fallback
+          if (count == null) {
+            try {
+              count = await page.evaluate(() => {
+                const el = document.querySelector('[data-e2e="challenge-vvcount"]');
+                if (el?.textContent) {
+                  const text = el.textContent.trim();
+                  const matchMan = text.match(/([\d.]+)\s*万/);
+                  if (matchMan) return Math.round(parseFloat(matchMan[1]) * 10000);
+                  const matchK = text.match(/([\d.]+)\s*K/i);
+                  if (matchK) return Math.round(parseFloat(matchK[1]) * 1000);
+                  const matchM = text.match(/([\d.]+)\s*M/i);
+                  if (matchM) return Math.round(parseFloat(matchM[1]) * 1000000);
+                  const matchNum = text.match(/([\d,]+)/);
+                  if (matchNum) return parseInt(matchNum[1].replace(/,/g, ''), 10);
+                }
+                const bodyText = document.body.innerText || "";
+                const regMatch = bodyText.match(/([\d.]+)\s*万?\s*本の動画/);
+                if (regMatch) {
+                  const val = parseFloat(regMatch[1]);
+                  return regMatch[0].includes('万') ? Math.round(val * 10000) : Math.round(val);
+                }
+                return null;
+              });
+            } catch { /* ignore */ }
+          }
+
+          if (count != null && count > 0) {
+            result.set(tag, count);
+            console.log(`[TagCount] #${tag}: ${count}`);
+          } else {
+            console.log(`[TagCount] #${tag}: count not found`);
+          }
+        } catch (err) {
+          console.warn(`[TagCount] #${tag} failed:`, err);
+        } finally {
+          await context.close();
+        }
+      });
+
+      await Promise.allSettled(promises);
+    }
+  } finally {
+    await browser.close();
+  }
+
+  return result;
+}
+
+/**
  * TikTok動画のコメントを取得する関数
  * ネットワーク監視を使用してコメントAPIのレスポンスを横取りする
  */

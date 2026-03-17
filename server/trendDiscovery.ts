@@ -10,6 +10,8 @@ const BLACKLISTED_TAGS = new Set([
   "tiktok", "tiktoker", "tiktokjapan",
   "fy", "fypシ", "fypage", "fypdongggggggg",
   "xyzbca", "xyz", "xyzabc",
+  "pr", "ad", "広告", "プロモーション", "sponsored",
+  "タイアップ", "提供", "案件",
 ]);
 
 type FlatVideo = NonNullable<TrendDiscoveryJob["scrapedVideos"]>[number];
@@ -464,7 +466,6 @@ function computeStatistics(
       for (const tag of v.hashtags) {
         const lt = tag.toLowerCase();
         if (BLACKLISTED_TAGS.has(lt)) continue;
-        if (lt === "pr") continue; // #PR自体は自明なので除外
         if (!adTagPerf.has(tag)) adTagPerf.set(tag, { count: 0, totalER: 0, totalPlays: 0 });
         const tp = adTagPerf.get(tag)!;
         tp.count++;
@@ -813,11 +814,23 @@ export interface TrendReportSection {
   id: string;
   title: string;
   icon: string; // lucide icon name
-  content: string; // Markdown
+  content: string; // Markdown (後方互換 + fallback)
+  bullets?: string[]; // 箇条書きポイント（3-5個）
+  dataHighlights?: string[]; // 数値ハイライト（例: "ER中央値: 5.2%"）
+  recommendation?: string; // 1行の推奨アクション
 }
 
+/** セクション定義マップ */
+const SECTION_DEFS: { id: string; title: string; icon: string }[] = [
+  { id: "overview", title: "トレンド概況", icon: "TrendingUp" },
+  { id: "hashtag_strategy", title: "ハッシュタグ戦略", icon: "Hash" },
+  { id: "content_insights", title: "コンテンツ傾向分析", icon: "Play" },
+  { id: "creator_analysis", title: "クリエイター動向", icon: "Users" },
+  { id: "action_plan", title: "推奨アクションプラン", icon: "Sparkles" },
+];
+
 /**
- * LLMでトレンドレポートを複数セクションに分けて生成
+ * LLMでトレンドレポートを1回のJSON生成で作成
  */
 export async function generateTrendSummary(
   persona: string,
@@ -852,132 +865,112 @@ ${stats.durationBands?.map((d: any) => `${d.label}: ${d.videoCount}本, ER ${d.a
     .map(c => `@${c.uniqueId} (${c.videoCount}動画, ${c.queryCount}クエリ横断, フォロワー${c.followerCount})`)
     .join("\n");
 
-  const sharedSystemPrompt = `あなたはTikTokマーケティングの専門家です。「${persona}」界隈のトレンドデータを分析しています。Markdown形式で回答してください。箇条書き・太字を活用し、簡潔かつ具体的に書いてください。`;
+  const systemPrompt = `あなたはTikTokマーケティングの専門家です。「${persona}」界隈のトレンドデータを分析しています。
 
-  // セクション定義: 各セクションを独立したプロンプトで生成
-  const sectionPrompts: { id: string; title: string; icon: string; prompt: string; maxTokens: number }[] = [
-    {
-      id: "overview",
-      title: "トレンド概況",
-      icon: "TrendingUp",
-      prompt: `以下のデータから「${persona}」界隈の現在のトレンド概況を3-4文で要約してください。数値を交えて、何が今盛り上がっていてどういう傾向があるかを簡潔に述べてください。
+【絶対ルール】
+- 固有名詞（具体的なタグ名 #xxx・クリエイター名 @xxx・動画テーマ）を必ず含めること。一般論・抽象表現は禁止。
+- データの数値を引用して根拠を示すこと（例: 「#xxx はER 8.2%で全体中央値の1.6倍」）。
+- 各bulletsは1-2文で、実務で即使える粒度の具体性。
+- dataHighlightsは「ラベル: 値」形式の重要数値。
+- recommendationは即実行可能な具体的アクション1行。`;
+
+  const userPrompt = `以下のデータを分析し、5セクションの構造化レポートをJSON形式で生成してください。
 
 ## トレンドハッシュタグ TOP15
 ${topTags}
 
 ## 高ER動画 TOP10
 ${topVids}
-${statsContext}`,
-      maxTokens: 512,
-    },
-    {
-      id: "hashtag_strategy",
-      title: "ハッシュタグ戦略",
-      icon: "Hash",
-      prompt: `以下のハッシュタグデータから、「${persona}」界隈で使うべきハッシュタグ戦略を提案してください。
-
-## トレンドハッシュタグ TOP15
-${topTags}
 
 ## 頻出タグ組み合わせ TOP10
 ${topPairs}
 
-以下の観点で具体的に5つ推奨してください:
-- 必ず使うべき鉄板タグ（理由付き）
-- 穴場タグ（ER高いが利用少ない）
-- 効果的なタグ組み合わせパターン
-各推奨は1-2文で簡潔に。`,
-      maxTokens: 768,
-    },
-    {
-      id: "content_insights",
-      title: "コンテンツ傾向分析",
-      icon: "Play",
-      prompt: `以下のデータから、「${persona}」界隈で伸びているコンテンツの傾向を分析してください。
-
-## 高ER動画 TOP10
-${topVids}
-
-## 動画長・投稿タイミング
-${statsContext}
-
-以下を含めてください:
-- **伸びている動画の共通点**（テーマ・フォーマット・構成）
-- **最適な動画尺**（データに基づく推奨）
-- **投稿タイミング**（ベストな曜日・時間帯）
-各項目2-3文で。`,
-      maxTokens: 768,
-    },
-    {
-      id: "creator_analysis",
-      title: "クリエイター動向",
-      icon: "Users",
-      prompt: `以下のデータから「${persona}」界隈のクリエイター動向を分析してください。
-
 ## キークリエイター
 ${creatorsContext}
-
-## 高ER動画 TOP10
-${topVids}
-
-以下を含めてください:
-- **注目クリエイターの特徴**（フォロワー規模・投稿傾向）
-- **参考にすべきポイント**（何を真似できるか）
-2-3項目、各1-2文で簡潔に。`,
-      maxTokens: 512,
-    },
-    {
-      id: "action_plan",
-      title: "推奨アクションプラン",
-      icon: "Sparkles",
-      prompt: `以下の全データを踏まえ、「${persona}」界隈でTikTok動画を投稿する場合の具体的なアクションプランを作成してください。
-
-## トレンドハッシュタグ
-${topTags}
-
-## 高ER動画
-${topVids}
-
-## タグ組み合わせ
-${topPairs}
 ${statsContext}
 
-以下の形式で5つの具体的アクションを提案してください:
-1. **今すぐやるべきこと**（即実行可能な施策）
-2. **コンテンツ企画**（具体的な動画テーマ案2つ）
-3. **タグ設計**（推奨タグセット例）
-4. **投稿戦略**（頻度・タイミング）
-5. **差別化ポイント**（競合と差をつける方法）
-各項目2-3文で。`,
-      maxTokens: 768,
+---
+
+以下の5セクションを生成してください。各セクションは bullets (3-5個)、dataHighlights (2-4個)、recommendation (1行) を含みます。
+
+1. **overview** (トレンド概況): 今何が盛り上がっているか、主要なトレンドの方向性
+2. **hashtag_strategy** (ハッシュタグ戦略): 鉄板タグ・穴場タグ・効果的な組み合わせパターン
+3. **content_insights** (コンテンツ傾向): 伸びている動画の共通点・最適な動画尺・投稿タイミング
+4. **creator_analysis** (クリエイター動向): 注目クリエイターの特徴・参考にすべきポイント
+5. **action_plan** (アクションプラン): 即実行施策・企画案・タグ設計・投稿戦略・差別化ポイント`;
+
+  const result = await invokeLLM({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    maxTokens: 4096,
+    responseFormat: {
+      type: "json_schema",
+      json_schema: {
+        name: "trend_report",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            sections: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: { type: "string" },
+                  bullets: { type: "array", items: { type: "string" } },
+                  dataHighlights: { type: "array", items: { type: "string" } },
+                  recommendation: { type: "string" },
+                },
+                required: ["id", "bullets", "dataHighlights", "recommendation"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["sections"],
+          additionalProperties: false,
+        },
+      },
     },
-  ];
+  });
 
-  // 全セクションを並列でLLM呼び出し
-  const sectionResults = await Promise.allSettled(
-    sectionPrompts.map(async (sec) => {
-      const result = await invokeLLM({
-        messages: [
-          { role: "system", content: sharedSystemPrompt },
-          { role: "user", content: sec.prompt },
-        ],
-        maxTokens: sec.maxTokens,
-      });
-      const content = result.choices[0]?.message?.content;
-      return {
-        id: sec.id,
-        title: sec.title,
-        icon: sec.icon,
-        content: typeof content === "string" ? content : "",
-      };
-    })
-  );
+  const content = result.choices[0]?.message?.content;
+  const text = typeof content === "string" ? content : "";
 
-  const report: TrendReportSection[] = [];
-  for (const r of sectionResults) {
-    if (r.status === "fulfilled" && r.value.content) {
-      report.push(r.value);
-    }
+  // セクション定義マップ
+  const defMap = new Map(SECTION_DEFS.map(d => [d.id, d]));
+
+  let report: TrendReportSection[] = [];
+
+  try {
+    const parsed = JSON.parse(text) as {
+      sections: Array<{ id: string; bullets: string[]; dataHighlights: string[]; recommendation: string }>;
+    };
+
+    report = parsed.sections
+      .map(s => {
+        const def = defMap.get(s.id);
+        if (!def) return null;
+        return {
+          id: s.id,
+          title: def.title,
+          icon: def.icon,
+          bullets: s.bullets,
+          dataHighlights: s.dataHighlights,
+          recommendation: s.recommendation,
+          content: s.bullets.map(b => "- " + b).join("\n"), // 後方互換Markdown
+        };
+      })
+      .filter((s): s is TrendReportSection => s !== null);
+  } catch {
+    // JSONパース失敗時: テキストをそのまま fallback
+    report = [{
+      id: "overview",
+      title: "トレンド概況",
+      icon: "TrendingUp",
+      content: text,
+    }];
   }
 
   // 後方互換: summary は全セクションを連結したMarkdown

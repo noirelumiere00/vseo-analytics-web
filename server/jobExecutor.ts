@@ -18,7 +18,7 @@ import {
   analyzeSentimentAndKeywordsBatch,
   type SentimentInput,
 } from "./videoAnalysis";
-import { searchTikTokTriple, searchTikTokBatch, scrapeTikTokMetaKeywords } from "./tiktokScraper";
+import { searchTikTokTriple, searchTikTokBatch, scrapeTikTokMetaKeywords, fetchTagVideoCountsBatch } from "./tiktokScraper";
 import { expandPersonaToQueries, flattenTikTokVideo, computeCrossAnalysis, generateTrendSummary } from "./trendDiscovery";
 import { captureSnapshot } from "./campaignSnapshot";
 import { generateCampaignReport } from "./campaignReport";
@@ -465,6 +465,37 @@ export async function executeTrendDiscoveryJob(
     console.log(`[TrendDiscovery] Job ${jobId}: scraped ${allVideos.length} total videos`);
 
     await db.updateTrendDiscoveryJob(jobId, { scrapedVideos: allVideos });
+
+    // Step 2.3: 動画から抽出したハッシュタグのTikTok総投稿数を追加取得
+    onProgress({ message: "ハッシュタグの投稿数を取得中...", percent: 78 });
+    try {
+      const tagFreq = new Map<string, number>();
+      for (const v of allVideos) {
+        for (const tag of (v.hashtags || [])) {
+          tagFreq.set(tag, (tagFreq.get(tag) || 0) + 1);
+        }
+      }
+      // 頻出タグの上位から、まだ tagVideoCountMap にないものを最大15個選ぶ
+      const TAG_COUNT_LIMIT = 15;
+      const tagsToFetch = Array.from(tagFreq.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag]) => tag)
+        .filter(tag => !tagVideoCountMap.has(tag))
+        .slice(0, TAG_COUNT_LIMIT);
+
+      if (tagsToFetch.length > 0) {
+        console.log(`[TrendDiscovery] Job ${jobId}: fetching tag counts for ${tagsToFetch.length} additional hashtags`);
+        const extraCounts = await fetchTagVideoCountsBatch(tagsToFetch, (msg) =>
+          onProgress({ message: msg, percent: 79 })
+        );
+        for (const [tag, count] of extraCounts) {
+          tagVideoCountMap.set(tag, count);
+        }
+        console.log(`[TrendDiscovery] Job ${jobId}: got ${extraCounts.size}/${tagsToFetch.length} extra tag counts`);
+      }
+    } catch (e) {
+      console.warn(`[TrendDiscovery] Job ${jobId}: extra tag count fetch failed, skipping`, e);
+    }
 
     // Step 2.5: 全体上位20動画のメタキーワード取得
     onProgress({ message: "上位動画のSEOキーワードを取得中...", percent: 80 });
