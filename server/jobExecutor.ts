@@ -277,25 +277,23 @@ export async function executeAnalysisJob(
     onProgress({ message: "分析レポート生成中...", percent: 85, failedVideos });
     await generateAnalysisReport(jobId);
 
-    // 勝ちパターン分析（オーガニック）
+    // Win/Lose × Organic/Ad パターン分析を並列実行
     await checkCancelled();
-    onProgress({ message: "勝ちパターン（オーガニック）を分析中...", percent: 88, failedVideos });
-    if (job.keyword) await analyzeWinPatternCommonality(jobId, job.keyword);
-
-    // 勝ちパターン分析（Ad）
-    await checkCancelled();
-    onProgress({ message: "勝ちパターン（Ad）を分析中...", percent: 91, failedVideos });
-    if (job.keyword) await analyzeWinPatternCommonalityAd(jobId, job.keyword);
-
-    // 負けパターン分析（オーガニック）
-    await checkCancelled();
-    onProgress({ message: "負けパターン（オーガニック）を分析中...", percent: 94, failedVideos });
-    if (job.keyword) await analyzeLosePatternCommonality(jobId, job.keyword);
-
-    // 負けパターン分析（Ad）
-    await checkCancelled();
-    onProgress({ message: "負けパターン（Ad）を分析中...", percent: 97, failedVideos });
-    if (job.keyword) await analyzeLosePatternCommonalityAd(jobId, job.keyword);
+    onProgress({ message: "パターン分析エージェント群を並列実行中...", percent: 88, failedVideos });
+    if (job.keyword) {
+      const patternResults = await Promise.allSettled([
+        analyzeWinPatternCommonality(jobId, job.keyword),
+        analyzeWinPatternCommonalityAd(jobId, job.keyword),
+        analyzeLosePatternCommonality(jobId, job.keyword),
+        analyzeLosePatternCommonalityAd(jobId, job.keyword),
+      ]);
+      const agentNames = ["WinOrganic", "WinAd", "LoseOrganic", "LoseAd"];
+      for (const [i, result] of patternResults.entries()) {
+        if (result.status === "rejected") {
+          console.warn(`[Analysis] Job ${jobId}: ${agentNames[i]} agent failed:`, result.reason);
+        }
+      }
+    }
 
     // 完了
     await db.updateAnalysisJobStatus(jobId, "completed", new Date());
@@ -453,11 +451,6 @@ export async function executeTrendDiscoveryJob(
     );
 
     const tagVideoCountMap = new Map<string, number>();
-    for (const r of batchResults) {
-      if (r.type === "hashtag" && r.tagVideoCount != null) {
-        tagVideoCountMap.set(r.query, r.tagVideoCount);
-      }
-    }
 
     const allVideos = batchResults.flatMap(r =>
       r.videos.map(v => flattenTikTokVideo(v, r.query, r.type))
@@ -466,67 +459,83 @@ export async function executeTrendDiscoveryJob(
 
     await db.updateTrendDiscoveryJob(jobId, { scrapedVideos: allVideos });
 
-    // Step 2.3: 動画から抽出したハッシュタグのTikTok総投稿数を追加取得
-    onProgress({ message: "ハッシュタグの投稿数を取得中...", percent: 78 });
-    try {
-      const tagFreq = new Map<string, number>();
-      for (const v of allVideos) {
-        for (const tag of (v.hashtags || [])) {
-          tagFreq.set(tag, (tagFreq.get(tag) || 0) + 1);
-        }
-      }
-      // 頻出タグの上位から、まだ tagVideoCountMap にないものを最大15個選ぶ
-      const TAG_COUNT_LIMIT = 15;
-      const tagsToFetch = Array.from(tagFreq.entries())
-        .sort((a, b) => b[1] - a[1])
-        .map(([tag]) => tag)
-        .filter(tag => !tagVideoCountMap.has(tag))
-        .slice(0, TAG_COUNT_LIMIT);
+    // Step 2.3 + 2.5: HT投稿数取得 と メタKW取得 を並列実行
+    onProgress({ message: "ハッシュタグ投稿数 + SEOキーワードを並列取得中...", percent: 78 });
 
-      if (tagsToFetch.length > 0) {
-        console.log(`[TrendDiscovery] Job ${jobId}: fetching tag counts for ${tagsToFetch.length} additional hashtags`);
-        const extraCounts = await fetchTagVideoCountsBatch(tagsToFetch, (msg) =>
-          onProgress({ message: msg, percent: 79 })
-        );
-        for (const [tag, count] of extraCounts) {
-          tagVideoCountMap.set(tag, count);
-        }
-        console.log(`[TrendDiscovery] Job ${jobId}: got ${extraCounts.size}/${tagsToFetch.length} extra tag counts`);
-      }
-    } catch (e) {
-      console.warn(`[TrendDiscovery] Job ${jobId}: extra tag count fetch failed, skipping`, e);
-    }
-
-    // Step 2.5: 全体上位20動画のメタキーワード取得
-    onProgress({ message: "上位動画のSEOキーワードを取得中...", percent: 80 });
-    let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
-    try {
-      const seenVideoIds = new Set<string>();
-      const selectedVideos = allVideos
-        .filter(v => {
-          if (!v.authorUniqueId || seenVideoIds.has(v.videoId)) return false;
-          seenVideoIds.add(v.videoId);
-          return true;
-        })
-        .sort((a, b) => b.playCount - a.playCount)
-        .slice(0, 20);
-
-      if (selectedVideos.length > 0) {
-        const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
-        const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
-          onProgress({ message: msg, percent: 82 })
-        );
-        for (const v of selectedVideos) {
-          const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
-          const kw = metaMap.get(url);
-          if (kw && kw.length > 0) {
-            trendMetaKeywords.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
+    const [tagCountResult, metaKwResult] = await Promise.allSettled([
+      // Agent A: ハッシュタグ投稿数
+      (async () => {
+        const tagFreq = new Map<string, number>();
+        for (const v of allVideos) {
+          for (const tag of (v.hashtags || [])) {
+            tagFreq.set(tag, (tagFreq.get(tag) || 0) + 1);
           }
         }
-        console.log(`[TrendDiscovery] Job ${jobId}: fetched meta keywords for ${trendMetaKeywords.length}/${selectedVideos.length} videos`);
+        const TAG_COUNT_LIMIT = 15;
+        const priorityTags = new Set(hashtags);
+        const videoTags = Array.from(tagFreq.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([tag]) => tag)
+          .filter(tag => !priorityTags.has(tag));
+        const tagsToFetch = [...priorityTags, ...videoTags].slice(0, TAG_COUNT_LIMIT);
+
+        if (tagsToFetch.length > 0) {
+          console.log(`[TrendDiscovery] Job ${jobId}: fetching tag counts for ${tagsToFetch.length} hashtags (${hashtags.length} search + ${Math.max(0, tagsToFetch.length - hashtags.length)} from videos)`);
+          const counts = await fetchTagVideoCountsBatch(tagsToFetch, (msg) =>
+            onProgress({ message: msg, percent: 79 })
+          );
+          console.log(`[TrendDiscovery] Job ${jobId}: got ${counts.size}/${tagsToFetch.length} tag counts`);
+          return counts;
+        }
+        return new Map<string, number>();
+      })(),
+
+      // Agent B: 上位20動画のメタキーワード
+      (async () => {
+        const seenVideoIds = new Set<string>();
+        const selectedVideos = allVideos
+          .filter(v => {
+            if (!v.authorUniqueId || seenVideoIds.has(v.videoId)) return false;
+            seenVideoIds.add(v.videoId);
+            return true;
+          })
+          .sort((a, b) => b.playCount - a.playCount)
+          .slice(0, 20);
+
+        if (selectedVideos.length > 0) {
+          const urls = selectedVideos.map(v => `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`);
+          const metaMap = await scrapeTikTokMetaKeywords(urls, (msg) =>
+            onProgress({ message: msg, percent: 80 })
+          );
+          const results: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
+          for (const v of selectedVideos) {
+            const url = `https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`;
+            const kw = metaMap.get(url);
+            if (kw && kw.length > 0) {
+              results.push({ videoId: v.videoId, authorUniqueId: v.authorUniqueId, keywords: kw });
+            }
+          }
+          console.log(`[TrendDiscovery] Job ${jobId}: fetched meta keywords for ${results.length}/${selectedVideos.length} videos`);
+          return results;
+        }
+        return [];
+      })(),
+    ]);
+
+    // 結果をマージ
+    if (tagCountResult.status === "fulfilled") {
+      for (const [tag, count] of tagCountResult.value) {
+        tagVideoCountMap.set(tag, count);
       }
-    } catch (e) {
-      console.warn(`[TrendDiscovery] Job ${jobId}: meta keywords scraping failed, skipping`, e);
+    } else {
+      console.warn(`[TrendDiscovery] Job ${jobId}: tag count fetch failed, skipping`, tagCountResult.reason);
+    }
+
+    let trendMetaKeywords: Array<{ videoId: string; authorUniqueId: string; keywords: string[] }> = [];
+    if (metaKwResult.status === "fulfilled") {
+      trendMetaKeywords = metaKwResult.value;
+    } else {
+      console.warn(`[TrendDiscovery] Job ${jobId}: meta keywords scraping failed, skipping`, metaKwResult.reason);
     }
 
     // Step 3: 横断集計

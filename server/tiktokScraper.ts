@@ -939,11 +939,10 @@ export async function searchTikTokBatch(
       const promises = batch.map(async ({ query, type }, batchIdx) => {
         const globalIdx = batchStart + batchIdx;
         const isTag = type === "hashtag";
-        const searchTerm = query;
+        const searchTerm = isTag ? `#${query}` : query;
 
         if (onProgress) {
-          const displayTerm = isTag ? `#${query}` : query;
-          onProgress(`クエリ ${globalIdx + 1}/${queries.length}: "${displayTerm}" を${isTag ? 'タグページ' : '検索'}中...`, completedCount, queries.length);
+          onProgress(`クエリ ${globalIdx + 1}/${queries.length}: "${searchTerm}" を検索中...`, completedCount, queries.length);
         }
 
         // 同一バッチ内で少しずらして開始（bot検出回避）
@@ -957,17 +956,13 @@ export async function searchTikTokBatch(
             searchTerm,
             maxVideosPerQuery,
             globalIdx, // sessionIndex
-            undefined,
-            isTag, // isTagPage
           );
           results[globalIdx] = {
             query, type, videos: result.videos,
-            ...(result.tagVideoCount != null && { tagVideoCount: result.tagVideoCount }),
           };
-          const countInfo = result.tagVideoCount != null ? ` (tagVideoCount: ${result.tagVideoCount})` : '';
-          console.log(`[TikTok Batch] Query ${globalIdx + 1}/${queries.length} "${isTag ? '#' + query : query}": ${result.videos.length} videos${countInfo}`);
+          console.log(`[TikTok Batch] Query ${globalIdx + 1}/${queries.length} "${searchTerm}": ${result.videos.length} videos`);
         } catch (err) {
-          console.error(`[TikTok Batch] Query ${globalIdx + 1} "${isTag ? '#' + query : query}" failed:`, err);
+          console.error(`[TikTok Batch] Query ${globalIdx + 1} "${searchTerm}" failed:`, err);
           results[globalIdx] = { query, type, videos: [] };
         }
       });
