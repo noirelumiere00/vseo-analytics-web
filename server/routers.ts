@@ -412,26 +412,45 @@ export const appRouter = router({
         return { keyword: input.keyword, points: results };
       }),
 
-    // ダッシュボード: 全ジョブの俯瞰データ
+    // ダッシュボード: 統合俯瞰データ (マーケター向け)
     dashboard: protectedProcedure
       .query(async ({ ctx }) => {
-        const allJobs = await db.getAnalysisJobsByUserId(ctx.user.id);
-        const completedJobs = allJobs.filter(j => j.status === "completed");
+        const userId = ctx.user.id;
 
-        // キーワード別集計
-        const keywordMap = new Map<string, number>();
-        for (const job of completedJobs) {
-          if (job.keyword) {
-            keywordMap.set(job.keyword, (keywordMap.get(job.keyword) || 0) + 1);
-          }
-        }
+        const [allAnalysisJobs, trendJobs, campaignList, activeJobs] = await Promise.all([
+          db.getAnalysisJobsByUserId(userId),
+          db.getTrendDiscoveryJobsByUserId(userId),
+          db.getCampaignsByUserId(userId),
+          db.getActiveJobsByUserId(userId),
+        ]);
 
-        // 最新5ジョブのレポートサマリ
-        const recentSummaries = [];
-        for (const job of completedJobs.slice(0, 5)) {
+        const completedAnalysis = allAnalysisJobs.filter(j => j.status === "completed");
+        const completedTrends = trendJobs.filter(j => j.status === "completed");
+
+        // 今週の増分 (7日以内)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const weeklyAnalyses = allAnalysisJobs.filter(j => j.status === "completed" && new Date(j.createdAt) >= sevenDaysAgo).length;
+        const weeklyTrends = trendJobs.filter(j => j.status === "completed" && new Date(j.createdAt) >= sevenDaysAgo).length;
+
+        // KPI (3枚)
+        const kpi = {
+          totalAnalyses: completedAnalysis.length + completedTrends.length,
+          weeklyDelta: weeklyAnalyses + weeklyTrends,
+          failedJobs: allAnalysisJobs.filter(j => j.status === "failed").length + trendJobs.filter(j => j.status === "failed").length,
+        };
+
+        // 統合タイムライン (最新5件)
+        type ActivityItem =
+          | { type: "seo"; jobId: number; keyword: string; date: Date; totalVideos: number | null; totalViews: number; positivePercentage: number | null; negativePercentage: number | null }
+          | { type: "trend"; jobId: number; persona: string; date: Date; keywordCount: number; hashtagCount: number; topTags: string[] };
+
+        const recentActivity: ActivityItem[] = [];
+
+        for (const job of completedAnalysis.slice(0, 5)) {
           const report = await db.getAnalysisReportByJobId(job.id);
           if (report) {
-            recentSummaries.push({
+            recentActivity.push({
+              type: "seo",
               jobId: job.id,
               keyword: job.keyword || "手動URL",
               date: job.createdAt,
@@ -443,16 +462,93 @@ export const appRouter = router({
           }
         }
 
+        for (const job of completedTrends.slice(0, 5)) {
+          const ca = job.crossAnalysis as any;
+          const topTags = (ca?.trendingHashtags || []).slice(0, 3).map((t: any) => t.tag);
+          recentActivity.push({
+            type: "trend",
+            jobId: job.id,
+            persona: job.persona,
+            date: job.createdAt,
+            keywordCount: (job.expandedKeywords as string[] | null)?.length ?? 0,
+            hashtagCount: (job.expandedHashtags as string[] | null)?.length ?? 0,
+            topTags,
+          });
+        }
+
+        recentActivity.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const trimmedActivity = recentActivity.slice(0, 5);
+
         return {
-          totalJobs: allJobs.length,
-          completedJobs: completedJobs.length,
-          failedJobs: allJobs.filter(j => j.status === "failed").length,
-          topKeywords: Array.from(keywordMap.entries())
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10)
-            .map(([keyword, count]) => ({ keyword, count })),
-          recentSummaries,
+          kpi,
+          activeJobs,
+          recentActivity: trimmedActivity,
         };
+      }),
+
+    // ユーザー別インサイト
+    platformInsights: protectedProcedure
+      .query(async ({ ctx }) => {
+        return db.getPlatformInsights(ctx.user.id);
+      }),
+
+    // 統合アクティビティ (SEO + トレンド全件)
+    allActivity: protectedProcedure
+      .query(async ({ ctx }) => {
+        const userId = ctx.user.id;
+        const [analysisJobs, trendJobs] = await Promise.all([
+          db.getAnalysisJobsByUserId(userId),
+          db.getTrendDiscoveryJobsByUserId(userId),
+        ]);
+
+        type ActivityItem =
+          | { type: "seo"; id: number; label: string; status: string; date: Date; completedAt: Date | null; totalVideos?: number | null; totalViews?: number; positivePercentage?: number | null; negativePercentage?: number | null; manualUrls?: string[] | null }
+          | { type: "trend"; id: number; label: string; status: string; date: Date; completedAt: Date | null; keywordCount: number; hashtagCount: number; topTags: string[] };
+
+        const items: ActivityItem[] = [];
+
+        // SEO items
+        for (const job of analysisJobs) {
+          const item: ActivityItem = {
+            type: "seo",
+            id: job.id,
+            label: job.keyword || "手動URL",
+            status: job.status,
+            date: job.createdAt,
+            completedAt: job.completedAt ?? null,
+            manualUrls: job.manualUrls as string[] | null,
+          };
+          if (job.status === "completed") {
+            const report = await db.getAnalysisReportByJobId(job.id);
+            if (report) {
+              (item as any).totalVideos = report.totalVideos;
+              (item as any).totalViews = Number(report.totalViews);
+              (item as any).positivePercentage = report.positivePercentage;
+              (item as any).negativePercentage = report.negativePercentage;
+            }
+          }
+          items.push(item);
+        }
+
+        // Trend items
+        for (const job of trendJobs) {
+          const ca = job.crossAnalysis as any;
+          const topTags = (ca?.trendingHashtags || []).slice(0, 3).map((t: any) => t.tag);
+          items.push({
+            type: "trend",
+            id: job.id,
+            label: job.persona,
+            status: job.status,
+            date: job.createdAt,
+            completedAt: job.completedAt ?? null,
+            keywordCount: (job.expandedKeywords as string[] | null)?.length ?? 0,
+            hashtagCount: (job.expandedHashtags as string[] | null)?.length ?? 0,
+            topTags,
+          });
+        }
+
+        items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return items;
       }),
 
     // ジョブを削除
@@ -1005,6 +1101,20 @@ export const appRouter = router({
         if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
         if (job.status === "processing" || job.status === "queued") throw new TRPCError({ code: "BAD_REQUEST", message: "処理中またはキュー中のジョブは削除できません" });
         await db.deleteTrendDiscoveryJob(input.jobId);
+        return { success: true };
+      }),
+
+    cancel: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getTrendDiscoveryJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.status !== "processing" && job.status !== "queued") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "キャンセルできるのは実行中またはキュー中のジョブのみです" });
+        }
+        await db.updateTrendDiscoveryJobStatus(input.jobId, "failed", new Date());
+        await db.updateJobProgress("trend", input.jobId, { message: "ユーザーによりキャンセルされました", percent: 0 });
         return { success: true };
       }),
   }),

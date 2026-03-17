@@ -840,6 +840,410 @@ export async function countMonthlyJobs(userId: number, since: Date): Promise<num
   return (a?.count ?? 0) + (t?.count ?? 0) + (c?.count ?? 0);
 }
 
+// === Active Jobs (Dashboard) ===
+
+export async function getActiveJobsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return { analysis: [], trend: [], campaign: [] };
+
+  const [analysisRows, trendRows, snapshotRows] = await Promise.all([
+    db.select({
+      id: analysisJobs.id,
+      keyword: analysisJobs.keyword,
+      status: analysisJobs.status,
+      progress: analysisJobs.progress,
+      createdAt: analysisJobs.createdAt,
+    }).from(analysisJobs).where(and(
+      eq(analysisJobs.userId, userId),
+      or(eq(analysisJobs.status, "processing"), eq(analysisJobs.status, "queued"))
+    )),
+    db.select({
+      id: trendDiscoveryJobs.id,
+      persona: trendDiscoveryJobs.persona,
+      status: trendDiscoveryJobs.status,
+      progress: trendDiscoveryJobs.progress,
+      createdAt: trendDiscoveryJobs.createdAt,
+    }).from(trendDiscoveryJobs).where(and(
+      eq(trendDiscoveryJobs.userId, userId),
+      or(eq(trendDiscoveryJobs.status, "processing"), eq(trendDiscoveryJobs.status, "queued"))
+    )),
+    db.select({
+      id: campaignSnapshots.id,
+      campaignId: campaignSnapshots.campaignId,
+      snapshotType: campaignSnapshots.snapshotType,
+      status: campaignSnapshots.status,
+      progress: campaignSnapshots.progress,
+      campaignName: campaigns.name,
+    }).from(campaignSnapshots)
+      .innerJoin(campaigns, eq(campaignSnapshots.campaignId, campaigns.id))
+      .where(and(
+        eq(campaigns.userId, userId),
+        or(eq(campaignSnapshots.status, "processing"), eq(campaignSnapshots.status, "queued"))
+      )),
+  ]);
+
+  return { analysis: analysisRows, trend: trendRows, campaign: snapshotRows };
+}
+
+// === User Insights (ユーザー別集計, 5分キャッシュ) ===
+
+const _userInsightsCache = new Map<number, { data: any; expiresAt: number }>();
+
+export async function getPlatformInsights(userId: number) {
+  const cached = _userInsightsCache.get(userId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.data;
+  }
+
+  const db = await getDb();
+  if (!db) return null;
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [recentVideos, completedAnalysisCount, completedTrendCount, totalVideoCount, recentReports] = await Promise.all([
+    db.select({
+      hashtags: videos.hashtags,
+      postedAt: videos.postedAt,
+      duration: videos.duration,
+      sentiment: videos.sentiment,
+      viewCount: videos.viewCount,
+      likeCount: videos.likeCount,
+      commentCount: videos.commentCount,
+      shareCount: videos.shareCount,
+      accountName: videos.accountName,
+      accountId: videos.accountId,
+      followerCount: videos.followerCount,
+      keyHook: videos.keyHook,
+      isAd: videos.isAd,
+    }).from(videos)
+      .innerJoin(analysisJobs, eq(videos.jobId, analysisJobs.id))
+      .where(and(eq(analysisJobs.userId, userId), gte(videos.createdAt, thirtyDaysAgo))),
+
+    db.select({ count: sql<number>`COUNT(*)` }).from(analysisJobs).where(and(eq(analysisJobs.userId, userId), eq(analysisJobs.status, "completed"))),
+    db.select({ count: sql<number>`COUNT(*)` }).from(trendDiscoveryJobs).where(and(eq(trendDiscoveryJobs.userId, userId), eq(trendDiscoveryJobs.status, "completed"))),
+    db.select({ count: sql<number>`COUNT(*)` }).from(videos).innerJoin(analysisJobs, eq(videos.jobId, analysisJobs.id)).where(eq(analysisJobs.userId, userId)),
+
+    // ハッシュタグコンビネーション + 感情ワード集計用
+    db.select({
+      hashtagStrategy: analysisReports.hashtagStrategy,
+      emotionWords: analysisReports.emotionWords,
+    }).from(analysisReports)
+      .innerJoin(analysisJobs, eq(analysisReports.jobId, analysisJobs.id))
+      .where(and(eq(analysisJobs.userId, userId), gte(analysisJobs.createdAt, thirtyDaysAgo)))
+      .orderBy(desc(analysisJobs.createdAt))
+      .limit(10),
+  ]);
+
+  // --- ハッシュタグ集計 (with ER) TOP10 ---
+  const hashtagStats = new Map<string, { count: number; views: number; engagement: number }>();
+  let totalViews = 0;
+  let totalEngagement = 0;
+
+  for (const v of recentVideos) {
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    totalViews += views;
+    totalEngagement += eng;
+
+    const tags = v.hashtags as string[] | null;
+    if (tags) {
+      for (const tag of tags) {
+        const normalized = tag.toLowerCase().replace(/^#/, "");
+        if (!normalized) continue;
+        // 広告・汎用タグを除外
+        const HASHTAG_BLACKLIST = new Set([
+          "fyp", "foryou", "foryoupage", "viral", "trending", "trend",
+          "おすすめ", "おすすめにのりたい", "バズりたい", "バズれ",
+          "tiktok", "tiktoker", "tiktokjapan",
+          "fy", "fypシ", "fypage", "fypdongggggggg",
+          "xyzbca", "xyz", "xyzabc",
+          "pr", "ad", "広告", "プロモーション", "sponsored",
+          "タイアップ", "提供", "案件",
+        ]);
+        if (HASHTAG_BLACKLIST.has(normalized)) continue;
+        const existing = hashtagStats.get(normalized) || { count: 0, views: 0, engagement: 0 };
+        existing.count++;
+        existing.views += views;
+        existing.engagement += eng;
+        hashtagStats.set(normalized, existing);
+      }
+    }
+  }
+  const topHashtags = Array.from(hashtagStats.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .map(([tag, stats]) => ({
+      tag,
+      count: stats.count,
+      avgER: stats.views > 0 ? Math.round((stats.engagement / stats.views) * 10000) / 100 : 0,
+    }));
+
+  // --- ハッシュタグコンビネーション ---
+  // 注意: analysis_reports.hashtagStrategy.topCombinations の avgER は実際は平均再生数
+  const COMBO_BLACKLIST = new Set([
+    "fyp", "foryou", "foryoupage", "viral", "trending", "trend",
+    "おすすめ", "おすすめにのりたい", "バズりたい", "バズれ",
+    "tiktok", "tiktoker", "tiktokjapan",
+    "fy", "fypシ", "fypage", "fypdongggggggg",
+    "xyzbca", "xyz", "xyzabc",
+    "pr", "ad", "広告", "プロモーション", "sponsored",
+    "タイアップ", "提供", "案件",
+  ]);
+  const combinationMap = new Map<string, { tags: string[]; count: number; totalViews: number; n: number }>();
+  for (const r of recentReports) {
+    const strategy = r.hashtagStrategy as any;
+    if (!strategy?.topCombinations) continue;
+    for (const combo of strategy.topCombinations) {
+      // ブラックリストタグを含むコンビネーションを除外
+      const hasBlacklisted = combo.tags.some((t: string) => COMBO_BLACKLIST.has(t.toLowerCase()));
+      if (hasBlacklisted) continue;
+      const key = [...combo.tags].sort().join("+");
+      const existing = combinationMap.get(key) || { tags: combo.tags, count: 0, totalViews: 0, n: 0 };
+      existing.count += combo.count;
+      existing.totalViews += combo.avgER; // avgER は実際は平均再生数
+      existing.n++;
+      combinationMap.set(key, existing);
+    }
+  }
+  const topHashtagCombinations = Array.from(combinationMap.values())
+    .map(c => ({ tags: c.tags, count: c.count, avgViews: c.n > 0 ? Math.round(c.totalViews / c.n) : 0 }))
+    .sort((a, b) => b.avgViews - a.avgViews)
+    .slice(0, 3);
+
+  // --- センチメント分析 (with ER) ---
+  const sentimentStats: Record<string, { count: number; views: number; engagement: number }> = {
+    positive: { count: 0, views: 0, engagement: 0 },
+    neutral: { count: 0, views: 0, engagement: 0 },
+    negative: { count: 0, views: 0, engagement: 0 },
+  };
+  for (const v of recentVideos) {
+    const key = v.sentiment || "neutral";
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    if (sentimentStats[key]) {
+      sentimentStats[key].count++;
+      sentimentStats[key].views += views;
+      sentimentStats[key].engagement += eng;
+    }
+  }
+  const sentimentAnalysis = Object.entries(sentimentStats).map(([sentiment, stats]) => ({
+    sentiment,
+    count: stats.count,
+    avgER: stats.views > 0 ? Math.round((stats.engagement / stats.views) * 10000) / 100 : 0,
+  }));
+
+  // --- 動画長別パフォーマンス ---
+  const durationBuckets: Record<string, { views: number; engagement: number; count: number }> = {
+    "~15秒": { views: 0, engagement: 0, count: 0 },
+    "16~30秒": { views: 0, engagement: 0, count: 0 },
+    "31~60秒": { views: 0, engagement: 0, count: 0 },
+    "60秒超": { views: 0, engagement: 0, count: 0 },
+  };
+  for (const v of recentVideos) {
+    const dur = v.duration ?? 0;
+    const bucket = dur <= 15 ? "~15秒" : dur <= 30 ? "16~30秒" : dur <= 60 ? "31~60秒" : "60秒超";
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    durationBuckets[bucket].views += views;
+    durationBuckets[bucket].engagement += eng;
+    durationBuckets[bucket].count++;
+  }
+  const durationPerformance = Object.entries(durationBuckets)
+    .map(([label, d]) => ({
+      label,
+      avgViews: d.count > 0 ? Math.round(d.views / d.count) : 0,
+      avgER: d.count > 0 && d.views > 0 ? Math.round((d.engagement / d.views) * 10000) / 100 : 0,
+      count: d.count,
+    }))
+    .filter(d => d.count > 0);
+
+  // --- 投稿時間帯ヒートマップ (7曜日 × 4時間帯) ---
+  const timeBands = [
+    { label: "朝", start: 6, end: 11 },
+    { label: "昼", start: 11, end: 15 },
+    { label: "夕", start: 15, end: 19 },
+    { label: "夜", start: 19, end: 24 },
+  ];
+  const dayOrder = ["月", "火", "水", "木", "金", "土", "日"];
+  const heatmap: Record<string, Record<string, { views: number; engagement: number; count: number }>> = {};
+  for (const band of timeBands) {
+    heatmap[band.label] = {};
+    for (const day of dayOrder) {
+      heatmap[band.label][day] = { views: 0, engagement: 0, count: 0 };
+    }
+  }
+  let bestHeatmapSlot = { day: "", band: "", er: 0 };
+  for (const v of recentVideos) {
+    if (!v.postedAt) continue;
+    const dt = new Date(v.postedAt);
+    const dayIdx = (dt.getDay() + 6) % 7; // Monday=0
+    const dayName = dayOrder[dayIdx];
+    const hour = dt.getHours();
+    const band = timeBands.find(b => hour >= b.start && hour < b.end) || timeBands[3]; // default to 夜
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    heatmap[band.label][dayName].views += views;
+    heatmap[band.label][dayName].engagement += eng;
+    heatmap[band.label][dayName].count++;
+  }
+  // Compute ER for each cell and find best
+  const postingHeatmap: Record<string, Record<string, { er: number; count: number }>> = {};
+  for (const band of timeBands) {
+    postingHeatmap[band.label] = {};
+    for (const day of dayOrder) {
+      const cell = heatmap[band.label][day];
+      const er = cell.views > 0 ? Math.round((cell.engagement / cell.views) * 10000) / 100 : 0;
+      postingHeatmap[band.label][day] = { er, count: cell.count };
+      if (er > bestHeatmapSlot.er && cell.count >= 2) {
+        bestHeatmapSlot = { day, band: band.label, er };
+      }
+    }
+  }
+
+  // --- トップクリエイター ---
+  const creatorStats = new Map<string, {
+    accountName: string;
+    followerCount: number;
+    videoCount: number;
+    totalPlays: number;
+    totalEngagement: number;
+  }>();
+  for (const v of recentVideos) {
+    const key = v.accountId || v.accountName || "";
+    if (!key) continue;
+    const existing = creatorStats.get(key) || {
+      accountName: v.accountName || key,
+      followerCount: Number(v.followerCount ?? 0),
+      videoCount: 0,
+      totalPlays: 0,
+      totalEngagement: 0,
+    };
+    existing.videoCount++;
+    existing.totalPlays += Number(v.viewCount ?? 0);
+    existing.totalEngagement += Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    existing.followerCount = Math.max(existing.followerCount, Number(v.followerCount ?? 0));
+    creatorStats.set(key, existing);
+  }
+  const topCreators = Array.from(creatorStats.values())
+    .filter(c => c.videoCount >= 2)
+    .sort((a, b) => b.totalPlays - a.totalPlays)
+    .slice(0, 5)
+    .map(c => ({
+      accountName: c.accountName,
+      followerCount: c.followerCount,
+      videoCount: c.videoCount,
+      totalPlays: c.totalPlays,
+      avgER: c.totalPlays > 0 ? Math.round((c.totalEngagement / c.totalPlays) * 10000) / 100 : 0,
+    }));
+
+  const overallAvgER = totalViews > 0 ? Math.round((totalEngagement / totalViews) * 10000) / 100 : 0;
+
+  // --- キーフック分析 ---
+  const hookStats = new Map<string, { count: number; views: number; engagement: number; example: string }>();
+  for (const v of recentVideos) {
+    const hook = ((v as any).keyHook || "").trim();
+    if (!hook || hook.length < 4) continue;
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    const existing = hookStats.get(hook) || { count: 0, views: 0, engagement: 0, example: hook };
+    existing.count++;
+    existing.views += views;
+    existing.engagement += eng;
+    hookStats.set(hook, existing);
+  }
+  const topHooks = Array.from(hookStats.values())
+    .filter(h => h.count >= 2)
+    .sort((a, b) => {
+      const erA = a.views > 0 ? a.engagement / a.views : 0;
+      const erB = b.views > 0 ? b.engagement / b.views : 0;
+      return erB - erA;
+    })
+    .slice(0, 5)
+    .map(h => ({
+      hook: h.example,
+      count: h.count,
+      avgViews: Math.round(h.views / h.count),
+      avgER: h.views > 0 ? Math.round((h.engagement / h.views) * 10000) / 100 : 0,
+    }));
+
+  // --- 広告 vs オーガニック ---
+  const adOrganic = { ad: { count: 0, views: 0, engagement: 0 }, organic: { count: 0, views: 0, engagement: 0 } };
+  for (const v of recentVideos) {
+    const bucket = (v as any).isAd === 1 ? "ad" : "organic";
+    const views = Number(v.viewCount ?? 0);
+    const eng = Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+    adOrganic[bucket].count++;
+    adOrganic[bucket].views += views;
+    adOrganic[bucket].engagement += eng;
+  }
+  const adVsOrganic = {
+    ad: {
+      count: adOrganic.ad.count,
+      avgViews: adOrganic.ad.count > 0 ? Math.round(adOrganic.ad.views / adOrganic.ad.count) : 0,
+      avgER: adOrganic.ad.views > 0 ? Math.round((adOrganic.ad.engagement / adOrganic.ad.views) * 10000) / 100 : 0,
+    },
+    organic: {
+      count: adOrganic.organic.count,
+      avgViews: adOrganic.organic.count > 0 ? Math.round(adOrganic.organic.views / adOrganic.organic.count) : 0,
+      avgER: adOrganic.organic.views > 0 ? Math.round((adOrganic.organic.engagement / adOrganic.organic.views) * 10000) / 100 : 0,
+    },
+  };
+
+  // --- 感情ワードマップ ---
+  const emotionWordMap = new Map<string, { word: string; totalCount: number; valence: number; arousal: number; n: number }>();
+  for (const r of recentReports) {
+    const words = (r as any).emotionWords as Array<{ word: string; count: number; valence: number; arousal: number }> | null;
+    if (!words) continue;
+    for (const w of words) {
+      const existing = emotionWordMap.get(w.word) || { word: w.word, totalCount: 0, valence: 0, arousal: 0, n: 0 };
+      existing.totalCount += w.count;
+      existing.valence += w.valence;
+      existing.arousal += w.arousal;
+      existing.n++;
+      emotionWordMap.set(w.word, existing);
+    }
+  }
+  const emotionLandscape = Array.from(emotionWordMap.values())
+    .map(e => ({
+      word: e.word,
+      count: e.totalCount,
+      valence: e.n > 0 ? Math.round((e.valence / e.n) * 100) / 100 : 0,
+      arousal: e.n > 0 ? Math.round((e.arousal / e.n) * 100) / 100 : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  const emotionQuadrants = {
+    highEnergyPositive: emotionLandscape.filter(w => w.valence > 0 && w.arousal > 0),
+    calmPositive: emotionLandscape.filter(w => w.valence > 0 && w.arousal <= 0),
+    highEnergyNegative: emotionLandscape.filter(w => w.valence <= 0 && w.arousal > 0),
+    calmNegative: emotionLandscape.filter(w => w.valence <= 0 && w.arousal <= 0),
+  };
+
+  const result = {
+    topHashtags,
+    topHashtagCombinations,
+    sentimentAnalysis,
+    durationPerformance,
+    postingHeatmap,
+    bestHeatmapSlot,
+    topCreators,
+    overallAvgER,
+    topHooks,
+    adVsOrganic,
+    emotionLandscape,
+    emotionQuadrants,
+    stats: {
+      completedAnalyses: completedAnalysisCount[0]?.count ?? 0,
+      completedTrends: completedTrendCount[0]?.count ?? 0,
+      totalVideos: totalVideoCount[0]?.count ?? 0,
+    },
+  };
+
+  _userInsightsCache.set(userId, { data: result, expiresAt: Date.now() + 5 * 60 * 1000 });
+  return result;
+}
+
 // === Admin: Users with subscriptions ===
 
 export async function getAllUsersWithSubscriptions() {
