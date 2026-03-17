@@ -87,7 +87,7 @@ export default function ReportView() {
         <div className="text-center space-y-4">
           <p className="text-red-600 font-semibold">{error}</p>
           <button
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/dashboard")}
             className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
           >
             ホームに戻る
@@ -103,7 +103,7 @@ export default function ReportView() {
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">トークンが無効です</p>
           <button
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/dashboard")}
             className="px-4 py-2 bg-primary text-white rounded hover:bg-primary/90"
           >
             ホームに戻る

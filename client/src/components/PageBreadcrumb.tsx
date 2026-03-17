@@ -5,13 +5,16 @@ import {
 import { useLocation } from "wouter";
 
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
-  "/": { label: "TikTok SEO分析" },
-  "/history": { label: "SEO分析履歴" },
   "/dashboard": { label: "ダッシュボード" },
-  "/trend-discovery": { label: "TikTokトレンド分析" },
-  "/trend-insights": { label: "トレンド分析結果" },
+  "/activity": { label: "アクティビティ" },
+  "/history": { label: "キーワード分析" },
+  "/analysis/new": { label: "新規分析", parent: "/history" },
   "/compare": { label: "比較分析", parent: "/history" },
-  "/trend": { label: "トレンド推移", parent: "/dashboard" },
+  "/trend": { label: "トレンド推移", parent: "/history" },
+  "/trend-insights": { label: "トレンド発掘" },
+  "/trend-discovery": { label: "新規分析", parent: "/trend-insights" },
+  "/campaigns": { label: "施策レポート" },
+  "/campaigns/new": { label: "新規作成", parent: "/campaigns" },
   "/admin": { label: "管理画面" },
 };
 
@@ -24,22 +27,26 @@ export function PageBreadcrumb() {
   let parentLabel = "";
 
   // Check dynamic routes
-  if (location.startsWith("/analysis/")) {
+  if (location.startsWith("/analysis/") && location !== "/analysis/new") {
     currentLabel = "分析詳細";
     parentPath = "/history";
-    parentLabel = "SEO分析履歴";
+    parentLabel = "キーワード分析";
   } else if (location.startsWith("/trend-discovery/") && location !== "/trend-discovery") {
     currentLabel = "トレンド詳細";
-    parentPath = "/trend-discovery";
-    parentLabel = "TikTokトレンド分析";
+    parentPath = "/trend-insights";
+    parentLabel = "トレンド発掘";
   } else if (location === "/campaigns/new") {
     currentLabel = "新規作成";
-    parentPath = "/trend-insights";
-    parentLabel = "トレンド分析結果";
+    parentPath = "/campaigns";
+    parentLabel = "施策レポート";
+  } else if (location.match(/^\/campaigns\/\d+\/report$/)) {
+    currentLabel = "レポート";
+    parentPath = "/campaigns";
+    parentLabel = "施策レポート";
   } else if (location.startsWith("/campaigns/") && location !== "/campaigns") {
-    currentLabel = "キャンペーン詳細";
-    parentPath = "/trend-insights";
-    parentLabel = "トレンド分析結果";
+    currentLabel = "詳細";
+    parentPath = "/campaigns";
+    parentLabel = "施策レポート";
   } else {
     const route = ROUTE_MAP[location];
     if (route) {

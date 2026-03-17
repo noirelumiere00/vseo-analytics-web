@@ -24,7 +24,7 @@ export default function NotFound() {
             お探しのページは存在しないか、移動された可能性があります。
           </p>
 
-          <Button onClick={() => setLocation("/")} className="px-6">
+          <Button onClick={() => setLocation("/dashboard")} className="px-6">
             <Home className="w-4 h-4 mr-2" />
             ホームへ戻る
           </Button>

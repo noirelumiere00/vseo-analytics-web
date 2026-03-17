@@ -144,7 +144,7 @@ export default function CampaignNew() {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setLocation("/trend-insights")}>
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/campaigns")}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
@@ -270,7 +270,7 @@ export default function CampaignNew() {
 
         {/* Submit */}
         <div className="flex justify-end gap-3 pb-8">
-          <Button variant="outline" onClick={() => setLocation("/trend-insights")}>キャンセル</Button>
+          <Button variant="outline" onClick={() => setLocation("/campaigns")}>キャンセル</Button>
           <Button onClick={handleSubmit} disabled={createMutation.isPending} className="min-w-[120px]">
             {createMutation.isPending ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" />作成中...</>

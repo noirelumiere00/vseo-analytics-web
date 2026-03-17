@@ -35,7 +35,7 @@ export default function CampaignList() {
               VSEO施策の前後比較レポートを作成・管理
             </p>
           </div>
-          <Button onClick={() => setLocation("/trend-insights")} className="gap-2">
+          <Button onClick={() => setLocation("/campaigns/new")} className="gap-2">
             <Plus className="h-4 w-4" />
             新規キャンペーン
           </Button>

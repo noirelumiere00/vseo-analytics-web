@@ -172,7 +172,7 @@ export default function History() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">SEO分析履歴</h1>
+            <h1 className="text-2xl font-bold">キーワード分析</h1>
             <p className="text-sm text-muted-foreground mt-1">
               過去に実行した分析ジョブの一覧
             </p>
@@ -200,7 +200,7 @@ export default function History() {
                 </Button>
               </>
             )}
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/")}>
+            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
               <Search className="h-4 w-4 mr-1.5" />
               新規分析
             </Button>
@@ -278,7 +278,7 @@ export default function History() {
                 キーワードを入力して最初のVSEO分析を開始しましょう。
               </EmptyDescription>
             </EmptyHeader>
-            <Button className="gradient-primary text-white" onClick={() => setLocation("/")}>
+            <Button className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
               <Search className="mr-2 h-4 w-4" />最初の分析を開始
             </Button>
           </Empty>
