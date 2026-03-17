@@ -52,7 +52,6 @@ export default function Admin() {
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-4">ID</th>
                       <th className="pb-2 pr-4">名前</th>
-                      <th className="pb-2 pr-4">プラン</th>
                       <th className="pb-2 pr-4">最終ログイン</th>
                     </tr>
                   </thead>
@@ -65,15 +64,6 @@ export default function Admin() {
                           {me && u.id === me.id && (
                             <span className="ml-2 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">自分</span>
                           )}
-                        </td>
-                        <td className="py-3 pr-4">
-                          <span className={`text-xs font-medium px-2 py-1 rounded capitalize ${
-                            (u as any).plan === "pro" ? "bg-primary/10 text-primary"
-                            : (u as any).plan === "business" ? "bg-primary/10 text-primary"
-                            : "bg-muted text-muted-foreground"
-                          }`}>
-                            {(u as any).plan || "free"}
-                          </span>
                         </td>
                         <td className="py-3 pr-4 text-muted-foreground">
                           {u.lastSignedIn

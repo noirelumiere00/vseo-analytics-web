@@ -8,14 +8,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { Compass, Loader2 } from "lucide-react";
-import QuotaMeter from "@/components/QuotaMeter";
-import { useQuota } from "@/hooks/useQuota";
 
 export default function TrendDiscovery() {
   const [, setLocation] = useLocation();
   const [persona, setPersona] = useState("");
-  const { isExceeded } = useQuota();
-
   const createMutation = trpc.trendDiscovery.create.useMutation({
     onSuccess: (data) => {
       setLocation(`/trend-discovery/${data.jobId}`);
@@ -62,7 +58,7 @@ export default function TrendDiscovery() {
               />
               <Button
                 type="submit"
-                disabled={!persona.trim() || createMutation.isPending || isExceeded}
+                disabled={!persona.trim() || createMutation.isPending}
               >
                 {createMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -70,9 +66,6 @@ export default function TrendDiscovery() {
                 分析開始
               </Button>
             </form>
-            <div className="mt-4">
-              <QuotaMeter />
-            </div>
           </CardContent>
         </Card>
       </div>
