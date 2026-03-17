@@ -26,6 +26,8 @@ export const ENV = {
   appUrl: process.env.APP_URL ?? "http://localhost:3001",
   // Admin
   adminEmail: process.env.ADMIN_EMAIL ?? "",
+  // 無制限ドメイン（カンマ区切り）
+  unlimitedDomains: process.env.UNLIMITED_DOMAINS ?? "",
 };
 
 /** 起動時に必須環境変数をバリデーション */

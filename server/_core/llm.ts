@@ -207,10 +207,18 @@ function injectJsonSchemaInstruction(
  * Bedrock Converse API のレスポンスを InvokeResult 形式に変換
  * → 呼び出し側（videoAnalysis.ts 等）の choices[0].message.content を変更不要にする
  */
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim();
+  // ```json ... ``` or ``` ... ``` 形式を除去
+  const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+  return match ? match[1].trim() : trimmed;
+}
+
 function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult {
-  const outputText = bedrockRes.output?.message?.content
+  const rawText = bedrockRes.output?.message?.content
     ?.map((c: any) => c.text || "")
     .join("") || "";
+  const outputText = stripCodeFences(rawText);
 
   return {
     id: bedrockRes.$metadata?.requestId || "",

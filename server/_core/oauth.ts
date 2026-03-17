@@ -12,6 +12,14 @@ import { sendPasswordResetEmail } from "./email";
 import { getGoogleAuthUrl, exchangeCodeForTokens, getGoogleUserInfo } from "./google";
 import { SignJWT, jwtVerify } from "jose";
 
+/** メールドメインが無制限対象か判定 */
+function isUnlimitedDomain(email: string): boolean {
+  const domains = ENV.unlimitedDomains.split(",").map(d => d.trim().toLowerCase()).filter(Boolean);
+  if (domains.length === 0) return false;
+  const emailDomain = email.split("@")[1]?.toLowerCase();
+  return domains.includes(emailDomain);
+}
+
 function getStateSecret() {
   if (!ENV.cookieSecret) {
     throw new Error("FATAL: JWT_SECRET environment variable is required");
@@ -326,13 +334,19 @@ export function registerOAuthRoutes(app: Express) {
 
         user = await db.getUserByOpenId(openId);
         if (user) {
-          await db.upsertSubscription({ userId: user.id, plan: "free", status: "active" });
+          const plan = isUnlimitedDomain(userInfo.email) ? "business" : "free";
+          await db.upsertSubscription({ userId: user.id, plan, status: "active" });
         }
       }
 
       if (!user) {
         res.redirect(302, "/login?error=user_creation_failed");
         return;
+      }
+
+      // 無制限ドメインの既存ユーザーをビジネスプランにアップグレード
+      if (isUnlimitedDomain(userInfo.email)) {
+        await db.upsertSubscription({ userId: user.id, plan: "business", status: "active" });
       }
 
       // Update last sign in

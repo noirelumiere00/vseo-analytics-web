@@ -7,8 +7,6 @@ import { trpc } from "@/lib/trpc";
 import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import QuotaMeter from "@/components/QuotaMeter";
-import { useQuota } from "@/hooks/useQuota";
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   draft: { label: "下書き", variant: "outline" },
@@ -29,8 +27,6 @@ export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const campaignId = parseInt(id || "0");
-  const { isExceeded } = useQuota();
-
   const detailQuery = trpc.campaign.getById.useQuery(
     { id: campaignId },
     {
@@ -182,7 +178,7 @@ export default function CampaignDetail() {
               )}
               <Button
                 onClick={() => captureMutation.mutate({ campaignId, type: "baseline" })}
-                disabled={isCapturing || captureMutation.isPending || isExceeded}
+                disabled={isCapturing || captureMutation.isPending}
                 className="w-full"
                 variant={latestBaseline?.status === "completed" ? "outline" : "default"}
               >
@@ -229,7 +225,7 @@ export default function CampaignDetail() {
               )}
               <Button
                 onClick={() => captureMutation.mutate({ campaignId, type: "measurement" })}
-                disabled={isCapturing || captureMutation.isPending || isExceeded}
+                disabled={isCapturing || captureMutation.isPending}
                 className="w-full"
                 variant={latestMeasurement?.status === "completed" ? "outline" : "default"}
               >
