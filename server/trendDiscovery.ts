@@ -724,7 +724,7 @@ export function computeCrossAnalysis(
   const sortKeys = ["er", "playCount", "diggCount", "commentCount", "shareCount", "collectCount"] as const;
   for (const key of sortKeys) {
     const sorted = [...enrichedAll].sort((a, b) => (b[key] as number) - (a[key] as number));
-    for (const v of sorted.slice(0, 20)) topVideoIds.add(v.videoId);
+    for (const v of sorted.slice(0, 40)) topVideoIds.add(v.videoId);
   }
   const topVideos = enrichedAll
     .filter(v => topVideoIds.has(v.videoId))
@@ -792,7 +792,7 @@ export function computeCrossAnalysis(
       totalPlays: c.totalPlays,
     }))
     .sort((a, b) => b.queryCount - a.queryCount || b.totalPlays - a.totalPlays)
-    .slice(0, 20);
+    .slice(0, 40);
 
   // 統計分析
   const statistics = computeStatistics(uniqueVideos, completedAt ?? new Date(), tagVideoCountMap, trendMetaKeywords);
