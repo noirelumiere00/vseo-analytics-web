@@ -111,3 +111,17 @@ temp/
 
 # Webdev artifacts (checkpoint zips, migrations, etc.)
 .webdev/
+
+# Production build output (symlink to dist/public)
+server/_core/public
+
+# Debug/test scratch files
+debug-*
+diag-*
+test-*.mjs
+test2-*
+_check-*
+mock-*
+fix-*.mjs
+*.save
+.envsudo
