@@ -21,27 +21,20 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Compass, CreditCard, History, LayoutDashboard, LogOut, Search, TrendingUp, Users } from "lucide-react";
+import { Clock, Compass, LayoutDashboard, LogOut, Megaphone, Search } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { PageBreadcrumb } from "./PageBreadcrumb";
 import { Button } from "./ui/button";
-import { useQuota } from "@/hooks/useQuota";
 
-// SEO分析セクション (index 0-1)
-// トレンド分析セクション (index 2-3)
-// その他 (index 4+)
-const seoItems = [
-  { icon: Search, label: "SEO分析", path: "/" },
-  { icon: History, label: "SEO分析履歴", path: "/history" },
-];
-const trendItems = [
-  { icon: Compass, label: "トレンド分析", path: "/trend-discovery" },
-  { icon: TrendingUp, label: "トレンド分析履歴", path: "/trend-insights" },
-];
-const otherItems = [
+
+const navItems = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
+  { icon: Clock, label: "アクティビティ", path: "/activity" },
+  { icon: Search, label: "キーワード分析", path: "/history" },
+  { icon: Compass, label: "トレンド発掘", path: "/trend-insights" },
+  { icon: Megaphone, label: "施策レポート", path: "/campaigns" },
 ];
 
 
@@ -115,27 +108,6 @@ type DashboardLayoutContentProps = {
   setSidebarWidth: (width: number) => void;
 };
 
-function PlanBadge() {
-  const { plan, used, limit, isExceeded } = useQuota();
-  const limitLabel = limit === Infinity ? "無制限" : `${limit}`;
-  const colors: Record<string, string> = {
-    free: "bg-muted text-muted-foreground",
-    pro: "bg-primary/10 text-primary",
-    business: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  };
-  return (
-    <div className="px-1 py-1 group-data-[collapsible=icon]:hidden">
-      <div className="flex items-center justify-between text-xs">
-        <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${colors[plan] ?? colors.free}`}>
-          {plan}
-        </span>
-        <span className={`${isExceeded ? "text-destructive" : "text-muted-foreground"}`}>
-          {used}/{limitLabel}回
-        </span>
-      </div>
-    </div>
-  );
-}
 
 function DashboardLayoutContent({
   children,
@@ -147,8 +119,7 @@ function DashboardLayoutContent({
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const allMenuItems = [...seoItems, ...trendItems, ...otherItems];
-  const activeMenuItem = allMenuItems.find(item => item.path === location);
+  const activeMenuItem = navItems.find(item => item.path === location);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -216,15 +187,13 @@ function DashboardLayoutContent({
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {/* SEO分析セクション */}
-              {!isCollapsed && (
-                <div className="px-3 pt-2 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">SEO分析</span>
-                </div>
-              )}
-              {seoItems.map(item => {
-                const isActive = location === item.path
-                  || (item.path === "/history" && location.startsWith("/analysis/"));
+              {navItems.map(item => {
+                const isActive =
+                  location === item.path
+                  || (item.path === "/activity" && location === "/activity")
+                  || (item.path === "/history" && (location.startsWith("/analysis/") || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?")))
+                  || (item.path === "/trend-insights" && (location.startsWith("/trend-discovery") || location.startsWith("/trend-insights")))
+                  || (item.path === "/campaigns" && location.startsWith("/campaigns"));
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -241,65 +210,10 @@ function DashboardLayoutContent({
                   </SidebarMenuItem>
                 );
               })}
-
-              {/* トレンド分析セクション */}
-              {!isCollapsed && (
-                <div className="px-3 pt-4 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">トレンド分析</span>
-                </div>
-              )}
-              {isCollapsed && <div className="my-2 mx-2 border-t" />}
-              {trendItems.map(item => {
-                const isActive = location === item.path
-                  || (item.path === "/trend-insights" && (location.startsWith("/campaigns") || location.startsWith("/trend-discovery/")));
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-
-              {/* その他 */}
-              {!isCollapsed && (
-                <div className="px-3 pt-4 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">その他</span>
-                </div>
-              )}
-              {isCollapsed && <div className="my-2 mx-2 border-t" />}
-              {otherItems.map(item => {
-                const isActive = location === item.path;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => setLocation(item.path)}
-                      tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
-                    >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-
             </SidebarMenu>
           </SidebarContent>
 
           <SidebarFooter className="p-3">
-            <PlanBadge />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -319,13 +233,6 @@ function DashboardLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => setLocation("/pricing")}
-                  className="cursor-pointer"
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  <span>プラン・利用状況</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

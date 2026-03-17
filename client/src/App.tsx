@@ -25,7 +25,6 @@ const AdminLogs = lazy(() => import("./pages/AdminLogs").then(m => ({ default: m
 const Comparison = lazy(() => import("./pages/Comparison"));
 const Trend = lazy(() => import("./pages/Trend"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
-const Pricing = lazy(() => import("./pages/Pricing"));
 const TrendDiscovery = lazy(() => import("./pages/TrendDiscovery"));
 const TrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetail"));
 const CampaignList = lazy(() => import("./pages/CampaignList"));
@@ -33,6 +32,8 @@ const CampaignNew = lazy(() => import("./pages/CampaignNew"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const CampaignReport = lazy(() => import("./pages/CampaignReport"));
 const TrendInsights = lazy(() => import("./pages/TrendInsights"));
+const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
+const Activity = lazy(() => import("./pages/Activity"));
 
 function PageLoader() {
   return (
@@ -66,6 +67,8 @@ function Router() {
       {/* Protected routes */}
       <Route path={"/"} component={Home} />
       <Route path="/history" component={History} />
+      <Route path="/activity" component={Activity} />
+      <Route path="/analysis/new" component={AnalysisNew} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/analysis/:id" component={AnalysisDetail} />
       <Route path="/compare" component={Comparison} />
@@ -78,7 +81,6 @@ function Router() {
       <Route path="/campaigns/:id" component={CampaignDetail} />
       <Route path="/campaigns/:id/report" component={CampaignReport} />
       <Route path="/report/view/:jobId" component={ReportView} />
-      <Route path="/pricing" component={Pricing} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
       {/* Final fallback route */}

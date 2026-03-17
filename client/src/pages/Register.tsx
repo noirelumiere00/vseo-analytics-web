@@ -57,7 +57,7 @@ export default function Register() {
         return;
       }
 
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     } catch {
       setError("サーバーに接続できません");
     } finally {
