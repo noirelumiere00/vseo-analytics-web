@@ -306,19 +306,13 @@ export default function TrendDiscoveryDetail() {
             {(job.crossAnalysis as any)?.statistics && (() => {
               const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
               return (
-                <Accordion type="multiple" className="space-y-2">
-                  {/* 1. 需要トレンド分析 */}
-                  {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
-                    <AccordionItem value="demand-trend" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        需要トレンド分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <QueryFreshnessChart data={statistics.queryFreshness} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                <>
+                {/* 1. 需要トレンド分析 (常時表示) */}
+                {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
+                  <QueryFreshnessChart data={statistics.queryFreshness} />
+                )}
 
+                <Accordion type="multiple" className="space-y-2">
                   {/* 2. ハッシュタグ分析 */}
                   <AccordionItem value="hashtag-analysis" className="border rounded-xl">
                     <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
@@ -383,6 +377,7 @@ export default function TrendDiscoveryDetail() {
                     </AccordionItem>
                   )}
                 </Accordion>
+                </>
               );
             })()}
           </>
@@ -392,7 +387,7 @@ export default function TrendDiscoveryDetail() {
   );
 }
 
-// ---- AIレポート (デフォルト展開, inline表示) ----
+// ---- AIレポート (Accordion化 + 構造化表示) ----
 
 const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
   TrendingUp: <TrendingUp className="h-4 w-4" />,
@@ -403,43 +398,75 @@ const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
 };
 
 function AITrendReport({ report, fallbackSummary }: {
-  report?: Array<{ id: string; title: string; icon: string; content: string }>;
+  report?: Array<{ id: string; title: string; icon: string; content: string; bullets?: string[]; dataHighlights?: string[]; recommendation?: string }>;
   fallbackSummary?: string;
 }) {
-  // 新形式: report セクション配列がある場合 — デフォルト展開、inline表示
+  // 新形式: report セクション配列がある場合
   if (report && report.length > 0) {
     return (
-      <Card className="overflow-hidden">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-              <Sparkles className="h-4 w-4 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-bold text-white">AIトレンドレポート</h3>
-              <p className="text-xs text-white/70">データに基づく{report.length}セクションの分析レポート</p>
-            </div>
-          </div>
-        </div>
-        <div className="divide-y">
-          {report.map((section, idx) => {
-            const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
-            return (
-              <div key={section.id || idx} className="px-5 py-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-100 dark:bg-blue-950/50">
-                    <span className="text-blue-600 dark:text-blue-400">{icon}</span>
-                  </div>
-                  <h4 className="text-sm font-bold">{section.title}</h4>
-                  <span className="text-[10px] text-muted-foreground ml-auto">{idx + 1}/{report.length}</span>
-                </div>
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4" />
+            AIトレンドレポート
+            <span className="text-xs font-normal text-muted-foreground ml-1">{report.length}セクション</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <Accordion type="multiple" defaultValue={["overview"]} className="space-y-2">
+            {report.map((section) => {
+              const icon = REPORT_SECTION_ICONS[section.icon] ?? <FileText className="h-4 w-4" />;
+              const hasBullets = section.bullets && section.bullets.length > 0;
+              return (
+                <AccordionItem key={section.id} value={section.id} className="border rounded-xl">
+                  <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                    <span className="flex items-center gap-2">
+                      {icon}
+                      {section.title}
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="px-4 pb-4">
+                    {hasBullets ? (
+                      <div className="space-y-3">
+                        {/* dataHighlights — インラインバッジ行 */}
+                        {section.dataHighlights && section.dataHighlights.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {section.dataHighlights.map((h, i) => (
+                              <span key={i} className="bg-muted rounded px-2 py-0.5 text-xs">{h}</span>
+                            ))}
+                          </div>
+                        )}
+                        {/* bullets — リスト */}
+                        <ul className="space-y-1.5">
+                          {section.bullets!.map((b, i) => (
+                            <li key={i} className="text-sm flex gap-2">
+                              <span className="text-muted-foreground shrink-0 mt-0.5">•</span>
+                              <span>{b}</span>
+                            </li>
+                          ))}
+                        </ul>
+                        {/* recommendation — アクションカード */}
+                        {section.recommendation && (
+                          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
+                            <p className="text-sm flex items-start gap-2">
+                              <Sparkles className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                              <span><span className="font-medium text-blue-700 dark:text-blue-300">推奨: </span>{section.recommendation}</span>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* fallback: 旧データ — ReactMarkdown表示 */
+                      <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-sm prose-headings:font-bold prose-headings:mt-3 prose-headings:mb-1.5 first:prose-headings:mt-0 prose-p:leading-relaxed prose-p:my-1.5 prose-li:leading-relaxed prose-li:my-0.5 prose-strong:text-foreground prose-ul:my-1.5">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.content}</ReactMarkdown>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              );
+            })}
+          </Accordion>
+        </CardContent>
       </Card>
     );
   }
@@ -447,19 +474,14 @@ function AITrendReport({ report, fallbackSummary }: {
   // フォールバック: 旧形式の単一 summary
   if (!fallbackSummary) return null;
   return (
-    <Card className="overflow-hidden">
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-5 py-3">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/20 backdrop-blur-sm">
-            <Sparkles className="h-4 w-4 text-white" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-base font-bold text-white">AIトレンド分析</h3>
-            <p className="text-xs text-white/70">データに基づくインサイトと推奨アクション</p>
-          </div>
-        </div>
-      </div>
-      <CardContent className="pt-6 pb-6">
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="h-4 w-4" />
+          AIトレンド分析
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
         <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:text-base prose-headings:font-bold prose-headings:mt-5 prose-headings:mb-2 first:prose-headings:mt-0 prose-p:leading-relaxed prose-li:leading-relaxed prose-strong:text-foreground">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{fallbackSummary}</ReactMarkdown>
         </div>
