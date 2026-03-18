@@ -228,3 +228,153 @@ export const tripleSearchResults = mysqlTable("triple_search_results", {
 
 export type TripleSearchResult = typeof tripleSearchResults.$inferSelect;
 export type InsertTripleSearchResult = typeof tripleSearchResults.$inferInsert;
+
+/**
+ * 施策レポート（TikTok施策の成果分析）
+ */
+export const campaignReports = mysqlTable("campaign_reports", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+
+  // 施策メタ情報
+  campaignName: varchar("campaignName", { length: 255 }).notNull(),
+  keyword: varchar("keyword", { length: 255 }),
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  description: text("description"), // 施策概要
+
+  // KPI目標値
+  targetViews: bigint("targetViews", { mode: "number" }),
+  targetEngagementRate: int("targetEngagementRate"), // percentage * 100 (e.g. 5.5% = 550)
+  adSpend: bigint("adSpend", { mode: "number" }), // 広告費（円）
+
+  // 紐付け
+  videoUrls: json("videoUrls").$type<string[]>(), // 施策で投稿した動画URL群
+  beforeJobId: int("beforeJobId"), // 施策前のSEO分析ジョブID
+
+  // ステータス
+  status: mysqlEnum("status", ["pending", "processing", "completed", "failed"]).default("pending").notNull(),
+
+  // 集計結果
+  totalVideos: int("totalVideos").default(0),
+  totalViews: bigint("totalViews", { mode: "number" }).default(0),
+  totalLikes: bigint("totalLikes", { mode: "number" }).default(0),
+  totalComments: bigint("totalComments", { mode: "number" }).default(0),
+  totalShares: bigint("totalShares", { mode: "number" }).default(0),
+  totalSaves: bigint("totalSaves", { mode: "number" }).default(0),
+  totalEngagement: bigint("totalEngagement", { mode: "number" }).default(0),
+  avgEngagementRate: int("avgEngagementRate").default(0), // percentage * 100
+
+  // KPI達成率
+  viewsAchievementRate: int("viewsAchievementRate"), // percentage (100 = 達成)
+  erAchievementRate: int("erAchievementRate"), // percentage
+
+  // コスト指標
+  cpv: int("cpv"), // Cost Per View (円 * 100)
+  cpe: int("cpe"), // Cost Per Engagement (円 * 100)
+
+  // センチメント
+  positiveCount: int("positiveCount").default(0),
+  positivePercentage: int("positivePercentage").default(0),
+  neutralCount: int("neutralCount").default(0),
+  neutralPercentage: int("neutralPercentage").default(0),
+  negativeCount: int("negativeCount").default(0),
+  negativePercentage: int("negativePercentage").default(0),
+
+  // Before/After比較結果
+  beforeAfterComparison: json("beforeAfterComparison").$type<{
+    before: {
+      totalVideos: number;
+      totalViews: number;
+      avgEngagementRate: number;
+      positivePercentage: number;
+      negativePercentage: number;
+      topKeywords: string[];
+    };
+    after: {
+      totalVideos: number;
+      totalViews: number;
+      avgEngagementRate: number;
+      positivePercentage: number;
+      negativePercentage: number;
+      topKeywords: string[];
+    };
+    changes: {
+      viewsChange: number; // percentage
+      erChange: number; // percentage points
+      sentimentChange: number; // percentage points (positive)
+    };
+  }>(),
+
+  // AI生成: 施策評価
+  overallEvaluation: mysqlEnum("overallEvaluation", ["excellent", "good", "needs_improvement", "poor"]),
+  evaluationSummary: text("evaluationSummary"), // 総合評価テキスト
+
+  // AI生成: 効果分析
+  effectAnalysis: json("effectAnalysis").$type<Array<{
+    category: "strength" | "improvement" | "risk";
+    title: string;
+    description: string;
+    metric?: string;
+  }>>(),
+
+  // AI生成: Next提案
+  nextRecommendations: json("nextRecommendations").$type<Array<{
+    priority: "high" | "medium" | "low";
+    title: string;
+    description: string;
+    actionItems: string[];
+  }>>(),
+
+  // AI生成: クロージング用サマリー
+  closingSummary: text("closingSummary"), // コピペ用報告文
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type CampaignReport = typeof campaignReports.$inferSelect;
+export type InsertCampaignReport = typeof campaignReports.$inferInsert;
+
+/**
+ * 施策レポート動画（施策で投稿された個別動画の詳細）
+ */
+export const campaignVideos = mysqlTable("campaign_videos", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull(),
+
+  videoUrl: varchar("videoUrl", { length: 512 }).notNull(),
+  videoId: varchar("videoId", { length: 128 }).notNull(),
+  platform: mysqlEnum("platform", ["tiktok", "youtube_shorts"]).default("tiktok").notNull(),
+
+  title: text("title"),
+  description: text("description"),
+  thumbnailUrl: varchar("thumbnailUrl", { length: 512 }),
+  duration: int("duration"),
+
+  // エンゲージメント
+  viewCount: bigint("viewCount", { mode: "number" }),
+  likeCount: bigint("likeCount", { mode: "number" }),
+  commentCount: bigint("commentCount", { mode: "number" }),
+  shareCount: bigint("shareCount", { mode: "number" }),
+  saveCount: bigint("saveCount", { mode: "number" }),
+  engagementRate: int("engagementRate"), // percentage * 100
+
+  // KOL情報
+  accountName: varchar("accountName", { length: 255 }),
+  accountId: varchar("accountId", { length: 128 }),
+  followerCount: bigint("followerCount", { mode: "number" }),
+  accountAvatarUrl: varchar("accountAvatarUrl", { length: 512 }),
+
+  // 分析結果
+  sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]),
+  keyHook: text("keyHook"),
+  keywords: json("keywords").$type<string[]>(),
+  hashtags: json("hashtags").$type<string[]>(),
+
+  postedAt: timestamp("postedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type CampaignVideo = typeof campaignVideos.$inferSelect;
+export type InsertCampaignVideo = typeof campaignVideos.$inferInsert;

@@ -1,8 +1,8 @@
 import { eq, desc, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { 
-  InsertUser, 
-  users, 
+import {
+  InsertUser,
+  users,
   analysisJobs,
   videos,
   ocrResults,
@@ -10,13 +10,17 @@ import {
   analysisScores,
   analysisReports,
   tripleSearchResults,
+  campaignReports,
+  campaignVideos,
   InsertAnalysisJob,
   InsertVideo,
   InsertOcrResult,
   InsertTranscription,
   InsertAnalysisScore,
   InsertAnalysisReport,
-  InsertTripleSearchResult
+  InsertTripleSearchResult,
+  InsertCampaignReport,
+  InsertCampaignVideo
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -330,6 +334,72 @@ export async function clearJobVideoData(jobId: number) {
 /**
  * 分析ジョブを削除（関連データも含む）
  */
+// === Campaign Reports ===
+export async function createCampaignReport(report: InsertCampaignReport) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaignReports).values(report);
+  return result[0].insertId;
+}
+
+export async function getCampaignReportsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignReports).where(eq(campaignReports.userId, userId)).orderBy(desc(campaignReports.createdAt));
+}
+
+export async function getCampaignReportById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(campaignReports).where(eq(campaignReports.id, id)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function updateCampaignReport(id: number, data: Partial<InsertCampaignReport>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaignReports).set(data).where(eq(campaignReports.id, id));
+}
+
+export async function updateCampaignReportStatus(id: number, status: "pending" | "processing" | "completed" | "failed", completedAt?: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaignReports).set({ status, completedAt }).where(eq(campaignReports.id, id));
+}
+
+export async function deleteCampaignReport(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(campaignVideos).where(eq(campaignVideos.campaignId, id));
+  await db.delete(campaignReports).where(eq(campaignReports.id, id));
+}
+
+// === Campaign Videos ===
+export async function createCampaignVideo(video: InsertCampaignVideo) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(campaignVideos).values(video);
+  return result[0].insertId;
+}
+
+export async function getCampaignVideosByCampaignId(campaignId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignVideos).where(eq(campaignVideos.campaignId, campaignId));
+}
+
+export async function updateCampaignVideo(id: number, data: Partial<InsertCampaignVideo>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaignVideos).set(data).where(eq(campaignVideos.id, id));
+}
+
+export async function clearCampaignVideos(campaignId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(campaignVideos).where(eq(campaignVideos.campaignId, campaignId));
+}
+
 export async function deleteAnalysisJob(jobId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

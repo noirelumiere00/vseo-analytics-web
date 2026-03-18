@@ -6,6 +6,7 @@ import { z } from "zod";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { analyzeVideoFromTikTok, analyzeVideoFromUrl, generateAnalysisReport, analyzeWinPatternCommonality, analyzeSentimentAndKeywordsBatch, type SentimentInput } from "./videoAnalysis";
+import { scrapeCampaignVideos, analyzeCampaignSentiment, generateCampaignReport } from "./campaignAnalysis";
 import { LLMQuotaExhaustedError } from "./_core/llm";
 import { searchTikTokTriple, type TikTokVideo, type TikTokTripleSearchResult } from "./tiktokScraper";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
@@ -734,6 +735,134 @@ export const appRouter = router({
         await db.updateAnalysisJobStatus(input.jobId, "pending");
         return { success: true, jobId: input.jobId };
       }),
+  }),
+
+  // === 施策レポート ===
+  campaign: router({
+    // 施策レポートを作成
+    create: protectedProcedure
+      .input(z.object({
+        campaignName: z.string().min(1),
+        keyword: z.string().optional(),
+        startDate: z.string().optional(), // ISO date string
+        endDate: z.string().optional(),
+        description: z.string().optional(),
+        targetViews: z.number().optional(),
+        targetEngagementRate: z.number().optional(), // percentage * 100
+        adSpend: z.number().optional(),
+        videoUrls: z.array(z.string().url()).min(1),
+        beforeJobId: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const id = await db.createCampaignReport({
+          userId: ctx.user.id,
+          campaignName: input.campaignName,
+          keyword: input.keyword,
+          startDate: input.startDate ? new Date(input.startDate) : undefined,
+          endDate: input.endDate ? new Date(input.endDate) : undefined,
+          description: input.description,
+          targetViews: input.targetViews,
+          targetEngagementRate: input.targetEngagementRate,
+          adSpend: input.adSpend,
+          videoUrls: input.videoUrls,
+          beforeJobId: input.beforeJobId,
+          status: "pending",
+        });
+        return { id };
+      }),
+
+    // 施策レポート一覧
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return db.getCampaignReportsByUserId(ctx.user.id);
+    }),
+
+    // 施策レポート詳細
+    getById: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignReportById(input.id);
+        if (!campaign) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "施策レポートが見つかりません" });
+        }
+        if (campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        const videos = await db.getCampaignVideosByCampaignId(input.id);
+        return { campaign, videos };
+      }),
+
+    // 施策レポート実行
+    execute: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignReportById(input.id);
+        if (!campaign) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "施策レポートが見つかりません" });
+        }
+        if (campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+
+        await db.updateCampaignReportStatus(input.id, "processing");
+        const campaignProgressStore = new Map<number, { message: string; percent: number }>();
+        campaignProgressStore.set(input.id, { message: "施策分析を開始...", percent: 0 });
+
+        // 非同期実行
+        setImmediate(async () => {
+          try {
+            const videoUrls = campaign.videoUrls as string[] || [];
+
+            // Phase 1: 動画データスクレイピング (0-40%)
+            await scrapeCampaignVideos(input.id, videoUrls, (msg, pct) => {
+              campaignProgressStore.set(input.id, { message: msg, percent: pct });
+            });
+
+            // Phase 2: センチメント分析 (40-60%)
+            campaignProgressStore.set(input.id, { message: "センチメント分析中...", percent: 50 });
+            await analyzeCampaignSentiment(input.id);
+
+            // Phase 3: レポート生成 + AI分析 (60-100%)
+            campaignProgressStore.set(input.id, { message: "AI分析・レポート生成中...", percent: 70 });
+            await generateCampaignReport(input.id);
+
+            await db.updateCampaignReportStatus(input.id, "completed", new Date());
+            campaignProgressStore.delete(input.id);
+            console.log(`[Campaign] Completed campaign report ${input.id}`);
+          } catch (error) {
+            console.error(`[Campaign] Error:`, error);
+            await db.updateCampaignReportStatus(input.id, "failed");
+            campaignProgressStore.delete(input.id);
+          }
+        });
+
+        return { success: true };
+      }),
+
+    // 施策レポート削除
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignReportById(input.id);
+        if (!campaign) {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        if (campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        if (campaign.status === "processing") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "処理中のレポートは削除できません" });
+        }
+        await db.deleteCampaignReport(input.id);
+        return { success: true };
+      }),
+
+    // Before比較用: 完了済みのSEO分析ジョブ一覧
+    availableBeforeJobs: protectedProcedure.query(async ({ ctx }) => {
+      const jobs = await db.getAnalysisJobsByUserId(ctx.user.id);
+      return jobs
+        .filter(j => j.status === "completed")
+        .map(j => ({ id: j.id, keyword: j.keyword, createdAt: j.createdAt }));
+    }),
   }),
 
   admin: router({

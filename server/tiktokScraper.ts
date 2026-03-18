@@ -840,3 +840,172 @@ export async function scrapeTikTokComments(videoUrl: string): Promise<string[]> 
 
   return comments;
 }
+
+/**
+ * TikTok動画URLからメタデータを取得する関数
+ * ページのSSR JSONデータから動画情報を抽出する
+ */
+export async function searchTikTokByUrl(videoUrl: string): Promise<TikTokVideo | null> {
+  const browser = await launchBrowser();
+  try {
+    const context = await browser.createBrowserContext();
+    const page = await context.newPage();
+    await page.setUserAgent(USER_AGENTS[0]);
+
+    // ネットワーク最適化: 画像・メディアをブロック
+    await page.setRequestInterception(true);
+    page.on("request", (req: any) => {
+      const type = req.resourceType();
+      if (["image", "media", "font", "stylesheet"].includes(type)) {
+        req.abort();
+      } else {
+        req.continue();
+      }
+    });
+
+    let videoData: TikTokVideo | null = null;
+
+    // API レスポンスを監視
+    page.on("response", async (response: any) => {
+      const url = response.url();
+      if (url.includes("/api/item/detail") || url.includes("/api/related/item_list")) {
+        try {
+          const json = await response.json();
+          if (json?.itemInfo?.itemStruct) {
+            const item = json.itemInfo.itemStruct;
+            videoData = extractVideoFromItemStruct(item);
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+    });
+
+    await page.goto(videoUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await new Promise(r => setTimeout(r, 3000));
+
+    // SSR data から取得を試みる
+    if (!videoData) {
+      videoData = await page.evaluate(() => {
+        try {
+          // TikTok embeds video data in __UNIVERSAL_DATA_FOR_REHYDRATION__
+          const scriptTags = document.querySelectorAll("script#__UNIVERSAL_DATA_FOR_REHYDRATION__");
+          for (const script of scriptTags) {
+            const data = JSON.parse(script.textContent || "{}");
+            const defaultScope = data?.__DEFAULT_SCOPE__;
+            const detail = defaultScope?.["webapp.video-detail"]?.itemInfo?.itemStruct;
+            if (detail) {
+              return {
+                id: detail.id,
+                desc: detail.desc || "",
+                createTime: detail.createTime || 0,
+                duration: detail.video?.duration || 0,
+                coverUrl: detail.video?.cover || "",
+                playUrl: detail.video?.playAddr || "",
+                author: {
+                  uniqueId: detail.author?.uniqueId || "",
+                  nickname: detail.author?.nickname || "",
+                  avatarUrl: detail.author?.avatarLarger || detail.author?.avatarMedium || "",
+                  followerCount: detail.authorStats?.followerCount || 0,
+                  followingCount: detail.authorStats?.followingCount || 0,
+                  heartCount: detail.authorStats?.heartCount || 0,
+                  videoCount: detail.authorStats?.videoCount || 0,
+                },
+                stats: {
+                  playCount: detail.stats?.playCount || 0,
+                  diggCount: detail.stats?.diggCount || 0,
+                  commentCount: detail.stats?.commentCount || 0,
+                  shareCount: detail.stats?.shareCount || 0,
+                  collectCount: detail.stats?.collectCount || 0,
+                },
+                hashtags: (detail.textExtra || [])
+                  .filter((t: any) => t.hashtagName)
+                  .map((t: any) => t.hashtagName),
+              };
+            }
+          }
+
+          // Fallback: SIGI_STATE
+          const sigiScript = document.querySelector("script#SIGI_STATE");
+          if (sigiScript) {
+            const sigi = JSON.parse(sigiScript.textContent || "{}");
+            const items = sigi?.ItemModule || {};
+            const firstKey = Object.keys(items)[0];
+            if (firstKey) {
+              const item = items[firstKey];
+              return {
+                id: item.id || firstKey,
+                desc: item.desc || "",
+                createTime: item.createTime || 0,
+                duration: item.video?.duration || 0,
+                coverUrl: item.video?.cover || "",
+                playUrl: item.video?.playAddr || "",
+                author: {
+                  uniqueId: item.author || "",
+                  nickname: item.nickname || "",
+                  avatarUrl: "",
+                  followerCount: 0,
+                  followingCount: 0,
+                  heartCount: 0,
+                  videoCount: 0,
+                },
+                stats: {
+                  playCount: item.stats?.playCount || 0,
+                  diggCount: item.stats?.diggCount || 0,
+                  commentCount: item.stats?.commentCount || 0,
+                  shareCount: item.stats?.shareCount || 0,
+                  collectCount: item.stats?.collectCount || 0,
+                },
+                hashtags: (item.textExtra || [])
+                  .filter((t: any) => t.hashtagName)
+                  .map((t: any) => t.hashtagName),
+              };
+            }
+          }
+        } catch (e) {
+          console.error("[TikTok URL] SSR extraction error:", e);
+        }
+        return null;
+      });
+    }
+
+    await context.close();
+    console.log(`[TikTok URL] ${videoData ? "Successfully extracted" : "Failed to extract"} data from ${videoUrl}`);
+    return videoData;
+  } catch (error) {
+    console.error(`[TikTok URL] Error fetching ${videoUrl}:`, error);
+    return null;
+  } finally {
+    await browser.close();
+  }
+}
+
+function extractVideoFromItemStruct(item: any): TikTokVideo {
+  return {
+    id: item.id,
+    desc: item.desc || "",
+    createTime: item.createTime || 0,
+    duration: item.video?.duration || 0,
+    coverUrl: item.video?.cover || item.video?.originCover || "",
+    playUrl: item.video?.playAddr || "",
+    author: {
+      uniqueId: item.author?.uniqueId || "",
+      nickname: item.author?.nickname || "",
+      avatarUrl: item.author?.avatarLarger || item.author?.avatarMedium || "",
+      followerCount: item.authorStats?.followerCount || 0,
+      followingCount: item.authorStats?.followingCount || 0,
+      heartCount: item.authorStats?.heartCount || 0,
+      videoCount: item.authorStats?.videoCount || 0,
+    },
+    stats: {
+      playCount: item.stats?.playCount || 0,
+      diggCount: item.stats?.diggCount || 0,
+      commentCount: item.stats?.commentCount || 0,
+      shareCount: item.stats?.shareCount || 0,
+      collectCount: item.stats?.collectCount || 0,
+    },
+    hashtags: (item.textExtra || [])
+      .filter((t: any) => t.hashtagName)
+      .map((t: any) => t.hashtagName),
+  };
+}

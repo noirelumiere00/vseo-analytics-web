@@ -184,10 +184,13 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          {/* Recent Analyses Link */}
-          <div className="text-center">
+          {/* Navigation Links */}
+          <div className="flex justify-center gap-4">
             <Button variant="outline" onClick={() => setLocation("/history")}>
               過去の分析履歴を見る
+            </Button>
+            <Button variant="outline" onClick={() => setLocation("/campaign")}>
+              施策レポート
             </Button>
           </div>
         </div>

@@ -12,6 +12,9 @@ import { AdminLogs } from "./pages/AdminLogs";
 import Comparison from "./pages/Comparison";
 import Trend from "./pages/Trend";
 import Dashboard from "./pages/Dashboard";
+import CampaignList from "./pages/CampaignList";
+import CampaignCreate from "./pages/CampaignCreate";
+import CampaignDetail from "./pages/CampaignDetail";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -23,6 +26,9 @@ function Router() {
       <Route path="/analysis/:id" component={AnalysisDetail} />
       <Route path="/compare" component={Comparison} />
       <Route path="/trend" component={Trend} />
+      <Route path="/campaign" component={CampaignList} />
+      <Route path="/campaign/new" component={CampaignCreate} />
+      <Route path="/campaign/:id" component={CampaignDetail} />
       <Route path="/report/view/:jobId" component={ReportView} />
       <Route path="/admin/logs" component={AdminLogs} />
       <Route path={"/404"} component={NotFound} />
