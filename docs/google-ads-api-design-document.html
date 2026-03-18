@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSEO Analytics — Google Ads API Tool Design Document</title>
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.7; }
+  h1 { color: #1a73e8; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; }
+  h2 { color: #1a73e8; border-bottom: 1px solid #ddd; padding-bottom: 6px; margin-top: 40px; }
+  h3 { color: #444; margin-top: 24px; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #ddd; padding: 10px 14px; text-align: left; }
+  th { background: #f0f4ff; color: #1a73e8; }
+  .diagram { background: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 24px; margin: 16px 0; font-family: 'Courier New', monospace; font-size: 13px; white-space: pre; overflow-x: auto; }
+  .note { background: #fff8e1; border-left: 4px solid #ffc107; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
+  .section-meta { color: #666; font-size: 14px; margin-bottom: 20px; }
+  ul { margin: 8px 0; }
+  li { margin: 4px 0; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 14px; }
+  .cover { text-align: center; padding: 60px 0; }
+  .cover h1 { border: none; font-size: 32px; }
+  .cover p { font-size: 16px; color: #666; }
+  .badge { display: inline-block; background: #1a73e8; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px; }
+  .screenshot-placeholder { background: #e8f0fe; border: 2px dashed #1a73e8; border-radius: 8px; padding: 40px; text-align: center; color: #1a73e8; margin: 16px 0; }
+  @media print { body { margin: 20px; } .page-break { page-break-before: always; } }
+</style>
+</head>
+<body>
+
+<!-- Cover Page -->
+<div class="cover">
+  <h1>VSEO Analytics</h1>
+  <p style="font-size: 20px; color: #1a73e8;">Google Ads API Tool Design Document</p>
+  <br>
+  <p><strong>Version:</strong> 1.0</p>
+  <p><strong>Date:</strong> March 2026</p>
+  <p><strong>Company:</strong> [Your Company Name]</p>
+  <p><strong>Contact:</strong> [your-email@company.com]</p>
+  <p><strong>MCC ID:</strong> [XXX-XXX-XXXX]</p>
+  <p><strong>Classification:</strong> <span class="badge">Confidential</span></p>
+</div>
+
+<div class="page-break"></div>
+
+<!-- Table of Contents -->
+<h2>Table of Contents</h2>
+<ol>
+  <li><a href="#overview">Product Overview</a></li>
+  <li><a href="#business-model">Business Model & Use Case</a></li>
+  <li><a href="#architecture">System Architecture</a></li>
+  <li><a href="#google-ads-integration">Google Ads API Integration Design</a></li>
+  <li><a href="#auth-flow">OAuth 2.0 Authentication Flow</a></li>
+  <li><a href="#api-usage">API Endpoints & Usage Details</a></li>
+  <li><a href="#data-flow">Data Flow Diagrams</a></li>
+  <li><a href="#rate-limiting">Rate Limiting & Error Handling</a></li>
+  <li><a href="#ui-mockups">User Interface Screenshots & Mockups</a></li>
+  <li><a href="#data-security">Data Security & Privacy</a></li>
+  <li><a href="#compliance">Policy Compliance</a></li>
+</ol>
+
+<div class="page-break"></div>
+
+<!-- 1. Product Overview -->
+<h2 id="overview">1. Product Overview</h2>
+
+<p><strong>VSEO Analytics</strong> is a B2B SaaS platform that provides comprehensive short-form video content analysis, primarily focused on TikTok. The platform helps PR agencies, marketing teams, and brand managers understand video content performance through AI-powered sentiment analysis, engagement metrics, and keyword trend analysis.</p>
+
+<h3>Core Capabilities (Existing)</h3>
+<table>
+  <tr><th>Feature</th><th>Description</th></tr>
+  <tr><td>Triple Search Analysis</td><td>Searches the same keyword across 3 independent browser sessions to eliminate algorithmic bias and identify genuinely trending videos</td></tr>
+  <tr><td>AI Sentiment Analysis</td><td>Classifies videos as Positive / Neutral / Negative using LLM analysis of OCR text, audio transcriptions, and visual elements</td></tr>
+  <tr><td>Engagement Metrics</td><td>Collects views, likes, comments, shares, and saves for each video</td></tr>
+  <tr><td>Keyword Extraction</td><td>Identifies trending keywords and hashtag strategies from video content</td></tr>
+  <tr><td>Cross-Analysis Reports</td><td>Generates comprehensive reports with emotion word maps, aspect-based sentiment, and actionable insights</td></tr>
+  <tr><td>Trend Tracking</td><td>Monitors keyword performance over time with historical comparison</td></tr>
+</table>
+
+<h3>Proposed Enhancement: Google Ads Integration</h3>
+<p>We plan to integrate Google Ads API to bridge the gap between organic video content trends and paid search advertising strategy. This will enable our clients to:</p>
+<ul>
+  <li>Compare trending video keywords with Google Ads search volume and competition data</li>
+  <li>View Google Ads campaign performance alongside video content analysis in a unified dashboard</li>
+  <li>Generate cross-platform reports that correlate video content trends with paid search performance</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- 2. Business Model -->
+<h2 id="business-model">2. Business Model & Use Case</h2>
+
+<h3>2.1 Company Type</h3>
+<p>We operate as a <strong>technology company providing advertising and marketing tools</strong> to external clients (PR agencies, brand managers, marketing teams).</p>
+
+<h3>2.2 Target Users</h3>
+<table>
+  <tr><th>User Type</th><th>Role</th><th>Google Ads API Usage</th></tr>
+  <tr><td>Marketing Manager</td><td>Plans and optimizes cross-platform campaigns</td><td>Views campaign reports, keyword insights</td></tr>
+  <tr><td>PR Agency</td><td>Manages multiple client brands</td><td>Accesses client Google Ads accounts via MCC linking</td></tr>
+  <tr><td>Brand Owner</td><td>Monitors brand presence across platforms</td><td>Views keyword search volume and ad performance</td></tr>
+</table>
+
+<h3>2.3 Use Case Example</h3>
+<div class="note">
+  <strong>Scenario:</strong> A cosmetics brand wants to understand how TikTok video trends for "skincare routine" correlate with their Google Ads search campaign performance.<br><br>
+  <strong>Workflow:</strong>
+  <ol>
+    <li>User runs a VSEO Analysis for keyword "skincare routine" on TikTok</li>
+    <li>System collects 30+ videos, analyzes sentiment, extracts trending sub-keywords</li>
+    <li>User links their Google Ads account via OAuth consent</li>
+    <li>System fetches Google Ads campaign data for related keywords</li>
+    <li>Dashboard displays: video sentiment trends vs. search ad CTR, trending video keywords vs. Google Ads keyword competition</li>
+    <li>User discovers high-engagement video keywords that have low competition in Google Ads, identifying new ad opportunities</li>
+  </ol>
+</div>
+
+<div class="page-break"></div>
+
+<!-- 3. System Architecture -->
+<h2 id="architecture">3. System Architecture</h2>
+
+<h3>3.1 Technology Stack</h3>
+<table>
+  <tr><th>Layer</th><th>Technology</th></tr>
+  <tr><td>Frontend</td><td>React 19, TypeScript, Tailwind CSS, Radix UI, Recharts</td></tr>
+  <tr><td>API Layer</td><td>tRPC (type-safe RPC) on Express.js</td></tr>
+  <tr><td>Backend</td><td>Node.js (ES Modules), TypeScript</td></tr>
+  <tr><td>Database</td><td>MySQL with Drizzle ORM</td></tr>
+  <tr><td>AI/ML</td><td>LLM API (sentiment analysis), Whisper API (transcription)</td></tr>
+  <tr><td>Video Processing</td><td>Puppeteer (scraping), FFmpeg (frame extraction)</td></tr>
+  <tr><td>Google Ads</td><td>Google Ads API v18 (Node.js client library)</td></tr>
+</table>
+
+<h3>3.2 High-Level Architecture Diagram</h3>
+<div class="diagram">
+┌─────────────────────────────────────────────────────────────────────┐
+│                        VSEO Analytics Platform                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  ┌──────────────┐    ┌──────────────────┐    ┌──────────────────┐  │
+│  │   React UI   │───▶│   tRPC Router    │───▶│    MySQL DB      │  │
+│  │  (Dashboard) │    │   (Express.js)   │    │  (Drizzle ORM)   │  │
+│  └──────────────┘    └────────┬─────────┘    └──────────────────┘  │
+│                               │                                     │
+│              ┌────────────────┼────────────────┐                   │
+│              ▼                ▼                 ▼                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐        │
+│  │   TikTok     │  │   LLM API    │  │  Google Ads API   │        │
+│  │  Scraper     │  │  (Sentiment) │  │  (v18, OAuth2.0)  │        │
+│  │ (Puppeteer)  │  │  + Whisper   │  │                   │        │
+│  └──────────────┘  └──────────────┘  │ - KeywordPlanning │        │
+│                                      │ - Reporting       │        │
+│                                      │ - CampaignMgmt    │        │
+│                                      └───────────────────┘        │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+
+<div class="page-break"></div>
+
+<!-- 4. Google Ads API Integration Design -->
+<h2 id="google-ads-integration">4. Google Ads API Integration Design</h2>
+
+<h3>4.1 Integration Scope</h3>
+<p>Our Google Ads API integration focuses on three primary capabilities:</p>
+
+<table>
+  <tr><th>Capability</th><th>API Service</th><th>Purpose</th></tr>
+  <tr>
+    <td><strong>Keyword Planning</strong></td>
+    <td>KeywordPlanIdeaService</td>
+    <td>Generate keyword ideas and search volume estimates based on trending video keywords discovered through our analysis</td>
+  </tr>
+  <tr>
+    <td><strong>Reporting</strong></td>
+    <td>GoogleAdsService.SearchStream</td>
+    <td>Fetch campaign, ad group, and keyword performance metrics to display alongside video content analysis in our dashboard</td>
+  </tr>
+  <tr>
+    <td><strong>Campaign Management</strong></td>
+    <td>GoogleAdsService.Search</td>
+    <td>Read campaign structure and settings to provide context for cross-platform analysis (read-only operations)</td>
+  </tr>
+</table>
+
+<h3>4.2 API Resources Used</h3>
+<table>
+  <tr><th>Resource</th><th>Operations</th><th>Frequency</th></tr>
+  <tr><td>customers</td><td>GET (list accessible accounts)</td><td>On OAuth connection</td></tr>
+  <tr><td>campaigns</td><td>GET (list, metrics)</td><td>On dashboard load, report generation</td></tr>
+  <tr><td>ad_groups</td><td>GET (list, metrics)</td><td>On report generation</td></tr>
+  <tr><td>ad_group_criterions (keywords)</td><td>GET (list, metrics)</td><td>On report generation</td></tr>
+  <tr><td>keyword_plan_ideas</td><td>POST (generate ideas)</td><td>On keyword analysis request</td></tr>
+  <tr><td>search_term_views</td><td>GET (search terms report)</td><td>On report generation</td></tr>
+</table>
+
+<div class="note">
+  <strong>Important:</strong> Our tool performs <strong>read-only operations</strong> on customer accounts. We do not create, modify, or delete any campaigns, ad groups, or ads through the API. The only write operation is KeywordPlanIdeaService which generates keyword suggestions without modifying the account.
+</div>
+
+<div class="page-break"></div>
+
+<!-- 5. OAuth 2.0 Authentication Flow -->
+<h2 id="auth-flow">5. OAuth 2.0 Authentication Flow</h2>
+
+<h3>5.1 Flow Overview</h3>
+<p>We use the standard OAuth 2.0 Authorization Code flow for web applications as recommended by Google.</p>
+
+<div class="diagram">
+┌──────────┐         ┌───────────────┐         ┌──────────────────┐
+│  User    │         │ VSEO Analytics│         │ Google OAuth 2.0 │
+│ (Browser)│         │   (Server)    │         │   / Ads API      │
+└────┬─────┘         └───────┬───────┘         └────────┬─────────┘
+     │                       │                          │
+     │  1. Click "Connect    │                          │
+     │     Google Ads"       │                          │
+     │──────────────────────▶│                          │
+     │                       │                          │
+     │  2. Redirect to       │  3. Authorization URL    │
+     │     Google consent    │     (scope: google-ads)  │
+     │◀──────────────────────│─────────────────────────▶│
+     │                       │                          │
+     │  4. User grants       │                          │
+     │     consent           │                          │
+     │──────────────────────────────────────────────────▶│
+     │                       │                          │
+     │                       │  5. Auth code callback   │
+     │                       │◀─────────────────────────│
+     │                       │                          │
+     │                       │  6. Exchange code for    │
+     │                       │     access + refresh     │
+     │                       │     tokens               │
+     │                       │─────────────────────────▶│
+     │                       │                          │
+     │                       │  7. Tokens returned      │
+     │                       │◀─────────────────────────│
+     │                       │                          │
+     │  8. "Connected"       │  9. Store encrypted      │
+     │     confirmation      │     refresh token in DB  │
+     │◀──────────────────────│                          │
+     │                       │                          │
+     │ 10. View dashboard    │ 11. Use refresh token    │
+     │     with Ads data     │     to get access token, │
+     │──────────────────────▶│     then call Ads API    │
+     │                       │─────────────────────────▶│
+     │                       │                          │
+     │ 12. Unified report    │ 13. Return Ads data      │
+     │◀──────────────────────│◀─────────────────────────│
+</div>
+
+<h3>5.2 OAuth Scopes Requested</h3>
+<table>
+  <tr><th>Scope</th><th>Purpose</th></tr>
+  <tr><td><code>https://www.googleapis.com/auth/adwords</code></td><td>Read Google Ads account data (campaigns, keywords, reports)</td></tr>
+</table>
+
+<h3>5.3 Token Management</h3>
+<ul>
+  <li><strong>Refresh tokens</strong> are encrypted (AES-256) and stored in our MySQL database</li>
+  <li><strong>Access tokens</strong> are kept in server memory only, never persisted</li>
+  <li>Tokens are automatically refreshed before expiration</li>
+  <li>Users can revoke access at any time through the VSEO Analytics settings page</li>
+  <li>On revocation, all stored tokens and cached Ads data are permanently deleted</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- 6. API Endpoints & Usage Details -->
+<h2 id="api-usage">6. API Endpoints & Usage Details</h2>
+
+<h3>6.1 Keyword Planning Integration</h3>
+<p>When users run a video analysis, our system extracts trending keywords. Users can then click "Check Google Ads Potential" to see search volume and competition data.</p>
+
+<h4>GAQL Query Example:</h4>
+<div class="diagram">
+// KeywordPlanIdeaService.GenerateKeywordIdeas
+{
+  customer_id: "1234567890",
+  language: "languageConstants/1005",    // Japanese
+  geo_target_constants: ["geoTargetConstants/2392"],  // Japan
+  keyword_seed: {
+    keywords: ["skincare routine", "スキンケア"]  // From video analysis
+  },
+  keyword_plan_network: "GOOGLE_SEARCH"
+}
+</div>
+
+<h3>6.2 Campaign Performance Reporting</h3>
+<p>Users who link their Google Ads accounts can view campaign metrics alongside video analysis results.</p>
+
+<h4>GAQL Query Example:</h4>
+<div class="diagram">
+SELECT
+  campaign.id,
+  campaign.name,
+  campaign.status,
+  campaign.advertising_channel_type,
+  metrics.impressions,
+  metrics.clicks,
+  metrics.cost_micros,
+  metrics.conversions,
+  metrics.average_cpc,
+  metrics.ctr,
+  segments.date
+FROM campaign
+WHERE segments.date DURING LAST_30_DAYS
+  AND campaign.status = 'ENABLED'
+ORDER BY metrics.impressions DESC
+</div>
+
+<h3>6.3 Keyword Performance Reporting</h3>
+<h4>GAQL Query Example:</h4>
+<div class="diagram">
+SELECT
+  ad_group_criterion.keyword.text,
+  ad_group_criterion.keyword.match_type,
+  metrics.impressions,
+  metrics.clicks,
+  metrics.ctr,
+  metrics.average_cpc,
+  metrics.cost_micros,
+  metrics.conversions
+FROM keyword_view
+WHERE segments.date DURING LAST_30_DAYS
+  AND ad_group_criterion.status = 'ENABLED'
+ORDER BY metrics.impressions DESC
+LIMIT 100
+</div>
+
+<h3>6.4 Search Terms Report</h3>
+<h4>GAQL Query Example:</h4>
+<div class="diagram">
+SELECT
+  search_term_view.search_term,
+  metrics.impressions,
+  metrics.clicks,
+  metrics.ctr,
+  metrics.conversions
+FROM search_term_view
+WHERE segments.date DURING LAST_30_DAYS
+ORDER BY metrics.impressions DESC
+LIMIT 200
+</div>
+
+<h3>6.5 Estimated API Call Volume</h3>
+<table>
+  <tr><th>Operation</th><th>Calls per User/Day</th><th>Estimated Total/Day</th></tr>
+  <tr><td>Keyword Ideas</td><td>2-5</td><td>~200</td></tr>
+  <tr><td>Campaign Report</td><td>1-3</td><td>~150</td></tr>
+  <tr><td>Keyword Report</td><td>1-3</td><td>~150</td></tr>
+  <tr><td>Search Terms Report</td><td>1-2</td><td>~100</td></tr>
+  <tr><td><strong>Total</strong></td><td></td><td><strong>~600 requests/day</strong></td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<!-- 7. Data Flow Diagrams -->
+<h2 id="data-flow">7. Data Flow Diagrams</h2>
+
+<h3>7.1 Video Analysis + Google Ads Keyword Insight Flow</h3>
+<div class="diagram">
+User inputs keyword (e.g., "クイックディナー")
+         │
+         ▼
+┌─────────────────────┐
+│ TikTok Triple Search│  Existing feature: 3 browser sessions
+│ (Puppeteer x3)      │  collect 30+ unique videos
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ AI Analysis         │  LLM sentiment analysis + Whisper transcription
+│ - Sentiment         │  Extract keywords & hashtags
+│ - Keywords          │
+│ - Engagement        │
+└─────────┬───────────┘
+          │
+          ├──── Video Analysis Report (existing) ────▶ Dashboard
+          │
+          ▼
+┌─────────────────────┐
+│ Google Ads API      │  NEW: Send extracted keywords to
+│ Keyword Planner     │  KeywordPlanIdeaService
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│ Cross-Platform      │  NEW: Merge video trends with
+│ Insight Report      │  search volume & competition data
+└─────────────────────┘
+          │
+          ▼
+     Unified Dashboard
+  (Video Trends + Ads Data)
+</div>
+
+<h3>7.2 Google Ads Account Linking Flow</h3>
+<div class="diagram">
+User clicks "Connect Google Ads"
+         │
+         ▼
+┌─────────────────────┐     ┌──────────────────┐
+│ VSEO Analytics      │────▶│ Google OAuth 2.0  │
+│ generates auth URL  │     │ Consent Screen    │
+└─────────────────────┘     └────────┬─────────┘
+                                     │
+                            User grants access
+                                     │
+                                     ▼
+                            ┌──────────────────┐
+                            │ Callback with    │
+                            │ authorization    │
+                            │ code             │
+                            └────────┬─────────┘
+                                     │
+                                     ▼
+                            ┌──────────────────┐
+                            │ Exchange for     │
+                            │ refresh token    │
+                            │ (encrypted,      │
+                            │  stored in DB)   │
+                            └────────┬─────────┘
+                                     │
+                                     ▼
+                            ┌──────────────────┐
+                            │ List accessible  │
+                            │ Google Ads       │
+                            │ customer IDs     │
+                            └────────┬─────────┘
+                                     │
+                                     ▼
+                            User selects account(s)
+                            to link with VSEO Analytics
+</div>
+
+<div class="page-break"></div>
+
+<!-- 8. Rate Limiting & Error Handling -->
+<h2 id="rate-limiting">8. Rate Limiting & Error Handling</h2>
+
+<h3>8.1 Rate Limiting Strategy</h3>
+<table>
+  <tr><th>Strategy</th><th>Implementation</th></tr>
+  <tr><td>Request throttling</td><td>Max 1 request/second per customer ID using a token bucket algorithm</td></tr>
+  <tr><td>Caching</td><td>Campaign and keyword reports are cached for 1 hour in server memory to avoid redundant calls</td></tr>
+  <tr><td>Batching</td><td>Multiple keyword ideas are fetched in a single API call rather than individual calls</td></tr>
+  <tr><td>Daily limits</td><td>Soft limit of 10 keyword planning requests per user per day</td></tr>
+</table>
+
+<h3>8.2 Error Handling</h3>
+<table>
+  <tr><th>Error Type</th><th>Handling</th></tr>
+  <tr><td><code>RATE_LIMIT_EXCEEDED</code></td><td>Exponential backoff (1s, 2s, 4s, max 3 retries), then queue for later</td></tr>
+  <tr><td><code>AUTHENTICATION_ERROR</code></td><td>Attempt token refresh; if fails, prompt user to re-authenticate</td></tr>
+  <tr><td><code>AUTHORIZATION_ERROR</code></td><td>Notify user that account access has been revoked, remove stored tokens</td></tr>
+  <tr><td><code>INTERNAL_ERROR</code></td><td>Retry once after 5 seconds; log error for investigation</td></tr>
+  <tr><td><code>QUOTA_EXCEEDED</code></td><td>Display user-friendly message, defer requests to next day</td></tr>
+</table>
+
+<h3>8.3 Logging & Monitoring</h3>
+<ul>
+  <li>All API calls are logged with timestamp, customer_id, method, and response status</li>
+  <li>Error rates are monitored; alerts are triggered if error rate exceeds 5% in a 15-minute window</li>
+  <li>API usage metrics are tracked in our admin dashboard (accessible at <code>/admin/logs</code>)</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- 9. UI Mockups -->
+<h2 id="ui-mockups">9. User Interface Screenshots & Mockups</h2>
+
+<h3>9.1 Existing Dashboard (Current Production)</h3>
+<div class="screenshot-placeholder">
+  [Insert screenshot of the VSEO Analytics Dashboard page]<br>
+  Route: /dashboard — Shows analysis history, trending keywords, and job status
+</div>
+
+<h3>9.2 Existing Analysis Detail Page (Current Production)</h3>
+<div class="screenshot-placeholder">
+  [Insert screenshot of the Analysis Detail page]<br>
+  Route: /analysis/:id — Shows sentiment breakdown, emotion word map, engagement metrics, and video list
+</div>
+
+<h3>9.3 Google Ads Account Connection (Planned)</h3>
+<div class="screenshot-placeholder">
+  [Insert mockup of the Google Ads connection UI]<br>
+  Settings page with "Connect Google Ads" button → OAuth consent → Account selection
+</div>
+
+<h3>9.4 Cross-Platform Keyword Insights (Planned)</h3>
+<div class="screenshot-placeholder">
+  [Insert mockup of keyword comparison view]<br>
+  Table showing: Video Keyword | Video Mentions | Sentiment | Google Search Volume | Competition | Avg CPC
+</div>
+
+<h3>9.5 Unified Campaign Dashboard (Planned)</h3>
+<div class="screenshot-placeholder">
+  [Insert mockup of unified dashboard]<br>
+  Side-by-side view: TikTok video trend graph (left) vs. Google Ads campaign performance graph (right)
+</div>
+
+<div class="note">
+  <strong>Note:</strong> Screenshots of existing production pages and mockups of planned features are included as separate attachments (Appendix A). The placeholder boxes above indicate where each screenshot corresponds.
+</div>
+
+<div class="page-break"></div>
+
+<!-- 10. Data Security -->
+<h2 id="data-security">10. Data Security & Privacy</h2>
+
+<h3>10.1 Data Storage</h3>
+<table>
+  <tr><th>Data Type</th><th>Storage</th><th>Encryption</th><th>Retention</th></tr>
+  <tr><td>OAuth refresh tokens</td><td>MySQL (encrypted column)</td><td>AES-256-GCM</td><td>Until user revokes access</td></tr>
+  <tr><td>Access tokens</td><td>Server memory only</td><td>N/A (not persisted)</td><td>Session duration only</td></tr>
+  <tr><td>Google Ads reports (cached)</td><td>Server memory</td><td>N/A</td><td>1 hour TTL cache</td></tr>
+  <tr><td>Customer IDs</td><td>MySQL</td><td>AES-256-GCM</td><td>Until user revokes access</td></tr>
+</table>
+
+<h3>10.2 Access Controls</h3>
+<ul>
+  <li>All API endpoints require authenticated user sessions (cookie-based authentication)</li>
+  <li>Users can only access their own linked Google Ads accounts</li>
+  <li>Admin role has access to system logs but not to user Google Ads data</li>
+  <li>Google Ads API credentials (developer token, client ID, client secret) are stored as environment variables, never in source code</li>
+</ul>
+
+<h3>10.3 Data Deletion</h3>
+<ul>
+  <li>When a user disconnects their Google Ads account, all related tokens and cached data are immediately and permanently deleted</li>
+  <li>When a user deletes their VSEO Analytics account, all associated data (including Google Ads tokens) is permanently removed</li>
+  <li>No Google Ads data is shared with third parties or used for purposes other than displaying reports to the authenticated account owner</li>
+</ul>
+
+<h3>10.4 Infrastructure Security</h3>
+<ul>
+  <li>All communication uses HTTPS/TLS 1.3</li>
+  <li>Database connections use SSL</li>
+  <li>Server runs in an isolated container environment</li>
+  <li>Regular security updates applied to all dependencies</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- 11. Policy Compliance -->
+<h2 id="compliance">11. Policy Compliance</h2>
+
+<h3>11.1 Google Ads API Terms & Conditions</h3>
+<table>
+  <tr><th>Policy Requirement</th><th>Our Compliance</th></tr>
+  <tr><td>Do not sell, license, or redistribute API data</td><td>Google Ads data is only displayed to the authenticated account owner within our dashboard. Data is never shared externally.</td></tr>
+  <tr><td>Clearly disclose data usage to users</td><td>Our privacy policy and consent screen clearly describe what data is accessed and how it is used.</td></tr>
+  <tr><td>Allow users to revoke access</td><td>Users can disconnect their Google Ads account at any time from Settings. All tokens and data are deleted on revocation.</td></tr>
+  <tr><td>Handle user data securely</td><td>Tokens encrypted with AES-256, access tokens kept in memory only, HTTPS enforced.</td></tr>
+  <tr><td>Use developer token only for stated purposes</td><td>Token is used exclusively for keyword planning, reporting, and read-only campaign management within VSEO Analytics.</td></tr>
+  <tr><td>Keep API contact email up-to-date</td><td>We use a group alias email monitored by our engineering team to ensure timely responses.</td></tr>
+</table>
+
+<h3>11.2 Prohibited Practices (Confirmed Not Used)</h3>
+<ul>
+  <li>We do NOT automate bidding or budget changes</li>
+  <li>We do NOT scrape Google Ads UI as an alternative to the API</li>
+  <li>We do NOT store or display personally identifiable information from Google Ads</li>
+  <li>We do NOT use the API for app conversion tracking or remarketing</li>
+  <li>We do NOT resell or redistribute Google Ads data to third parties</li>
+</ul>
+
+<hr style="margin-top: 40px;">
+<p style="text-align: center; color: #888; font-size: 13px;">
+  VSEO Analytics — Google Ads API Design Document v1.0 — March 2026<br>
+  Confidential — For Google Ads API Review Team Only
+</p>
+
+</body>
+</html>
