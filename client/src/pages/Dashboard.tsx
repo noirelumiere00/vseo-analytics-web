@@ -34,6 +34,9 @@ export default function Dashboard() {
             <Button variant="outline" size="sm" onClick={() => setLocation("/history")}>
               履歴
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setLocation("/campaign")}>
+              施策レポート
+            </Button>
             <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/")}>
               新規分析
             </Button>
