@@ -530,7 +530,7 @@ function analyzeHashtagCombinations(videosData: Array<{
  * ルールベースのスコアリング（LLM不使用）
  * エンゲージメント率・説明文・ハッシュタグ・動画尺などから算出
  */
-function calculateScoresFromData(input: {
+export function calculateScoresFromData(input: {
   desc: string;
   duration: number;
   stats: { playCount: number; diggCount: number; commentCount: number; shareCount: number; collectCount: number };

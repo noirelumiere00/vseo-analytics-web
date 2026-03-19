@@ -243,7 +243,13 @@ export const analysisReports = mysqlTable("analysis_reports", {
     positive_percentage: number;
     negative_percentage: number;
   }>>(),
-  
+
+  // Google Trends キャッシュ（検索相関分析用）
+  googleTrendsCache: json("googleTrendsCache").$type<{
+    data: Array<{ date: string; value: number }>;
+    fetchedAt: string;
+  }>(),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -398,6 +404,15 @@ export const campaigns = mysqlTable("campaigns", {
   keywords: json("keywords").$type<string[]>().notNull(),
   ownAccountIds: json("ownAccountIds").$type<string[]>().notNull(),
   ownVideoIds: json("ownVideoIds").$type<string[]>(),
+  ownVideoUrls: json("ownVideoUrls").$type<string[]>(),
+  ownVideoData: json("ownVideoData").$type<Array<{
+    videoId: string; videoUrl: string; coverUrl: string;
+    description: string; hashtags: string[]; duration: number;
+    createTime: number; authorUniqueId: string; authorNickname: string;
+    authorAvatarUrl: string; followerCount: number;
+    viewCount: number; likeCount: number; commentCount: number;
+    shareCount: number; saveCount: number;
+  }>>(),
   campaignHashtags: json("campaignHashtags").$type<string[]>(),
 
   // 競合
@@ -498,6 +513,31 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
       hashtags: string[];
       posted_at: string;
     }>;
+  }>>(),
+
+  // 施策動画メトリクス（Phase 1）
+  ownVideoMetrics: json("ownVideoMetrics").$type<Record<string, {
+    viewCount: number; likeCount: number; commentCount: number;
+    shareCount: number; saveCount: number;
+  }>>(),
+
+  // ハッシュタグSOV分析（Phase 2）
+  hashtagAnalysis: json("hashtagAnalysis").$type<Record<string, {
+    totalPostCount: number;
+    top30Videos: Array<{
+      video_id: string; creator_username: string; view_count: number;
+      search_rank: number;
+    }>;
+    ownVideoCount: number;
+    bestOwnRank: number | null;
+    sovPercentage: number;
+  }>>(),
+
+  // 競合自動検出（Phase 3）
+  detectedCompetitors: json("detectedCompetitors").$type<Array<{
+    accountId: string; nickname: string; avatarUrl: string;
+    followerCount: number; keywordAppearances: number;
+    totalVideosInTop30: number; avgRank: number;
   }>>(),
 
   capturedAt: timestamp("capturedAt"),
@@ -603,6 +643,41 @@ export const campaignReports = mysqlTable("campaign_reports", {
   }>>(),
 
   notes: json("notes").$type<string[]>(),
+
+  // 施策動画メトリクスBefore/After（Phase 1）
+  videoMetricsReport: json("videoMetricsReport").$type<Array<{
+    videoId: string; videoUrl: string; coverUrl: string; description: string;
+    postedAt: string;
+    before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
+    after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
+    viewsChangePct: string | null;
+  }>>(),
+
+  // ハッシュタグSOVレポート（Phase 2）
+  hashtagSovReport: json("hashtagSovReport").$type<Array<{
+    hashtag: string; totalPostCount: number;
+    before: { ownCount: number; bestRank: number | null; sovPct: number };
+    after: { ownCount: number; bestRank: number | null; sovPct: number };
+  }>>(),
+
+  // クロスプラットフォームデータ（Phase 4）
+  crossPlatformData: json("crossPlatformData").$type<{
+    trendsData: Array<{ date: string; value: number }>;
+    videoTimeline: Array<{ date: string; postCount: number; totalViews: number }>;
+    videoMarkers: Array<{ date: string; videoId: string; videoUrl: string; description: string }>;
+    correlation: number | null;
+  }>(),
+
+  // 動画スコア（Phase 5）
+  videoScores: json("videoScores").$type<Array<{
+    videoId: string; videoUrl: string; overallScore: number; aiEvaluation: string;
+  }>>(),
+
+  // AI総合レポート（Phase 5）
+  aiOverallReport: json("aiOverallReport").$type<{
+    grade: string; summary: string;
+    strengths: string[]; weaknesses: string[]; actionProposals: string[];
+  }>(),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

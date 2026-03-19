@@ -5,10 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, Crown } from "lucide-react";
+import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, Crown, Star, Brain } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine } from "recharts";
 
 function fmt(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -28,6 +28,14 @@ function ChangeIndicator({ value, suffix = "", inverse = false }: { value: numbe
     </span>
   );
 }
+
+const gradeColors: Record<string, string> = {
+  S: "bg-yellow-500 text-white",
+  A: "bg-green-500 text-white",
+  B: "bg-blue-500 text-white",
+  C: "bg-gray-500 text-white",
+  D: "bg-red-500 text-white",
+};
 
 export default function CampaignReport() {
   const { id } = useParams<{ id: string }>();
@@ -85,6 +93,17 @@ export default function CampaignReport() {
   const sovReport = report.sovReport || {};
   const ripple = report.rippleReport || {};
   const freqReport = report.competitorFrequencyReport || [];
+  const videoMetrics = (report as any).videoMetricsReport as any[] | undefined;
+  const hashtagSov = (report as any).hashtagSovReport as any[] | undefined;
+  const crossPlatform = (report as any).crossPlatformData as any | undefined;
+  const videoScores = (report as any).videoScores as any[] | undefined;
+  const aiReport = (report as any).aiOverallReport as any | undefined;
+
+  // Determine which tabs to show
+  const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
+  const hasHashtagSov = hashtagSov && hashtagSov.length > 0;
+  const hasCrossPlatform = crossPlatform && crossPlatform.trendsData?.length > 0;
+  const hasAiReport = aiReport || (videoScores && videoScores.length > 0);
 
   return (
     <DashboardLayout>
@@ -108,15 +127,68 @@ export default function CampaignReport() {
           </Button>
         </div>
 
+        {/* AI Overall Report Card */}
+        {aiReport && (
+          <Card className="border-2 border-primary/20">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Brain className="h-4 w-4" />
+                AI総合評価
+                <span className={`ml-2 px-3 py-0.5 rounded-full text-sm font-bold ${gradeColors[aiReport.grade] || gradeColors.C}`}>
+                  {aiReport.grade}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm">{aiReport.summary}</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {aiReport.strengths?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-green-600 mb-1">強み</p>
+                    <ul className="text-xs space-y-1">
+                      {aiReport.strengths.map((s: string, i: number) => (
+                        <li key={i} className="flex gap-1"><span className="text-green-500">+</span>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {aiReport.weaknesses?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-500 mb-1">弱み</p>
+                    <ul className="text-xs space-y-1">
+                      {aiReport.weaknesses.map((s: string, i: number) => (
+                        <li key={i} className="flex gap-1"><span className="text-red-400">-</span>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {aiReport.actionProposals?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-blue-600 mb-1">アクション提案</p>
+                    <ul className="text-xs space-y-1">
+                      {aiReport.actionProposals.map((s: string, i: number) => (
+                        <li key={i} className="flex gap-1"><span className="text-blue-500">{i + 1}.</span>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Summary Cards */}
         {summary && <SummaryCards summary={summary} />}
 
         {/* Tabs */}
         <Tabs defaultValue="position" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="flex w-full overflow-x-auto">
             <TabsTrigger value="position">自社ポジション</TabsTrigger>
             <TabsTrigger value="competitor">競合比較</TabsTrigger>
             <TabsTrigger value="ripple">波及効果</TabsTrigger>
+            {hasVideoMetrics && <TabsTrigger value="videos">施策動画</TabsTrigger>}
+            {hasHashtagSov && <TabsTrigger value="hashtagSov">ハッシュタグSOV</TabsTrigger>}
+            {hasCrossPlatform && <TabsTrigger value="crossPlatform">クロスPF</TabsTrigger>}
           </TabsList>
 
           {/* Tab 1: Position */}
@@ -133,6 +205,27 @@ export default function CampaignReport() {
           <TabsContent value="ripple" className="space-y-4">
             <RippleTab ripple={ripple} />
           </TabsContent>
+
+          {/* Tab 4: Video Metrics */}
+          {hasVideoMetrics && (
+            <TabsContent value="videos" className="space-y-4">
+              <VideoMetricsTab videos={videoMetrics!} videoScores={videoScores} />
+            </TabsContent>
+          )}
+
+          {/* Tab 5: Hashtag SOV */}
+          {hasHashtagSov && (
+            <TabsContent value="hashtagSov" className="space-y-4">
+              <HashtagSovTab data={hashtagSov!} />
+            </TabsContent>
+          )}
+
+          {/* Tab 6: Cross Platform */}
+          {hasCrossPlatform && (
+            <TabsContent value="crossPlatform" className="space-y-4">
+              <CrossPlatformTab data={crossPlatform} />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Notes */}
@@ -226,7 +319,6 @@ function PositionTab({ positions }: { positions: any[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Table */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">KW別ポジション変化</CardTitle>
@@ -265,7 +357,6 @@ function PositionTab({ positions }: { positions: any[] }) {
         </CardContent>
       </Card>
 
-      {/* Chart */}
       {chartData.length > 0 && (
         <Card>
           <CardHeader>
@@ -305,7 +396,6 @@ function CompetitorTab({
 }) {
   return (
     <div className="space-y-4">
-      {/* Rank Matrix */}
       {Object.entries(compReport).map(([kw, data]) => (
         <Card key={kw}>
           <CardHeader>
@@ -334,7 +424,6 @@ function CompetitorTab({
         </Card>
       ))}
 
-      {/* SOV */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">シェア・オブ・ボイス（上位30本中の自社占有率）</CardTitle>
@@ -372,7 +461,6 @@ function CompetitorTab({
         </CardContent>
       </Card>
 
-      {/* Posting Frequency */}
       {freqReport.length > 0 && (
         <Card>
           <CardHeader>
@@ -412,7 +500,6 @@ function RippleTab({ ripple }: { ripple: Record<string, any> }) {
         <div key={tag} className="space-y-4">
           <h3 className="text-lg font-semibold">{tag}</h3>
 
-          {/* Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Card>
               <CardContent className="py-3 px-4">
@@ -443,7 +530,6 @@ function RippleTab({ ripple }: { ripple: Record<string, any> }) {
             </Card>
           </div>
 
-          {/* Impact Flow */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">影響フロー</CardTitle>
@@ -470,7 +556,6 @@ function RippleTab({ ripple }: { ripple: Record<string, any> }) {
             </CardContent>
           </Card>
 
-          {/* Omaage Videos */}
           {data.omaage_videos?.length > 0 && (
             <Card>
               <CardHeader>
@@ -491,12 +576,7 @@ function RippleTab({ ripple }: { ripple: Record<string, any> }) {
                     {data.omaage_videos.map((v: any, i: number) => (
                       <TableRow key={i}>
                         <TableCell>
-                          <a
-                            href={v.video_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline"
-                          >
+                          <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                             @{v.creator}
                           </a>
                         </TableCell>
@@ -520,6 +600,219 @@ function RippleTab({ ripple }: { ripple: Record<string, any> }) {
         <Card>
           <CardContent className="py-8 text-center text-muted-foreground">
             キャンペーンハッシュタグが設定されていないため、波及効果データがありません。
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================
+// Video Metrics Tab (Phase 1)
+// ============================
+
+function VideoMetricsTab({ videos, videoScores }: { videos: any[]; videoScores?: any[] }) {
+  const scoreMap = new Map((videoScores || []).map((s: any) => [s.videoId, s]));
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">施策動画一覧 Before/After</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {videos.map((v, i) => {
+              const score = scoreMap.get(v.videoId);
+              return (
+                <div key={i} className="border rounded-lg p-4 flex gap-4">
+                  {v.coverUrl && (
+                    <img src={v.coverUrl} alt="" className="w-20 h-28 rounded object-cover flex-shrink-0" loading="lazy" />
+                  )}
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{v.description?.slice(0, 60) || v.videoId}</p>
+                      {score && (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Star className="h-3.5 w-3.5 text-yellow-500" />
+                          <span className="text-sm font-bold">{score.overallScore}</span>
+                        </div>
+                      )}
+                    </div>
+                    {v.postedAt && (
+                      <p className="text-xs text-muted-foreground">投稿日: {new Date(v.postedAt).toLocaleDateString("ja-JP")}</p>
+                    )}
+                    {score?.aiEvaluation && (
+                      <p className="text-xs text-blue-600">{score.aiEvaluation}</p>
+                    )}
+
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs py-1">指標</TableHead>
+                          <TableHead className="text-xs py-1 text-right">施策前</TableHead>
+                          <TableHead className="text-xs py-1 text-right">施策後</TableHead>
+                          <TableHead className="text-xs py-1 text-right">変動</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[
+                          { label: "再生数", key: "viewCount" },
+                          { label: "いいね", key: "likeCount" },
+                          { label: "コメント", key: "commentCount" },
+                          { label: "シェア", key: "shareCount" },
+                          { label: "保存", key: "saveCount" },
+                        ].map(({ label, key }) => (
+                          <TableRow key={key}>
+                            <TableCell className="py-1 text-xs">{label}</TableCell>
+                            <TableCell className="py-1 text-xs text-right">{fmt(v.before?.[key])}</TableCell>
+                            <TableCell className="py-1 text-xs text-right">{fmt(v.after?.[key])}</TableCell>
+                            <TableCell className="py-1 text-xs text-right">
+                              {v.before?.[key] && v.after?.[key] ? (
+                                <ChangeIndicator
+                                  value={Number(((v.after[key] - v.before[key]) / (v.before[key] || 1) * 100).toFixed(0))}
+                                  suffix="%"
+                                />
+                              ) : "-"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ============================
+// Hashtag SOV Tab (Phase 2)
+// ============================
+
+function HashtagSovTab({ data }: { data: any[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">ハッシュタグ別SOV（発見欄占有率）</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ハッシュタグ</TableHead>
+              <TableHead className="text-right">総投稿数</TableHead>
+              <TableHead className="text-right">SOV前</TableHead>
+              <TableHead className="text-right">SOV後</TableHead>
+              <TableHead className="text-right">最上位(前)</TableHead>
+              <TableHead className="text-right">最上位(後)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((h, i) => (
+              <TableRow key={i}>
+                <TableCell className="font-medium">#{h.hashtag}</TableCell>
+                <TableCell className="text-right">{fmt(h.totalPostCount)}</TableCell>
+                <TableCell className="text-right">{h.before.sovPct}%</TableCell>
+                <TableCell className="text-right">
+                  {h.after.sovPct}%
+                  <span className="ml-1">
+                    <ChangeIndicator value={Number((h.after.sovPct - h.before.sovPct).toFixed(1))} suffix="pt" />
+                  </span>
+                </TableCell>
+                <TableCell className="text-right">{h.before.bestRank ?? "圏外"}</TableCell>
+                <TableCell className="text-right">
+                  {h.after.bestRank ?? "圏外"}
+                  {h.before.bestRank && h.after.bestRank && (
+                    <span className="ml-1">
+                      <ChangeIndicator value={h.before.bestRank - h.after.bestRank} suffix="位" />
+                    </span>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================
+// Cross Platform Tab (Phase 4)
+// ============================
+
+function CrossPlatformTab({ data }: { data: any }) {
+  // Merge trends and video timeline by date
+  const trendMap = new Map<string, number>((data.trendsData || []).map((t: any) => [t.date, t.value]));
+  const videoMap = new Map<string, any>((data.videoTimeline || []).map((v: any) => [v.date, v]));
+
+  const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys()])].sort();
+  const chartData = allDates.map((date: string) => ({
+    date: date.slice(5), // MM-DD
+    fullDate: date,
+    trends: trendMap.get(date) ?? null,
+    views: videoMap.get(date)?.totalViews ?? null,
+  }));
+
+  const markerDates = new Set<string>((data.videoMarkers || []).map((m: any) => m.date as string));
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Google Trends × TikTok 重ね合わせチャート
+            {data.correlation != null && (
+              <span className={`ml-2 text-sm font-normal ${
+                Math.abs(data.correlation) >= 0.7 ? "text-green-600" :
+                Math.abs(data.correlation) >= 0.4 ? "text-yellow-600" : "text-muted-foreground"
+              }`}>
+                相関係数: {data.correlation.toFixed(3)}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" label={{ value: "Google Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
+              <YAxis yAxisId="right" orientation="right" label={{ value: "再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
+              <Tooltip />
+              <Legend />
+              <Line yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+              <Line yAxisId="right" type="monotone" dataKey="views" name="再生数" stroke="#ef4444" strokeWidth={2} dot={false} connectNulls />
+              {Array.from(markerDates).map((date: string) => (
+                <ReferenceLine key={date} x={date.slice(5)} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
+              ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Video Markers */}
+      {data.videoMarkers?.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">施策動画投稿タイムライン</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {data.videoMarkers.map((m: any, i: number) => (
+                <div key={i} className="flex items-center gap-3 text-sm">
+                  <Badge variant="outline">{m.date}</Badge>
+                  <a href={m.videoUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">
+                    {m.description || m.videoId}
+                  </a>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

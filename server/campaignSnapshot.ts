@@ -3,7 +3,7 @@
  * 既存のPuppeteerスクレイパーを再利用して、キャンペーンのベースライン/効果測定データを収集
  */
 
-import { searchTikTokVideos, type TikTokVideo } from "./tiktokScraper";
+import { searchTikTokVideos, scrapeTikTokVideosByUrls, fetchTagVideoCountsBatch, type TikTokVideo } from "./tiktokScraper";
 import { storagePut } from "./storage";
 import puppeteer from "puppeteer-core";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
@@ -251,6 +251,135 @@ export async function captureSnapshot(
     await sleep(3000 + Math.random() * 2000);
   }
 
+  // ============================
+  // D. 施策動画の現在メトリクス取得
+  // ============================
+  let ownVideoMetrics: NonNullable<InsertCampaignSnapshot["ownVideoMetrics"]> = {};
+
+  const ownVideoUrls = (campaign as any).ownVideoUrls as string[] | undefined;
+  if (ownVideoUrls && ownVideoUrls.length > 0) {
+    report("video_metrics", `施策動画メトリクス取得中...`, 90);
+    try {
+      const scraped = await scrapeTikTokVideosByUrls(ownVideoUrls, (msg) =>
+        report("video_metrics", msg, 92)
+      );
+      for (const [, v] of scraped) {
+        ownVideoMetrics[v.videoId] = {
+          viewCount: v.viewCount,
+          likeCount: v.likeCount,
+          commentCount: v.commentCount,
+          shareCount: v.shareCount,
+          saveCount: v.saveCount,
+        };
+      }
+    } catch (e) {
+      console.error("Own video metrics scrape failed:", e);
+    }
+  }
+
+  // ============================
+  // E. ハッシュタグSOV分析
+  // ============================
+  let hashtagAnalysis: NonNullable<InsertCampaignSnapshot["hashtagAnalysis"]> = {};
+
+  // ownVideoDataから追加ハッシュタグを収集
+  const ownVideoData = (campaign as any).ownVideoData as Array<{ hashtags: string[] }> | undefined;
+  const allHashtags = new Set<string>(campaignHashtags.map(t => t.replace(/^#/, "")));
+  if (ownVideoData) {
+    for (const v of ownVideoData) {
+      for (const t of (v.hashtags || [])) {
+        allHashtags.add(t.replace(/^#/, ""));
+      }
+    }
+  }
+  const uniqueHashtags = Array.from(allHashtags).filter(t => t.length > 0);
+
+  if (uniqueHashtags.length > 0) {
+    report("hashtag_sov", `ハッシュタグSOV分析中...`, 93);
+
+    // 総投稿数を取得
+    let tagCounts = new Map<string, number>();
+    try {
+      tagCounts = await fetchTagVideoCountsBatch(uniqueHashtags);
+    } catch (e) {
+      console.error("Tag video count fetch failed:", e);
+    }
+
+    for (let hi = 0; hi < uniqueHashtags.length; hi++) {
+      const tag = uniqueHashtags[hi];
+      report("hashtag_sov", `ハッシュタグSOV: #${tag} (${hi + 1}/${uniqueHashtags.length})`, 93 + Math.round((hi / uniqueHashtags.length) * 4));
+
+      let top30Videos: Array<{ video_id: string; creator_username: string; view_count: number; search_rank: number }> = [];
+      try {
+        const result = await searchTikTokVideos(`#${tag}`, 30);
+        top30Videos = result.videos.map((v, idx) => ({
+          video_id: v.id,
+          creator_username: v.author.uniqueId,
+          view_count: v.stats.playCount || 0,
+          search_rank: idx + 1,
+        }));
+      } catch (e) {
+        console.error(`Hashtag SOV search failed for #${tag}:`, e);
+      }
+
+      const ownVideosInTop30 = top30Videos.filter(v =>
+        ownAccountIds.includes(v.creator_username) || ownVideoIds.includes(v.video_id)
+      );
+
+      hashtagAnalysis[tag] = {
+        totalPostCount: tagCounts.get(tag) || 0,
+        top30Videos,
+        ownVideoCount: ownVideosInTop30.length,
+        bestOwnRank: ownVideosInTop30.length > 0 ? Math.min(...ownVideosInTop30.map(v => v.search_rank)) : null,
+        sovPercentage: top30Videos.length > 0 ? Number((ownVideosInTop30.length / top30Videos.length * 100).toFixed(1)) : 0,
+      };
+
+      await sleep(3000 + Math.random() * 2000);
+    }
+  }
+
+  // ============================
+  // F. 競合自動検出（KW検索Top30から2+KWに出現するアカウントを抽出）
+  // ============================
+  let detectedCompetitors: NonNullable<InsertCampaignSnapshot["detectedCompetitors"]> = [];
+
+  const competitorIds = new Set(competitors.map(c => c.account_id));
+  const accountMap = new Map<string, {
+    nickname: string; avatarUrl: string; followerCount: number;
+    kwSet: Set<string>; totalVideos: number; ranks: number[];
+  }>();
+
+  for (const [kw, data] of Object.entries(searchResults)) {
+    for (const v of data.all_videos) {
+      const acct = v.creator_username;
+      if (ownAccountIds.includes(acct) || competitorIds.has(acct)) continue;
+
+      if (!accountMap.has(acct)) {
+        accountMap.set(acct, {
+          nickname: acct, avatarUrl: "", followerCount: 0,
+          kwSet: new Set(), totalVideos: 0, ranks: [],
+        });
+      }
+      const entry = accountMap.get(acct)!;
+      entry.kwSet.add(kw);
+      entry.totalVideos++;
+      entry.ranks.push(v.search_rank);
+    }
+  }
+
+  detectedCompetitors = Array.from(accountMap.entries())
+    .filter(([, e]) => e.kwSet.size >= 2)
+    .map(([accountId, e]) => ({
+      accountId,
+      nickname: e.nickname,
+      avatarUrl: e.avatarUrl,
+      followerCount: e.followerCount,
+      keywordAppearances: e.kwSet.size,
+      totalVideosInTop30: e.totalVideos,
+      avgRank: Math.round(e.ranks.reduce((a, b) => a + b, 0) / e.ranks.length),
+    }))
+    .sort((a, b) => b.keywordAppearances - a.keywordAppearances || a.avgRank - b.avgRank);
+
   report("complete", "スナップショット取得完了", 100);
 
   return {
@@ -260,6 +389,9 @@ export async function captureSnapshot(
     searchResults,
     competitorProfiles,
     rippleEffect,
+    ownVideoMetrics,
+    hashtagAnalysis,
+    detectedCompetitors,
     capturedAt: new Date(),
   };
 }

@@ -24,6 +24,7 @@ export default function CampaignNew() {
   const [keywords, setKeywords] = useState("");
   const [ownAccountIds, setOwnAccountIds] = useState("");
   const [ownVideoIds, setOwnVideoIds] = useState("");
+  const [ownVideoUrls, setOwnVideoUrls] = useState("");
   const [campaignHashtags, setCampaignHashtags] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [brandKeywords, setBrandKeywords] = useState("");
@@ -108,6 +109,7 @@ export default function CampaignNew() {
       keywords: kwList,
       ownAccountIds: ownIds,
       ownVideoIds: ownVideoIds.split("\n").map(s => s.trim()).filter(Boolean),
+      ownVideoUrls: ownVideoUrls.split("\n").map(s => s.trim()).filter(Boolean),
       campaignHashtags: campaignHashtags.split("\n").map(s => s.trim()).filter(Boolean),
       competitors: compList.length > 0 ? compList : undefined,
       brandKeywords: brandKeywords.split("\n").map(s => s.trim()).filter(Boolean),
@@ -200,6 +202,11 @@ export default function CampaignNew() {
             <div className="space-y-2">
               <Label>自社TikTokアカウントID *（1行1ID）</Label>
               <Textarea value={ownAccountIds} onChange={e => setOwnAccountIds(e.target.value)} placeholder="samplecosme_official" rows={2} />
+            </div>
+            <div className="space-y-2">
+              <Label>施策動画URL（1行1URL、任意）</Label>
+              <Textarea value={ownVideoUrls} onChange={e => setOwnVideoUrls(e.target.value)} placeholder={"https://www.tiktok.com/@user/video/7340000000000000000"} rows={3} />
+              <p className="text-xs text-muted-foreground">施策で投稿した動画のURLを入力すると、メトリクス追跡・ハッシュタグ自動抽出が有効になります</p>
             </div>
             <div className="space-y-2">
               <Label>施策動画ID（1行1ID、任意）</Label>

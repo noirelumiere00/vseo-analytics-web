@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
+import { useState } from "react";
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   draft: { label: "下書き", variant: "outline" },
@@ -50,6 +51,22 @@ export default function CampaignDetail() {
   const generateReportMutation = trpc.campaign.generateReport.useMutation({
     onSuccess: () => {
       toast.success("レポートを生成しました");
+      detailQuery.refetch();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const scrapeVideosMutation = trpc.campaign.scrapeVideoUrls.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.videoCount}件の動画データを取得しました${data.newHashtags.length > 0 ? `（${data.newHashtags.length}件の新規ハッシュタグを追加）` : ""}`);
+      detailQuery.refetch();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const applyCompetitorsMutation = trpc.campaign.applyDetectedCompetitors.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.added}件の競合を追加しました`);
       detailQuery.refetch();
     },
     onError: (error) => toast.error(error.message),
@@ -241,6 +258,74 @@ export default function CampaignDetail() {
           </Card>
         </div>
 
+        {/* 施策動画データ取得 */}
+        {campaign && (campaign as any).ownVideoUrls?.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                施策動画データ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(campaign as any).ownVideoData?.length > 0 ? (
+                <>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {((campaign as any).ownVideoData as any[]).map((v: any) => (
+                      <div key={v.videoId} className="border rounded-lg p-3 flex gap-3">
+                        {v.coverUrl && (
+                          <img src={v.coverUrl} alt="" className="w-16 h-20 rounded object-cover flex-shrink-0" loading="lazy" />
+                        )}
+                        <div className="min-w-0 flex-1 text-xs">
+                          <p className="font-medium truncate">{v.description?.slice(0, 40) || v.videoId}</p>
+                          <p className="text-muted-foreground">@{v.authorUniqueId}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-muted-foreground">
+                            <span>{(v.viewCount || 0).toLocaleString()} 再生</span>
+                            <span>{(v.likeCount || 0).toLocaleString()} いいね</span>
+                            <span>{(v.commentCount || 0).toLocaleString()} コメント</span>
+                          </div>
+                          {v.hashtags?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {v.hashtags.slice(0, 5).map((t: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[10px]">#{t}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline" size="sm"
+                    onClick={() => scrapeVideosMutation.mutate({ campaignId })}
+                    disabled={scrapeVideosMutation.isPending}
+                  >
+                    {scrapeVideosMutation.isPending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />取得中...</> : "動画データ再取得"}
+                  </Button>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">{((campaign as any).ownVideoUrls as string[]).length}件のURLが設定されています</p>
+                  <Button
+                    onClick={() => scrapeVideosMutation.mutate({ campaignId })}
+                    disabled={scrapeVideosMutation.isPending}
+                  >
+                    {scrapeVideosMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />取得中...</> : "動画データ取得"}
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 検出された競合 */}
+        <DetectedCompetitorsCard
+          campaign={campaign}
+          snapshots={snapshots}
+          campaignId={campaignId}
+          applyMutation={applyCompetitorsMutation}
+        />
+
         {/* Report */}
         <Card>
           <CardHeader>
@@ -289,6 +374,85 @@ export default function CampaignDetail() {
         </Card>
       </div>
     </DashboardLayout>
+  );
+}
+
+function DetectedCompetitorsCard({
+  campaign, snapshots, campaignId, applyMutation,
+}: {
+  campaign: any;
+  snapshots: any[];
+  campaignId: number;
+  applyMutation: any;
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Find latest completed snapshot with detected competitors
+  const snapshotWithCompetitors = snapshots.find(
+    (s: any) => s.status === "completed" && s.detectedCompetitors?.length > 0,
+  );
+
+  if (!snapshotWithCompetitors) return null;
+
+  const detected = (snapshotWithCompetitors.detectedCompetitors || []) as Array<{
+    accountId: string; nickname: string; avatarUrl: string;
+    followerCount: number; keywordAppearances: number;
+    totalVideosInTop30: number; avgRank: number;
+  }>;
+  const existingIds = new Set(((campaign?.competitors || []) as any[]).map((c: any) => c.account_id));
+  const newCandidates = detected.filter(d => !existingIds.has(d.accountId));
+
+  if (newCandidates.length === 0) return null;
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <UserPlus className="h-4 w-4" />
+          検出された競合候補（{newCandidates.length}件）
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-xs text-muted-foreground">KW検索Top30に2つ以上のキーワードで出現するアカウントです</p>
+        <div className="space-y-2">
+          {newCandidates.map(d => (
+            <label key={d.accountId} className="flex items-center gap-3 border rounded-lg p-2.5 cursor-pointer hover:bg-muted/50">
+              <input
+                type="checkbox"
+                checked={selectedIds.includes(d.accountId)}
+                onChange={() => toggleSelect(d.accountId)}
+                className="rounded"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">@{d.accountId}</p>
+                <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                  <span>{d.keywordAppearances}KWに出現</span>
+                  <span>Top30内 {d.totalVideosInTop30}本</span>
+                  <span>平均{d.avgRank}位</span>
+                </div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {selectedIds.length > 0 && (
+          <Button
+            size="sm"
+            onClick={() => applyMutation.mutate({
+              campaignId,
+              snapshotId: snapshotWithCompetitors.id,
+              selectedAccountIds: selectedIds,
+            })}
+            disabled={applyMutation.isPending}
+          >
+            {applyMutation.isPending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />追加中...</> : `選択した${selectedIds.length}件を競合に追加`}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
