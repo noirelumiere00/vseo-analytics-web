@@ -655,6 +655,11 @@ export async function upsertCampaignReport(data: InsertCampaignReport) {
       rippleReport: data.rippleReport,
       screenshots: data.screenshots,
       notes: data.notes,
+      videoMetricsReport: data.videoMetricsReport,
+      hashtagSovReport: data.hashtagSovReport,
+      crossPlatformData: data.crossPlatformData,
+      videoScores: data.videoScores,
+      aiOverallReport: data.aiOverallReport,
     },
   });
 }

@@ -120,6 +120,20 @@
       "when": 1773394237230,
       "tag": "0016_exotic_doctor_spectrum",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1773803319291,
+      "tag": "0017_daffy_rage",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1774070400000,
+      "tag": "0018_campaign_report_enhancement",
+      "breakpoints": true
     }
   ]
 }

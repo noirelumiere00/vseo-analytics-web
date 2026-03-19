@@ -11,9 +11,27 @@ import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
+import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { checkQuota, PLAN_LIMITS } from "./_core/quota";
 import { createCheckoutSession, createPortalSession } from "./_core/stripe";
 import { ENV } from "./_core/env";
+import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } from "./googleTrends";
+
+// Google Trends取得＋キャッシュ保存ヘルパー
+async function fetchAndCacheTrends(jobId: number, keyword: string) {
+  const endTime = new Date();
+  const startTime = new Date();
+  startTime.setDate(startTime.getDate() - 90);
+
+  const data = await fetchGoogleTrends(keyword, startTime, endTime, "JP");
+
+  // DBキャッシュに保存
+  await db.updateAnalysisReport(jobId, {
+    googleTrendsCache: { data, fetchedAt: new Date().toISOString() },
+  } as any);
+
+  return data;
+}
 
 // CSV出力ヘルパー: ダブルクォートエスケープ
 function csvEscape(val: string): string {
@@ -936,6 +954,60 @@ export const appRouter = router({
         await db.updateAnalysisJobStatus(input.jobId, "pending");
         return { success: true, jobId: input.jobId };
       }),
+
+    // 検索相関分析（Google Trends × TikTok）
+    getSearchCorrelation: protectedProcedure
+      .input(z.object({ jobId: z.number(), forceRefresh: z.boolean().optional() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+        if (!job.keyword) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "キーワードが設定されていないジョブです" });
+        }
+
+        // キャッシュチェック（24時間有効）
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const cache = report?.googleTrendsCache as { data: Array<{ date: string; value: number }>; fetchedAt: string } | null;
+        const CACHE_TTL = 24 * 60 * 60 * 1000;
+
+        let trendsData: Array<{ date: string; value: number }>;
+
+        if (cache?.data && cache.fetchedAt && !input.forceRefresh) {
+          const age = Date.now() - new Date(cache.fetchedAt).getTime();
+          if (age < CACHE_TTL) {
+            trendsData = cache.data;
+          } else {
+            trendsData = await fetchAndCacheTrends(input.jobId, job.keyword);
+          }
+        } else {
+          trendsData = await fetchAndCacheTrends(input.jobId, job.keyword);
+        }
+
+        // TikTok動画を日別集計
+        const videos = await db.getVideosByJobId(input.jobId);
+        const videoStats = aggregateVideosByDay(videos);
+
+        // 個別動画データも返す（全件）
+        const individualVideos = videos
+          .filter(v => v.postedAt)
+          .map(v => ({
+            videoId: v.videoId,
+            title: v.title,
+            postedAt: v.postedAt!.toISOString().split("T")[0],
+            viewCount: Number(v.viewCount || 0),
+            likeCount: Number(v.likeCount || 0),
+            accountName: v.accountName,
+          }))
+          .sort((a, b) => a.postedAt.localeCompare(b.postedAt));
+
+        const result = computeSearchCorrelation(trendsData, videoStats);
+        return { ...result, individualVideos, totalVideoCount: videos.length };
+      }),
   }),
 
   trendDiscovery: router({
@@ -1230,6 +1302,7 @@ export const appRouter = router({
         keywords: z.array(z.string()).min(1, "キーワードを1つ以上入力してください"),
         ownAccountIds: z.array(z.string()).min(1, "自社アカウントIDを1つ以上入力してください"),
         ownVideoIds: z.array(z.string()).optional(),
+        ownVideoUrls: z.array(z.string()).optional(),
         campaignHashtags: z.array(z.string()).optional(),
         competitors: z.array(z.object({
           name: z.string(),
@@ -1245,6 +1318,7 @@ export const appRouter = router({
           keywords: input.keywords,
           ownAccountIds: input.ownAccountIds,
           ownVideoIds: input.ownVideoIds || [],
+          ownVideoUrls: input.ownVideoUrls || [],
           campaignHashtags: input.campaignHashtags || [],
           competitors: input.competitors || [],
           brandKeywords: input.brandKeywords || [],
@@ -1274,6 +1348,7 @@ export const appRouter = router({
         keywords: z.array(z.string()).optional(),
         ownAccountIds: z.array(z.string()).optional(),
         ownVideoIds: z.array(z.string()).optional(),
+        ownVideoUrls: z.array(z.string()).optional(),
         campaignHashtags: z.array(z.string()).optional(),
         competitors: z.array(z.object({
           name: z.string(),
@@ -1301,6 +1376,74 @@ export const appRouter = router({
         }
         await db.deleteCampaign(input.id);
         return { success: true };
+      }),
+
+    // 施策動画URLスクレイプ（ownVideoUrls → ownVideoData + ハッシュタグ自動抽出）
+    scrapeVideoUrls: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const urls = campaign.ownVideoUrls || [];
+        if (urls.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "施策動画URLが設定されていません" });
+        }
+        const scraped = await scrapeTikTokVideosByUrls(urls);
+        const ownVideoData = Array.from(scraped.values());
+
+        // 自動でハッシュタグを抽出してcampaignHashtagsにマージ
+        const existingHashtags = new Set((campaign.campaignHashtags || []).map(t => t.toLowerCase().replace(/^#/, "")));
+        const newHashtags: string[] = [];
+        for (const v of ownVideoData) {
+          for (const tag of v.hashtags) {
+            const normalized = tag.toLowerCase().replace(/^#/, "");
+            if (!existingHashtags.has(normalized)) {
+              existingHashtags.add(normalized);
+              newHashtags.push(tag);
+            }
+          }
+        }
+
+        const mergedHashtags = [...(campaign.campaignHashtags || []), ...newHashtags];
+        await db.updateCampaign(input.campaignId, {
+          ownVideoData,
+          campaignHashtags: mergedHashtags,
+        });
+
+        return { videoCount: ownVideoData.length, newHashtags };
+      }),
+
+    // 検出された競合をcampaign.competitorsにマージ
+    applyDetectedCompetitors: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        snapshotId: z.number(),
+        selectedAccountIds: z.array(z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const snapshot = await db.getCampaignSnapshotById(input.snapshotId);
+        if (!snapshot) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
+        }
+        const detected = snapshot.detectedCompetitors || [];
+        const existing = campaign.competitors || [];
+        const existingIds = new Set(existing.map(c => c.account_id));
+
+        const toAdd = detected
+          .filter(d => input.selectedAccountIds.includes(d.accountId) && !existingIds.has(d.accountId))
+          .map(d => ({ name: d.nickname || d.accountId, account_id: d.accountId }));
+
+        await db.updateCampaign(input.campaignId, {
+          competitors: [...existing, ...toAdd],
+        });
+
+        return { added: toAdd.length };
       }),
 
     // スナップショット取得実行（ワーカーキューに投入）
@@ -1377,7 +1520,7 @@ export const appRouter = router({
         if (!baselineSnapshot || !measurementSnapshot) {
           throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
         }
-        const reportData = generateCampaignReport(campaign, baselineSnapshot, measurementSnapshot);
+        const reportData = await generateCampaignReport(campaign, baselineSnapshot, measurementSnapshot);
         await db.upsertCampaignReport(reportData);
         await db.updateCampaign(input.campaignId, { status: "report_ready" });
         return { success: true };

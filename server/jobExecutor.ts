@@ -651,6 +651,9 @@ export async function executeCampaignSnapshot(
       searchResults: snapshotData.searchResults,
       competitorProfiles: snapshotData.competitorProfiles,
       rippleEffect: snapshotData.rippleEffect,
+      ownVideoMetrics: snapshotData.ownVideoMetrics,
+      hashtagAnalysis: snapshotData.hashtagAnalysis,
+      detectedCompetitors: snapshotData.detectedCompetitors,
       capturedAt: new Date(),
     });
 
@@ -671,7 +674,7 @@ export async function executeCampaignSnapshot(
       const baselineSnapshot = await db.getCampaignSnapshotById(updatedCampaign.baselineSnapshotId);
       const measurementSnapshot = await db.getCampaignSnapshotById(updatedCampaign.measurementSnapshotId);
       if (baselineSnapshot?.status === "completed" && measurementSnapshot?.status === "completed") {
-        const reportData = generateCampaignReport(updatedCampaign, baselineSnapshot, measurementSnapshot);
+        const reportData = await generateCampaignReport(updatedCampaign, baselineSnapshot, measurementSnapshot);
         await db.upsertCampaignReport(reportData);
         await db.updateCampaign(snapshot.campaignId, { status: "report_ready" });
       }

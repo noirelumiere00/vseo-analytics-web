@@ -145,8 +145,8 @@ async function searchInIncognitoContext(
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
 
-  // ページネーション安全装置: 最大15ページまで
-  const MAX_PAGES = 15;
+  // ページネーション安全装置: 最大18ページまで（100動画取得に対応）
+  const MAX_PAGES = 18;
 
   try {
     await page.setViewport({ width: 1280, height: 900 });
@@ -1207,6 +1207,164 @@ export async function scrapeTikTokMetaKeywords(
       await Promise.allSettled(promises);
       completed += batch.length;
       if (onProgress) onProgress(`meta keywords取得中 (${completed}/${videoUrls.length})...`);
+    }
+  } finally {
+    await browser.close();
+  }
+
+  return result;
+}
+
+// ============================
+// 施策動画URL → データ自動取得
+// ============================
+
+export interface ScrapedVideoData {
+  videoId: string;
+  videoUrl: string;
+  coverUrl: string;
+  description: string;
+  hashtags: string[];
+  duration: number;
+  createTime: number;
+  authorUniqueId: string;
+  authorNickname: string;
+  authorAvatarUrl: string;
+  followerCount: number;
+  viewCount: number;
+  likeCount: number;
+  commentCount: number;
+  shareCount: number;
+  saveCount: number;
+}
+
+/**
+ * TikTok動画URLリストからSSRデータを取得し、動画メタ情報+メトリクスを返す。
+ * scrapeTikTokMetaKeywords() と同じ CONCURRENCY=3 パターン。
+ */
+export async function scrapeTikTokVideosByUrls(
+  urls: string[],
+  onProgress?: (msg: string) => void,
+): Promise<Map<string, ScrapedVideoData>> {
+  const result = new Map<string, ScrapedVideoData>();
+  if (urls.length === 0) return result;
+
+  const browser = await puppeteer.launch({
+    executablePath: findChromiumPath(),
+    headless: true,
+    args: buildChromiumArgs(),
+  });
+
+  const CONCURRENCY = 3;
+  let completed = 0;
+
+  try {
+    for (let batchStart = 0; batchStart < urls.length; batchStart += CONCURRENCY) {
+      const batch = urls.slice(batchStart, batchStart + CONCURRENCY);
+      const promises = batch.map(async (url, batchIdx) => {
+        const globalIdx = batchStart + batchIdx;
+        const page = await browser.newPage();
+        try {
+          await page.setUserAgent(USER_AGENTS[globalIdx % USER_AGENTS.length]);
+          await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
+          await new Promise(r => setTimeout(r, 2000));
+
+          // SSRデータから動画情報を取得
+          const videoData = await page.evaluate(() => {
+            const ssrData = (window as any).__UNIVERSAL_DATA_FOR_REHYDRATION__;
+            if (!ssrData) return null;
+            const defaultScope = ssrData.__DEFAULT_SCOPE__;
+            if (!defaultScope) return null;
+            const videoDetail = defaultScope["webapp.video-detail"];
+            if (!videoDetail) return null;
+            const itemStruct = videoDetail?.itemInfo?.itemStruct;
+            if (!itemStruct) return null;
+
+            const v = itemStruct;
+            const stats = v.stats || {};
+            const author = v.author || {};
+            const authorStats = v.authorStats || {};
+
+            // ハッシュタグ抽出
+            const hashtags: string[] = [];
+            if (v.textExtra) {
+              v.textExtra.forEach((te: any) => {
+                if (te.hashtagName) hashtags.push(te.hashtagName);
+              });
+            }
+            const hashtagMatches = (v.desc || "").match(/#[\w\u3000-\u9FFF]+/g);
+            if (hashtagMatches) {
+              hashtagMatches.forEach((tag: string) => {
+                const cleaned = tag.replace("#", "");
+                if (!hashtags.includes(cleaned)) hashtags.push(cleaned);
+              });
+            }
+
+            return {
+              videoId: v.id || "",
+              coverUrl: v.video?.cover || v.video?.originCover || "",
+              description: v.desc || "",
+              hashtags,
+              duration: v.video?.duration || 0,
+              createTime: v.createTime || 0,
+              authorUniqueId: author.uniqueId || "",
+              authorNickname: author.nickname || "",
+              authorAvatarUrl: author.avatarThumb || author.avatarMedium || "",
+              followerCount: author.followerCount || authorStats.followerCount || 0,
+              viewCount: stats.playCount || 0,
+              likeCount: stats.diggCount || 0,
+              commentCount: stats.commentCount || 0,
+              shareCount: stats.shareCount || 0,
+              saveCount: stats.collectCount || 0,
+            };
+          });
+
+          if (videoData && videoData.videoId) {
+            result.set(url, { ...videoData, videoUrl: url });
+            console.log(`[TikTok Video] ${url.slice(-30)}: OK (${videoData.viewCount} views)`);
+          } else {
+            // DOMフォールバック: SSRデータが取れない場合
+            const fallbackData = await page.evaluate(() => {
+              const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
+              const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute("content") || "";
+              const desc = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || "";
+              return { ogTitle, ogImage, desc };
+            });
+            console.warn(`[TikTok Video] ${url.slice(-30)}: SSR failed, DOM fallback partial`);
+
+            // URLからvideoIdを抽出
+            const videoIdMatch = url.match(/\/video\/(\d+)/);
+            if (videoIdMatch) {
+              result.set(url, {
+                videoId: videoIdMatch[1],
+                videoUrl: url,
+                coverUrl: fallbackData.ogImage,
+                description: fallbackData.desc || fallbackData.ogTitle,
+                hashtags: [],
+                duration: 0,
+                createTime: 0,
+                authorUniqueId: "",
+                authorNickname: "",
+                authorAvatarUrl: "",
+                followerCount: 0,
+                viewCount: 0,
+                likeCount: 0,
+                commentCount: 0,
+                shareCount: 0,
+                saveCount: 0,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`[TikTok Video] Failed for ${url}:`, (e as Error).message);
+        } finally {
+          await page.close();
+        }
+      });
+
+      await Promise.allSettled(promises);
+      completed += batch.length;
+      if (onProgress) onProgress(`動画データ取得中 (${completed}/${urls.length})...`);
     }
   } finally {
     await browser.close();
