@@ -1269,9 +1269,18 @@ export async function scrapeTikTokVideosByUrls(
           await page.goto(url, { waitUntil: "domcontentloaded", timeout: 25000 });
           await new Promise(r => setTimeout(r, 2000));
 
-          // SSRデータから動画情報を取得
+          // SSRデータから動画情報を取得（scriptタグ → window変数の順でフォールバック）
           const videoData = await page.evaluate(() => {
-            const ssrData = (window as any).__UNIVERSAL_DATA_FOR_REHYDRATION__;
+            let ssrData: any = null;
+            // 1. scriptタグから取得（最も安定）
+            const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+            if (el && el.textContent) {
+              try { ssrData = JSON.parse(el.textContent); } catch {}
+            }
+            // 2. 新しいwindow変数
+            if (!ssrData) ssrData = (window as any).__$UNIVERSAL_DATA$__;
+            // 3. 旧window変数
+            if (!ssrData) ssrData = (window as any).__UNIVERSAL_DATA_FOR_REHYDRATION__;
             if (!ssrData) return null;
             const defaultScope = ssrData.__DEFAULT_SCOPE__;
             if (!defaultScope) return null;
@@ -1315,7 +1324,7 @@ export async function scrapeTikTokVideosByUrls(
               likeCount: stats.diggCount || 0,
               commentCount: stats.commentCount || 0,
               shareCount: stats.shareCount || 0,
-              saveCount: stats.collectCount || 0,
+              saveCount: Number(stats.collectCount) || 0,
             };
           });
 
@@ -1323,14 +1332,41 @@ export async function scrapeTikTokVideosByUrls(
             result.set(url, { ...videoData, videoUrl: url });
             console.log(`[TikTok Video] ${url.slice(-30)}: OK (${videoData.viewCount} views)`);
           } else {
-            // DOMフォールバック: SSRデータが取れない場合
+            // DOMフォールバック: SSRデータが取れない場合、DOM要素からメトリクスも取得
             const fallbackData = await page.evaluate(() => {
               const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute("content") || "";
               const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute("content") || "";
               const desc = document.querySelector('meta[property="og:description"]')?.getAttribute("content") || "";
-              return { ogTitle, ogImage, desc };
+
+              // DOM要素からメトリクスをパース（例: "1.2K", "3M", "500"）
+              function parseMetricText(text: string): number {
+                if (!text) return 0;
+                text = text.trim().replace(/,/g, "");
+                const mMatch = text.match(/^([\d.]+)\s*[Mm]$/);
+                if (mMatch) return Math.round(parseFloat(mMatch[1]) * 1_000_000);
+                const kMatch = text.match(/^([\d.]+)\s*[Kk]$/);
+                if (kMatch) return Math.round(parseFloat(kMatch[1]) * 1_000);
+                const num = parseInt(text, 10);
+                return isNaN(num) ? 0 : num;
+              }
+
+              // data-e2e セレクターからメトリクス取得
+              const likeText = document.querySelector('[data-e2e="like-count"], [data-e2e="browse-like-count"]')?.textContent || "";
+              const commentText = document.querySelector('[data-e2e="comment-count"], [data-e2e="browse-comment-count"]')?.textContent || "";
+              const shareText = document.querySelector('[data-e2e="share-count"], [data-e2e="browse-share-count"]')?.textContent || "";
+              const saveText = document.querySelector('[data-e2e="undefined-count"], [data-e2e="collect-count"]')?.textContent || "";
+              const viewText = document.querySelector('[data-e2e="video-views"], [data-e2e="view-count"]')?.textContent || "";
+
+              return {
+                ogTitle, ogImage, desc,
+                viewCount: parseMetricText(viewText),
+                likeCount: parseMetricText(likeText),
+                commentCount: parseMetricText(commentText),
+                shareCount: parseMetricText(shareText),
+                saveCount: parseMetricText(saveText),
+              };
             });
-            console.warn(`[TikTok Video] ${url.slice(-30)}: SSR failed, DOM fallback partial`);
+            console.warn(`[TikTok Video] ${url.slice(-30)}: SSR failed, DOM fallback (views=${fallbackData.viewCount})`);
 
             // URLからvideoIdを抽出
             const videoIdMatch = url.match(/\/video\/(\d+)/);
@@ -1347,11 +1383,11 @@ export async function scrapeTikTokVideosByUrls(
                 authorNickname: "",
                 authorAvatarUrl: "",
                 followerCount: 0,
-                viewCount: 0,
-                likeCount: 0,
-                commentCount: 0,
-                shareCount: 0,
-                saveCount: 0,
+                viewCount: fallbackData.viewCount,
+                likeCount: fallbackData.likeCount,
+                commentCount: fallbackData.commentCount,
+                shareCount: fallbackData.shareCount,
+                saveCount: fallbackData.saveCount,
               });
             }
           }

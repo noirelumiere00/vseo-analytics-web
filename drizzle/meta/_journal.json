@@ -134,6 +134,20 @@
       "when": 1774070400000,
       "tag": "0018_campaign_report_enhancement",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1774070400001,
+      "tag": "0019_big_keywords",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1774070400002,
+      "tag": "0020_google_ads_keyword_cache",
+      "breakpoints": true
     }
   ]
 }

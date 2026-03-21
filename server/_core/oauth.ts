@@ -291,13 +291,45 @@ export function registerOAuthRoutes(app: Express) {
         return;
       }
 
-      // Exchange code for tokens
-      const tokens = await exchangeCodeForTokens(code);
-      const userInfo = await getGoogleUserInfo(tokens.access_token);
-
       // Clear state cookie
       const cookieOptions = getSessionCookieOptions(req);
       res.clearCookie("google_oauth_state", cookieOptions);
+
+      // Google Ads token exchange flow
+      if (statePayload.purpose === "google_ads") {
+        const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            code,
+            client_id: ENV.googleClientId,
+            client_secret: ENV.googleClientSecret,
+            redirect_uri: ENV.googleRedirectUri,
+            grant_type: "authorization_code",
+          }),
+        });
+        const data = await tokenRes.json() as any;
+        if (data.refresh_token) {
+          res.send(`<html><body style="font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto">
+            <h2>Google Ads API Refresh Token 取得成功</h2>
+            <p>以下を <code>.env</code> に追加してください:</p>
+            <pre style="background:#f1f5f9;padding:16px;border-radius:8px;overflow-x:auto">GOOGLE_ADS_DEVELOPER_TOKEN=A4aFjFVsTHTikr3gdlbEgA
+GOOGLE_ADS_REFRESH_TOKEN=${data.refresh_token}
+GOOGLE_ADS_CUSTOMER_ID=9716315717</pre>
+            <p style="color:#666;font-size:14px">このページを閉じて大丈夫です。</p>
+          </body></html>`);
+        } else {
+          res.status(400).send(`<html><body style="font-family:sans-serif;padding:40px">
+            <h2>エラー</h2>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          </body></html>`);
+        }
+        return;
+      }
+
+      // Exchange code for tokens (normal Google login flow)
+      const tokens = await exchangeCodeForTokens(code);
+      const userInfo = await getGoogleUserInfo(tokens.access_token);
 
       // Try to find existing user
       let user = await db.getUserByGoogleId(userInfo.googleId);
@@ -368,5 +400,37 @@ export function registerOAuthRoutes(app: Express) {
   // Keep legacy callback route for backwards-compatibility (no-op redirect)
   app.get("/api/oauth/callback", (_req: Request, res: Response) => {
     res.redirect(302, "/login");
+  });
+
+  /**
+   * GET /api/auth/google-ads
+   * Google Ads API用のOAuth認証開始（Refresh Token取得用）
+   * 既存の /api/auth/google/callback リダイレクトURIを流用し、stateで区別する
+   */
+  app.get("/api/auth/google-ads", async (_req: Request, res: Response) => {
+    try {
+      const nonce = crypto.randomBytes(16).toString("hex");
+      const state = await signState({ nonce, purpose: "google_ads" });
+
+      const cookieOptions = getSessionCookieOptions(_req);
+      res.cookie("google_oauth_state", nonce, {
+        ...cookieOptions,
+        maxAge: 10 * 60 * 1000,
+      });
+
+      const params = new URLSearchParams({
+        client_id: ENV.googleClientId,
+        redirect_uri: ENV.googleRedirectUri, // 既存の登録済みURI を流用
+        response_type: "code",
+        scope: "https://www.googleapis.com/auth/adwords",
+        access_type: "offline",
+        prompt: "consent",
+        state,
+      });
+      res.redirect(302, `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+    } catch (error) {
+      console.error("[Auth] Google Ads redirect failed", error);
+      res.status(500).send("OAuth開始に失敗しました");
+    }
   });
 }

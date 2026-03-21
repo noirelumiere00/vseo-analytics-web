@@ -16,6 +16,7 @@ import { checkQuota, PLAN_LIMITS } from "./_core/quota";
 import { createCheckoutSession, createPortalSession } from "./_core/stripe";
 import { ENV } from "./_core/env";
 import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } from "./googleTrends";
+import { fetchKeywordVolume, type KeywordVolumeData } from "./googleAds";
 
 // Google Trends取得＋キャッシュ保存ヘルパー
 async function fetchAndCacheTrends(jobId: number, keyword: string) {
@@ -1008,6 +1009,55 @@ export const appRouter = router({
         const result = computeSearchCorrelation(trendsData, videoStats);
         return { ...result, individualVideos, totalVideoCount: videos.length };
       }),
+
+    // Google Ads Keyword Planner 検索ボリューム取得
+    getKeywordVolume: protectedProcedure
+      .input(z.object({ jobId: z.number(), forceRefresh: z.boolean().optional() }))
+      .query(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        }
+        if (job.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        }
+        if (!job.keyword) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "キーワードが設定されていないジョブです" });
+        }
+
+        // キャッシュチェック（7日間有効 — 月次データなので長め）
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const cache = report?.googleAdsKeywordCache as {
+          keywords: KeywordVolumeData[];
+          fetchedAt: string;
+        } | null;
+        const CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+
+        if (cache?.keywords && cache.fetchedAt && !input.forceRefresh) {
+          const age = Date.now() - new Date(cache.fetchedAt).getTime();
+          if (age < CACHE_TTL) {
+            return cache;
+          }
+        }
+
+        // Google Ads API呼び出し
+        if (!ENV.googleAdsRefreshToken || !ENV.googleAdsDeveloperToken) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Google Ads APIの認証情報が設定されていません",
+          });
+        }
+
+        const keywords = await fetchKeywordVolume([job.keyword]);
+        const result = { keywords, fetchedAt: new Date().toISOString() };
+
+        // DBキャッシュ保存
+        await db.updateAnalysisReport(input.jobId, {
+          googleAdsKeywordCache: result,
+        } as any);
+
+        return result;
+      }),
   }),
 
   trendDiscovery: router({
@@ -1176,6 +1226,27 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    bulkDelete: protectedProcedure
+      .input(z.object({ jobIds: z.array(z.number()).min(1).max(100) }))
+      .mutation(async ({ ctx, input }) => {
+        const skipped: number[] = [];
+        let deleted = 0;
+        for (const jobId of input.jobIds) {
+          const job = await db.getTrendDiscoveryJobById(jobId);
+          if (!job || job.userId !== ctx.user.id) {
+            skipped.push(jobId);
+            continue;
+          }
+          if (job.status === "processing" || job.status === "queued") {
+            skipped.push(jobId);
+            continue;
+          }
+          await db.deleteTrendDiscoveryJob(jobId);
+          deleted++;
+        }
+        return { success: true, deleted, skipped };
+      }),
+
     cancel: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -1300,28 +1371,42 @@ export const appRouter = router({
         name: z.string().min(1, "キャンペーン名を入力してください"),
         clientName: z.string().optional(),
         keywords: z.array(z.string()).min(1, "キーワードを1つ以上入力してください"),
-        ownAccountIds: z.array(z.string()).min(1, "自社アカウントIDを1つ以上入力してください"),
-        ownVideoIds: z.array(z.string()).optional(),
-        ownVideoUrls: z.array(z.string()).optional(),
+        ownAccountIds: z.array(z.string()).optional(),
         campaignHashtags: z.array(z.string()).optional(),
         competitors: z.array(z.object({
           name: z.string(),
           account_id: z.string(),
         })).optional(),
         brandKeywords: z.array(z.string()).optional(),
+        bigKeywords: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const { extractTikTokUsername } = await import("@shared/tiktokUrl");
+
+        // 自社アカウント: URL/ID → username抽出
+        const ownAccountIds = (input.ownAccountIds || [])
+          .map(s => extractTikTokUsername(s))
+          .filter((s): s is string => s !== null);
+
+        // 競合: URL/ID → {name: username, account_id: username}
+        const competitors = (input.competitors || []).map(c => {
+          const parsed = extractTikTokUsername(c.account_id);
+          const accountId = parsed || c.account_id;
+          return { name: c.name || accountId, account_id: accountId };
+        });
+
         const id = await db.createCampaign({
           userId: ctx.user.id,
           name: input.name,
           clientName: input.clientName || null,
           keywords: input.keywords,
-          ownAccountIds: input.ownAccountIds,
-          ownVideoIds: input.ownVideoIds || [],
-          ownVideoUrls: input.ownVideoUrls || [],
+          ownAccountIds,
+          ownVideoIds: [],
+          ownVideoUrls: [],
           campaignHashtags: input.campaignHashtags || [],
-          competitors: input.competitors || [],
+          competitors,
           brandKeywords: input.brandKeywords || [],
+          bigKeywords: input.bigKeywords || [],
         });
         return { id };
       }),
@@ -1355,14 +1440,33 @@ export const appRouter = router({
           account_id: z.string(),
         })).optional(),
         brandKeywords: z.array(z.string()).optional(),
+        bigKeywords: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const campaign = await db.getCampaignById(input.id);
         if (!campaign || campaign.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
         }
-        const { id, ...updateData } = input;
-        await db.updateCampaign(id, updateData);
+        const { extractTikTokUsername } = await import("@shared/tiktokUrl");
+        const { id, ...rawData } = input;
+
+        // ownAccountIds の URL解析
+        if (rawData.ownAccountIds) {
+          rawData.ownAccountIds = rawData.ownAccountIds
+            .map(s => extractTikTokUsername(s))
+            .filter((s): s is string => s !== null);
+        }
+
+        // competitors の URL解析
+        if (rawData.competitors) {
+          rawData.competitors = rawData.competitors.map(c => {
+            const parsed = extractTikTokUsername(c.account_id);
+            const accountId = parsed || c.account_id;
+            return { name: c.name || accountId, account_id: accountId };
+          });
+        }
+
+        await db.updateCampaign(id, rawData);
         return { success: true };
       }),
 

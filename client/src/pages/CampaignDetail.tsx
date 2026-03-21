@@ -2,12 +2,28 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus } from "lucide-react";
+import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
+
+function extractTikTokUsername(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const urlMatch = trimmed.match(/tiktok\.com\/@([a-zA-Z0-9_.]+)/);
+  if (urlMatch) return urlMatch[1];
+  if (trimmed.startsWith("@")) {
+    const id = trimmed.slice(1).split(/[\s?#/]/)[0];
+    return id || null;
+  }
+  if (/^[a-zA-Z0-9_.]+$/.test(trimmed)) return trimmed;
+  return null;
+}
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   draft: { label: "下書き", variant: "outline" },
@@ -83,6 +99,7 @@ export default function CampaignDetail() {
 
   const isCapturing = snapshots.some(s => s.status === "processing" || s.status === "queued");
   const status = campaign ? statusConfig[campaign.status] || statusConfig.draft : statusConfig.draft;
+  const isBaselineCompleted = latestBaseline?.status === "completed";
 
   if (!campaign && !detailQuery.isLoading) {
     return (
@@ -129,14 +146,26 @@ export default function CampaignDetail() {
                   ))}
                 </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">自社アカウント:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {(campaign.ownAccountIds as string[])?.map((id, i) => (
-                    <Badge key={i} variant="outline">@{id}</Badge>
-                  ))}
+              {(campaign.ownAccountIds as string[])?.length > 0 && (
+                <div>
+                  <span className="text-muted-foreground">自社アカウント:</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(campaign.ownAccountIds as string[]).map((aid, i) => (
+                      <Badge key={i} variant="outline">@{aid}</Badge>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
+              {(campaign as any).bigKeywords?.length > 0 && (
+                <div>
+                  <span className="text-muted-foreground">ビッグキーワード:</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {((campaign as any).bigKeywords as string[]).map((bk, i) => (
+                      <Badge key={i} variant="secondary">{bk}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               {(campaign.campaignHashtags as string[])?.length > 0 && (
                 <div>
                   <span className="text-muted-foreground">ハッシュタグ:</span>
@@ -258,8 +287,18 @@ export default function CampaignDetail() {
           </Card>
         </div>
 
-        {/* 施策動画データ取得 */}
-        {campaign && (campaign as any).ownVideoUrls?.length > 0 && (
+        {/* 施策コンテンツの登録（ベースライン完了後に表示） */}
+        {campaign && isBaselineCompleted && (
+          <PostCampaignRegistration
+            campaign={campaign}
+            campaignId={campaignId}
+            scrapeVideosMutation={scrapeVideosMutation}
+            onRefetch={() => detailQuery.refetch()}
+          />
+        )}
+
+        {/* 施策動画データ表示（ownVideoData がある場合） */}
+        {campaign && (campaign as any).ownVideoData?.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
@@ -268,52 +307,38 @@ export default function CampaignDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(campaign as any).ownVideoData?.length > 0 ? (
-                <>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {((campaign as any).ownVideoData as any[]).map((v: any) => (
-                      <div key={v.videoId} className="border rounded-lg p-3 flex gap-3">
-                        {v.coverUrl && (
-                          <img src={v.coverUrl} alt="" className="w-16 h-20 rounded object-cover flex-shrink-0" loading="lazy" />
-                        )}
-                        <div className="min-w-0 flex-1 text-xs">
-                          <p className="font-medium truncate">{v.description?.slice(0, 40) || v.videoId}</p>
-                          <p className="text-muted-foreground">@{v.authorUniqueId}</p>
-                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-muted-foreground">
-                            <span>{(v.viewCount || 0).toLocaleString()} 再生</span>
-                            <span>{(v.likeCount || 0).toLocaleString()} いいね</span>
-                            <span>{(v.commentCount || 0).toLocaleString()} コメント</span>
-                          </div>
-                          {v.hashtags?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {v.hashtags.slice(0, 5).map((t: string, i: number) => (
-                                <Badge key={i} variant="secondary" className="text-[10px]">#{t}</Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {((campaign as any).ownVideoData as any[]).map((v: any) => (
+                  <div key={v.videoId} className="border rounded-lg p-3 flex gap-3">
+                    {v.coverUrl && (
+                      <img src={v.coverUrl} alt="" className="w-16 h-20 rounded object-cover flex-shrink-0" loading="lazy" />
+                    )}
+                    <div className="min-w-0 flex-1 text-xs">
+                      <p className="font-medium truncate">{v.description?.slice(0, 40) || v.videoId}</p>
+                      <p className="text-muted-foreground">@{v.authorUniqueId}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-muted-foreground">
+                        <span>{(v.viewCount || 0).toLocaleString()} 再生</span>
+                        <span>{(v.likeCount || 0).toLocaleString()} いいね</span>
+                        <span>{(v.commentCount || 0).toLocaleString()} コメント</span>
                       </div>
-                    ))}
+                      {v.hashtags?.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {v.hashtags.slice(0, 5).map((t: string, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-[10px]">#{t}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <Button
-                    variant="outline" size="sm"
-                    onClick={() => scrapeVideosMutation.mutate({ campaignId })}
-                    disabled={scrapeVideosMutation.isPending}
-                  >
-                    {scrapeVideosMutation.isPending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />取得中...</> : "動画データ再取得"}
-                  </Button>
-                </>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-sm text-muted-foreground">{((campaign as any).ownVideoUrls as string[]).length}件のURLが設定されています</p>
-                  <Button
-                    onClick={() => scrapeVideosMutation.mutate({ campaignId })}
-                    disabled={scrapeVideosMutation.isPending}
-                  >
-                    {scrapeVideosMutation.isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />取得中...</> : "動画データ取得"}
-                  </Button>
-                </div>
-              )}
+                ))}
+              </div>
+              <Button
+                variant="outline" size="sm"
+                onClick={() => scrapeVideosMutation.mutate({ campaignId })}
+                disabled={scrapeVideosMutation.isPending}
+              >
+                {scrapeVideosMutation.isPending ? <><Loader2 className="mr-2 h-3 w-3 animate-spin" />取得中...</> : "動画データ再取得"}
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -377,6 +402,228 @@ export default function CampaignDetail() {
   );
 }
 
+// ============================
+// 施策コンテンツ登録セクション
+// ============================
+
+function PostCampaignRegistration({
+  campaign, campaignId, scrapeVideosMutation, onRefetch,
+}: {
+  campaign: any;
+  campaignId: number;
+  scrapeVideosMutation: any;
+  onRefetch: () => void;
+}) {
+  const [videoUrl, setVideoUrl] = useState("");
+  const [accountUrl, setAccountUrl] = useState("");
+  const [competitorUrl, setCompetitorUrl] = useState("");
+
+  const updateMutation = trpc.campaign.update.useMutation({
+    onSuccess: () => {
+      onRefetch();
+    },
+    onError: (error) => toast.error(error.message),
+  });
+
+  const handleAddVideos = () => {
+    const lines = videoUrl.split("\n").map(s => s.trim()).filter(Boolean);
+    if (lines.length === 0) { toast.error("URLを入力してください"); return; }
+
+    const invalid = lines.filter(u => !u.includes("tiktok.com"));
+    if (invalid.length > 0) { toast.error(`TikTok以外のURLが${invalid.length}件あります`); return; }
+
+    const existing = new Set((campaign.ownVideoUrls as string[]) || []);
+    const newUrls = lines.filter(u => !existing.has(u));
+    if (newUrls.length === 0) { toast.error("全て登録済みのURLです"); return; }
+
+    updateMutation.mutate({
+      id: campaignId,
+      ownVideoUrls: [...existing, ...newUrls],
+    }, {
+      onSuccess: () => {
+        toast.success(`${newUrls.length}件の動画URLを追加しました`);
+        setVideoUrl("");
+        scrapeVideosMutation.mutate({ campaignId });
+      },
+    });
+  };
+
+  const handleAddAccounts = () => {
+    const lines = accountUrl.split("\n").map(s => s.trim()).filter(Boolean);
+    if (lines.length === 0) { toast.error("アカウントを入力してください"); return; }
+
+    const parsed = lines.map(l => extractTikTokUsername(l));
+    const invalid = lines.filter((_, i) => !parsed[i]);
+    if (invalid.length > 0) { toast.error(`解析できないアカウントが${invalid.length}件あります`); return; }
+
+    const validIds = parsed.filter(Boolean) as string[];
+    const existing = new Set((campaign.ownAccountIds as string[]) || []);
+    const newIds = validIds.filter(id => !existing.has(id));
+    if (newIds.length === 0) { toast.error("全て登録済みのアカウントです"); return; }
+
+    updateMutation.mutate({
+      id: campaignId,
+      ownAccountIds: [...existing, ...newIds],
+    }, {
+      onSuccess: () => {
+        toast.success(`${newIds.length}件のアカウントを追加しました`);
+        setAccountUrl("");
+      },
+    });
+  };
+
+  const handleAddCompetitors = () => {
+    const lines = competitorUrl.split("\n").map(s => s.trim()).filter(Boolean);
+    if (lines.length === 0) { toast.error("競合アカウントを入力してください"); return; }
+
+    const parsed = lines.map(l => extractTikTokUsername(l));
+    const invalid = lines.filter((_, i) => !parsed[i]);
+    if (invalid.length > 0) { toast.error(`解析できないアカウントが${invalid.length}件あります`); return; }
+
+    const validIds = parsed.filter(Boolean) as string[];
+    const existing = (campaign.competitors as any[]) || [];
+    const existingIds = new Set(existing.map((c: any) => c.account_id));
+    const newIds = validIds.filter(id => !existingIds.has(id));
+    if (newIds.length === 0) { toast.error("全て登録済みの競合です"); return; }
+
+    updateMutation.mutate({
+      id: campaignId,
+      competitors: [...existing, ...newIds.map(id => ({ name: id, account_id: id }))],
+    }, {
+      onSuccess: () => {
+        toast.success(`${newIds.length}件の競合を追加しました`);
+        setCompetitorUrl("");
+      },
+    });
+  };
+
+  const accountLines = accountUrl.split("\n").map(s => s.trim()).filter(Boolean);
+  const competitorLines = competitorUrl.split("\n").map(s => s.trim()).filter(Boolean);
+
+  return (
+    <Card className="border-blue-200 bg-blue-50/30">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Plus className="h-4 w-4" />
+          施策コンテンツの登録
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <p className="text-sm text-muted-foreground">施策で投稿した動画やアカウントを登録してください</p>
+
+        {/* 施策動画 */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">施策動画URL（1行1URL）</Label>
+          <Textarea
+            value={videoUrl}
+            onChange={e => setVideoUrl(e.target.value)}
+            placeholder={"https://www.tiktok.com/@user/video/123...\nhttps://www.tiktok.com/@user2/video/456..."}
+            rows={4}
+            className="bg-white"
+          />
+          <div className="flex items-center justify-between">
+            <div className="text-xs text-muted-foreground">
+              {(campaign.ownVideoUrls as string[])?.length > 0 && (
+                <span>{(campaign.ownVideoUrls as string[]).length}件登録済み</span>
+              )}
+              {videoUrl.trim() && (
+                <span className="ml-2">+ {videoUrl.split("\n").map(s => s.trim()).filter(Boolean).length}件入力中</span>
+              )}
+            </div>
+            <Button
+              size="sm"
+              onClick={handleAddVideos}
+              disabled={updateMutation.isPending || !videoUrl.trim()}
+            >
+              {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "一括追加"}
+            </Button>
+          </div>
+        </div>
+
+        {/* 自社アカウント */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">自社アカウント追加（1行1アカウント）</Label>
+          <Textarea
+            value={accountUrl}
+            onChange={e => setAccountUrl(e.target.value)}
+            placeholder={"https://www.tiktok.com/@account1\nhttps://www.tiktok.com/@account2\n@account3"}
+            rows={3}
+            className="bg-white"
+          />
+          {accountLines.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {accountLines.map((line, i) => {
+                const parsed = extractTikTokUsername(line);
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${parsed ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+                    {parsed ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    {parsed ? `@${parsed}` : line.slice(0, 30)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {(campaign.ownAccountIds as string[])?.length > 0 && `${(campaign.ownAccountIds as string[]).length}件登録済み`}
+              {accountLines.length > 0 && <span className="ml-2">+ {accountLines.length}件入力中</span>}
+            </p>
+            <Button
+              size="sm"
+              onClick={handleAddAccounts}
+              disabled={updateMutation.isPending || !accountUrl.trim()}
+            >
+              {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "一括追加"}
+            </Button>
+          </div>
+        </div>
+
+        {/* 競合追加 */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">競合追加（1行1アカウント）</Label>
+          <Textarea
+            value={competitorUrl}
+            onChange={e => setCompetitorUrl(e.target.value)}
+            placeholder={"https://www.tiktok.com/@competitor_a\nhttps://www.tiktok.com/@competitor_b\n@competitor_c"}
+            rows={3}
+            className="bg-white"
+          />
+          {competitorLines.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {competitorLines.map((line, i) => {
+                const parsed = extractTikTokUsername(line);
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${parsed ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+                    {parsed ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    {parsed ? `@${parsed}` : line.slice(0, 30)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">
+              {(campaign.competitors as any[])?.length > 0 && `${(campaign.competitors as any[]).length}件登録済み`}
+              {competitorLines.length > 0 && <span className="ml-2">+ {competitorLines.length}件入力中</span>}
+            </p>
+            <Button
+              size="sm"
+              onClick={handleAddCompetitors}
+              disabled={updateMutation.isPending || !competitorUrl.trim()}
+            >
+              {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "一括追加"}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================
+// 検出された競合
+// ============================
+
 function DetectedCompetitorsCard({
   campaign, snapshots, campaignId, applyMutation,
 }: {
@@ -387,7 +634,6 @@ function DetectedCompetitorsCard({
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Find latest completed snapshot with detected competitors
   const snapshotWithCompetitors = snapshots.find(
     (s: any) => s.status === "completed" && s.detectedCompetitors?.length > 0,
   );

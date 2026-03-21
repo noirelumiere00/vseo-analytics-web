@@ -38,6 +38,7 @@ import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection, SeoMetaKeywordsSection } from '@/components/ReportSection';
 import { filterAdHashtags, isPromotionVideo } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
+import SearchCorrelationChart from "@/components/SearchCorrelationChart";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
 import HashtagStrategy from "@/components/HashtagStrategy";
@@ -726,7 +727,7 @@ export default function AnalysisDetail() {
         <div className="flex items-center justify-center py-32">
           <div className="text-center space-y-4">
             <p className="text-muted-foreground">分析ジョブが見つかりません</p>
-            <Button onClick={() => setLocation("/history")}>一覧に戻る</Button>
+            <Button onClick={() => setLocation("/activity")}>一覧に戻る</Button>
           </div>
         </div>
       </DashboardLayout>
@@ -1430,6 +1431,18 @@ export default function AnalysisDetail() {
                             <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
                           </TabsContent>
                         </Tabs>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* 検索相関分析（Google Trends × TikTok） */}
+                  {data.job?.keyword && (
+                    <AccordionItem value="search-correlation" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        🔍 検索相関分析（Google Trends × TikTok）
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} />
                       </AccordionContent>
                     </AccordionItem>
                   )}

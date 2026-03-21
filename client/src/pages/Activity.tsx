@@ -1,27 +1,47 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { HistorySkeleton } from "@/components/PageSkeleton";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw,
-  TrendingUp, Search, Compass, ArrowRight, BarChart3, Smile, Frown, Minus,
+  TrendingUp, Search, Compass, BarChart3, GitCompareArrows, X, CheckSquare,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 type FilterType = "all" | "seo" | "trend";
+type EditMode = "normal" | "compare" | "delete";
 
 export default function Activity() {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const utils = trpc.useUtils();
   const { data: items, isLoading } = trpc.analysis.allActivity.useQuery();
-  const [filter, setFilter] = useState<FilterType>("all");
+
+  // URL query-driven initial state
+  const initialFilter = (params.get("filter") as FilterType) || "all";
+  const compareWithId = params.get("compareWith");
+
+  const [filter, setFilter] = useState<FilterType>(
+    initialFilter === "seo" || initialFilter === "trend" ? initialFilter : "all"
+  );
+  const [editMode, setEditMode] = useState<EditMode>(compareWithId ? "compare" : "normal");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    compareWithId ? new Set([`seo-${compareWithId}`]) : new Set()
+  );
+
+  // Sync filter from URL on mount
+  useEffect(() => {
+    const f = params.get("filter") as FilterType;
+    if (f === "seo" || f === "trend") setFilter(f);
+  }, [params]);
 
   const deleteAnalysis = trpc.analysis.delete.useMutation({
     onSuccess: () => {
@@ -51,6 +71,26 @@ export default function Activity() {
     onSuccess: () => {
       toast.success("再実行を開始します");
       utils.analysis.allActivity.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const bulkDeleteAnalysis = trpc.analysis.bulkDelete.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.deleted}件のSEO分析を削除しました`);
+      utils.analysis.allActivity.invalidate();
+      setSelectedIds(new Set());
+      setEditMode("normal");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const bulkDeleteTrend = trpc.trendDiscovery.bulkDelete.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.deleted}件のトレンド発掘を削除しました`);
+      utils.analysis.allActivity.invalidate();
+      setSelectedIds(new Set());
+      setEditMode("normal");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -107,11 +147,72 @@ export default function Activity() {
   };
 
   const handleClick = (item: typeof filtered[0]) => {
-    if (item.type === "seo") {
-      setLocation(`/analysis/${item.id}`);
-    } else {
-      setLocation(`/trend-discovery/${item.id}`);
+    if (editMode === "normal") {
+      if (item.type === "seo") {
+        setLocation(`/analysis/${item.id}`);
+      } else {
+        setLocation(`/trend-discovery/${item.id}`);
+      }
+      return;
     }
+
+    const key = `${item.type}-${item.id}`;
+
+    if (editMode === "compare") {
+      // Only allow completed SEO jobs for comparison
+      if (item.type !== "seo" || item.status !== "completed") return;
+      const next = new Set(selectedIds);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        if (next.size >= 2) return; // max 2
+        next.add(key);
+      }
+      setSelectedIds(next);
+      return;
+    }
+
+    if (editMode === "delete") {
+      const isProcessing = item.status === "processing" || item.status === "queued";
+      if (isProcessing) return;
+      const next = new Set(selectedIds);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      setSelectedIds(next);
+    }
+  };
+
+  const handleCompare = () => {
+    const ids = Array.from(selectedIds)
+      .filter(k => k.startsWith("seo-"))
+      .map(k => parseInt(k.replace("seo-", "")));
+    if (ids.length === 2) {
+      setLocation(`/compare?a=${ids[0]}&b=${ids[1]}`);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    const seoIds = Array.from(selectedIds)
+      .filter(k => k.startsWith("seo-"))
+      .map(k => parseInt(k.replace("seo-", "")));
+    const trendIds = Array.from(selectedIds)
+      .filter(k => k.startsWith("trend-"))
+      .map(k => parseInt(k.replace("trend-", "")));
+
+    if (seoIds.length + trendIds.length === 0) return;
+
+    if (!window.confirm(`${seoIds.length + trendIds.length}件のジョブを削除しますか？関連する全てのデータが削除されます。`)) return;
+
+    if (seoIds.length > 0) bulkDeleteAnalysis.mutate({ jobIds: seoIds });
+    if (trendIds.length > 0) bulkDeleteTrend.mutate({ jobIds: trendIds });
+  };
+
+  const exitEditMode = () => {
+    setEditMode("normal");
+    setSelectedIds(new Set());
   };
 
   return (
@@ -126,14 +227,52 @@ export default function Activity() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setLocation("/trend-discovery")}>
-              <Compass className="h-4 w-4 mr-1.5" />
-              トレンド発掘
-            </Button>
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
-              <Search className="h-4 w-4 mr-1.5" />
-              新規分析
-            </Button>
+            {editMode === "normal" ? (
+              <>
+                <Button size="sm" variant="outline" onClick={() => { setEditMode("compare"); setSelectedIds(new Set()); }}>
+                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
+                  比較
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setEditMode("delete"); setSelectedIds(new Set()); }}>
+                  <CheckSquare className="h-4 w-4 mr-1.5" />
+                  選択削除
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setLocation("/trend-discovery")}>
+                  <Compass className="h-4 w-4 mr-1.5" />
+                  トレンド発掘
+                </Button>
+                <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
+                  <Search className="h-4 w-4 mr-1.5" />
+                  新規分析
+                </Button>
+              </>
+            ) : editMode === "compare" ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  完了済みSEO分析を2件選択してください ({selectedIds.size}/2)
+                </span>
+                <Button size="sm" disabled={selectedIds.size !== 2} onClick={handleCompare}>
+                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
+                  比較する
+                </Button>
+                <Button size="sm" variant="ghost" onClick={exitEditMode}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  {selectedIds.size}件選択中
+                </span>
+                <Button size="sm" variant="destructive" disabled={selectedIds.size === 0} onClick={handleBulkDelete}>
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  削除する
+                </Button>
+                <Button size="sm" variant="ghost" onClick={exitEditMode}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -186,17 +325,43 @@ export default function Activity() {
               const isProcessing = item.status === "processing" || item.status === "queued";
               const canRetry = item.status === "failed" || item.status === "pending";
               const canDelete = !isProcessing;
+              const key = `${item.type}-${item.id}`;
+              const isSelected = selectedIds.has(key);
+              const isSelectable = editMode === "compare"
+                ? item.type === "seo" && item.status === "completed"
+                : editMode === "delete"
+                ? !isProcessing
+                : true;
 
               return (
                 <Card
-                  key={`${item.type}-${item.id}`}
-                  className="card-interactive cursor-pointer hover:border-primary/40 animate-list-item"
+                  key={key}
+                  className={`card-interactive cursor-pointer animate-list-item transition-all ${
+                    isSelected
+                      ? "border-primary ring-1 ring-primary/30"
+                      : editMode !== "normal" && !isSelectable
+                      ? "opacity-40 cursor-not-allowed"
+                      : "hover:border-primary/40"
+                  }`}
                   style={{ animationDelay: `${i * 30}ms` }}
                   onClick={() => handleClick(item)}
                 >
                   <CardHeader className="py-3 px-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Selection checkbox in edit modes */}
+                        {editMode !== "normal" && (
+                          <div className={`h-5 w-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected
+                              ? "bg-primary border-primary text-primary-foreground"
+                              : isSelectable
+                              ? "border-muted-foreground/40"
+                              : "border-muted-foreground/20"
+                          }`}>
+                            {isSelected && <CheckCircle2 className="h-3 w-3" />}
+                          </div>
+                        )}
+
                         {/* Type badge */}
                         <Badge
                           variant="secondary"
@@ -214,7 +379,7 @@ export default function Activity() {
                             <CardTitle className="text-sm font-medium truncate">
                               {item.label}
                             </CardTitle>
-                            {item.type === "seo" && item.status === "completed" && (
+                            {editMode === "normal" && item.type === "seo" && item.status === "completed" && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -228,7 +393,6 @@ export default function Activity() {
                           </div>
                           <CardDescription className="text-xs mt-0.5">
                             {formatDistanceToNow(new Date(item.date), { addSuffix: true, locale: ja })}
-                            {/* Extra metadata for completed items */}
                             {item.type === "seo" && item.status === "completed" && (item as any).totalVideos != null && (
                               <span className="ml-2">
                                 / {(item as any).totalVideos}本 / {((item as any).totalViews ?? 0).toLocaleString()}再生
@@ -265,8 +429,8 @@ export default function Activity() {
 
                         {getStatusBadge(item.status)}
 
-                        {/* Actions */}
-                        {canRetry && (
+                        {/* Actions (only in normal mode) */}
+                        {editMode === "normal" && canRetry && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -277,7 +441,7 @@ export default function Activity() {
                             <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {canDelete && (
+                        {editMode === "normal" && canDelete && (
                           <Button
                             variant="outline"
                             size="sm"

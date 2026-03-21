@@ -17,7 +17,6 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 
 // Heavy pages - lazy import
-const History = lazy(() => import("./pages/History"));
 const AnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
 const ReportView = lazy(() => import("./pages/ReportView"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -31,9 +30,14 @@ const CampaignList = lazy(() => import("./pages/CampaignList"));
 const CampaignNew = lazy(() => import("./pages/CampaignNew"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const CampaignReport = lazy(() => import("./pages/CampaignReport"));
-const TrendInsights = lazy(() => import("./pages/TrendInsights"));
 const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
 const Activity = lazy(() => import("./pages/Activity"));
+
+function RedirectTo({ to }: { to: string }) {
+  const [, navigate] = useLocation();
+  useEffect(() => { navigate(to, { replace: true }); }, [to, navigate]);
+  return null;
+}
 
 function PageLoader() {
   return (
@@ -66,7 +70,6 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       {/* Protected routes */}
       <Route path={"/"} component={Home} />
-      <Route path="/history" component={History} />
       <Route path="/activity" component={Activity} />
       <Route path="/analysis/new" component={AnalysisNew} />
       <Route path="/dashboard" component={Dashboard} />
@@ -75,8 +78,10 @@ function Router() {
       <Route path="/trend" component={Trend} />
       <Route path="/trend-discovery" component={TrendDiscovery} />
       <Route path="/trend-discovery/:id" component={TrendDiscoveryDetail} />
-      <Route path="/trend-insights" component={TrendInsights} />
       <Route path="/campaigns" component={CampaignList} />
+      {/* Legacy redirects */}
+      <Route path="/history">{() => <RedirectTo to="/activity?filter=seo" />}</Route>
+      <Route path="/trend-insights">{() => <RedirectTo to="/activity?filter=trend" />}</Route>
       <Route path="/campaigns/new" component={CampaignNew} />
       <Route path="/campaigns/:id" component={CampaignDetail} />
       <Route path="/campaigns/:id/report" component={CampaignReport} />

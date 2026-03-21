@@ -250,6 +250,20 @@ export const analysisReports = mysqlTable("analysis_reports", {
     fetchedAt: string;
   }>(),
 
+  // Google Ads Keyword Planner キャッシュ（検索ボリューム）
+  googleAdsKeywordCache: json("googleAdsKeywordCache").$type<{
+    keywords: Array<{
+      keyword: string;
+      avgMonthlySearches: number;
+      competition: string;
+      competitionIndex: number;
+      lowTopOfPageBidMicros: number;
+      highTopOfPageBidMicros: number;
+      monthlyVolumes: Array<{ year: number; month: number; volume: number }>;
+    }>;
+    fetchedAt: string;
+  }>(),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
@@ -421,8 +435,11 @@ export const campaigns = mysqlTable("campaigns", {
     account_id: string;
   }>>(),
 
-  // ブランド関連ワード（オマージュ検出用）
+  // ブランド関連ワード（任意・メモ用）
   brandKeywords: json("brandKeywords").$type<string[]>(),
+
+  // ビッグキーワード（カテゴリ全体での露出計測用）
+  bigKeywords: json("bigKeywords").$type<string[]>(),
 
   // スナップショットリンク
   baselineSnapshotId: int("baselineSnapshotId"),
@@ -504,7 +521,17 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
     other_post_count: number;
     other_total_views: number;
     other_avg_views: number;
-    omaage_videos: Array<{
+    third_party_videos?: Array<{
+      video_url: string;
+      creator: string;
+      views: number;
+      likes: number;
+      description: string;
+      hashtags: string[];
+      posted_at: string;
+    }>;
+    /** @deprecated 旧フィールド（後方互換） */
+    omaage_videos?: Array<{
       video_url: string;
       creator: string;
       views: number;
@@ -538,6 +565,12 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
     accountId: string; nickname: string; avatarUrl: string;
     followerCount: number; keywordAppearances: number;
     totalVideosInTop30: number; avgRank: number;
+  }>>(),
+
+  // ビッグキーワード検索結果
+  bigKeywordResults: json("bigKeywordResults").$type<Record<string, {
+    ownVideosInTop30: Array<{ videoId: string; rank: number; viewCount: number }>;
+    totalResults: number;
   }>>(),
 
   capturedAt: timestamp("capturedAt"),
@@ -590,11 +623,15 @@ export const campaignReports = mysqlTable("campaign_reports", {
   // 競合比較
   competitorReport: json("competitorReport").$type<Record<string, {
     own_rank: number | null;
+    own_rank_before?: number | null;
     competitors: Array<{
       competitor_name: string;
       competitor_id: string;
       best_rank: number | null;
       video_count_in_top30: number;
+      before_best_rank?: number | null;
+      before_video_count_in_top30?: number;
+      rank_change?: number | null;
     }>;
     is_top: boolean;
   }>>(),
@@ -624,7 +661,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
     posts_change_pct: string | null;
     before_total_views: number;
     after_total_views: number;
-    omaage_videos: Array<{
+    third_party_videos?: Array<{
       video_url: string;
       creator: string;
       views: number;
@@ -633,7 +670,19 @@ export const campaignReports = mysqlTable("campaign_reports", {
       hashtags: string[];
       posted_at: string;
     }>;
-    omaage_count: number;
+    third_party_count?: number;
+    /** @deprecated 旧フィールド（後方互換） */
+    omaage_videos?: Array<{
+      video_url: string;
+      creator: string;
+      views: number;
+      likes: number;
+      description: string;
+      hashtags: string[];
+      posted_at: string;
+    }>;
+    /** @deprecated 旧フィールド（後方互換） */
+    omaage_count?: number;
   }>>(),
 
   // スクリーンショット
@@ -678,6 +727,13 @@ export const campaignReports = mysqlTable("campaign_reports", {
     grade: string; summary: string;
     strengths: string[]; weaknesses: string[]; actionProposals: string[];
   }>(),
+
+  // ビッグキーワード露出レポート
+  bigKeywordReport: json("bigKeywordReport").$type<Array<{
+    keyword: string;
+    before: { ownVideoCount: number; bestRank: number | null };
+    after: { ownVideoCount: number; bestRank: number | null };
+  }>>(),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

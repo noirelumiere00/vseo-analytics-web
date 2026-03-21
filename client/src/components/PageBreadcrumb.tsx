@@ -7,12 +7,10 @@ import { useLocation } from "wouter";
 const ROUTE_MAP: Record<string, { label: string; parent?: string }> = {
   "/dashboard": { label: "ダッシュボード" },
   "/activity": { label: "アクティビティ" },
-  "/history": { label: "キーワード分析" },
-  "/analysis/new": { label: "新規分析", parent: "/history" },
-  "/compare": { label: "比較分析", parent: "/history" },
-  "/trend": { label: "トレンド推移", parent: "/history" },
-  "/trend-insights": { label: "トレンド発掘" },
-  "/trend-discovery": { label: "新規分析", parent: "/trend-insights" },
+  "/analysis/new": { label: "新規分析", parent: "/activity" },
+  "/compare": { label: "比較分析", parent: "/activity" },
+  "/trend": { label: "トレンド推移", parent: "/activity" },
+  "/trend-discovery": { label: "トレンド発掘", parent: "/activity" },
   "/campaigns": { label: "施策レポート" },
   "/campaigns/new": { label: "新規作成", parent: "/campaigns" },
   "/admin": { label: "管理画面" },
@@ -29,12 +27,12 @@ export function PageBreadcrumb() {
   // Check dynamic routes
   if (location.startsWith("/analysis/") && location !== "/analysis/new") {
     currentLabel = "分析詳細";
-    parentPath = "/history";
-    parentLabel = "キーワード分析";
+    parentPath = "/activity";
+    parentLabel = "アクティビティ";
   } else if (location.startsWith("/trend-discovery/") && location !== "/trend-discovery") {
     currentLabel = "トレンド詳細";
-    parentPath = "/trend-insights";
-    parentLabel = "トレンド発掘";
+    parentPath = "/activity";
+    parentLabel = "アクティビティ";
   } else if (location === "/campaigns/new") {
     currentLabel = "新規作成";
     parentPath = "/campaigns";
