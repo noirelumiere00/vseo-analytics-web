@@ -235,9 +235,9 @@ export default function Comparison() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">比較対象が指定されていません</p>
-          <Button variant="outline" onClick={() => setLocation("/history")}>
+          <Button variant="outline" onClick={() => setLocation("/activity")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            履歴へ戻る
+            一覧へ戻る
           </Button>
         </div>
       </div>
@@ -257,9 +257,9 @@ export default function Comparison() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">分析データを取得できませんでした</p>
-          <Button variant="outline" onClick={() => setLocation("/history")}>
+          <Button variant="outline" onClick={() => setLocation("/activity")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            履歴へ戻る
+            一覧へ戻る
           </Button>
         </div>
       </div>
@@ -400,9 +400,9 @@ export default function Comparison() {
               </h1>
               <p className="text-muted-foreground mt-2">2件の分析結果を並べて比較します</p>
             </div>
-            <Button variant="outline" onClick={() => setLocation("/history")}>
+            <Button variant="outline" onClick={() => setLocation("/activity")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
-              履歴へ戻る
+              一覧へ戻る
             </Button>
           </div>
 

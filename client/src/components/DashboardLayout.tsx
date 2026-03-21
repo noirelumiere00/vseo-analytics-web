@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Clock, Compass, LayoutDashboard, LogOut, Megaphone, Search } from "lucide-react";
+import { Clock, LayoutDashboard, LogOut, Megaphone } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,8 +32,6 @@ import { Button } from "./ui/button";
 const navItems = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Clock, label: "アクティビティ", path: "/activity" },
-  { icon: Search, label: "キーワード分析", path: "/history" },
-  { icon: Compass, label: "トレンド発掘", path: "/trend-insights" },
   { icon: Megaphone, label: "施策レポート", path: "/campaigns" },
 ];
 
@@ -190,9 +188,11 @@ function DashboardLayoutContent({
               {navItems.map(item => {
                 const isActive =
                   location === item.path
-                  || (item.path === "/activity" && location === "/activity")
-                  || (item.path === "/history" && (location.startsWith("/analysis/") || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?")))
-                  || (item.path === "/trend-insights" && (location.startsWith("/trend-discovery") || location.startsWith("/trend-insights")))
+                  || (item.path === "/activity" && (
+                    location.startsWith("/analysis/") || location.startsWith("/compare")
+                    || location === "/trend" || location.startsWith("/trend?")
+                    || location.startsWith("/trend-discovery") || location.startsWith("/trend-insights")
+                  ))
                   || (item.path === "/campaigns" && location.startsWith("/campaigns"));
                 return (
                   <SidebarMenuItem key={item.path}>

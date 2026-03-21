@@ -28,6 +28,12 @@ export const ENV = {
   adminEmail: process.env.ADMIN_EMAIL ?? "",
   // 無制限ドメイン（カンマ区切り）
   unlimitedDomains: process.env.UNLIMITED_DOMAINS ?? "",
+  // Google Ads API
+  googleAdsDeveloperToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
+  googleAdsRefreshToken: process.env.GOOGLE_ADS_REFRESH_TOKEN ?? "",
+  googleAdsCustomerId: process.env.GOOGLE_ADS_CUSTOMER_ID ?? "",
+  // Apify
+  apifyApiToken: process.env.APIFY_API_TOKEN ?? "",
 };
 
 /** 起動時に必須環境変数をバリデーション */

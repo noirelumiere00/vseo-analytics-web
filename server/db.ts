@@ -660,6 +660,7 @@ export async function upsertCampaignReport(data: InsertCampaignReport) {
       crossPlatformData: data.crossPlatformData,
       videoScores: data.videoScores,
       aiOverallReport: data.aiOverallReport,
+      bigKeywordReport: data.bigKeywordReport,
     },
   });
 }

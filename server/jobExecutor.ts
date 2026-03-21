@@ -654,6 +654,7 @@ export async function executeCampaignSnapshot(
       ownVideoMetrics: snapshotData.ownVideoMetrics,
       hashtagAnalysis: snapshotData.hashtagAnalysis,
       detectedCompetitors: snapshotData.detectedCompetitors,
+      bigKeywordResults: snapshotData.bigKeywordResults,
       capturedAt: new Date(),
     });
 
