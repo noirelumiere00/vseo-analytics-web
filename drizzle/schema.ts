@@ -715,6 +715,15 @@ export const campaignReports = mysqlTable("campaign_reports", {
     videoTimeline: Array<{ date: string; postCount: number; totalViews: number }>;
     videoMarkers: Array<{ date: string; videoId: string; videoUrl: string; description: string }>;
     correlation: number | null;
+    keywordSearchVolumes?: Array<{
+      keyword: string;
+      avgMonthlySearches: number;
+      competition: string;
+      competitionIndex: number;
+      lowTopOfPageBidMicros: number;
+      highTopOfPageBidMicros: number;
+      monthlyVolumes: Array<{ year: number; month: number; volume: number }>;
+    }>;
   }>(),
 
   // 動画スコア（Phase 5）
