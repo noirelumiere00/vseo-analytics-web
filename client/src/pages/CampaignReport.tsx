@@ -151,7 +151,23 @@ export default function CampaignReport() {
   const positions = report.positionReport || [];
   const compReport = report.competitorReport || {};
   const sovReport = report.sovReport || {};
-  const ripple = report.rippleReport || {};
+  // 施策KW/ハッシュタグに関連するタグのみ表示（日傘等の無関係タグを除外）
+  const rawRipple = report.rippleReport || {};
+  const ripple = (() => {
+    const kws = (campaign?.keywords || []).map((kw: string) => kw.replace(/^#/, "").toLowerCase()).filter(Boolean);
+    const name = (campaign?.name || "").toLowerCase();
+    const ownIds = (campaign?.ownAccountIds || []).map((id: string) => id.toLowerCase());
+    if (kws.length === 0) return rawRipple;
+    const filtered: Record<string, any> = {};
+    for (const [tag, data] of Object.entries(rawRipple)) {
+      const lower = tag.toLowerCase();
+      const relevant = kws.some(kw => lower.includes(kw) || kw.includes(lower))
+        || (name && (lower.includes(name) || name.includes(lower)))
+        || ownIds.some(id => lower.includes(id) || id.includes(lower));
+      if (relevant) filtered[tag] = data;
+    }
+    return Object.keys(filtered).length > 0 ? filtered : rawRipple;
+  })();
   const freqReport = report.competitorFrequencyReport || [];
   const videoMetrics = (report as any).videoMetricsReport as any[] | undefined;
   const crossPlatform = (report as any).crossPlatformData as any | undefined;
