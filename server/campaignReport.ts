@@ -179,13 +179,36 @@ export async function generateCampaignReport(
   }
 
   // ============================
-  // 軸3: 波及効果
+  // 軸3: 波及効果（施策KW/ハッシュタグの増減のみ）
   // ============================
-  const rippleTags = [...new Set([
+  // keywords 由来のハッシュタグだけに絞る（日傘等の無関係タグを除外）
+  const keywordHashtags = keywords
+    .map(kw => kw.replace(/^#/, "").toLowerCase())
+    .filter(Boolean);
+  const brandKws = (campaign.brandKeywords || []).map((b: string) => b.toLowerCase());
+  const campaignName = (campaign.name || "").toLowerCase();
+
+  const isRelevantTag = (tag: string): boolean => {
+    const lower = tag.toLowerCase();
+    // keywords由来のハッシュタグ
+    if (keywordHashtags.some(kh => lower.includes(kh) || kh.includes(lower))) return true;
+    // ブランドキーワードに一致
+    if (brandKws.some(bk => lower.includes(bk) || bk.includes(lower))) return true;
+    // キャンペーン名に含まれる
+    if (campaignName && (lower.includes(campaignName) || campaignName.includes(lower))) return true;
+    // 自社アカウントIDに一致（公式タグ）
+    const ownIds = (campaign.ownAccountIds || []).map((id: string) => id.toLowerCase());
+    if (ownIds.some(id => lower.includes(id) || id.includes(lower))) return true;
+    return false;
+  };
+
+  const allRippleTags = [...new Set([
     ...campaignHashtags,
     ...Object.keys(baseline.rippleEffect || {}),
     ...Object.keys(measurement.rippleEffect || {}),
   ])];
+  const rippleTags = allRippleTags.filter(isRelevantTag);
+
   for (const tag of rippleTags) {
     const before = baseline.rippleEffect?.[tag];
     const after = measurement.rippleEffect?.[tag];

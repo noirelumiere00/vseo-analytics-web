@@ -309,22 +309,27 @@ export async function captureSnapshot(
     // ============================
     // C. 波及効果データ（sharedBrowser で軽量取得）
     // ============================
-    let effectiveHashtags = [...campaignHashtags];
+    // 施策KW/ハッシュタグに関連するタグのみを検索対象にする
+    const keywordHashtags = keywords
+      .map((kw: string) => kw.replace(/^#/, "").toLowerCase())
+      .filter(Boolean);
+    const brandKws = ((campaign as any).brandKeywords || []).map((b: string) => b.toLowerCase());
+    const campaignName = ((campaign as any).name || "").toLowerCase();
+    const ownIdSet = new Set(ownAccountIds.map((id: string) => id.toLowerCase()));
+
+    const isRelevantTag = (tag: string): boolean => {
+      const lower = tag.toLowerCase().replace(/^#/, "");
+      if (keywordHashtags.some(kh => lower.includes(kh) || kh.includes(lower))) return true;
+      if (brandKws.some(bk => lower.includes(bk) || bk.includes(lower))) return true;
+      if (campaignName && (lower.includes(campaignName) || campaignName.includes(lower))) return true;
+      if ([...ownIdSet].some(id => lower.includes(id) || id.includes(lower))) return true;
+      return false;
+    };
+
+    let effectiveHashtags = campaignHashtags.filter(isRelevantTag);
     if (effectiveHashtags.length === 0) {
-      const ownVidData = (campaign as any).ownVideoData as Array<{ hashtags: string[] }> | undefined;
-      if (ownVidData?.length) {
-        const tagCounts = new Map<string, number>();
-        for (const v of ownVidData) {
-          for (const tag of (v.hashtags || [])) {
-            const n = tag.toLowerCase().replace(/^#/, "");
-            if (n) tagCounts.set(n, (tagCounts.get(n) || 0) + 1);
-          }
-        }
-        effectiveHashtags = [...tagCounts.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([t]) => `#${t}`);
-      }
+      // フォールバック: keywordsをそのままハッシュタグとして使う
+      effectiveHashtags = keywords.map((kw: string) => kw.replace(/^#/, ""));
     }
     if (effectiveHashtags.length > 0) {
       report("ripple", `波及効果データ取得中 (${effectiveHashtags.length}タグ)...`, 45);
