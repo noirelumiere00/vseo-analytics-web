@@ -37,6 +37,7 @@ const mainNav = [
 const quickActions = [
   { icon: Search, label: "新規SEO分析", path: "/analysis/new" },
   { icon: Compass, label: "トレンド発掘", path: "/trend-discovery" },
+  { icon: Megaphone, label: "新規施策レポート", path: "/campaigns/new" },
 ];
 
 // Combine for breadcrumb usage
@@ -155,7 +156,8 @@ function DashboardLayoutContent({
   const isActive = (path: string) => {
     if (path === "/dashboard") return location === path;
     if (path === "/activity") return location === path || (location.startsWith("/analysis/") && location !== "/analysis/new") || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?") || location.startsWith("/trend-insights");
-    if (path === "/campaigns") return location.startsWith("/campaigns");
+    if (path === "/campaigns/new") return location === path;
+    if (path === "/campaigns") return location.startsWith("/campaigns") && location !== "/campaigns/new";
     if (path === "/analysis/new") return location === path;
     if (path === "/trend-discovery") return location.startsWith("/trend-discovery");
     return location === path;
