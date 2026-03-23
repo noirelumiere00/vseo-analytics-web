@@ -10,9 +10,20 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/
 import { DashboardSkeleton } from "@/components/PageSkeleton";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   BarChart3, TrendingUp, Search, ArrowRight, AlertTriangle,
   Layers, X, Loader2, Compass, Hash, Clock, Smile, Frown, Minus,
-  Lightbulb, Users, Ruler, Play, Zap, Megaphone, Sparkles,
+  Lightbulb, Users, Ruler, Play, Zap, Megaphone, Sparkles, Plus, ChevronDown,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
@@ -107,23 +118,32 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto space-y-6">
+      <div className="max-w-5xl mx-auto space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">ダッシュボード</h1>
-            <p className="text-sm text-muted-foreground mt-1">コンテンツ戦略の全体像</p>
+            <h1 className="text-xl font-semibold">ダッシュボード</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">コンテンツ戦略の全体像</p>
           </div>
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => setLocation("/trend-discovery")}>
-              <Compass className="h-4 w-4 mr-1.5" />
-              トレンド発掘
-            </Button>
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
-              <Search className="h-4 w-4 mr-1.5" />
-              新規分析
-            </Button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="gradient-primary text-white h-8 text-[13px]">
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
+                新規作成
+                <ChevronDown className="h-3 w-3 ml-1 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setLocation("/analysis/new")}>
+                <Search className="h-4 w-4 mr-2" />
+                SEO分析
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLocation("/trend-discovery")}>
+                <Compass className="h-4 w-4 mr-2" />
+                トレンド発掘
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* === 進行中ジョブバナー === */}
@@ -131,8 +151,8 @@ export default function Dashboard() {
           <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />
                   進行中のジョブ
                 </CardTitle>
                 {(data?.kpi.failedJobs ?? 0) > 0 && (
@@ -190,39 +210,37 @@ export default function Dashboard() {
         )}
 
         {/* === KPIカード === */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card className="relative overflow-hidden">
-            <CardContent className="pt-6 pb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Card className="stat-card card-interactive">
+            <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">分析実行数</p>
-                  <div className="text-3xl font-bold mt-1 tabular-nums">{data?.kpi.totalAnalyses || 0}</div>
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">分析実行数</p>
+                  <div className="text-2xl font-bold mt-1 tabular-nums">{data?.kpi.totalAnalyses || 0}</div>
                   {(data?.kpi.weeklyDelta ?? 0) > 0 && (
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
                       <TrendingUp className="h-3 w-3" />今週 +{data!.kpi.weeklyDelta}
                     </p>
                   )}
                 </div>
-                <div className="h-12 w-12 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
-                  <BarChart3 className="h-6 w-6 text-blue-500" />
+                <div className="h-10 w-10 rounded-lg bg-blue-50 dark:bg-blue-950 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-blue-500" />
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
             </CardContent>
           </Card>
-          <Card className="relative overflow-hidden">
-            <CardContent className="pt-6 pb-4">
+          <Card className="stat-card card-interactive">
+            <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">解析済み動画</p>
-                  <div className="text-3xl font-bold mt-1 tabular-nums">{insights?.stats.totalVideos?.toLocaleString() || "0"}</div>
-                  <p className="text-xs text-muted-foreground mt-1">全期間</p>
+                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">解析済み動画</p>
+                  <div className="text-2xl font-bold mt-1 tabular-nums">{insights?.stats.totalVideos?.toLocaleString() || "0"}</div>
+                  <p className="text-[11px] text-muted-foreground mt-1">全期間</p>
                 </div>
-                <div className="h-12 w-12 rounded-xl bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
-                  <Play className="h-6 w-6 text-purple-500" />
+                <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
+                  <Play className="h-5 w-5 text-purple-500" />
                 </div>
               </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
             </CardContent>
           </Card>
         </div>
@@ -241,9 +259,9 @@ export default function Dashboard() {
         {/* === 最近のアクティビティ (5件) === */}
         {data?.recentActivity && data.recentActivity.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Clock className="h-4 w-4" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 最近のアクティビティ
               </CardTitle>
             </CardHeader>
@@ -304,10 +322,10 @@ export default function Dashboard() {
                   )
                 ))}
               </div>
-              <div className="pt-3 border-t mt-3">
-                <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => setLocation("/activity")}>
+              <div className="pt-2 border-t mt-2">
+                <Button variant="ghost" size="sm" className="w-full text-[13px] text-muted-foreground h-8" onClick={() => setLocation("/activity")}>
                   すべての履歴を見る
-                  <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                  <ArrowRight className="h-3 w-3 ml-1" />
                 </Button>
               </div>
             </CardContent>
@@ -333,25 +351,55 @@ export default function Dashboard() {
         {/* === コンテンツ戦略インテリジェンス === */}
         {insights && insights.stats.totalVideos > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                 コンテンツ戦略インテリジェンス
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-[12px]">
                 {insights.stats.totalVideos.toLocaleString()}本の動画データに基づく戦略分析（直近30日） — ER = エンゲージメント率
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <CardContent className="space-y-4">
+              {/* サマリー行 */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="p-2.5 rounded-lg bg-muted/40 border">
+                  <div className="text-[11px] text-muted-foreground">解析動画</div>
+                  <div className="text-base font-semibold mt-0.5 tabular-nums">{insights.stats.totalVideos.toLocaleString()}本</div>
+                </div>
+                {rankedDurations.length > 0 && (
+                  <div className="p-2.5 rounded-lg bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
+                    <div className="text-[11px] text-muted-foreground">最適フォーマット</div>
+                    <div className="text-base font-semibold mt-0.5 text-teal-700 dark:text-teal-400">{rankedDurations[0]?.label}</div>
+                  </div>
+                )}
+                {insights.topHashtags.length > 0 && (
+                  <div className="p-2.5 rounded-lg bg-sky-50/50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
+                    <div className="text-[11px] text-muted-foreground">Top ハッシュタグ</div>
+                    <div className="text-base font-semibold mt-0.5 text-sky-700 dark:text-sky-400 truncate">#{insights.topHashtags[0]?.tag}</div>
+                  </div>
+                )}
+                {insights.bestHeatmapSlot && insights.bestHeatmapSlot.er > 0 && (
+                  <div className="p-2.5 rounded-lg bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
+                    <div className="text-[11px] text-muted-foreground">最適投稿時間</div>
+                    <div className="text-base font-semibold mt-0.5 text-orange-700 dark:text-orange-400">{insights.bestHeatmapSlot.day}曜・{insights.bestHeatmapSlot.band}</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 {/* Panel A: フォーマット最適化 */}
                 {rankedDurations.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Ruler className="h-3.5 w-3.5 text-blue-500" />
-                      フォーマット最適化
-                    </h4>
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Ruler className="h-3.5 w-3.5 text-blue-500" />
+                        フォーマット最適化
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     <div className="space-y-1.5">
                       {rankedDurations.map((d, i) => (
                         <div
@@ -389,16 +437,21 @@ export default function Dashboard() {
                         {formatSummary}
                       </p>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 {/* Panel B: ハッシュタグ戦略 */}
                 {insights.topHashtags.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Hash className="h-3.5 w-3.5 text-sky-500" />
-                      ハッシュタグ戦略
-                    </h4>
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Hash className="h-3.5 w-3.5 text-sky-500" />
+                        ハッシュタグ戦略
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     {/* Tier 1: Top 3 with ER bars */}
                     <div className="space-y-1.5 mb-3">
                       {insights.topHashtags.slice(0, 3).map(h => {
@@ -442,16 +495,21 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 {/* Panel C: 注目クリエイター */}
                 {insights.topCreators && insights.topCreators.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5 text-violet-500" />
-                      注目クリエイター
-                    </h4>
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-violet-500" />
+                        注目クリエイター
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     <div className="space-y-2">
                       {insights.topCreators.map((creator, i) => (
                         <div key={creator.accountName} className="flex items-center gap-3 text-sm">
@@ -477,11 +535,21 @@ export default function Dashboard() {
                         {bestReachCreator.accountName.startsWith("@") ? bestReachCreator.accountName : `@${bestReachCreator.accountName}`}が最大リーチ。{bestERCreator.accountName.startsWith("@") ? bestERCreator.accountName : `@${bestERCreator.accountName}`}はER {bestERCreator.avgER}%で最も高効率。
                       </p>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 {/* Panel D: 投稿タイミング＆センチメント */}
-                <div className="space-y-4">
+                <Collapsible>
+                  <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                    <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                    <h4 className="text-sm font-medium flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5 text-orange-500" />
+                      投稿タイミング＆センチメント
+                    </h4>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                <div className="space-y-4 mt-2">
                   {/* Heatmap */}
                   {insights.postingHeatmap && (
                     <div>
@@ -581,14 +649,20 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {/* Panel E: キーフック分析 */}
                 {insights.topHooks && insights.topHooks.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Zap className="h-3.5 w-3.5 text-amber-500" />
-                      キーフック分析
-                    </h4>
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Zap className="h-3.5 w-3.5 text-amber-500" />
+                        キーフック分析
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     <div className="space-y-1.5">
                       {insights.topHooks.map((hook: any, i: number) => {
                         const maxER = Math.max(...(insights.topHooks as any[]).map((h: any) => h.avgER), 0.01);
@@ -618,16 +692,21 @@ export default function Dashboard() {
                       <Lightbulb className="h-3 w-3 inline mr-1" />
                       冒頭のフックが視聴継続率に直結。上位パターンを参考に最初の3秒を最適化。
                     </p>
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 {/* Panel F: 広告 vs オーガニック */}
                 {insights.adVsOrganic && (insights.adVsOrganic.ad.count > 0 || insights.adVsOrganic.organic.count > 0) && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Megaphone className="h-3.5 w-3.5 text-rose-500" />
-                      広告・オーガニック比較
-                    </h4>
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Megaphone className="h-3.5 w-3.5 text-rose-500" />
+                        広告・オーガニック比較
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     <div className="grid grid-cols-2 gap-3">
                       {/* Organic Card */}
                       <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-3 space-y-2">
@@ -635,7 +714,7 @@ export default function Dashboard() {
                           <div className="h-2 w-2 rounded-full bg-emerald-500" />
                           <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">オーガニック</span>
                         </div>
-                        <div className="text-2xl font-bold tabular-nums">{(insights.adVsOrganic as any).organic.count}本</div>
+                        <div className="text-xl font-semibold tabular-nums">{(insights.adVsOrganic as any).organic.count}本</div>
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">平均ER</span>
@@ -653,7 +732,7 @@ export default function Dashboard() {
                           <div className="h-2 w-2 rounded-full bg-rose-500" />
                           <span className="text-xs font-medium text-rose-700 dark:text-rose-400">広告</span>
                         </div>
-                        <div className="text-2xl font-bold tabular-nums">{(insights.adVsOrganic as any).ad.count}本</div>
+                        <div className="text-xl font-semibold tabular-nums">{(insights.adVsOrganic as any).ad.count}本</div>
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
                             <span className="text-muted-foreground">平均ER</span>
@@ -675,16 +754,21 @@ export default function Dashboard() {
                         }
                       </p>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
                 {/* Panel G: 感情ワードマップ (full-width) */}
                 {insights.emotionQuadrants && Object.values(insights.emotionQuadrants as Record<string, any>).some((q: any) => q.words?.length > 0) && (
-                  <div className="md:col-span-2">
-                    <h4 className="text-sm font-medium mb-3 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-pink-500" />
-                      感情ワードマップ
-                    </h4>
+                  <Collapsible className="md:col-span-2">
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full text-left group">
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                      <h4 className="text-sm font-medium flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-pink-500" />
+                        感情ワードマップ
+                      </h4>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
                     <p className="text-xs text-muted-foreground mb-3">
                       高パフォーマンス動画で頻出する感情表現を4象限で分析
                     </p>
@@ -725,7 +809,8 @@ export default function Dashboard() {
                         最も使われている感情ワード: {(insights.emotionLandscape as any[]).slice(0, 5).map((e: any) => `「${e.word}」`).join("、")}
                       </p>
                     )}
-                  </div>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
               </div>

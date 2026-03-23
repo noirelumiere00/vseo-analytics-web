@@ -3,13 +3,13 @@
  * 既存のPuppeteerスクレイパーを再利用して、キャンペーンのベースライン/効果測定データを収集
  *
  * 最適化ポイント:
- * - 検索を最大3並列で実行（Phase A, C, E, F）
- * - ハッシュタグ検索結果をキャッシュし二重検索を排除（C → E）
+ * - 検索を最大3並列で実行（Phase A, E）
+ * - Phase C はチャレンジページ SSR から軽量取得（sharedBrowser 再利用）
  * - スクリーンショット・プロフィール取得で共有ブラウザ使用
  * - バッチ間sleep短縮（2-3秒）
  */
 
-import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
+import { searchTikTokVideos, scrapeTikTokVideosByUrls, parseVideoData, type TikTokVideo } from "./tiktokScraper";
 import { storagePut } from "./storage";
 import puppeteer from "puppeteer-core";
 import { execSync } from "child_process";
@@ -211,10 +211,7 @@ export async function captureSnapshot(
   const ownAccountIds = campaign.ownAccountIds || [];
   const ownVideoIds = campaign.ownVideoIds || [];
 
-  // 検索結果キャッシュ（Phase C の結果を Phase E で再利用）
-  const searchCache = new Map<string, TikTokVideo[]>();
-
-  // 共有ブラウザ（スクリーンショット・プロフィール用）
+  // 共有ブラウザ（スクリーンショット・プロフィール・波及効果取得用）
   const sharedBrowser = await puppeteer.launch({
     executablePath: findChromiumPath(),
     headless: true,
@@ -310,7 +307,7 @@ export async function captureSnapshot(
     }
 
     // ============================
-    // C. 波及効果データ（3並列・キャッシュ保存）
+    // C. 波及効果データ（sharedBrowser で軽量取得）
     // ============================
     let effectiveHashtags = [...campaignHashtags];
     if (effectiveHashtags.length === 0) {
@@ -332,42 +329,154 @@ export async function captureSnapshot(
     if (effectiveHashtags.length > 0) {
       report("ripple", `波及効果データ取得中 (${effectiveHashtags.length}タグ)...`, 45);
 
-      const rippleResults = await batchSearch(effectiveHashtags, 3, 2000, (done, total) =>
-        report("ripple", `ハッシュタグ検索: ${done}/${total}`, 45 + Math.round((done / total) * 20))
-      );
+      const CONCURRENCY = 3;
+      for (let i = 0; i < effectiveHashtags.length; i += CONCURRENCY) {
+        const batch = effectiveHashtags.slice(i, i + CONCURRENCY);
+        if (i > 0) await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500));
 
-      for (const [tag, videos] of rippleResults) {
-        // キャッシュに保存（Phase E で再利用）
-        searchCache.set(tag.replace(/^#/, ""), videos);
+        await Promise.allSettled(batch.map(async (tag, batchIdx) => {
+          const cleanTag = tag.replace(/^#/, "");
+          const context = await sharedBrowser.createBrowserContext();
+          const page = await context.newPage();
+          try {
+            await page.setViewport({ width: 1280, height: 900 });
+            await page.setExtraHTTPHeaders({ "Accept-Language": "ja-JP,ja;q=0.9" });
+            if (batchIdx > 0) await new Promise(r => setTimeout(r, batchIdx * 800));
 
-        const allNormalized = videos.map((v, idx) => normalizeVideo(v, idx + 1));
-        const otherVideos = allNormalized.filter(v =>
-          !ownAccountIds.includes(v.creator_username) &&
-          !ownVideoIds.includes(v.video_id)
-        );
+            await page.goto(`https://www.tiktok.com/tag/${encodeURIComponent(cleanTag)}`, {
+              waitUntil: "domcontentloaded", timeout: 20000,
+            });
+            await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
 
-        // 第三者投稿: 再生数順Top50に制限
-        const thirdPartyVideos = otherVideos
-          .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
-          .slice(0, 50);
+            // SSR から videoCount + itemList を抽出
+            const ssrResult = await page.evaluate(() => {
+              const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+              if (!el?.textContent) return null;
+              try {
+                const parsed = JSON.parse(el.textContent);
+                const cd = parsed?.['__DEFAULT_SCOPE__']?.['webapp.challenge-detail'];
+                const videoCount = cd?.challengeInfo?.challenge?.videoCount
+                  ?? cd?.stats?.videoCount ?? null;
+                const items = cd?.itemList || [];
+                return { videoCount, items };
+              } catch { return null; }
+            });
 
-        rippleEffect[tag] = {
-          total_post_count: allNormalized.length,
-          other_post_count: otherVideos.length,
-          other_total_views: otherVideos.reduce((sum, v) => sum + (v.view_count || 0), 0),
-          other_avg_views: otherVideos.length > 0
-            ? Math.round(otherVideos.reduce((sum, v) => sum + (v.view_count || 0), 0) / otherVideos.length)
-            : 0,
-          third_party_videos: thirdPartyVideos.map(v => ({
-            video_url: v.video_url,
-            creator: v.creator_username,
-            views: v.view_count,
-            likes: v.like_count,
-            description: v.description,
-            hashtags: v.hashtags,
-            posted_at: v.created_at,
-          })),
-        };
+            // parseVideoData + normalizeVideo で既存パイプラインに合流
+            const videos: TikTokVideo[] = [];
+            if (ssrResult?.items) {
+              for (const item of ssrResult.items) {
+                if (!item?.id) continue;
+                const video = parseVideoData({ type: 1, item });
+                if (video) videos.push(video);
+              }
+            }
+
+            const allNormalized = videos.map((v, idx) => normalizeVideo(v, idx + 1));
+
+            // 自社動画の包括的な排除セット構築
+            // ownAccountIds に加え、ownVideoData の authorUniqueId も自社アカウントとして扱う
+            const ownVidData = (campaign as any).ownVideoData as Array<{
+              videoId: string; authorUniqueId: string;
+            }> | undefined;
+            const allOwnAccounts = new Set(ownAccountIds.map((id: string) => id.toLowerCase()));
+            const allOwnVideoIds = new Set(ownVideoIds.map((id: string) => id));
+            if (ownVidData) {
+              for (const v of ownVidData) {
+                if (v.authorUniqueId) allOwnAccounts.add(v.authorUniqueId.toLowerCase());
+                if (v.videoId) allOwnVideoIds.add(v.videoId);
+              }
+            }
+
+            const isOwnVideo = (v: NormalizedVideo): boolean => {
+              return allOwnAccounts.has(v.creator_username.toLowerCase()) ||
+                     allOwnVideoIds.has(v.video_id);
+            };
+
+            // キャンペーン関連性フィルタ（多段階）:
+            // チャレンジページの動画は検索タグ自体は含むので、
+            // それだけでは汎用タグ（日傘、沖縄旅行等）で無関係な動画が混入する。
+            // → 複数のシグナルで関連性を判定し、厳密→緩和のフォールバックで0件を防ぐ
+            const lowerTag = cleanTag.toLowerCase();
+            const lowerKeywords = keywords.map(k => k.toLowerCase().replace(/^#/, ""));
+            const otherCampaignTags = effectiveHashtags
+              .map(t => t.replace(/^#/, "").toLowerCase())
+              .filter(t => t !== lowerTag);
+
+            // 追加シグナル: brandKeywords, clientName, 自社アカウント名
+            const brandKws = ((campaign as any).brandKeywords as string[] | undefined) || [];
+            const clientName = ((campaign as any).clientName as string | undefined) || "";
+            const extraSignals: string[] = [
+              ...brandKws.map(k => k.toLowerCase()),
+              ...(clientName ? [clientName.toLowerCase()] : []),
+              ...[...allOwnAccounts], // 自社アカウントID（@メンション検出用）
+            ].filter(s => s.length >= 2); // 短すぎるものは除外
+
+            // ownVideoDataから共通ハッシュタグを抽出（自社動画に頻出するタグ = キャンペーン関連）
+            const ownCommonTags = new Set<string>();
+            if (ownVidData && ownVidData.length > 0) {
+              const tagFreq = new Map<string, number>();
+              for (const v of ownVidData as Array<{ hashtags?: string[] }>) {
+                for (const h of (v.hashtags || [])) {
+                  const lower = h.toLowerCase().replace(/^#/, "");
+                  if (lower && lower !== lowerTag) tagFreq.set(lower, (tagFreq.get(lower) || 0) + 1);
+                }
+              }
+              // 自社動画の半数以上で使われているタグをキャンペーン関連とみなす
+              const threshold = Math.max(1, Math.floor(ownVidData.length * 0.5));
+              for (const [t, count] of tagFreq) {
+                if (count >= threshold) ownCommonTags.add(t);
+              }
+            }
+
+            const isCampaignRelevant = (v: NormalizedVideo): boolean => {
+              const desc = v.description.toLowerCase();
+              const vTags = v.hashtags.map(h => h.toLowerCase().replace(/^#/, ""));
+              // 他のキャンペーンハッシュタグを含む
+              if (otherCampaignTags.some(ct => vTags.includes(ct) || desc.includes(ct))) return true;
+              // キャンペーンのキーワードを含む
+              if (lowerKeywords.some(kw => desc.includes(kw))) return true;
+              // ブランド名・クライアント名・自社アカウントへのメンション
+              if (extraSignals.some(sig => desc.includes(sig) || desc.includes(`@${sig}`))) return true;
+              // 自社動画の共通ハッシュタグを含む
+              if (ownCommonTags.size > 0 && vTags.some(t => ownCommonTags.has(t))) return true;
+              return false;
+            };
+
+            // 自社動画を排除
+            const nonOwnVideos = allNormalized.filter(v => !isOwnVideo(v));
+            // 厳密フィルタ適用
+            const strictFiltered = nonOwnVideos.filter(isCampaignRelevant);
+            // フォールバック: 厳密フィルタで0件の場合、自社除外のみ
+            // （ユーザーが明示的にキャンペーンタグとして設定 → タグ自体に関連性あり）
+            const relevantThirdParty = strictFiltered.length > 0 ? strictFiltered : nonOwnVideos;
+            const thirdPartyVideos = relevantThirdParty
+              .sort((a, b) => (b.view_count || 0) - (a.view_count || 0))
+              .slice(0, 5);
+
+            rippleEffect[tag] = {
+              total_post_count: ssrResult?.videoCount ?? allNormalized.length,
+              other_post_count: relevantThirdParty.length,
+              other_total_views: relevantThirdParty.reduce((sum, v) => sum + (v.view_count || 0), 0),
+              other_avg_views: relevantThirdParty.length > 0
+                ? Math.round(relevantThirdParty.reduce((s, v) => s + (v.view_count || 0), 0) / relevantThirdParty.length)
+                : 0,
+              third_party_videos: thirdPartyVideos.map(v => ({
+                video_url: v.video_url, creator: v.creator_username,
+                views: v.view_count, likes: v.like_count,
+                description: v.description, hashtags: v.hashtags,
+                posted_at: v.created_at,
+              })),
+            };
+          } catch (err) {
+            console.error(`[Ripple] #${cleanTag} failed:`, err);
+          } finally {
+            await context.close();
+          }
+        }));
+
+        report("ripple", `ハッシュタグ検索: ${Math.min(i + CONCURRENCY, effectiveHashtags.length)}/${effectiveHashtags.length}`,
+          45 + Math.round((Math.min(i + CONCURRENCY, effectiveHashtags.length) / effectiveHashtags.length) * 20));
       }
     }
 

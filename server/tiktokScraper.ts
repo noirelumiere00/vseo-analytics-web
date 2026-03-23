@@ -78,7 +78,7 @@ const USER_AGENTS = [
 ];
 
 // APIレスポンスからTikTokVideoオブジェクトに変換
-function parseVideoData(item: any): TikTokVideo | null {
+export function parseVideoData(item: any): TikTokVideo | null {
   if (!item || item.type !== 1 || !item.item) return null;
 
   const v = item.item;

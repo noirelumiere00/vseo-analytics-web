@@ -161,7 +161,8 @@ export default function CampaignReport() {
   const bigKeywordReport = (report as any).bigKeywordReport as Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; competitors?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number; before_best_rank: number | null; before_video_count_in_top30: number; rank_change: number | null }> }> | undefined;
 
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
-  const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0);
+  const hasKeywordVolumes = crossPlatform?.keywordSearchVolumes?.length > 0;
+  const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0 || hasKeywordVolumes);
   const hasBigKW = bigKeywordReport && bigKeywordReport.length > 0;
 
   // Filter visible sections
@@ -278,7 +279,12 @@ export default function CampaignReport() {
         {hasCrossPlatform && (
           <div id="cross" ref={el => { sectionRefs.current["cross"] = el; }} className="scroll-mt-16">
             <SectionHeader number={8} title="クロスプラットフォーム相関" question="検索トレンドとの関係は？" />
-            <CrossPlatformSection data={crossPlatform} videoMetrics={videoMetrics} />
+            {(crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0) && (
+              <CrossPlatformSection data={crossPlatform} videoMetrics={videoMetrics} />
+            )}
+            {hasKeywordVolumes && (
+              <KeywordVolumeSection data={crossPlatform.keywordSearchVolumes} />
+            )}
           </div>
         )}
 
@@ -984,28 +990,60 @@ function RippleSection({ ripple }: { ripple: Record<string, any> }) {
         </Card>
       </div>
 
-      {/* Omaage videos */}
-      {entries.map(([tag, data]) => {
-        const videos = data.third_party_videos || data.omaage_videos || [];
-        return videos.length > 0 && (
-          <Card key={tag}>
-            <CardHeader>
-              <CardTitle className="text-base">{tag} 第三者投稿</CardTitle>
+      {/* Per-tag table (compact) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">ハッシュタグ別内訳</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-xs text-muted-foreground">
+                  <th className="py-1.5 pr-3">タグ</th>
+                  <th className="py-1.5 px-2 text-right">投稿数</th>
+                  <th className="py-1.5 px-2 text-right">総再生数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(([tag, data]) => (
+                  <tr key={tag} className="border-b last:border-0">
+                    <td className="py-1.5 pr-3 font-medium">{tag}</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <BeforeAfter before={data.before_posts || 0} after={data.after_posts || 0} />
+                    </td>
+                    <td className="py-1.5 px-2 text-right">
+                      <BeforeAfter before={fmt(data.before_total_views || 0)} after={fmt(data.after_total_views || 0)} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Top third-party videos (all tags combined) */}
+      {(() => {
+        const allVideos = entries.flatMap(([, data]) =>
+          (data.third_party_videos || data.omaage_videos || [])
+        ).sort((a: any, b: any) => (b.views || 0) - (a.views || 0)).slice(0, 5);
+        return allVideos.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">注目の第三者投稿（再生数上位）</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-2 md:grid-cols-2">
-                {videos.map((v: any, i: number) => (
-                  <div key={i} className="border rounded-lg p-3 text-sm">
-                    <div className="flex items-center justify-between">
-                      <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
+              <div className="divide-y">
+                {allVideos.map((v: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium shrink-0">
                         @{v.creator}
                       </a>
-                      <span className="text-xs text-muted-foreground">
-                        {v.posted_at ? new Date(v.posted_at).toLocaleDateString("ja-JP") : ""}
-                      </span>
+                      <span className="text-xs text-muted-foreground truncate">{v.description?.slice(0, 40)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{v.description}</p>
-                    <div className="flex gap-3 mt-1.5 text-xs text-muted-foreground">
+                    <div className="flex gap-3 text-xs text-muted-foreground shrink-0 ml-2">
                       <span>{fmt(v.views)} 再生</span>
                       <span>{fmt(v.likes)} いいね</span>
                     </div>
@@ -1015,7 +1053,7 @@ function RippleSection({ ripple }: { ripple: Record<string, any> }) {
             </CardContent>
           </Card>
         );
-      })}
+      })()}
     </div>
   );
 }
@@ -1046,12 +1084,18 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
   }
 
   const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys()])].sort();
-  const chartData = allDates.map((date: string) => ({
-    date: date.slice(5),
-    fullDate: date,
-    trends: trendMap.get(date) ?? null,
-    views: videoMap.get(date)?.totalViews ?? null,
-  }));
+  // 累計再生数を算出
+  let cumulativeViews = 0;
+  const chartData = allDates.map((date: string) => {
+    const dayViews = videoMap.get(date)?.totalViews ?? 0;
+    cumulativeViews += dayViews;
+    return {
+      date: date.slice(5),
+      fullDate: date,
+      trends: trendMap.get(date) ?? null,
+      views: cumulativeViews > 0 ? cumulativeViews : null,
+    };
+  });
 
   const markerDates = new Set<string>((data.videoMarkers || []).map((m: any) => m.date as string));
   // videoMarkersが空の場合、videoMetricsからフォールバック
@@ -1093,7 +1137,7 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="left" label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
-              <YAxis yAxisId="right" orientation="right" label={{ value: "再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
+              <YAxis yAxisId="right" orientation="right" label={{ value: "累計再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
               <Tooltip
                 formatter={(value: any, name: string) => {
                   if (value === null || value === undefined) return ["—", name];
@@ -1103,7 +1147,7 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
               />
               <Legend />
               <Line yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
-              <Line yAxisId="right" type="monotone" dataKey="views" name="再生数" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} connectNulls />
+              <Line yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} connectNulls />
               {Array.from(markerDates).map((date: string) => (
                 <ReferenceLine key={date} x={date.slice(5)} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
               ))}
@@ -1124,6 +1168,100 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
                 : "明確な相関は認められません。TikTok施策とGoogle検索トレンドは独立して推移しています。"
               }
             </p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================
+// Section 8b: Keyword Search Volumes
+// ============================
+
+function KeywordVolumeSection({ data }: { data: any[] }) {
+  // 月別推移チャート用データ（直近12ヶ月）
+  const chartData = (() => {
+    if (!data || data.length === 0) return [];
+    // 全キーワードの月次データを集約
+    const monthMap = new Map<string, Record<string, number>>();
+    for (const kw of data) {
+      for (const mv of (kw.monthlyVolumes || []).slice(-12)) {
+        const key = `${mv.year}-${String(mv.month).padStart(2, "0")}`;
+        if (!monthMap.has(key)) monthMap.set(key, {});
+        monthMap.get(key)![kw.keyword] = mv.volume;
+      }
+    }
+    return [...monthMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, volumes]) => ({ month: month.slice(2), ...volumes }));
+  })();
+
+  const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#84cc16"];
+
+  return (
+    <div className="space-y-4 mt-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Search className="h-4 w-4" />
+            Google 検索ボリューム
+          </CardTitle>
+          <CardDescription>Google Ads Keyword Planner による月間検索ボリューム</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>キーワード</TableHead>
+                <TableHead className="text-right">月間検索数</TableHead>
+                <TableHead className="text-center">競合性</TableHead>
+                <TableHead className="text-right">競合指数</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((kw: any, i: number) => (
+                <TableRow key={i}>
+                  <TableCell className="font-medium">{kw.keyword}</TableCell>
+                  <TableCell className="text-right">{fmt(kw.avgMonthlySearches)}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={
+                      kw.competition === "HIGH" ? "destructive" :
+                      kw.competition === "MEDIUM" ? "secondary" :
+                      "outline"
+                    }>
+                      {kw.competition === "HIGH" ? "高" :
+                       kw.competition === "MEDIUM" ? "中" :
+                       kw.competition === "LOW" ? "低" : "-"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">{kw.competitionIndex}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">月別検索ボリューム推移</CardTitle>
+            <CardDescription>直近12ヶ月の検索ボリューム推移</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                {data.map((kw: any, i: number) => (
+                  <Bar key={kw.keyword} dataKey={kw.keyword} fill={COLORS[i % COLORS.length]} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
           </CardContent>
         </Card>
       )}

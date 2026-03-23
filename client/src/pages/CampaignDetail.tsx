@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { trpc } from "@/lib/trpc";
-import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X } from "lucide-react";
+import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -129,7 +129,66 @@ export default function CampaignDetail() {
               <p className="text-sm text-muted-foreground mt-0.5">{campaign.clientName}</p>
             )}
           </div>
+          {/* Header Report Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            {report ? (
+              <>
+                <Button
+                  size="sm"
+                  className="gradient-primary text-white"
+                  onClick={() => setLocation(`/campaigns/${campaignId}/report`)}
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  レポートを表示
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => generateReportMutation.mutate({ campaignId })}
+                  disabled={generateReportMutation.isPending}
+                >
+                  {generateReportMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </>
+            ) : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? (
+              <Button
+                size="sm"
+                onClick={() => generateReportMutation.mutate({ campaignId })}
+                disabled={generateReportMutation.isPending}
+              >
+                {generateReportMutation.isPending ? (
+                  <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />生成中...</>
+                ) : (
+                  <><FileText className="h-3.5 w-3.5 mr-1.5" />レポート生成</>
+                )}
+              </Button>
+            ) : null}
+          </div>
         </div>
+
+        {/* Workflow Stepper */}
+        {campaign && (
+          <div className="flex items-center gap-2 text-xs">
+            <StepIndicator
+              label="ベースライン"
+              status={latestBaseline?.status === "completed" ? "done" : latestBaseline?.status === "processing" || latestBaseline?.status === "queued" ? "active" : "pending"}
+            />
+            <div className="h-px flex-1 max-w-8 bg-border" />
+            <StepIndicator
+              label="効果測定"
+              status={latestMeasurement?.status === "completed" ? "done" : latestMeasurement?.status === "processing" || latestMeasurement?.status === "queued" ? "active" : "pending"}
+            />
+            <div className="h-px flex-1 max-w-8 bg-border" />
+            <StepIndicator
+              label="レポート"
+              status={report ? "done" : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? "ready" : "pending"}
+            />
+          </div>
+        )}
 
         {/* Campaign Config Summary */}
         {campaign && (
@@ -352,49 +411,48 @@ export default function CampaignDetail() {
         />
 
         {/* Report */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
+        <Card className={report ? "border-green-200 bg-green-50/30" : ""}>
+          <CardContent className="py-4 flex items-center gap-3">
+            <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${report ? "bg-green-100 text-green-600" : "bg-muted text-muted-foreground"}`}>
               <FileText className="h-4 w-4" />
-              施策効果レポート
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">施策効果レポート</p>
+              <p className="text-xs text-muted-foreground">
+                {report
+                  ? `生成済み（${new Date(report.createdAt).toLocaleDateString("ja-JP")}）`
+                  : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed"
+                  ? "スナップショット完了 — レポート生成可能"
+                  : "ベースラインと効果測定の完了後に生成可能"}
+              </p>
+            </div>
             {report ? (
-              <div className="space-y-3">
-                <p className="text-sm text-green-600">レポートが生成されています</p>
-                <div className="flex gap-2">
-                  <Button onClick={() => setLocation(`/campaigns/${campaignId}/report`)}>
-                    レポートを表示
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => generateReportMutation.mutate({ campaignId })}
-                    disabled={generateReportMutation.isPending}
-                  >
-                    再生成
-                  </Button>
-                </div>
-              </div>
-            ) : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">両方のスナップショットが揃いました。レポートを生成できます。</p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button size="sm" onClick={() => setLocation(`/campaigns/${campaignId}/report`)}>
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  表示
+                </Button>
                 <Button
+                  size="sm" variant="ghost"
                   onClick={() => generateReportMutation.mutate({ campaignId })}
                   disabled={generateReportMutation.isPending}
                 >
-                  {generateReportMutation.isPending ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />生成中...</>
-                  ) : (
-                    "レポート生成"
-                  )}
+                  {generateReportMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 </Button>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                ベースラインと効果測定の両方のスナップショットを取得するとレポートを生成できます。
-              </p>
-            )}
+            ) : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? (
+              <Button
+                size="sm"
+                onClick={() => generateReportMutation.mutate({ campaignId })}
+                disabled={generateReportMutation.isPending}
+              >
+                {generateReportMutation.isPending ? (
+                  <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />生成中...</>
+                ) : (
+                  "レポート生成"
+                )}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -699,6 +757,23 @@ function DetectedCompetitorsCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function StepIndicator({ label, status }: { label: string; status: "pending" | "active" | "ready" | "done" }) {
+  return (
+    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+      status === "done" ? "bg-green-100 text-green-700" :
+      status === "active" ? "bg-blue-100 text-blue-700" :
+      status === "ready" ? "bg-amber-100 text-amber-700" :
+      "bg-muted text-muted-foreground"
+    }`}>
+      {status === "done" ? <CheckCircle2 className="h-3 w-3" /> :
+       status === "active" ? <Loader2 className="h-3 w-3 animate-spin" /> :
+       status === "ready" ? <FileText className="h-3 w-3" /> :
+       <Clock className="h-3 w-3" />}
+      <span>{label}</span>
+    </div>
   );
 }
 

@@ -6,6 +6,7 @@
 import type { Campaign, CampaignSnapshot, InsertCampaignReport } from "../drizzle/schema";
 import { estimatePostingFrequency } from "./campaignSnapshot";
 import { fetchGoogleTrends, aggregateVideosByDay, pearsonCorrelation } from "./googleTrends";
+import { fetchKeywordVolume } from "./googleAds";
 import { calculateScoresFromData } from "./videoAnalysis";
 import { invokeLLM } from "./_core/llm";
 
@@ -307,8 +308,34 @@ export async function generateCampaignReport(
       }
 
       crossPlatformData = { trendsData, videoTimeline, videoMarkers, correlation };
+
+      // Google Ads キーワード検索ボリューム取得
+      try {
+        const keywordSearchVolumes = await fetchKeywordVolume(keywords);
+        if (keywordSearchVolumes.length > 0) {
+          crossPlatformData.keywordSearchVolumes = keywordSearchVolumes;
+        }
+      } catch (e) {
+        console.error("Keyword volume fetch failed (non-fatal):", e);
+      }
     } catch (e) {
       console.error("Cross-platform data generation failed:", e);
+    }
+  }
+
+  // キーワード検索ボリューム単独フォールバック（Trends取得が失敗/スキップされた場合）
+  if (keywords.length > 0 && (!crossPlatformData || !crossPlatformData.keywordSearchVolumes)) {
+    try {
+      const keywordSearchVolumes = await fetchKeywordVolume(keywords);
+      if (keywordSearchVolumes.length > 0) {
+        if (!crossPlatformData) {
+          crossPlatformData = { trendsData: [], videoTimeline: [], videoMarkers: [], correlation: null, keywordSearchVolumes };
+        } else {
+          crossPlatformData.keywordSearchVolumes = keywordSearchVolumes;
+        }
+      }
+    } catch (e) {
+      console.error("Keyword volume standalone fetch failed (non-fatal):", e);
     }
   }
 
@@ -601,6 +628,14 @@ export function generateCampaignCsv(report: InsertCampaignReport): string {
   for (const v of report.videoMetricsReport || []) {
     lines.push(`施策動画,${v.videoId},再生数,${v.before?.viewCount ?? "-"},${v.after?.viewCount ?? "-"},${v.viewsChangePct ? `${v.viewsChangePct}%` : "-"}`);
     lines.push(`施策動画,${v.videoId},いいね,${v.before?.likeCount ?? "-"},${v.after?.likeCount ?? "-"},`);
+  }
+
+  // キーワード検索ボリューム
+  const kwVolumes = (report.crossPlatformData as any)?.keywordSearchVolumes as Array<{ keyword: string; avgMonthlySearches: number; competition: string; competitionIndex: number }> | undefined;
+  if (kwVolumes && kwVolumes.length > 0) {
+    for (const kv of kwVolumes) {
+      lines.push(`検索ボリューム,${kv.keyword},月間検索数,,${kv.avgMonthlySearches},競合性: ${kv.competition} (${kv.competitionIndex})`);
+    }
   }
 
   // AI総合評価

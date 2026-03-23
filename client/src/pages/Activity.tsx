@@ -5,8 +5,15 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/
 import { HistorySkeleton } from "@/components/PageSkeleton";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Clock, CheckCircle2, XCircle, Loader as LoaderIcon, Trash2, RotateCcw,
   TrendingUp, Search, Compass, BarChart3, GitCompareArrows, X, CheckSquare,
+  MoreHorizontal,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
@@ -111,17 +118,18 @@ export default function Activity() {
   };
 
   const getStatusBadge = (status: string) => {
+    const cls = "text-[10px] px-1.5 py-0.5";
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500 hover:bg-green-500"><CheckCircle2 className="h-3 w-3 mr-1" />完了</Badge>;
+        return <Badge className={`bg-green-500 hover:bg-green-500 ${cls}`}><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />完了</Badge>;
       case "processing":
-        return <Badge className="bg-blue-500 hover:bg-blue-500"><LoaderIcon className="h-3 w-3 mr-1 animate-spin" />処理中</Badge>;
+        return <Badge className={`bg-blue-500 hover:bg-blue-500 ${cls}`}><LoaderIcon className="h-2.5 w-2.5 mr-0.5 animate-spin" />処理中</Badge>;
       case "queued":
-        return <Badge className="bg-yellow-500 hover:bg-yellow-500"><Clock className="h-3 w-3 mr-1" />キュー中</Badge>;
+        return <Badge className={`bg-yellow-500 hover:bg-yellow-500 ${cls}`}><Clock className="h-2.5 w-2.5 mr-0.5" />キュー中</Badge>;
       case "failed":
-        return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />失敗</Badge>;
+        return <Badge variant="destructive" className={cls}><XCircle className="h-2.5 w-2.5 mr-0.5" />失敗</Badge>;
       default:
-        return <Badge variant="secondary"><Clock className="h-3 w-3 mr-1" />待機中</Badge>;
+        return <Badge variant="secondary" className={cls}><Clock className="h-2.5 w-2.5 mr-0.5" />待機中</Badge>;
     }
   };
 
@@ -217,67 +225,46 @@ export default function Activity() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">アクティビティ</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-xl font-semibold">アクティビティ</h1>
+            <p className="text-[13px] text-muted-foreground mt-0.5">
               SEO分析・トレンド発掘の全履歴
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {editMode === "normal" ? (
-              <>
-                <Button size="sm" variant="outline" onClick={() => { setEditMode("compare"); setSelectedIds(new Set()); }}>
-                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
-                  比較
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-8 w-8 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setEditMode("delete"); setSelectedIds(new Set()); }}>
-                  <CheckSquare className="h-4 w-4 mr-1.5" />
-                  選択削除
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setLocation("/trend-discovery")}>
-                  <Compass className="h-4 w-4 mr-1.5" />
-                  トレンド発掘
-                </Button>
-                <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
-                  <Search className="h-4 w-4 mr-1.5" />
-                  新規分析
-                </Button>
-              </>
-            ) : editMode === "compare" ? (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  完了済みSEO分析を2件選択してください ({selectedIds.size}/2)
-                </span>
-                <Button size="sm" disabled={selectedIds.size !== 2} onClick={handleCompare}>
-                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
-                  比較する
-                </Button>
-                <Button size="sm" variant="ghost" onClick={exitEditMode}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              <>
-                <span className="text-sm text-muted-foreground">
-                  {selectedIds.size}件選択中
-                </span>
-                <Button size="sm" variant="destructive" disabled={selectedIds.size === 0} onClick={handleBulkDelete}>
-                  <Trash2 className="h-4 w-4 mr-1.5" />
-                  削除する
-                </Button>
-                <Button size="sm" variant="ghost" onClick={exitEditMode}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </>
-            )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => { setEditMode("compare"); setSelectedIds(new Set()); }}>
+                  <GitCompareArrows className="h-4 w-4 mr-2" />
+                  比較モード
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => { setEditMode("delete"); setSelectedIds(new Set()); }}>
+                  <CheckSquare className="h-4 w-4 mr-2" />
+                  選択削除モード
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" variant="outline" className="h-8 text-[13px]" onClick={() => setLocation("/trend-discovery")}>
+              <Compass className="h-3.5 w-3.5 mr-1.5" />
+              トレンド発掘
+            </Button>
+            <Button size="sm" className="gradient-primary text-white h-8 text-[13px]" onClick={() => setLocation("/analysis/new")}>
+              <Search className="h-3.5 w-3.5 mr-1.5" />
+              新規分析
+            </Button>
           </div>
         </div>
 
         {/* Filter tabs */}
-        <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+        <div className="flex gap-0.5 p-0.5 bg-muted rounded-lg w-fit">
           {([
             { key: "all" as const, label: "すべて", count: counts.all },
             { key: "seo" as const, label: "SEO分析", count: counts.seo },
@@ -286,17 +273,48 @@ export default function Activity() {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
                 filter === tab.key
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
-              <span className="ml-1.5 text-xs opacity-60">{tab.count}</span>
+              <span className="ml-1.5 text-[11px] opacity-50 tabular-nums">{tab.count}</span>
             </button>
           ))}
         </div>
+
+        {/* Edit mode banner */}
+        {editMode !== "normal" && (
+          <div className={`flex items-center justify-between p-2.5 rounded-lg border ${
+            editMode === "compare"
+              ? "bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
+              : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+          }`}>
+            <span className="text-[13px] text-muted-foreground">
+              {editMode === "compare"
+                ? `完了済みSEO分析を2件選択してください (${selectedIds.size}/2)`
+                : `${selectedIds.size}件選択中`}
+            </span>
+            <div className="flex items-center gap-2">
+              {editMode === "compare" ? (
+                <Button size="sm" disabled={selectedIds.size !== 2} onClick={handleCompare}>
+                  <GitCompareArrows className="h-4 w-4 mr-1.5" />
+                  比較する
+                </Button>
+              ) : (
+                <Button size="sm" variant="destructive" disabled={selectedIds.size === 0} onClick={handleBulkDelete}>
+                  <Trash2 className="h-4 w-4 mr-1.5" />
+                  削除する
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={exitEditMode}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Activity List */}
         {filtered.length === 0 ? (
@@ -320,7 +338,7 @@ export default function Activity() {
             </Button>
           </Empty>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {filtered.map((item, i) => {
               const isProcessing = item.status === "processing" || item.status === "queued";
               const canRetry = item.status === "failed" || item.status === "pending";
@@ -346,7 +364,7 @@ export default function Activity() {
                   style={{ animationDelay: `${i * 30}ms` }}
                   onClick={() => handleClick(item)}
                 >
-                  <CardHeader className="py-3 px-4">
+                  <CardHeader className="py-2.5 px-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3 flex-1 min-w-0">
                         {/* Selection checkbox in edit modes */}
@@ -376,7 +394,7 @@ export default function Activity() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <CardTitle className="text-sm font-medium truncate">
+                            <CardTitle className="text-[13px] font-medium truncate">
                               {item.label}
                             </CardTitle>
                             {editMode === "normal" && item.type === "seo" && item.status === "completed" && (
@@ -391,7 +409,7 @@ export default function Activity() {
                               </Button>
                             )}
                           </div>
-                          <CardDescription className="text-xs mt-0.5">
+                          <CardDescription className="text-[11px] mt-0.5">
                             {formatDistanceToNow(new Date(item.date), { addSuffix: true, locale: ja })}
                             {item.type === "seo" && item.status === "completed" && (item as any).totalVideos != null && (
                               <span className="ml-2">
