@@ -29,6 +29,9 @@ export interface NormalizedVideo {
   share_count: number;
   search_rank: number;
   created_at: string;
+  is_ad?: boolean;
+  aigc_description?: string;
+  cover_url?: string;
 }
 
 export interface NormalizedVideoWithER extends NormalizedVideo {
@@ -58,6 +61,9 @@ function normalizeVideo(v: TikTokVideo, rank: number): NormalizedVideo {
     share_count: v.stats.shareCount || 0,
     search_rank: rank,
     created_at: new Date(v.createTime * 1000).toISOString(),
+    is_ad: v.isAd || false,
+    aigc_description: v.aigcDescription || "",
+    cover_url: v.coverUrl || "",
   };
 }
 
@@ -409,10 +415,14 @@ export async function captureSnapshot(
           };
         });
 
+        // Top10を all_videos として保存（SOVスロットマップ用）
+        const allVideosTop10 = bkVideos.slice(0, 10).map((v, idx) => normalizeVideo(v, idx + 1));
+
         bigKeywordResults[bkw] = {
           ownVideosInTop30,
           competitorPositions,
           totalResults: bkVideos.length,
+          all_videos: allVideosTop10,
         };
       }
     }

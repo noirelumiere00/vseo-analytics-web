@@ -478,6 +478,8 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
       share_count: number;
       search_rank: number;
       created_at: string;
+      is_ad?: boolean;
+      aigc_description?: string;
     }>;
     own_videos: Array<{
       video_id: string;
@@ -571,6 +573,22 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
   bigKeywordResults: json("bigKeywordResults").$type<Record<string, {
     ownVideosInTop30: Array<{ videoId: string; rank: number; viewCount: number }>;
     totalResults: number;
+    all_videos?: Array<{
+      video_id: string;
+      video_url: string;
+      creator_username: string;
+      description: string;
+      hashtags: string[];
+      view_count: number;
+      like_count: number;
+      comment_count: number;
+      share_count: number;
+      search_rank: number;
+      created_at: string;
+      is_ad?: boolean;
+      aigc_description?: string;
+      cover_url?: string;
+    }>;
   }>>(),
 
   capturedAt: timestamp("capturedAt"),
@@ -579,6 +597,28 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
 
 export type CampaignSnapshot = typeof campaignSnapshots.$inferSelect;
 export type InsertCampaignSnapshot = typeof campaignSnapshots.$inferInsert;
+
+/**
+ * SOVスロットマップ用の個別スロットデータ
+ */
+export interface SovSlot {
+  rank: number;
+  video_id: string;
+  video_url: string;
+  creator_username: string;
+  description: string;
+  hashtags: string[];
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  owner: "own" | "competitor" | "other";
+  owner_name?: string;
+  owner_detail?: "official" | "campaign";
+  genre: "recommend" | "howto" | "entertainment" | "negative" | "other";
+  tiktok_labels: Array<"promotion" | "paid_partnership" | "aigc">;
+  cover_url?: string;
+}
 
 /**
  * キャンペーンレポート（2スナップショット比較結果）
@@ -641,6 +681,8 @@ export const campaignReports = mysqlTable("campaign_reports", {
   sovReport: json("sovReport").$type<Record<string, {
     before: { own_count: number; total_count: number; percentage: string };
     after: { own_count: number; total_count: number; percentage: string };
+    before_slots?: SovSlot[];
+    after_slots?: SovSlot[];
   }>>(),
 
   // 競合投稿頻度
