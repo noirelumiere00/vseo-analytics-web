@@ -1539,8 +1539,16 @@ export const appRouter = router({
         const existing = campaign.competitors || [];
         const existingIds = new Set(existing.map(c => c.account_id));
 
+        // 自社アカウント + 施策動画投稿者は競合に追加できないようガード
+        const ownAccounts = new Set((campaign.ownAccountIds || []).map((id: string) => id.toLowerCase()));
+        const ownVideoAuthors = new Set(
+          ((campaign as any).ownVideoData || []).map((v: any) => ((v.authorUniqueId as string) || "").toLowerCase()).filter(Boolean)
+        );
         const toAdd = detected
-          .filter(d => input.selectedAccountIds.includes(d.accountId) && !existingIds.has(d.accountId))
+          .filter(d => input.selectedAccountIds.includes(d.accountId) &&
+            !existingIds.has(d.accountId) &&
+            !ownAccounts.has(d.accountId.toLowerCase()) &&
+            !ownVideoAuthors.has(d.accountId.toLowerCase()))
           .map(d => ({ name: d.nickname || d.accountId, account_id: d.accountId }));
 
         await db.updateCampaign(input.campaignId, {
@@ -1616,12 +1624,14 @@ export const appRouter = router({
         if (!campaign || campaign.userId !== ctx.user.id) {
           throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
         }
-        if (!campaign.baselineSnapshotId || !campaign.measurementSnapshotId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "ベースラインと効果測定の両方のスナップショットが必要です" });
+        if (!campaign.measurementSnapshotId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "効果測定のスナップショットが必要です" });
         }
-        const baselineSnapshot = await db.getCampaignSnapshotById(campaign.baselineSnapshotId);
+        const baselineSnapshot = campaign.baselineSnapshotId
+          ? await db.getCampaignSnapshotById(campaign.baselineSnapshotId)
+          : null;
         const measurementSnapshot = await db.getCampaignSnapshotById(campaign.measurementSnapshotId);
-        if (!baselineSnapshot || !measurementSnapshot) {
+        if (!measurementSnapshot) {
           throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
         }
         const reportData = await generateCampaignReport(campaign, baselineSnapshot, measurementSnapshot);

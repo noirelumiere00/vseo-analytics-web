@@ -191,7 +191,7 @@ function DashboardLayoutContent({
             {/* Main Navigation */}
             <div className="space-y-0.5 py-2">
               {!isCollapsed && (
-                <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
                   ナビゲーション
                 </p>
               )}
@@ -204,7 +204,7 @@ function DashboardLayoutContent({
                         isActive={active}
                         onClick={() => setLocation(item.path)}
                         tooltip={item.label}
-                        className="h-9 transition-all font-normal text-[13px]"
+                        className="h-9 transition-all font-normal text-sm"
                       >
                         <item.icon className={`h-4 w-4 ${active ? "text-primary" : "text-muted-foreground"}`} />
                         <span>{item.label}</span>
@@ -221,7 +221,7 @@ function DashboardLayoutContent({
             {/* Quick Actions */}
             <div className="space-y-0.5 py-2">
               {!isCollapsed && (
-                <p className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
                   クイックアクション
                 </p>
               )}
@@ -234,7 +234,7 @@ function DashboardLayoutContent({
                         isActive={active}
                         onClick={() => setLocation(item.path)}
                         tooltip={item.label}
-                        className={`h-9 transition-all font-normal text-[13px] ${active ? "gradient-primary text-white" : ""}`}
+                        className={`h-9 transition-all font-normal text-sm ${active ? "gradient-primary text-white" : ""}`}
                       >
                         <item.icon className={`h-4 w-4 ${active ? "text-white" : "text-muted-foreground"}`} />
                         <span>{item.label}</span>
@@ -257,10 +257,10 @@ function DashboardLayoutContent({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-[13px] font-medium truncate leading-none">
+                    <p className="text-sm font-medium truncate leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground truncate mt-1">
+                    <p className="text-xs text-muted-foreground truncate mt-1">
                       {user?.email || "-"}
                     </p>
                   </div>
@@ -281,9 +281,9 @@ function DashboardLayoutContent({
 
         {/* Resize handle */}
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`fixed top-0 w-1 h-svh cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => { if (!isCollapsed) setIsResizing(true); }}
-          style={{ zIndex: 50 }}
+          style={{ zIndex: 50, left: "var(--sidebar-width)" }}
         />
       </div>
 

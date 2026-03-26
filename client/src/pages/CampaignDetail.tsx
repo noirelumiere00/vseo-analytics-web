@@ -154,7 +154,7 @@ export default function CampaignDetail() {
                   )}
                 </Button>
               </>
-            ) : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? (
+            ) : latestMeasurement?.status === "completed" ? (
               <Button
                 size="sm"
                 onClick={() => generateReportMutation.mutate({ campaignId })}
@@ -346,8 +346,8 @@ export default function CampaignDetail() {
           </Card>
         </div>
 
-        {/* 施策コンテンツの登録（ベースライン完了後に表示） */}
-        {campaign && isBaselineCompleted && (
+        {/* 施策コンテンツの登録 */}
+        {campaign && (
           <PostCampaignRegistration
             campaign={campaign}
             campaignId={campaignId}
@@ -421,9 +421,9 @@ export default function CampaignDetail() {
               <p className="text-xs text-muted-foreground">
                 {report
                   ? `生成済み（${new Date(report.createdAt).toLocaleDateString("ja-JP")}）`
-                  : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed"
-                  ? "スナップショット完了 — レポート生成可能"
-                  : "ベースラインと効果測定の完了後に生成可能"}
+                  : latestMeasurement?.status === "completed"
+                  ? `スナップショット完了 — レポート生成可能${!latestBaseline || latestBaseline.status !== "completed" ? "（ベースラインなし）" : ""}`
+                  : "効果測定の完了後に生成可能"}
               </p>
             </div>
             {report ? (
@@ -440,7 +440,7 @@ export default function CampaignDetail() {
                   {generateReportMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                 </Button>
               </div>
-            ) : latestBaseline?.status === "completed" && latestMeasurement?.status === "completed" ? (
+            ) : latestMeasurement?.status === "completed" ? (
               <Button
                 size="sm"
                 onClick={() => generateReportMutation.mutate({ campaignId })}
@@ -704,7 +704,16 @@ function DetectedCompetitorsCard({
     totalVideosInTop30: number; avgRank: number;
   }>;
   const existingIds = new Set(((campaign?.competitors || []) as any[]).map((c: any) => c.account_id));
-  const newCandidates = detected.filter(d => !existingIds.has(d.accountId));
+  // 自社アカウント + 施策動画投稿者を除外（古いスナップショットで混入したケース対応）
+  const ownAccountIds = new Set((campaign?.ownAccountIds || []).map((id: string) => id.toLowerCase()));
+  const ownVideoAuthors = new Set(
+    ((campaign?.ownVideoData || []) as any[]).map((v: any) => (v.authorUniqueId || "").toLowerCase()).filter(Boolean)
+  );
+  const newCandidates = detected.filter(d =>
+    !existingIds.has(d.accountId) &&
+    !ownAccountIds.has(d.accountId.toLowerCase()) &&
+    !ownVideoAuthors.has(d.accountId.toLowerCase())
+  );
 
   if (newCandidates.length === 0) return null;
 

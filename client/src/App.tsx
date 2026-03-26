@@ -55,11 +55,21 @@ function ScrollToTop() {
   return null;
 }
 
+function AnimatedPage({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  return (
+    <div key={location} className="animate-page-enter">
+      {children}
+    </div>
+  );
+}
+
 function Router() {
   return (
     <>
     <ScrollToTop />
     <Suspense fallback={<PageLoader />}>
+    <AnimatedPage>
     <Switch>
       {/* Public routes */}
       <Route path="/login" component={Login} />
@@ -91,6 +101,7 @@ function Router() {
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
+    </AnimatedPage>
     </Suspense>
     </>
   );

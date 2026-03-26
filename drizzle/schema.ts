@@ -618,6 +618,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
     views_change_pct: string | null;
     before_er: number;
     after_er: number;
+    videos?: Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>;
   }>>(),
 
   // 競合比較
@@ -742,6 +743,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
     keyword: string;
     before: { ownVideoCount: number; bestRank: number | null };
     after: { ownVideoCount: number; bestRank: number | null };
+    ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }>;
   }>>(),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),

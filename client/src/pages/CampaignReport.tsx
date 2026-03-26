@@ -5,11 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useEffect, useRef, useState, useCallback } from "react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine } from "recharts";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, Cell } from "recharts";
 
 // ============================
 // Utilities
@@ -55,9 +56,8 @@ const gradeColors: Record<string, string> = {
 const SECTIONS = [
   { id: "summary", label: "総合", icon: Brain },
   { id: "videos", label: "動画", icon: Eye },
-  { id: "position", label: "順位", icon: Search },
-  { id: "sov", label: "SOV", icon: BarChart3 },
-  { id: "bigkw", label: "露出", icon: Hash },
+  { id: "keyword", label: "順位・露出", icon: Search },
+  { id: "sov", label: "シェア率", icon: BarChart3 },
   { id: "competitor", label: "競合", icon: Users },
   { id: "ripple", label: "波及", icon: Share2 },
   { id: "cross", label: "相関", icon: Globe },
@@ -124,6 +124,82 @@ export default function CampaignReport() {
     }
   };
 
+  // --- All hooks MUST be above early returns ---
+  const videoMetrics = (report as any)?.videoMetricsReport as any[] | undefined;
+
+  // 施策KW/ハッシュタグに関連するタグのみ表示（日傘等の無関係タグを除外）
+  const ripple = useMemo(() => {
+    const rawRipple = report?.rippleReport || {};
+    const kws = (campaign?.keywords || []).map((kw: string) => kw.replace(/^#/, "").toLowerCase()).filter(Boolean);
+    const name = (campaign?.name || "").toLowerCase();
+    const ownIds = (campaign?.ownAccountIds || []).map((id: string) => id.toLowerCase());
+    if (kws.length === 0) return rawRipple;
+    const filtered: Record<string, any> = {};
+    for (const [tag, data] of Object.entries(rawRipple)) {
+      const lower = tag.toLowerCase();
+      const relevant = kws.some(kw => lower.includes(kw) || kw.includes(lower))
+        || (name && (lower.includes(name) || name.includes(lower)))
+        || ownIds.some(id => lower.includes(id) || id.includes(lower));
+      if (relevant) filtered[tag] = data;
+    }
+    return Object.keys(filtered).length > 0 ? filtered : rawRipple;
+  }, [report, campaign]);
+
+  // 施策期間のデフォルト値（動画投稿日から算出）
+  const defaultStart = useMemo(() => {
+    if (videoMetrics && videoMetrics.length > 0) {
+      const dates = videoMetrics.map((v: any) => v.postedAt).filter(Boolean).sort();
+      if (dates.length > 0) return dates[0].split("T")[0];
+    }
+    return report?.baselineDate ? new Date(report.baselineDate).toISOString().split("T")[0] : "";
+  }, [videoMetrics, report?.baselineDate]);
+  const defaultEnd = useMemo(() => {
+    if (videoMetrics && videoMetrics.length > 0) {
+      const dates = videoMetrics.map((v: any) => v.postedAt).filter(Boolean).sort();
+      if (dates.length > 0) return dates[dates.length - 1].split("T")[0];
+    }
+    return report?.measurementDate ? new Date(report.measurementDate).toISOString().split("T")[0] : "";
+  }, [videoMetrics, report?.measurementDate]);
+  const [campaignStart, setCampaignStart] = useState("");
+  const [campaignEnd, setCampaignEnd] = useState("");
+  useEffect(() => {
+    if (defaultStart && !campaignStart) setCampaignStart(defaultStart);
+    if (defaultEnd && !campaignEnd) setCampaignEnd(defaultEnd);
+  }, [defaultStart, defaultEnd]);
+
+  // 期間内の第三者投稿数
+  const thirdPartyInPeriodCount = useMemo(() => {
+    if (!ripple) return 0;
+    let count = 0;
+    for (const [, data] of Object.entries(ripple)) {
+      for (const v of ((data as any).third_party_videos || (data as any).omaage_videos || [])) {
+        if (v.posted_at && campaignStart && campaignEnd) {
+          const d = v.posted_at.split("T")[0];
+          if (d >= campaignStart && d <= campaignEnd) { count++; }
+        } else {
+          count++;
+        }
+      }
+    }
+    return count;
+  }, [ripple, campaignStart, campaignEnd]);
+
+  // ANIM-02: Section fade-in
+  useEffect(() => {
+    const fadeObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) entry.target.classList.add("is-visible");
+        }
+      },
+      { threshold: 0.1 },
+    );
+    const els = document.querySelectorAll(".section-fade-in");
+    els.forEach(el => fadeObserver.observe(el));
+    return () => fadeObserver.disconnect();
+  }, [report]);
+
+  // --- Early returns ---
   if (reportQuery.isLoading) {
     return (
       <DashboardLayout>
@@ -147,48 +223,33 @@ export default function CampaignReport() {
     );
   }
 
+  // --- Derived data (no hooks below here) ---
   const summary = report.summary;
   const positions = report.positionReport || [];
   const compReport = report.competitorReport || {};
   const sovReport = report.sovReport || {};
-  // 施策KW/ハッシュタグに関連するタグのみ表示（日傘等の無関係タグを除外）
-  const rawRipple = report.rippleReport || {};
-  const ripple = (() => {
-    const kws = (campaign?.keywords || []).map((kw: string) => kw.replace(/^#/, "").toLowerCase()).filter(Boolean);
-    const name = (campaign?.name || "").toLowerCase();
-    const ownIds = (campaign?.ownAccountIds || []).map((id: string) => id.toLowerCase());
-    if (kws.length === 0) return rawRipple;
-    const filtered: Record<string, any> = {};
-    for (const [tag, data] of Object.entries(rawRipple)) {
-      const lower = tag.toLowerCase();
-      const relevant = kws.some(kw => lower.includes(kw) || kw.includes(lower))
-        || (name && (lower.includes(name) || name.includes(lower)))
-        || ownIds.some(id => lower.includes(id) || id.includes(lower));
-      if (relevant) filtered[tag] = data;
-    }
-    return Object.keys(filtered).length > 0 ? filtered : rawRipple;
-  })();
   const freqReport = report.competitorFrequencyReport || [];
-  const videoMetrics = (report as any).videoMetricsReport as any[] | undefined;
   const crossPlatform = (report as any).crossPlatformData as any | undefined;
   const videoScores = (report as any).videoScores as any[] | undefined;
   const aiReport = (report as any).aiOverallReport as any | undefined;
-
   const bigKeywordReport = (report as any).bigKeywordReport as Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; competitors?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number; before_best_rank: number | null; before_video_count_in_top30: number; rank_change: number | null }> }> | undefined;
 
+  const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
   const hasKeywordVolumes = crossPlatform?.keywordSearchVolumes?.length > 0;
   const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0 || hasKeywordVolumes);
   const hasBigKW = bigKeywordReport && bigKeywordReport.length > 0;
+  const hasCompetitors = campaign?.competitors && campaign.competitors.length > 0;
 
   // Filter visible sections
   const visibleSections = SECTIONS.filter(s => {
     if (s.id === "videos" && !hasVideoMetrics) return false;
-    if (s.id === "bigkw" && !hasBigKW) return false;
+    if (s.id === "competitor" && !hasCompetitors) return false;
     if (s.id === "cross" && !hasCrossPlatform) return false;
     if (s.id === "next" && !aiReport) return false;
     return true;
   });
+  const sectionNumber = (id: string) => visibleSections.findIndex(s => s.id === id) + 1;
 
   return (
     <DashboardLayout>
@@ -204,6 +265,16 @@ export default function CampaignReport() {
               <p className="text-sm text-muted-foreground">
                 {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
               </p>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                <CalendarDays className="h-3.5 w-3.5" />
+                <span>施策期間:</span>
+                <input type="date" value={campaignStart} onChange={e => setCampaignStart(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
+                <span>〜</span>
+                <input type="date" value={campaignEnd} onChange={e => setCampaignEnd(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
+                {(campaignStart !== defaultStart || campaignEnd !== defaultEnd) && (
+                  <button onClick={() => { setCampaignStart(defaultStart); setCampaignEnd(defaultEnd); }} className="text-xs text-primary hover:underline">リセット</button>
+                )}
+              </div>
             </div>
           </div>
           <Button variant="outline" onClick={handleCsvExport} className="gap-2">
@@ -235,9 +306,9 @@ export default function CampaignReport() {
           </div>
         </nav>
 
-        {/* Section 1: Executive Summary */}
-        <div id="summary" ref={el => { sectionRefs.current["summary"] = el; }} className="scroll-mt-16">
-          <SectionHeader number={1} title="エグゼクティブサマリー" question="施策は成功したのか？" />
+        {/* Section: Executive Summary */}
+        <div id="summary" ref={el => { sectionRefs.current["summary"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("summary")} title="エグゼクティブサマリー" question="施策は成功したのか？" />
           {aiReport && (
             <Card className="mb-4">
               <CardContent className="py-5 flex items-start gap-4">
@@ -248,66 +319,55 @@ export default function CampaignReport() {
               </CardContent>
             </Card>
           )}
-          {summary && <SummaryCards summary={summary} />}
+          {summary && <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={(report as any)?.sovReport} campaignStart={campaignStart} campaignEnd={campaignEnd} />}
         </div>
 
-        {/* Section 2: Videos */}
+        {/* Section: Videos */}
         {hasVideoMetrics && (
-          <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16">
-            <SectionHeader number={2} title="施策動画パフォーマンス" question="投稿した動画の状況は？" />
-            <VideoSection videos={videoMetrics!} videoScores={videoScores} />
+          <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question="投稿した動画の状況は？" />
+            <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
           </div>
         )}
 
-        {/* Section 3: Position */}
-        <div id="position" ref={el => { sectionRefs.current["position"] = el; }} className="scroll-mt-16">
-          <SectionHeader number={3} title="検索順位の変化" question="検索順位はどう変わった？" />
-          <PositionSection positions={positions} />
+        {/* Section: Keyword (merged Position + BigKeyword) */}
+        <div id="keyword" ref={el => { sectionRefs.current["keyword"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("keyword")} title="検索順位・露出" question="検索順位はどう変わった？" />
+          <KeywordSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} hasBaseline={hasBaseline} keywords={campaign?.keywords} bigKeywords={campaign?.bigKeywords} campaign={campaign} />
         </div>
 
-        {/* Section 4: SOV */}
-        <div id="sov" ref={el => { sectionRefs.current["sov"] = el; }} className="scroll-mt-16">
-          <SectionHeader number={4} title="SOV・市場シェア" question="市場シェアは拡大した？" />
-          <SovSection sovReport={sovReport} />
+        {/* Section: SOV */}
+        <div id="sov" ref={el => { sectionRefs.current["sov"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("sov")} title="検索上位シェア率" question="どのKWにどの動画が露出した？" />
+          <SovSection sovReport={sovReport} positions={positions} hasBaseline={hasBaseline} campaign={campaign} />
         </div>
 
-        {/* Section 5: Big Keyword */}
-        {hasBigKW && (
-          <div id="bigkw" ref={el => { sectionRefs.current["bigkw"] = el; }} className="scroll-mt-16">
-            <SectionHeader number={5} title="ビッグキーワード露出" question="カテゴリ検索で商品が露出できた？" />
-            <BigKeywordSection data={bigKeywordReport!} />
+        {/* Section: Competitor */}
+        {hasCompetitors && (
+          <div id="competitor" ref={el => { sectionRefs.current["competitor"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("competitor")} title="競合動向" question="競合と比べてどうだった？" />
+            <CompetitorSection compReport={compReport} freqReport={freqReport} bigKeywordReport={bigKeywordReport} hasBaseline={hasBaseline} />
           </div>
         )}
 
-        {/* Section 6: Competitor */}
-        <div id="competitor" ref={el => { sectionRefs.current["competitor"] = el; }} className="scroll-mt-16">
-          <SectionHeader number={6} title="競合動向" question="競合と比べてどうだった？" />
-          <CompetitorSection compReport={compReport} freqReport={freqReport} bigKeywordReport={bigKeywordReport} />
+        {/* Section: Ripple */}
+        <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
+          <RippleSection ripple={ripple} campaign={campaign} />
         </div>
 
-        {/* Section 7: Ripple */}
-        <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16">
-          <SectionHeader number={7} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
-          <RippleSection ripple={ripple} />
-        </div>
-
-        {/* Section 8: Cross Platform */}
+        {/* Section: Cross Platform */}
         {hasCrossPlatform && (
-          <div id="cross" ref={el => { sectionRefs.current["cross"] = el; }} className="scroll-mt-16">
-            <SectionHeader number={8} title="クロスプラットフォーム相関" question="検索トレンドとの関係は？" />
-            {(crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0) && (
-              <CrossPlatformSection data={crossPlatform} videoMetrics={videoMetrics} />
-            )}
-            {hasKeywordVolumes && (
-              <KeywordVolumeSection data={crossPlatform.keywordSearchVolumes} />
-            )}
+          <div id="cross" ref={el => { sectionRefs.current["cross"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("cross")} title="クロスプラットフォーム相関" question="検索トレンドとの関係は？" />
+            <CrossPlatformSection data={crossPlatform} videoMetrics={videoMetrics} baselineDate={report.baselineDate} measurementDate={report.measurementDate} ripple={ripple} campaignStart={campaignStart} campaignEnd={campaignEnd} />
           </div>
         )}
 
-        {/* Section 9: Next Actions */}
+        {/* Section: Next Actions */}
         {aiReport && (
-          <div id="next" ref={el => { sectionRefs.current["next"] = el; }} className="scroll-mt-16">
-            <SectionHeader number={9} title="ネクストアクション" question="次に何をすべき？" />
+          <div id="next" ref={el => { sectionRefs.current["next"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("next")} title="ネクストアクション" question="次に何をすべき？" />
             <NextActionsSection aiReport={aiReport} />
           </div>
         )}
@@ -349,62 +409,98 @@ function SectionHeader({ number, title, question }: { number: number; title: str
 // Section 1: Summary Cards
 // ============================
 
-function SummaryCards({ summary }: { summary: any }) {
-  const cards = [
-    {
-      title: "検索順位",
-      before: summary.rank_before != null ? `${summary.rank_before}位` : "圏外",
-      after: summary.rank_after != null ? `${summary.rank_after}位` : "圏外",
-      change: summary.rank_change != null ? <ChangeIndicator value={summary.rank_change} suffix="位" /> : null,
-    },
-    {
-      title: "再生数",
-      before: fmt(summary.views_before),
-      after: fmt(summary.views_after),
-      change: summary.views_before > 0 ? (
-        <ChangeIndicator value={Number(((summary.views_after - summary.views_before) / summary.views_before * 100).toFixed(0))} suffix="%" />
-      ) : null,
-    },
-    {
-      title: "ER",
-      before: `${summary.er_before}%`,
-      after: `${summary.er_after}%`,
-      change: <ChangeIndicator value={Number((summary.er_after - summary.er_before).toFixed(2))} suffix="pt" />,
-    },
-    {
-      title: "SOV",
-      before: `${summary.sov_before}%`,
-      after: `${summary.sov_after}%`,
-      change: <ChangeIndicator value={Number((parseFloat(summary.sov_after) - parseFloat(summary.sov_before)).toFixed(1))} suffix="pt" />,
-    },
-    {
-      title: "関連投稿数",
-      before: String(summary.related_posts_before),
-      after: String(summary.related_posts_after),
-      change: summary.related_posts_before > 0 ? (
-        <ChangeIndicator value={Number(((summary.related_posts_after - summary.related_posts_before) / summary.related_posts_before * 100).toFixed(0))} suffix="%" />
-      ) : <span className="text-green-600">+{summary.related_posts_after - summary.related_posts_before}</span>,
-    },
-    {
-      title: "第三者投稿",
-      before: "-",
-      after: `${summary.omaage_count || 0}本`,
-      change: null,
-    },
-  ];
+function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, sovReport, campaignStart, campaignEnd }: {
+  summary: any; thirdPartyCount: number; hasBaseline: boolean; ripple?: Record<string, any>; sovReport?: Record<string, any>; campaignStart?: string; campaignEnd?: string;
+}) {
+  const fmtAvgRank = (count: number | undefined, rank: number | null | undefined) => {
+    if (rank == null || !count) return "圏外";
+    return `${count}ワード ${rank}位`;
+  };
 
+  // SOV: 施策KW固有タグ（own_count >= 2）
+  const specificTags = useMemo(() => {
+    if (!sovReport) return [];
+    return Object.entries(sovReport).filter(([, d]) => (d.after?.own_count || 0) >= 2);
+  }, [sovReport]);
+
+  // 期間内の第三者投稿数・再生数
+  const tpStats = useMemo(() => {
+    let count = 0, views = 0;
+    if (!ripple) return { count: thirdPartyCount, views: 0 };
+    for (const [, data] of Object.entries(ripple)) {
+      for (const v of (data.third_party_videos || data.omaage_videos || [])) {
+        if (v.posted_at && campaignStart && campaignEnd) {
+          const d = v.posted_at.split("T")[0];
+          if (d >= campaignStart && d <= campaignEnd) { count++; views += v.views || 0; }
+        } else { count++; views += v.views || 0; }
+      }
+    }
+    return { count, views };
+  }, [ripple, campaignStart, campaignEnd, thirdPartyCount]);
+
+  if (hasBaseline) {
+    const cards = [
+      {
+        title: "平均検索順位",
+        before: fmtAvgRank(summary.total_keyword_count, summary.avg_rank_before),
+        after: fmtAvgRank(summary.ranked_keyword_count, summary.avg_rank_after),
+        change: summary.avg_rank_before != null && summary.avg_rank_after != null
+          ? <ChangeIndicator value={Number((summary.avg_rank_before - summary.avg_rank_after).toFixed(1))} suffix="位" />
+          : null,
+      },
+      {
+        title: "平均ER",
+        before: `${summary.er_before}%`,
+        after: `${summary.er_after}%`,
+        change: <ChangeIndicator value={Number((summary.er_after - summary.er_before).toFixed(2))} suffix="pt" />,
+      },
+      {
+        title: "上位表示率",
+        before: `${summary.sov_before}%`,
+        after: `${summary.sov_after}%`,
+        change: <ChangeIndicator value={Number((parseFloat(summary.sov_after) - parseFloat(summary.sov_before)).toFixed(1))} suffix="pt" />,
+      },
+      {
+        title: "第三者投稿",
+        before: "-",
+        after: `${tpStats.count}本`,
+        change: tpStats.views > 0 ? <span className="text-xs text-muted-foreground">{fmt(tpStats.views)} 再生</span> : null,
+      },
+    ];
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {cards.map((card) => (
+          <Card key={card.title}>
+            <CardContent className="py-3 px-4 space-y-1">
+              <p className="text-xs text-muted-foreground">{card.title}</p>
+              <p className="text-base font-bold">
+                <span className="text-slate-400">{card.before}</span>
+                <span className="text-muted-foreground mx-1">&rarr;</span>
+                <span className="text-blue-600">{card.after}</span>
+              </p>
+              {card.change && <div className="text-sm">{card.change}</div>}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  // Report B: absolute values only
+  const absCards = [
+    { title: "平均検索順位", value: fmtAvgRank(summary.ranked_keyword_count, summary.avg_rank_after) },
+    { title: "平均ER", value: `${summary.er_after}%` },
+    { title: "上位表示率", value: specificTags.length > 0 ? `${specificTags.length}タグ` : `${summary.sov_after}%` },
+    { title: "第三者投稿", value: `${tpStats.count}本` },
+    { title: "波及 総再生数", value: fmt(tpStats.views) },
+  ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {cards.map((card) => (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {absCards.map((card) => (
         <Card key={card.title}>
           <CardContent className="py-3 px-4 space-y-1">
             <p className="text-xs text-muted-foreground">{card.title}</p>
-            <p className="text-base font-bold">
-              <span className="text-slate-400">{card.before}</span>
-              <span className="text-muted-foreground mx-1">&rarr;</span>
-              <span className="text-blue-600">{card.after}</span>
-            </p>
-            {card.change && <div className="text-sm">{card.change}</div>}
+            <p className="text-xl font-bold text-blue-600">{card.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -413,38 +509,306 @@ function SummaryCards({ summary }: { summary: any }) {
 }
 
 // ============================
-// Section 2: Position
+// KwVideoCard — KWカード（5件表示 + もっと見る）
 // ============================
 
-function PositionSection({ positions }: { positions: any[] }) {
-  // 順位を反転: rank 1→30(最も高い棒), rank 30→1(短い棒), 圏外(31)→0(表示なし)
-  const chartData = positions.map(p => ({
-    keyword: p.keyword.length > 12 ? p.keyword.slice(0, 12) + "…" : p.keyword,
-    施策前: p.before_rank != null ? 31 - p.before_rank : 0,
-    施策後: p.after_rank != null ? 31 - p.after_rank : 0,
-  }));
+const INITIAL_SHOW = 5;
 
-  // Y軸ティック: 値→実際の順位ラベル (30→"1位", 25→"6位", ... 1→"30位", 0→"圏外")
+function KwVideoCard({ group, ownAccountIds, officialAccountIds }: { group: { keyword: string; kwType: string; rows: Array<{ keyword: string; kwType: string; username: string; description: string; rank: number | null; viewCount: number; videoId: string }> }; ownAccountIds: Set<string>; officialAccountIds: Set<string> }) {
+  const [expanded, setExpanded] = useState(false);
+  const rankedRows = group.rows.filter(r => r.rank != null && r.rank <= 30);
+  const hasRanked = rankedRows.length > 0;
+  const bestRank = hasRanked ? Math.min(...rankedRows.map(r => r.rank!)) : 999;
+  const visibleRows = expanded ? rankedRows : rankedRows.slice(0, INITIAL_SHOW);
+  const hiddenCount = rankedRows.length - INITIAL_SHOW;
+
+  return (
+    <div className={`rounded-lg border ${hasRanked ? "bg-white" : "bg-muted/30 border-dashed"}`}>
+      {/* KWヘッダー */}
+      <div className={`flex items-center gap-2 px-3 py-2 ${hasRanked ? "border-b bg-slate-50/80" : ""}`}>
+        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${group.kwType === "ビッグKW" ? "bg-green-400" : "bg-blue-400"}`} />
+        <span className="font-medium text-sm">{group.keyword}</span>
+        {group.kwType === "ビッグKW" && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-green-700 border-green-300 bg-green-50">ビッグKW</Badge>
+        )}
+        {hasRanked ? (
+          <Badge className={`ml-auto text-[10px] px-1.5 py-0 h-5 ${
+            bestRank <= 3 ? "bg-amber-500 hover:bg-amber-500" :
+            bestRank <= 10 ? "bg-blue-500 hover:bg-blue-500" :
+            "bg-slate-500 hover:bg-slate-500"
+          }`}>
+            最高 {bestRank}位 / {rankedRows.length}本ランクイン
+          </Badge>
+        ) : (
+          <span className="ml-auto text-xs text-muted-foreground">圏外</span>
+        )}
+      </div>
+      {/* 動画リスト */}
+      {hasRanked && (
+        <div className="divide-y">
+          {visibleRows.map((r, ri) => {
+            const videoUrl = r.username && r.videoId
+              ? `https://www.tiktok.com/@${r.username}/video/${r.videoId}`
+              : null;
+            const Row = (
+              <div className={`flex items-center gap-3 px-3 py-2 ${videoUrl ? "hover:bg-muted/40 transition-colors" : ""}`}>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm ${
+                  r.rank! <= 3 ? "bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-sm" :
+                  r.rank! <= 10 ? "bg-gradient-to-br from-blue-400 to-blue-500 text-white shadow-sm" :
+                  r.rank! <= 20 ? "bg-slate-100 text-slate-600" :
+                  "bg-slate-50 text-slate-400"
+                }`}>
+                  {r.rank}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm truncate flex items-center gap-1.5">
+                    {r.username ? (() => {
+                      const uLower = r.username.toLowerCase();
+                      const isOfficial = officialAccountIds.has(uLower);
+                      const isCampaign = !isOfficial && ownAccountIds.has(uLower);
+                      return (
+                        <>
+                          {isOfficial && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-blue-300 text-blue-700 bg-blue-50">公式</Badge>
+                          )}
+                          {isCampaign && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-purple-300 text-purple-700 bg-purple-50">施策</Badge>
+                          )}
+                          <span className={`font-medium ${isOfficial ? "text-blue-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>@{r.username}</span>
+                          {r.description && <span className="text-muted-foreground ml-0.5 truncate">{r.description}</span>}
+                        </>
+                      );
+                    })() : (
+                      <span className="text-muted-foreground italic text-xs">該当動画なし</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-sm font-medium ${r.viewCount >= 1_000_000 ? "text-amber-600" : r.viewCount >= 100_000 ? "text-blue-600" : "text-muted-foreground"}`}>
+                    {fmt(r.viewCount)}
+                  </span>
+                  {videoUrl
+                    ? <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40" />
+                    : <Eye className="h-3 w-3 text-muted-foreground/50" />
+                  }
+                </div>
+              </div>
+            );
+            return videoUrl ? (
+              <a key={`${r.videoId || ri}`} href={videoUrl} target="_blank" rel="noopener noreferrer" className="block">{Row}</a>
+            ) : (
+              <div key={`${r.videoId || ri}`}>{Row}</div>
+            );
+          })}
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            >
+              {expanded ? (
+                <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
+              ) : (
+                <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{hiddenCount}件）</>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================
+// KeywordSection (merged Position + BigKeyword)
+// ============================
+
+function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bigKeywords, campaign }: {
+  positions: any[];
+  bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }> }>;
+  hasBaseline: boolean;
+  keywords?: string[];
+  bigKeywords?: string[];
+  campaign?: any;
+}) {
+  // 公式アカウント（ownAccountIds）
+  const officialAccountIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of campaign?.ownAccountIds || []) ids.add(id.toLowerCase());
+    return ids;
+  }, [campaign]);
+  // 施策動画投稿者（ownVideoDataのauthor、公式アカウント除く）
+  const campaignVideoAccountIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const v of campaign?.ownVideoData || []) {
+      if (v.authorUniqueId) ids.add(v.authorUniqueId.toLowerCase());
+    }
+    return ids;
+  }, [campaign]);
+  // 全KW × 各動画の行を統合
+  type VideoRow = { keyword: string; kwType: "施策KW" | "ビッグKW"; username: string; description: string; rank: number | null; viewCount: number; videoId: string };
+  const allRows: VideoRow[] = [];
+
+  for (const p of positions) {
+    const videos = (p.videos as Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>) || [];
+    if (videos.length > 0) {
+      for (const v of videos) {
+        allRows.push({ keyword: p.keyword, kwType: "施策KW", username: v.username, description: v.description, rank: v.search_rank, viewCount: v.view_count, videoId: v.video_id });
+      }
+    } else {
+      allRows.push({ keyword: p.keyword, kwType: "施策KW", username: "", description: "", rank: p.after_rank, viewCount: 0, videoId: "" });
+    }
+  }
+  for (const item of bigKeywordReport || []) {
+    const videos = item.ownVideos || [];
+    if (videos.length > 0) {
+      for (const v of videos) {
+        allRows.push({ keyword: item.keyword, kwType: "ビッグKW", username: v.username, description: v.description, rank: v.rank, viewCount: v.viewCount, videoId: v.videoId });
+      }
+    } else {
+      allRows.push({ keyword: item.keyword, kwType: "ビッグKW", username: "", description: "", rank: item.after.bestRank, viewCount: 0, videoId: "" });
+    }
+  }
+
+  // 全KW名を収集（色決定用）
+  const allKwList: Array<{ keyword: string; kwType: string }> = [];
+  const kwSeen = new Set<string>();
+  for (const r of allRows) {
+    if (!kwSeen.has(r.keyword)) { kwSeen.add(r.keyword); allKwList.push({ keyword: r.keyword, kwType: r.kwType }); }
+  }
+  // KW色パレット（施策KW=青系、ビッグKW=緑系）
+  const blueShades = ["#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
+  const greenShades = ["#22c55e", "#4ade80", "#86efac", "#bbf7d0"];
+  let bIdx = 0, gIdx = 0;
+  const kwColorMap: Record<string, string> = {};
+  for (const kw of allKwList) {
+    if (kw.kwType === "ビッグKW") { kwColorMap[kw.keyword] = greenShades[gIdx % greenShades.length]; gIdx++; }
+    else { kwColorMap[kw.keyword] = blueShades[bIdx % blueShades.length]; bIdx++; }
+  }
+
+  // 動画別グラフ: videos付き（新データ）→ X軸=動画, 各KWバー
+  const hasVideoData = allRows.some(r => r.username !== "");
+  // ユニーク動画リスト
+  const videoMap = new Map<string, { username: string; description: string }>();
+  for (const r of allRows) {
+    if (!r.username) continue;
+    if (!videoMap.has(r.username)) videoMap.set(r.username, { username: r.username, description: r.description });
+  }
+  const chartVideos = hasVideoData
+    ? [...videoMap.entries()].map(([username, info]) => {
+        const row: Record<string, any> = { label: `@${username}\n${info.description.slice(0, 10)}` };
+        for (const kw of allKwList) {
+          const match = allRows.find(r => r.username === username && r.keyword === kw.keyword && r.rank != null && r.rank <= 30);
+          row[kw.keyword] = match ? 31 - match.rank! : 0;
+          row[`${kw.keyword}_actual`] = match ? match.rank : null;
+        }
+        return row;
+      })
+    : null;
+
+  // フォールバック: videos無し（旧データ）→ X軸=KW, 最上位順位バー
+  const chartFallback = !hasVideoData
+    ? allRows.filter(r => r.rank != null && r.rank <= 30).map(r => ({
+        label: r.keyword.length > 10 ? r.keyword.slice(0, 10) + "…" : r.keyword,
+        順位: 31 - r.rank!,
+        actualRank: r.rank!,
+        kwType: r.kwType,
+      }))
+    : null;
+
   const yTicks = [0, 6, 11, 16, 21, 26, 30];
   const rankLabel = (v: number) => v <= 0 ? "圏外" : `${31 - v}位`;
+
+  // テーブル表示: KWごとにグループ化（同一KWは最初の行のみKW名表示）
+  const tableGroups: Array<{ keyword: string; kwType: string; rows: VideoRow[] }> = [];
+  const seen = new Set<string>();
+  for (const r of allRows) {
+    if (!seen.has(r.keyword)) {
+      seen.add(r.keyword);
+      tableGroups.push({ keyword: r.keyword, kwType: r.kwType, rows: allRows.filter(ar => ar.keyword === r.keyword) });
+    }
+  }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">KW別検索順位変化</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">KW別検索順位</CardTitle>
+          <div className="flex items-center gap-3 flex-wrap">
+            {allKwList.map(kw => (
+              <span key={kw.keyword} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kwColorMap[kw.keyword] }} />
+                {kw.keyword}
+              </span>
+            ))}
+          </div>
+        </div>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="keyword" tick={{ fontSize: 11 }} />
-            <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} />
-            <Tooltip formatter={(value: number) => rankLabel(value)} />
-            <Legend />
-            <Bar dataKey="施策前" fill="#94a3b8" />
-            <Bar dataKey="施策後" fill="#3b82f6" />
-          </BarChart>
-        </ResponsiveContainer>
+      <CardContent className="space-y-4">
+        {/* グラフ: 新データ=動画×KW、旧データ=KW別最上位 */}
+        {chartVideos && chartVideos.length > 0 && allKwList.length > 0 && (
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={chartVideos} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
+              <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <Tooltip content={({ active, payload, label }: any) => {
+                if (!active || !payload?.length) return null;
+                return (
+                  <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+                    <p className="font-medium mb-1 whitespace-pre-line">{label}</p>
+                    {payload.map((entry: any, i: number) => {
+                      const actual = entry.payload[`${entry.name}_actual`];
+                      return (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                          <span className="text-muted-foreground">{entry.name}:</span>
+                          <span className="font-medium">{actual != null ? `${actual}位` : "圏外"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }} />
+              {allKwList.map(kw => (
+                <Bar key={kw.keyword} dataKey={kw.keyword} name={kw.keyword} fill={kwColorMap[kw.keyword]} radius={[4, 4, 0, 0]} barSize={20} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+        {chartFallback && chartFallback.length > 0 && (
+          <ResponsiveContainer width="100%" height={340}>
+            <BarChart data={chartFallback} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
+              <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <Tooltip content={({ active, payload }: any) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0]?.payload;
+                return (
+                  <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+                    <p className="font-medium mb-1">{d?.label}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: payload[0]?.color }} />
+                      <span className="font-medium">{d?.actualRank}位</span>
+                    </div>
+                  </div>
+                );
+              }} />
+              <Bar dataKey="順位" radius={[4, 4, 0, 0]} barSize={28}>
+                {chartFallback.map((entry, idx) => (
+                  <Cell key={idx} fill={entry.kwType === "ビッグKW" ? "#86efac" : "#93c5fd"} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* KWごとのカード */}
+        <div className="space-y-3">
+          {tableGroups.map((group) => (
+            <KwVideoCard key={group.keyword} group={group} ownAccountIds={campaignVideoAccountIds} officialAccountIds={officialAccountIds} />
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
@@ -463,7 +827,49 @@ function getScoreGradeColor(score: number | undefined): string {
   return "bg-red-100 text-red-800 border-red-300";                          // D
 }
 
-function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: any[] }) {
+function SlantedXTick({ x, y, payload, urlMap }: any) {
+  const lines = (payload.value || "").split("\n");
+  const url = urlMap?.[payload.value];
+  const accountEl = url
+    ? <a href={url} target="_blank" rel="noopener noreferrer"><text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#2563eb" style={{ cursor: "pointer" }}>{lines[0]}</text></a>
+    : <text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#64748b">{lines[0]}</text>;
+  return (
+    <g transform={`translate(${x},${y}) rotate(-35)`}>
+      {accountEl}
+      {lines[1] && <text x={0} y={0} dy={22} textAnchor="end" fontSize={9} fill="#94a3b8">{lines[1]}</text>}
+    </g>
+  );
+}
+
+function VideoChartTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+      <p className="font-medium mb-1 whitespace-pre-line">{label}</p>
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="text-muted-foreground">{entry.name}:</span>
+          <span className="font-medium">{Number(entry.value).toLocaleString()}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, keywords, bigKeywords }: { videos: any[]; videoScores?: any[]; hasBaseline?: boolean; dailyMetrics?: any[]; keywords?: string[]; bigKeywords?: string[] }) {
+  const kwSet = useMemo(() => new Set((keywords || []).map(k => k.replace(/^#/, "").toLowerCase())), [keywords]);
+  const bigKwSet = useMemo(() => new Set((bigKeywords || []).map(k => k.replace(/^#/, "").toLowerCase())), [bigKeywords]);
+  const SORT_OPTIONS = [
+    { key: "views", label: "再生数" },
+    { key: "likes", label: "いいね" },
+    { key: "comments", label: "コメント" },
+    { key: "saves", label: "保存" },
+    { key: "shares", label: "シェア" },
+    { key: "er", label: "ER" },
+    { key: "date", label: "投稿日" },
+  ];
+  const [sortBy, setSortBy] = useState("views");
   const PAGE_SIZE = 5;
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   const scoreMap = new Map((videoScores || []).map((s: any) => [s.videoId, s]));
@@ -477,18 +883,87 @@ function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: an
   const totalViews = videos.reduce((s, v) => s + (v.after?.viewCount || 0), 0);
   const totalLikes = videos.reduce((s, v) => s + (v.after?.likeCount || 0), 0);
   const totalComments = videos.reduce((s, v) => s + (v.after?.commentCount || 0), 0);
-
-  const displayedVideos = videos.slice(0, displayCount);
-  const remaining = videos.length - displayCount;
-
   const totalShares = videos.reduce((s, v) => s + (v.after?.shareCount || 0), 0);
   const totalSaves = videos.reduce((s, v) => s + (v.after?.saveCount || 0), 0);
+  const avgEr = totalViews > 0 ? Number(((totalLikes + totalComments + totalShares) / totalViews * 100).toFixed(2)) : 0;
+
+  // ソート
+  const sortedVideos = useMemo(() => {
+    return [...videos].sort((a, b) => {
+      const getVal = (v: any) => {
+        switch (sortBy) {
+          case "views": return v.after?.viewCount || 0;
+          case "likes": return v.after?.likeCount || 0;
+          case "comments": return v.after?.commentCount || 0;
+          case "saves": return v.after?.saveCount || 0;
+          case "shares": return v.after?.shareCount || 0;
+          case "er": {
+            const vw = v.after?.viewCount || 0;
+            const lk = v.after?.likeCount || 0;
+            const cm = v.after?.commentCount || 0;
+            const sh = v.after?.shareCount || 0;
+            return vw > 0 ? (lk + cm + sh) / vw * 100 : 0;
+          }
+          case "date": return v.postedAt ? new Date(v.postedAt).getTime() : 0;
+          default: return 0;
+        }
+      };
+      return getVal(b) - getVal(a);
+    });
+  }, [videos, sortBy]);
+
+  const { chartData, maxViews, chartUrlMap } = useMemo(() => {
+    const MAX_BARS = PAGE_SIZE;
+    const urlMap: Record<string, string> = {};
+    const toEntry = (v: any) => {
+      const username = v.videoUrl?.match(/@([^/]+)/)?.[1];
+      const caption = (v.description || "").slice(0, 10);
+      const label = `@${username || "?"}\n${caption}`;
+      if (v.videoUrl) urlMap[label] = v.videoUrl;
+      return {
+        label,
+        videoUrl: v.videoUrl || "",
+        views: v.after?.viewCount || 0,
+        likes: v.after?.likeCount || 0,
+        comments: v.after?.commentCount || 0,
+        saves: v.after?.saveCount || 0,
+        shares: v.after?.shareCount || 0,
+      };
+    };
+    let data: ReturnType<typeof toEntry>[];
+    if (sortedVideos.length <= MAX_BARS) {
+      data = sortedVideos.map(toEntry);
+    } else {
+      data = sortedVideos.slice(0, MAX_BARS).map(toEntry);
+      const rest = sortedVideos.slice(MAX_BARS);
+      data.push({
+        label: `その他\n(${rest.length}件)`,
+        videoUrl: "",
+        views: rest.reduce((s, v) => s + (v.after?.viewCount || 0), 0),
+        likes: rest.reduce((s, v) => s + (v.after?.likeCount || 0), 0),
+        comments: rest.reduce((s, v) => s + (v.after?.commentCount || 0), 0),
+        saves: rest.reduce((s, v) => s + (v.after?.saveCount || 0), 0),
+        shares: rest.reduce((s, v) => s + (v.after?.shareCount || 0), 0),
+      });
+    }
+    const mx = Math.max(...data.map(d => d.views), 0);
+    return { chartData: data, maxViews: mx, chartUrlMap: urlMap };
+  }, [sortedVideos]);
+
+  const displayedVideos = sortedVideos.slice(0, displayCount);
+  const remaining = sortedVideos.length - displayCount;
+
+  // dailyMetrics累積チャート
+  const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
 
   return (
     <div className="space-y-4">
       {/* サマリー */}
-      <p className="text-sm text-muted-foreground">{videos.length}本の施策動画</p>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">動画数</p>
+          <p className="text-xl font-bold">{videos.length}</p>
+        </CardContent></Card>
         <Card><CardContent className="py-3 px-4 text-center">
           <p className="text-xs text-muted-foreground">総再生数</p>
           <p className="text-xl font-bold">{fmt(totalViews)}</p>
@@ -506,14 +981,56 @@ function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: an
           <p className="text-xl font-bold">{fmt(totalSaves)}</p>
         </CardContent></Card>
         <Card><CardContent className="py-3 px-4 text-center">
-          <p className="text-xs text-muted-foreground">総シェア</p>
-          <p className="text-xl font-bold">{fmt(totalShares)}</p>
+          <p className="text-xs text-muted-foreground">平均ER</p>
+          <p className="text-xl font-bold">{avgEr}%</p>
         </CardContent></Card>
       </div>
 
-      {/* 累積折れ線グラフ（再生数 + エンゲージメント）— 日別集約・週単位表示 */}
-      {videos.length > 0 && (() => {
-        // 日別に集約（日付なしの動画は除外）
+      {/* Report A: 累積パフォーマンス推移 */}
+      {hasBaseline && videos.length > 0 && (() => {
+        if (hasDailyData) {
+          // 実測値ベースの累積チャート
+          const dayMap = new Map<string, { views: number; likes: number; comments: number }>();
+          for (const dm of dailyMetrics!) {
+            const dateKey = dm.date?.split("T")[0] || dm.dateKey;
+            if (!dateKey) continue;
+            const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0 };
+            entry.views += dm.viewCount || 0;
+            entry.likes += dm.likeCount || 0;
+            entry.comments += dm.commentCount || 0;
+            dayMap.set(dateKey, entry);
+          }
+          const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+          const lineData = sortedDays.map(([dateKey, d]) => ({
+            name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
+            再生数: d.views, いいね: d.likes, コメント: d.comments,
+          }));
+          return lineData.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">累積パフォーマンス推移（実測値）</CardTitle>
+                <CardDescription className="text-xs">日次取得データ</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={lineData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                    <Legend />
+                    <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          ) : null;
+        }
+
+        // フォールバック: postedAt集約の累積チャート
         const dayMap = new Map<string, { views: number; likes: number; comments: number; saves: number; shares: number }>();
         for (const v of videos) {
           if (!v.postedAt) continue;
@@ -527,26 +1044,14 @@ function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: an
           dayMap.set(dateKey, entry);
         }
         const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-
-        // 累積計算
         let cumViews = 0, cumLikes = 0, cumComments = 0, cumSaves = 0, cumShares = 0;
         const lineData = sortedDays.map(([dateKey, d]) => {
-          cumViews += d.views;
-          cumLikes += d.likes;
-          cumComments += d.comments;
-          cumSaves += d.saves;
-          cumShares += d.shares;
-          const label = dateKey !== "unknown"
-            ? `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`
-            : dateKey;
-          return { name: label, dateKey, 再生数: cumViews, いいね: cumLikes, コメント: cumComments, 保存: cumSaves, シェア: cumShares };
+          cumViews += d.views; cumLikes += d.likes; cumComments += d.comments; cumSaves += d.saves; cumShares += d.shares;
+          return { name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`, 再生数: cumViews, いいね: cumLikes, コメント: cumComments, 保存: cumSaves, シェア: cumShares };
         });
-
-        // 約7日間隔でtickを選定
         const tickInterval = Math.max(1, Math.round(lineData.length / Math.ceil(lineData.length / 7)));
         const ticks = lineData.filter((_, i) => i % tickInterval === 0 || i === lineData.length - 1).map(d => d.name);
-
-        return (
+        return lineData.length > 0 ? (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">累積パフォーマンス推移</CardTitle>
@@ -570,107 +1075,143 @@ function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: an
               </ResponsiveContainer>
             </CardContent>
           </Card>
-        );
+        ) : null;
       })()}
 
-      {/* アコーディオン */}
+      {/* 動画パフォーマンス */}
       <Card>
-        <CardContent className="pt-4 pb-2">
-          <Accordion type="multiple" defaultValue={[`video-0`]}>
-            {displayedVideos.map((v, i) => {
-              const score = scoreMap.get(v.videoId);
-              const isBest = v.videoId === bestVideoId;
-              const views = v.after?.viewCount || 0;
-              const likes = v.after?.likeCount || 0;
-              const comments = v.after?.commentCount || 0;
-              const shares = v.after?.shareCount || 0;
-              const erPercent = v.er != null ? v.er : (views > 0 ? Number(((likes + comments + shares) / views * 100).toFixed(2)) : 0);
-              const hashtags: string[] = v.hashtags || [];
-              const duration: number = v.duration || 0;
-              const durationStr = duration > 0 ? `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")}` : null;
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">動画パフォーマンス</CardTitle>
+            <div className="flex gap-1">
+              {SORT_OPTIONS.map(opt => (
+                <button key={opt.key} onClick={() => setSortBy(opt.key)}
+                  className={`px-2 py-1 rounded text-[11px] transition-colors ${sortBy === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {chartData.length > 1 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* 再生数バーチャート */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">再生数</p>
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={<SlantedXTick urlMap={chartUrlMap} />} interval={0} height={70} />
+                    <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<VideoChartTooltip />} />
+                    <Bar dataKey="views" name="再生数" radius={[4, 4, 0, 0]}>
+                      {chartData.map((entry, idx) => (
+                        <Cell key={idx} fill={entry.views === maxViews ? "#2563eb" : "#93c5fd"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              {/* エンゲージメント（グループ化バーチャート） */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">エンゲージメント</p>
+                  <div className="flex items-center gap-3">
+                    {[{ name: "いいね", color: "#ef4444" }, { name: "コメント", color: "#f59e0b" }, { name: "保存", color: "#22c55e" }, { name: "シェア", color: "#8b5cf6" }].map(item => (
+                      <span key={item.name} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: item.color }} />
+                        {item.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={<SlantedXTick urlMap={chartUrlMap} />} interval={0} height={70} />
+                    <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<VideoChartTooltip />} />
+                    <Bar dataKey="likes" name="いいね" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="comments" name="コメント" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="saves" name="保存" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="shares" name="シェア" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+          {displayedVideos.map((v, i) => {
+            const score = scoreMap.get(v.videoId);
+            const isBest = v.videoId === bestVideoId;
+            const views = v.after?.viewCount || 0;
+            const likes = v.after?.likeCount || 0;
+            const comments = v.after?.commentCount || 0;
+            const shares = v.after?.shareCount || 0;
+            const saves = v.after?.saveCount || 0;
+            const erPercent = v.er != null ? v.er : (views > 0 ? Number(((likes + comments + shares) / views * 100).toFixed(2)) : 0);
+            const hashtags: string[] = v.hashtags || [];
+            const duration: number = v.duration || 0;
+            const durationStr = duration > 0 ? `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")}` : null;
 
-              return (
-                <AccordionItem key={i} value={`video-${i}`} className={isBest ? "border-yellow-300" : ""}>
-                  <AccordionTrigger className="hover:no-underline py-3 gap-3">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      {v.coverUrl && (
-                        <img src={v.coverUrl} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" loading="lazy" />
-                      )}
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex items-center gap-2">
-                          {isBest && <Crown className="h-3.5 w-3.5 text-yellow-500 flex-shrink-0" />}
-                          <p className="text-sm font-medium truncate">{v.description?.slice(0, 50) || v.videoId}</p>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                          <span>{fmt(views)} 再生</span>
-                          <span>ER {erPercent}%</span>
-                          {durationStr && <span>{durationStr}</span>}
-                          {score && (
-                            <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border ${getScoreGradeColor(score.overallScore)}`}>
-                              <Star className="h-2.5 w-2.5" />{score.overallScore}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+            return (
+              <div key={i} className={`flex gap-3 py-2 px-3 rounded-lg border ${isBest ? "border-yellow-300 bg-yellow-50/30" : "hover:bg-muted/30"}`}>
+                <VideoThumbnail url={v.coverUrl} className="w-12 h-16" />
+                <div className="flex-1 min-w-0 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    {isBest && <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />}
+                    <p className="text-xs font-medium truncate">{v.description?.slice(0, 60) || v.videoId}</p>
+                    {score && (
+                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border ${getScoreGradeColor(score.overallScore)}`}>
+                        <Star className="h-2.5 w-2.5" />{score.overallScore}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                    <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{fmt(views)}</span>
+                    <span className="flex items-center gap-1"><Heart className="h-3 w-3" />{fmt(likes)}</span>
+                    <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{fmt(comments)}</span>
+                    <span className="flex items-center gap-1"><Bookmark className="h-3 w-3" />{fmt(saves)}</span>
+                    <span className="flex items-center gap-1"><Share2 className="h-3 w-3" />{fmt(shares)}</span>
+                    <span className="font-medium text-foreground">ER {erPercent}%</span>
+                    {v.postedAt && <span>{new Date(v.postedAt).toLocaleDateString("ja-JP")}</span>}
+                    {durationStr && <span>{durationStr}</span>}
+                    {v.videoUrl && (
+                      <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" />TikTok
+                      </a>
+                    )}
+                  </div>
+                  {hashtags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {hashtags.slice(0, 8).map((tag, ti) => {
+                        const lower = tag.toLowerCase();
+                        const isBigKw = bigKwSet.has(lower);
+                        const isKw = kwSet.has(lower);
+                        const colorCls = isBigKw
+                          ? "bg-green-50 text-green-700 border-green-200"
+                          : isKw
+                          ? "bg-blue-50 text-blue-600 border-blue-200"
+                          : "bg-slate-50 text-slate-500 border-slate-200";
+                        return (
+                          <span key={ti} className={`inline-block px-1.5 py-0 rounded-full text-[10px] border ${colorCls}`}>
+                            #{tag}
+                          </span>
+                        );
+                      })}
+                      {hashtags.length > 8 && <span className="text-[10px] text-muted-foreground">+{hashtags.length - 8}</span>}
                     </div>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    <div className="space-y-3 pl-1">
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        {v.postedAt && <span>投稿日: {new Date(v.postedAt).toLocaleDateString("ja-JP")}</span>}
-                        {durationStr && <span>尺: {durationStr}</span>}
-                        <span>ER: {erPercent}%</span>
-                      </div>
-                      {score?.aiEvaluation && (
-                        <Badge variant="secondary" className="text-xs">{score.aiEvaluation}</Badge>
-                      )}
-                      {/* ハッシュタグ */}
-                      {hashtags.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5">
-                          {hashtags.map((tag, ti) => (
-                            <span key={ti} className="inline-block px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[11px] font-medium">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {/* SEOメトリクス */}
-                      <div className="grid grid-cols-4 gap-2 text-xs">
-                        {[
-                          { label: "再生数", value: views },
-                          { label: "いいね", value: likes },
-                          { label: "コメント", value: comments },
-                          { label: "保存", value: v.after?.saveCount || 0 },
-                        ].map(m => (
-                          <div key={m.label} className="text-center p-2 rounded bg-muted/50">
-                            <p className="text-muted-foreground">{m.label}</p>
-                            <p className="font-semibold">{fmt(m.value)}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {v.videoUrl && (
-                        <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                          TikTokで見る &rarr;
-                        </a>
-                      )}
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              );
-            })}
-          </Accordion>
+                  )}
+                </div>
+              </div>
+            );
+          })}
 
-          {/* もっと見るボタン */}
           {remaining > 0 && (
-            <div className="flex justify-center pt-3 pb-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                <ChevronDown className="h-3.5 w-3.5 mr-1" />
-                もっと見る（残り{remaining}件）
+            <div className="flex justify-center pt-2">
+              <Button variant="ghost" size="sm" onClick={() => setDisplayCount(prev => prev + PAGE_SIZE)}
+                className="text-xs text-muted-foreground hover:text-foreground">
+                <ChevronDown className="h-3.5 w-3.5 mr-1" />もっと見る（残り{remaining}件）
               </Button>
             </div>
           )}
@@ -681,146 +1222,292 @@ function VideoSection({ videos, videoScores }: { videos: any[]; videoScores?: an
 }
 
 // ============================
-// Section 4: SOV
+// VideoThumbnail
 // ============================
 
-function SovSection({ sovReport }: { sovReport: Record<string, any> }) {
-  const sovEntries = Object.entries(sovReport);
+function VideoThumbnail({ url, className }: { url?: string; className?: string }) {
+  if (!url) return <div className={`bg-muted rounded flex-shrink-0 ${className || "w-16 h-22"}`} />;
+  return <img src={url} alt="" className={`rounded object-cover flex-shrink-0 ${className || "w-16 h-22"}`} loading="lazy" />;
+}
 
-  // Chart data for grouped bar
-  const chartData = sovEntries.map(([kw, data]) => ({
-    keyword: kw.length > 12 ? kw.slice(0, 12) + "..." : kw,
-    before: parseFloat(data.before.percentage) || 0,
-    after: parseFloat(data.after.percentage) || 0,
-  }));
+// ============================
+// ============================
+// SovVideoList — 上位10件 + もっと見る
+// ============================
+
+const SOV_INITIAL_SHOW = 10;
+
+function SovVideoList({ videos, officialIds, campaignAuthorIds }: {
+  videos: Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>;
+  officialIds: Set<string>;
+  campaignAuthorIds: Set<string>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  // 上位10位以内と11位以降に分割
+  const top = videos.filter(v => v.search_rank <= 10);
+  const rest = videos.filter(v => v.search_rank > 10);
+  const visibleVideos = expanded ? videos : top;
+  const hiddenCount = rest.length;
+
+  const renderRow = (v: typeof videos[0], i: number) => {
+    const uLower = v.username.toLowerCase();
+    const isOfficial = officialIds.has(uLower);
+    const isCampaign = !isOfficial && campaignAuthorIds.has(uLower);
+    const videoUrl = v.username && v.video_id
+      ? `https://www.tiktok.com/@${v.username}/video/${v.video_id}`
+      : null;
+    return (
+      <a
+        key={v.video_id || i}
+        href={videoUrl || "#"}
+        target={videoUrl ? "_blank" : undefined}
+        rel="noopener noreferrer"
+        className={`flex items-center gap-3 px-3 py-1.5 ${videoUrl ? "hover:bg-muted/40 transition-colors" : ""}`}
+      >
+        <span className={`w-6 text-center text-xs font-bold ${
+          v.search_rank <= 3 ? "text-amber-500" : v.search_rank <= 10 ? "text-blue-500" : "text-slate-400"
+        }`}>
+          {v.search_rank}
+        </span>
+        <div className="flex-1 min-w-0 flex items-center gap-1.5 text-sm truncate">
+          {isOfficial && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-blue-300 text-blue-700 bg-blue-50">公式</Badge>}
+          {isCampaign && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-purple-300 text-purple-700 bg-purple-50">施策</Badge>}
+          <span className={`font-medium ${isOfficial ? "text-blue-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>
+            @{v.username}
+          </span>
+          <span className="text-muted-foreground truncate">{v.description}</span>
+        </div>
+        <span className="text-xs text-muted-foreground shrink-0">{fmt(v.view_count)}</span>
+        {videoUrl && <ExternalLink className="h-3 w-3 text-muted-foreground/30 shrink-0" />}
+      </a>
+    );
+  };
 
   return (
-    <div className="space-y-4">
-      {chartData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">KW別SOV変化</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="keyword" tick={{ fontSize: 11 }} />
-                <YAxis unit="%" />
-                <Tooltip formatter={(value: number) => `${value}%`} />
-                <Legend />
-                <Bar dataKey="before" name="施策前" fill="#94a3b8" />
-                <Bar dataKey="after" name="施策後" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+    <div className="divide-y">
+      {visibleVideos.map(renderRow)}
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+        >
+          {expanded ? (
+            <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
+          ) : (
+            <><ChevronDown className="h-3.5 w-3.5" />11位以下を表示（{hiddenCount}件）</>
+          )}
+        </button>
       )}
-
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>キーワード</TableHead>
-                <TableHead className="text-right">施策前</TableHead>
-                <TableHead className="text-right">施策後</TableHead>
-                <TableHead className="text-right">変動</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sovEntries.map(([kw, data]) => {
-                const beforeFailed = data.before.total_count === 0;
-                const afterFailed = data.after.total_count === 0;
-                const canCompare = !beforeFailed && !afterFailed;
-                return (
-                  <TableRow key={kw}>
-                    <TableCell className="font-medium">{kw}</TableCell>
-                    <TableCell className="text-right text-slate-400">
-                      {beforeFailed
-                        ? <span className="text-orange-400 text-xs">データ取得失敗</span>
-                        : <>{data.before.own_count}/{data.before.total_count} ({data.before.percentage}%)</>
-                      }
-                    </TableCell>
-                    <TableCell className="text-right text-blue-600 font-semibold">
-                      {afterFailed
-                        ? <span className="text-orange-400 text-xs font-normal">データ取得失敗</span>
-                        : <>{data.after.own_count}/{data.after.total_count} ({data.after.percentage}%)</>
-                      }
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {canCompare ? (
-                        <ChangeIndicator
-                          value={Number((parseFloat(data.after.percentage) - parseFloat(data.before.percentage)).toFixed(1))}
-                          suffix="pt"
-                        />
-                      ) : <span className="text-slate-300">-</span>}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
     </div>
   );
 }
 
-// ============================
-// Section 5: Big Keyword Exposure
+// Section 4: 検索上位シェア率
 // ============================
 
-function BigKeywordSection({ data }: { data: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null } }> }) {
+function SovSection({ sovReport, positions, hasBaseline, campaign }: {
+  sovReport: Record<string, any>;
+  positions: any[];
+  hasBaseline: boolean;
+  campaign?: any;
+}) {
+  const sovEntries = Object.entries(sovReport);
+
+  // 公式 / 施策動画 判定用
+  const officialIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const id of campaign?.ownAccountIds || []) s.add(id.toLowerCase());
+    return s;
+  }, [campaign]);
+  const campaignAuthorIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const v of campaign?.ownVideoData || []) {
+      if (v.authorUniqueId) s.add(v.authorUniqueId.toLowerCase());
+    }
+    return s;
+  }, [campaign]);
+
+  // positionReport を keyword でルックアップ
+  const posMap = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const p of positions) m.set(p.keyword, p);
+    return m;
+  }, [positions]);
+
+  // Chart data
+  const chartData = sovEntries
+    .map(([kw, data]) => ({
+      keyword: kw,
+      own: data.after?.own_count || 0,
+      other: (data.after?.total_count || 0) - (data.after?.own_count || 0),
+      total: data.after?.total_count || 0,
+      pct: parseFloat(data.after?.percentage) || 0,
+    }))
+    .filter(d => d.total > 0);
+
+  // Aggregate stats
+  const totalOwn = chartData.reduce((s, d) => s + d.own, 0);
+  const totalScanned = chartData.reduce((s, d) => s + d.total, 0);
+  const avgPct = totalScanned > 0 ? Math.round((totalOwn / totalScanned) * 100 * 10) / 10 : 0;
+  const maxPctEntry = chartData.length > 0 ? chartData.reduce((a, b) => a.pct > b.pct ? a : b) : null;
+
+  // SVG ring chart helper
+  const ShareRing = ({ pct, size = 80, stroke = 7 }: { pct: number; size?: number; stroke?: number }) => {
+    const r = (size - stroke) / 2;
+    const circumference = 2 * Math.PI * r;
+    const filled = (pct / 100) * circumference;
+    const color = pct >= 40 ? "#2563eb" : pct >= 25 ? "#3b82f6" : pct >= 10 ? "#60a5fa" : "#94a3b8";
+    return (
+      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="transform -rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+          <circle
+            cx={size / 2} cy={size / 2} r={r} fill="none"
+            stroke={color} strokeWidth={stroke} strokeLinecap="round"
+            strokeDasharray={`${filled} ${circumference - filled}`}
+            style={{ transition: "stroke-dasharray 0.6s ease" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold leading-none" style={{ color }}>{Math.round(pct)}</span>
+          <span className="text-[9px] text-slate-400 leading-none mt-0.5">%</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>キーワード</TableHead>
-              <TableHead className="text-center">施策前</TableHead>
-              <TableHead className="text-center">施策後</TableHead>
-              <TableHead className="text-center">結果</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((item) => {
-              const exposed = item.after.ownVideoCount > 0;
-              const wasExposed = item.before.ownVideoCount > 0;
-              return (
-                <TableRow key={item.keyword}>
-                  <TableCell className="font-medium">{item.keyword}</TableCell>
-                  <TableCell className="text-center text-slate-400 text-sm">
-                    {wasExposed ? `${item.before.bestRank}位（${item.before.ownVideoCount}本）` : "圏外"}
-                  </TableCell>
-                  <TableCell className="text-center text-sm">
-                    {exposed
-                      ? <span className="text-green-600 font-semibold">{item.after.bestRank}位（{item.after.ownVideoCount}本）</span>
-                      : <span className="text-muted-foreground">圏外</span>
-                    }
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={exposed ? "default" : "secondary"} className={exposed ? "bg-green-600" : ""}>
-                      {exposed ? (wasExposed ? "継続露出" : "露出成功") : "未露出"}
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">KW別 検索上位シェア率</CardTitle>
+          <CardDescription className="text-xs">Top30内の自社動画の占有率と露出動画</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+
+          {/* === Overview Summary Banner === */}
+          {chartData.length > 0 && (
+            <div className="rounded-xl border bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 p-4">
+              <div className="flex items-center gap-5">
+                {/* Main ring - overall average */}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <ShareRing pct={avgPct} size={88} stroke={8} />
+                  <span className="text-[10px] font-medium text-slate-500 mt-1">平均シェア率</span>
+                </div>
+                {/* Stats */}
+                <div className="flex-1 min-w-0">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">自社動画数</p>
+                      <p className="text-xl font-bold text-slate-800">{totalOwn}<span className="text-sm font-normal text-slate-400">本</span></p>
+                      <p className="text-[10px] text-slate-400">/ {totalScanned}本中</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">対象KW数</p>
+                      <p className="text-xl font-bold text-slate-800">{chartData.length}<span className="text-sm font-normal text-slate-400">KW</span></p>
+                      <p className="text-[10px] text-slate-400">Top30 調査</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">最高シェア</p>
+                      <p className="text-xl font-bold text-blue-600">{maxPctEntry?.pct ?? 0}<span className="text-sm font-normal text-blue-400">%</span></p>
+                      <p className="text-[10px] text-slate-400 truncate">{maxPctEntry?.keyword}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* === Per-keyword Share Cards Grid === */}
+          {chartData.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-500 mb-2.5 flex items-center gap-1.5">
+                <BarChart3 className="h-3.5 w-3.5" />
+                キーワード別シェア率
+              </p>
+              <div className={`grid gap-2.5 ${chartData.length <= 2 ? "grid-cols-2" : chartData.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
+                {chartData.map((d) => {
+                  const tierColor = d.pct >= 40 ? "border-blue-200 bg-blue-50/40" : d.pct >= 25 ? "border-blue-100 bg-blue-50/20" : "border-slate-200 bg-white";
+                  const barColor = d.pct >= 40 ? "bg-blue-500" : d.pct >= 25 ? "bg-blue-400" : d.pct >= 10 ? "bg-blue-300" : "bg-slate-300";
+                  return (
+                    <div key={d.keyword} className={`rounded-lg border p-3 flex flex-col items-center gap-2 ${tierColor}`}>
+                      <ShareRing pct={d.pct} size={64} stroke={6} />
+                      <div className="text-center min-w-0 w-full">
+                        <p className="text-xs font-medium text-slate-700 truncate" title={d.keyword}>{d.keyword}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          <span className="font-semibold text-blue-600">{d.own}</span>
+                          <span className="text-slate-400"> / {d.total}本</span>
+                        </p>
+                      </div>
+                      {/* Mini horizontal bar */}
+                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${barColor}`}
+                          style={{ width: `${Math.min(d.pct, 100)}%`, transition: "width 0.6s ease" }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* === Per-keyword Video Lists === */}
+          <div className="space-y-3">
+          {sovEntries.map(([kw, data]) => {
+            const pos = posMap.get(kw);
+            const videos = (pos?.videos || []) as Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>;
+            const afterSov = data.after || { own_count: 0, total_count: 0, percentage: "0" };
+            const pct = parseFloat(afterSov.percentage) || 0;
+            const tierBadge = pct >= 40 ? "border-blue-300 text-blue-700 bg-blue-50" :
+              pct >= 25 ? "border-blue-200 text-blue-600 bg-blue-50/50" :
+              pct >= 10 ? "border-slate-200 text-blue-500 bg-slate-50" :
+              "border-slate-200 text-slate-500";
+            const barColor = pct >= 40 ? "bg-blue-500" : pct >= 25 ? "bg-blue-400" : pct >= 10 ? "bg-blue-300" : "bg-slate-300";
+
+            return (
+              <div key={kw} className="rounded-lg border bg-white">
+                {/* KWヘッダー */}
+                <div className="flex items-center gap-2 px-3 py-2 border-b bg-slate-50/80">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-medium text-sm">{kw}</span>
+                  <div className="ml-auto flex items-center gap-2">
+                    {/* シェア率バー */}
+                    <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${barColor}`}
+                        style={{ width: `${Math.min(pct, 100)}%` }}
+                      />
+                    </div>
+                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${tierBadge}`}>
+                      {afterSov.own_count}/{afterSov.total_count}本 ({afterSov.percentage}%)
                     </Badge>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                  </div>
+                </div>
+                {/* 動画リスト */}
+                {videos.length > 0 ? (
+                  <SovVideoList videos={videos} officialIds={officialIds} campaignAuthorIds={campaignAuthorIds} />
+                ) : (
+                  <div className="px-3 py-3 text-xs text-muted-foreground italic">該当動画なし</div>
+                )}
+              </div>
+            );
+          })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
+
+// (BigKeywordSection merged into KeywordSection above)
 
 // ============================
 // Section 6: Competitor
 // ============================
 
-function CompetitorSection({ compReport, freqReport, bigKeywordReport }: { compReport: Record<string, any>; freqReport: any[]; bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; competitors?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number; before_best_rank: number | null; before_video_count_in_top30: number; rank_change: number | null }> }> }) {
+function CompetitorSection({ compReport, freqReport, bigKeywordReport, hasBaseline }: { compReport: Record<string, any>; freqReport: any[]; bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; competitors?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number; before_best_rank: number | null; before_video_count_in_top30: number; rank_change: number | null }> }>; hasBaseline: boolean }) {
   // 全競合名を収集（施策KW + ビッグKW）— URLではなく@usernameで表示
   const compNames = new Map<string, string>(); // id -> display name
   const toDisplayName = (id: string, name: string) => {
@@ -958,7 +1645,7 @@ function CompetitorSection({ compReport, freqReport, bigKeywordReport }: { compR
 // Section 7: Ripple
 // ============================
 
-function RippleSection({ ripple }: { ripple: Record<string, any> }) {
+function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; campaign?: any }) {
   const entries = Object.entries(ripple);
 
   if (entries.length === 0) {
@@ -1078,53 +1765,129 @@ function RippleSection({ ripple }: { ripple: Record<string, any> }) {
 // Section 8: Cross Platform
 // ============================
 
-function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?: any[] }) {
-  const trendMap = new Map<string, number>((data.trendsData || []).map((t: any) => [t.date, t.value]));
-  const videoMap = new Map<string, any>((data.videoTimeline || []).map((v: any) => [v.date, v]));
+function CrossPlatformSection({ data, videoMetrics, baselineDate, measurementDate, ripple, campaignStart, campaignEnd }: {
+  data: any; videoMetrics?: any[]; baselineDate?: any; measurementDate?: any; ripple?: Record<string, any>; campaignStart?: string; campaignEnd?: string;
+}) {
+  // 日次チャートデータ（Trends + 自社再生数 + 第三者再生数）
+  const dailyChartData = useMemo(() => {
+    const trendMap = new Map<string, number>((data.trendsData || []).map((t: any) => [t.date, t.value]));
+    const videoMap = new Map<string, any>((data.videoTimeline || []).map((v: any) => [v.date, v]));
 
-  // videoTimelineが空の場合、videoMetricsからフォールバック
-  if (videoMap.size === 0 && videoMetrics && videoMetrics.length > 0) {
-    const fallbackMap = new Map<string, { postCount: number; totalViews: number }>();
-    for (const v of videoMetrics) {
-      const postedAt = v.postedAt;
-      if (!postedAt) continue;
-      const date = new Date(postedAt).toISOString().split("T")[0];
-      const existing = fallbackMap.get(date) || { postCount: 0, totalViews: 0 };
-      existing.postCount += 1;
-      existing.totalViews += (v.after?.viewCount || v.before?.viewCount || 0);
-      fallbackMap.set(date, existing);
-    }
-    for (const [date, stats] of fallbackMap) {
-      videoMap.set(date, { date, ...stats });
-    }
-  }
-
-  const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys()])].sort();
-  // 累計再生数を算出
-  let cumulativeViews = 0;
-  const chartData = allDates.map((date: string) => {
-    const dayViews = videoMap.get(date)?.totalViews ?? 0;
-    cumulativeViews += dayViews;
-    return {
-      date: date.slice(5),
-      fullDate: date,
-      trends: trendMap.get(date) ?? null,
-      views: cumulativeViews > 0 ? cumulativeViews : null,
-    };
-  });
-
-  const markerDates = new Set<string>((data.videoMarkers || []).map((m: any) => m.date as string));
-  // videoMarkersが空の場合、videoMetricsからフォールバック
-  if (markerDates.size === 0 && videoMetrics && videoMetrics.length > 0) {
-    for (const v of videoMetrics) {
-      if (v.postedAt) {
+    // videoTimelineが空の場合、videoMetricsからフォールバック
+    if (videoMap.size === 0 && videoMetrics && videoMetrics.length > 0) {
+      const fallbackMap = new Map<string, { postCount: number; totalViews: number }>();
+      for (const v of videoMetrics) {
+        if (!v.postedAt) continue;
         const date = new Date(v.postedAt).toISOString().split("T")[0];
-        markerDates.add(date);
+        const existing = fallbackMap.get(date) || { postCount: 0, totalViews: 0 };
+        existing.postCount += 1;
+        existing.totalViews += (v.after?.viewCount || v.before?.viewCount || 0);
+        fallbackMap.set(date, existing);
+      }
+      for (const [date, stats] of fallbackMap) videoMap.set(date, { date, ...stats });
+    }
+
+    // 第三者投稿の日別再生数
+    const tpDayViews = new Map<string, number>();
+    if (ripple) {
+      for (const [, tagData] of Object.entries(ripple)) {
+        for (const v of (tagData.third_party_videos || tagData.omaage_videos || [])) {
+          if (v.posted_at) {
+            const d = v.posted_at.split("T")[0];
+            tpDayViews.set(d, (tpDayViews.get(d) || 0) + (v.views || 0));
+          }
+        }
       }
     }
-  }
 
-  const hasViewsData = chartData.some(d => d.views != null && d.views > 0);
+    const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys(), ...tpDayViews.keys()])].sort();
+    let cumulativeViews = 0;
+    return allDates.map((date: string) => {
+      const dayViews = videoMap.get(date)?.totalViews ?? 0;
+      cumulativeViews += dayViews;
+      return {
+        date: date.slice(5),
+        fullDate: date,
+        trends: trendMap.get(date) ?? null,
+        views: cumulativeViews > 0 ? cumulativeViews : null,
+        thirdPartyViews: tpDayViews.get(date) || null,
+      };
+    });
+  }, [data, videoMetrics, ripple]);
+
+  const markerDates = useMemo(() => {
+    const dates = new Set<string>((data.videoMarkers || []).map((m: any) => m.date as string));
+    if (dates.size === 0 && videoMetrics && videoMetrics.length > 0) {
+      for (const v of videoMetrics) {
+        if (v.postedAt) dates.add(new Date(v.postedAt).toISOString().split("T")[0]);
+      }
+    }
+    return dates;
+  }, [data, videoMetrics]);
+
+  const hasViewsData = dailyChartData.some(d => d.views != null && d.views > 0);
+
+  // 月別チャートデータ
+  const monthlyChartData = useMemo(() => {
+    const monthMap = new Map<string, { trends: number; views: number; tpViews: number; count: number }>();
+    for (const d of dailyChartData) {
+      const month = d.fullDate.slice(0, 7); // YYYY-MM
+      const entry = monthMap.get(month) || { trends: 0, views: 0, tpViews: 0, count: 0 };
+      entry.trends += d.trends || 0;
+      entry.count += d.trends != null ? 1 : 0;
+      entry.views = d.views || entry.views; // use latest cumulative
+      entry.tpViews += d.thirdPartyViews || 0;
+      monthMap.set(month, entry);
+    }
+    return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
+      month: month.slice(2), // YY-MM
+      trends: d.count > 0 ? Math.round(d.trends / d.count) : 0,
+      views: d.views,
+      thirdPartyViews: d.tpViews > 0 ? d.tpViews : null,
+    }));
+  }, [dailyChartData]);
+
+  const renderDailyChart = () => (
+    <ResponsiveContainer width="100%" height={350}>
+      <LineChart data={dailyChartData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+        <YAxis yAxisId="left" label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
+        <YAxis yAxisId="right" orientation="right" label={{ value: "累計再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
+        <Tooltip formatter={(value: any, name: string) => {
+          if (value === null || value === undefined) return ["—", name];
+          if (name === "Google Trends") return [`${value} / 100`, name];
+          return [Number(value).toLocaleString() + " 回", name];
+        }} />
+        <Legend />
+        <Line yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+        <Line yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} connectNulls />
+        {Array.from(markerDates).map((date: string) => (
+          <ReferenceLine key={date} x={date.slice(5)} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+
+  const renderMonthlyChart = () => (
+    <ResponsiveContainer width="100%" height={350}>
+      <BarChart data={monthlyChartData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+        <YAxis yAxisId="left" label={{ value: "Trends (平均)", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
+        <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} />
+        <Tooltip />
+        <Legend />
+        <Bar yAxisId="left" dataKey="trends" name="Trends 平均" fill="#3b82f6" />
+        <Bar yAxisId="right" dataKey="views" name="累計再生数" fill="#ef4444" />
+        {monthlyChartData.some(d => d.thirdPartyViews != null) && (
+          <Bar yAxisId="right" dataKey="thirdPartyViews" name="第三者再生数" fill="#10b981" />
+        )}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+
+  const hasKeywordVolumes = data.keywordSearchVolumes?.length > 0;
 
   return (
     <div className="space-y-4">
@@ -1148,27 +1911,14 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
           )}
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="left" label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
-              <YAxis yAxisId="right" orientation="right" label={{ value: "累計再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
-              <Tooltip
-                formatter={(value: any, name: string) => {
-                  if (value === null || value === undefined) return ["—", name];
-                  if (name === "Google Trends") return [`${value} / 100`, name];
-                  return [Number(value).toLocaleString() + " 回", name];
-                }}
-              />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
-              <Line yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} connectNulls />
-              {Array.from(markerDates).map((date: string) => (
-                <ReferenceLine key={date} x={date.slice(5)} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
-              ))}
-            </LineChart>
-          </ResponsiveContainer>
+          <Tabs defaultValue="daily">
+            <TabsList className="mb-4">
+              <TabsTrigger value="daily">日次</TabsTrigger>
+              <TabsTrigger value="monthly">月次</TabsTrigger>
+            </TabsList>
+            <TabsContent value="daily">{renderDailyChart()}</TabsContent>
+            <TabsContent value="monthly">{renderMonthlyChart()}</TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
@@ -1186,6 +1936,10 @@ function CrossPlatformSection({ data, videoMetrics }: { data: any; videoMetrics?
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {hasKeywordVolumes && (
+        <KeywordVolumeSection data={data.keywordSearchVolumes} />
       )}
     </div>
   );
