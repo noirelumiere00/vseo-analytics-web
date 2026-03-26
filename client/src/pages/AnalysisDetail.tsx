@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -729,8 +729,55 @@ export default function AnalysisDetail() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation(`/trend-discovery?keyword=${encodeURIComponent(job.keyword)}`)}
+              >
+                <Compass className="mr-2 h-4 w-4" />
+                トレンド発掘
+              </Button>
             </div>
           )}
+
+          {/* KPIサマリーバナー */}
+          {job.status === "completed" && reportStats && (() => {
+            const avgER = reportStats.totalViews > 0
+              ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
+              : "—";
+            return (
+              <div className="grid gap-4 md:grid-cols-4">
+                <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
+                  <Play className="h-5 w-5 text-primary shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{reportStats.totalVideos}</p>
+                    <p className="text-xs text-muted-foreground">分析動画数</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                  <Search className="h-5 w-5 text-blue-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{formatNumber(reportStats.totalViews)}</p>
+                    <p className="text-xs text-muted-foreground">総再生数</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 border-l-4 border-emerald-500 rounded-lg p-4 bg-emerald-50 dark:bg-emerald-950/20">
+                  <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{reportStats.sentimentPercentages.positive}%</p>
+                    <p className="text-xs text-muted-foreground">ポジティブ率</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
+                  <Star className="h-5 w-5 text-amber-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{avgER}%</p>
+                    <p className="text-xs text-muted-foreground">平均ER</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (

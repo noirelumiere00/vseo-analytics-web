@@ -3,12 +3,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Eye, FileText, Loader2, Search, Video } from "lucide-react";
+import { Compass, Eye, FileText, Loader2, Search, Video } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import DashboardLayout from "@/components/DashboardLayout";
 
 const STEPS = [
@@ -20,7 +20,18 @@ const STEPS = [
 
 export default function AnalysisNew() {
   const [, setLocation] = useLocation();
+  const searchString = useSearch();
+  const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const fromTrend = params.get("from") === "trend";
+  const trendJobId = params.get("trendJobId") ? Number(params.get("trendJobId")) : null;
+  const trendKeywords = params.get("keywords")?.split(",").filter(Boolean) ?? [];
+
   const [keyword, setKeyword] = useState("");
+
+  const trendJobQuery = trpc.trendDiscovery.getById.useQuery(
+    { jobId: trendJobId! },
+    { enabled: fromTrend && trendJobId != null },
+  );
 
   const dashboardQuery = trpc.analysis.dashboard.useQuery();
 
@@ -73,6 +84,31 @@ export default function AnalysisNew() {
                   onChange={(e) => setKeyword(e.target.value)}
                 />
               </div>
+
+              {/* Trend-linked keywords */}
+              {fromTrend && trendKeywords.length > 0 && (
+                <div className="space-y-2 p-3 rounded-lg bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+                  <p className="text-xs font-medium text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                    <Compass className="h-3.5 w-3.5" />
+                    トレンド発掘から
+                    {trendJobQuery.data?.persona && (
+                      <span className="text-muted-foreground font-normal">— {trendJobQuery.data.persona}</span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {trendKeywords.map(kw => (
+                      <Badge
+                        key={kw}
+                        variant="secondary"
+                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs px-2.5 py-1"
+                        onClick={() => setKeyword(kw)}
+                      >
+                        {kw}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Recent keywords as quick select */}
               {topKeywords && topKeywords.length > 0 && (

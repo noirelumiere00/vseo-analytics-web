@@ -118,7 +118,7 @@ export default function Activity() {
   };
 
   const getStatusBadge = (status: string) => {
-    const cls = "text-[10px] px-1.5 py-0.5";
+    const cls = "text-xs px-1.5 py-0.5";
     switch (status) {
       case "completed":
         return <Badge className={`bg-green-500 hover:bg-green-500 ${cls}`}><CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />完了</Badge>;
@@ -230,7 +230,7 @@ export default function Activity() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">アクティビティ</h1>
-            <p className="text-[13px] text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               SEO分析・トレンド発掘の全履歴
             </p>
           </div>
@@ -252,11 +252,11 @@ export default function Activity() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button size="sm" variant="outline" className="h-8 text-[13px]" onClick={() => setLocation("/trend-discovery")}>
+            <Button size="sm" variant="outline" className="h-8 text-sm" onClick={() => setLocation("/trend-discovery")}>
               <Compass className="h-3.5 w-3.5 mr-1.5" />
               トレンド発掘
             </Button>
-            <Button size="sm" className="gradient-primary text-white h-8 text-[13px]" onClick={() => setLocation("/analysis/new")}>
+            <Button size="sm" className="gradient-primary text-white h-8 text-sm" onClick={() => setLocation("/analysis/new")}>
               <Search className="h-3.5 w-3.5 mr-1.5" />
               新規分析
             </Button>
@@ -273,14 +273,14 @@ export default function Activity() {
             <button
               key={tab.key}
               onClick={() => setFilter(tab.key)}
-              className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 filter === tab.key
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {tab.label}
-              <span className="ml-1.5 text-[11px] opacity-50 tabular-nums">{tab.count}</span>
+              <span className="ml-1.5 text-xs opacity-50 tabular-nums">{tab.count}</span>
             </button>
           ))}
         </div>
@@ -292,7 +292,7 @@ export default function Activity() {
               ? "bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800"
               : "bg-red-50/50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
           }`}>
-            <span className="text-[13px] text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               {editMode === "compare"
                 ? `完了済みSEO分析を2件選択してください (${selectedIds.size}/2)`
                 : `${selectedIds.size}件選択中`}
@@ -383,7 +383,7 @@ export default function Activity() {
                         {/* Type badge */}
                         <Badge
                           variant="secondary"
-                          className={`shrink-0 text-[10px] px-1.5 py-0.5 ${
+                          className={`shrink-0 text-xs px-1.5 py-0.5 ${
                             item.type === "seo"
                               ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
                               : "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
@@ -394,14 +394,14 @@ export default function Activity() {
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <CardTitle className="text-[13px] font-medium truncate">
+                            <CardTitle className="text-sm font-medium truncate">
                               {item.label}
                             </CardTitle>
                             {editMode === "normal" && item.type === "seo" && item.status === "completed" && (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-5 px-1.5 text-[10px] text-blue-500 hover:text-blue-700 shrink-0"
+                                className="h-5 px-1.5 text-xs text-blue-500 hover:text-blue-700 shrink-0"
                                 onClick={(e) => { e.stopPropagation(); setLocation(`/trend?keyword=${encodeURIComponent(item.label)}`); }}
                                 title="トレンド推移を見る"
                               >
@@ -409,7 +409,7 @@ export default function Activity() {
                               </Button>
                             )}
                           </div>
-                          <CardDescription className="text-[11px] mt-0.5">
+                          <CardDescription className="text-xs mt-0.5">
                             {formatDistanceToNow(new Date(item.date), { addSuffix: true, locale: ja })}
                             {item.type === "seo" && item.status === "completed" && (item as any).totalVideos != null && (
                               <span className="ml-2">
@@ -438,7 +438,7 @@ export default function Activity() {
                         {item.type === "trend" && item.status === "completed" && (item as any).topTags?.length > 0 && (
                           <div className="hidden sm:flex gap-1">
                             {((item as any).topTags as string[]).map(tag => (
-                              <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-600 dark:border-purple-700 dark:text-purple-400">
+                              <Badge key={tag} variant="outline" className="text-xs px-1.5 py-0 border-purple-300 text-purple-600 dark:border-purple-700 dark:text-purple-400">
                                 #{tag}
                               </Badge>
                             ))}

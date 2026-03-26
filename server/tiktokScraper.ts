@@ -133,7 +133,7 @@ export function parseVideoData(item: any): TikTokVideo | null {
 // 1つのシークレットブラウザコンテキストでキーワード検索して動画を取得
 // プランB: ネットワークインターセプト + ブラウザ内スクロールトリガーによるページネーション
 // ブラウザ自体にX-Bogus等の署名を生成させ、AWS側からの直接APIリクエストは行わない
-async function searchInIncognitoContext(
+export async function searchInIncognitoContext(
   browser: Browser,
   keyword: string,
   maxVideos: number,

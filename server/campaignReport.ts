@@ -1,6 +1,7 @@
 /**
  * キャンペーンレポート生成ロジック
  * 2つのスナップショット（baseline + measurement）を比較してレポートを生成
+ * baseline が null の場合は measurement のみで絶対値レポートを生成
  */
 
 import type { Campaign, CampaignSnapshot, InsertCampaignReport } from "../drizzle/schema";
@@ -19,7 +20,7 @@ function calcER(v: { view_count: number; like_count: number; comment_count: numb
 
 export async function generateCampaignReport(
   campaign: Campaign,
-  baseline: CampaignSnapshot,
+  baseline: CampaignSnapshot | null,
   measurement: CampaignSnapshot,
 ): Promise<Omit<InsertCampaignReport, "id">> {
   const keywords = campaign.keywords || [];
@@ -30,17 +31,38 @@ export async function generateCampaignReport(
   const competitorReport: NonNullable<InsertCampaignReport["competitorReport"]> = {};
   const sovReport: NonNullable<InsertCampaignReport["sovReport"]> = {};
   const rippleReport: NonNullable<InsertCampaignReport["rippleReport"]> = {};
-  const screenshots: NonNullable<InsertCampaignReport["screenshots"]> = {};
+
+  // 施策動画のビデオID集合（own_videosが空でもall_videosからマッチ可能にする）
+  const ownVideoData = (campaign as any).ownVideoData as Array<{ videoId: string }> | undefined;
+  const campaignVideoIds = new Set<string>([
+    ...(campaign.ownVideoIds || []),
+    ...(ownVideoData || []).map(v => v.videoId).filter(Boolean),
+  ]);
+  const ownAccountIdsLower = new Set((campaign.ownAccountIds || []).map((id: string) => id.toLowerCase()));
+
+  // all_videos から施策動画を検索するヘルパー
+  const findCampaignVideosInResults = (resultData: any): any[] => {
+    if (!resultData) return [];
+    // まず own_videos を使う（新コードのスナップショット）
+    if (resultData.own_videos?.length > 0) return resultData.own_videos;
+    // フォールバック: all_videos からビデオID・アカウントIDでマッチ
+    if (!resultData.all_videos) return [];
+    return resultData.all_videos.filter((v: any) =>
+      campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has((v.creator_username || "").toLowerCase())
+    );
+  };
 
   // ============================
   // 軸1: 自社ポジション変化
   // ============================
   for (const kw of keywords) {
-    const before = baseline.searchResults?.[kw];
+    const before = baseline?.searchResults?.[kw];
     const after = measurement.searchResults?.[kw];
 
-    const beforeOwn = before?.own_videos?.[0];
-    const afterOwn = after?.own_videos?.[0];
+    const beforeOwnAll = findCampaignVideosInResults(before);
+    const afterOwnAll = findCampaignVideosInResults(after);
+    const beforeOwn = beforeOwnAll[0];
+    const afterOwn = afterOwnAll[0];
 
     const beforeER = beforeOwn ? calcER(beforeOwn) : 0;
     const afterER = afterOwn ? calcER(afterOwn) : 0;
@@ -59,23 +81,25 @@ export async function generateCampaignReport(
         : null,
       before_er: beforeER,
       after_er: afterER,
+      videos: afterOwnAll.map((v: any) => ({
+        video_id: v.video_id,
+        username: v.creator_username || "",
+        description: (v.description || "").slice(0, 40),
+        search_rank: v.search_rank,
+        view_count: v.view_count || 0,
+      })),
     });
 
-    // スクリーンショット
-    screenshots[kw] = {
-      before: before?.screenshot_key || null,
-      after: after?.screenshot_key || null,
-    };
   }
 
   // ============================
   // 軸2: 競合比較（Before/After強化）
   // ============================
   for (const kw of keywords) {
-    const before = baseline.searchResults?.[kw];
+    const before = baseline?.searchResults?.[kw];
     const after = measurement.searchResults?.[kw];
-    const beforeOwn = before?.own_videos?.[0];
-    const afterOwn = after?.own_videos?.[0];
+    const beforeOwn = findCampaignVideosInResults(before)[0];
+    const afterOwn = findCampaignVideosInResults(after)[0];
 
     const beforeCompPositions = before?.competitor_positions || [];
     const afterCompPositions = after?.competitor_positions || [];
@@ -124,17 +148,32 @@ export async function generateCampaignReport(
         ),
     };
 
-    // シェア・オブ・ボイス（前後比較）
-    const beforeSov = baseline.searchResults?.[kw]?.share_of_voice;
-    const afterSov = after?.share_of_voice;
+    // シェア・オブ・ボイス（前後比較） — 保存値が不正確な場合はall_videosから再計算
+    const recalcSov = (resultData: any) => {
+      if (!resultData) return { own_count: 0, total_count: 0, percentage: "0" };
+      const saved = resultData.share_of_voice;
+      // saved.own_count > 0 なら信頼できる（新コードのスナップショット）
+      if (saved && saved.own_count > 0) return saved;
+      // all_videosから再計算
+      const allVids = resultData.all_videos || [];
+      const ownCount = allVids.filter((v: any) =>
+        campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has((v.creator_username || "").toLowerCase())
+      ).length;
+      const total = allVids.length;
+      return {
+        own_count: ownCount,
+        total_count: total,
+        percentage: total > 0 ? (ownCount / total * 100).toFixed(1) : "0",
+      };
+    };
     sovReport[kw] = {
-      before: beforeSov || { own_count: 0, total_count: 0, percentage: "0" },
-      after: afterSov || { own_count: 0, total_count: 0, percentage: "0" },
+      before: recalcSov(before),
+      after: recalcSov(after),
     };
   }
 
-  // ownVideoData を先に取得（投稿頻度・動画メトリクスで使う）
-  const ownVideoData = (campaign as any).ownVideoData as Array<{
+  // ownVideoData は上部で取得済み（施策動画マッチ用）— 投稿頻度・動画メトリクスでも使う
+  const ownVideoDataFull = (campaign as any).ownVideoData as Array<{
     videoId: string; videoUrl: string; coverUrl: string; description: string;
     createTime: number;
     viewCount?: number; likeCount?: number; commentCount?: number;
@@ -154,8 +193,8 @@ export async function generateCampaignReport(
     }
   }
   // フォールバック: ownVideoDataのcreateTimeも使う
-  if (ownPostDates.length < 2 && ownVideoData) {
-    for (const v of ownVideoData) {
+  if (ownPostDates.length < 2 && ownVideoDataFull) {
+    for (const v of ownVideoDataFull) {
       if (v.createTime) ownPostDates.push(new Date(v.createTime * 1000).toISOString());
     }
   }
@@ -204,26 +243,62 @@ export async function generateCampaignReport(
 
   const allRippleTags = [...new Set([
     ...campaignHashtags,
-    ...Object.keys(baseline.rippleEffect || {}),
+    ...Object.keys(baseline?.rippleEffect || {}),
     ...Object.keys(measurement.rippleEffect || {}),
   ])];
   const rippleTags = allRippleTags.filter(isRelevantTag);
 
+  // 施策動画の最も早い公開日を取得（波及効果の日付フィルタ用）
+  const ownCreateTimes = (ownVideoDataFull || [])
+    .map(v => v.createTime)
+    .filter((t): t is number => t != null && t > 0);
+  const earliestOwnPublishMs = ownCreateTimes.length > 0
+    ? Math.min(...ownCreateTimes) * 1000
+    : 0;
+
+  // 自社動画除外セット（ownAccountIds + ownVideoDataのauthorUniqueId/videoId）
+  const ownAccountsForRipple = new Set([
+    ...(campaign.ownAccountIds || []).map((id: string) => id.toLowerCase()),
+    ...(ownVideoDataFull || []).map(v => (v as any).authorUniqueId?.toLowerCase()).filter(Boolean),
+  ]);
+  const ownVideoIdsForRipple = new Set(
+    (ownVideoDataFull || []).map(v => v.videoId).filter(Boolean),
+  );
+
   for (const tag of rippleTags) {
-    const before = baseline.rippleEffect?.[tag];
+    const before = baseline?.rippleEffect?.[tag];
     const after = measurement.rippleEffect?.[tag];
 
-    const afterVideos = after?.third_party_videos || after?.omaage_videos || [];
+    let afterVideos = after?.third_party_videos || after?.omaage_videos || [];
+
+    // 自社動画を除外（スナップショット収集時に漏れたケースに対応）
+    afterVideos = afterVideos.filter((v: any) => {
+      const creatorLower = (v.creator || "").toLowerCase();
+      if (ownAccountsForRipple.has(creatorLower)) return false;
+      const urlVideoId = (v.video_url || "").match(/video\/(\d+)/)?.[1] || "";
+      if (urlVideoId && ownVideoIdsForRipple.has(urlVideoId)) return false;
+      return true;
+    });
+
+    // 施策動画公開日以降の第三者投稿のみに絞り込み
+    if (earliestOwnPublishMs > 0) {
+      afterVideos = afterVideos.filter((v: any) => {
+        if (!v.posted_at) return true;
+        return new Date(v.posted_at).getTime() >= earliestOwnPublishMs;
+      });
+    }
+
+    const filteredViews = afterVideos.reduce((sum: number, v: any) => sum + (v.views || 0), 0);
 
     rippleReport[tag] = {
       before_posts: before?.other_post_count || 0,
-      after_posts: after?.other_post_count || 0,
-      posts_change: (after?.other_post_count || 0) - (before?.other_post_count || 0),
+      after_posts: afterVideos.length,
+      posts_change: afterVideos.length - (before?.other_post_count || 0),
       posts_change_pct: (before?.other_post_count && before.other_post_count > 0)
-        ? (((after?.other_post_count || 0) - before.other_post_count) / before.other_post_count * 100).toFixed(0)
+        ? ((afterVideos.length - before.other_post_count) / before.other_post_count * 100).toFixed(0)
         : null,
       before_total_views: before?.other_total_views || 0,
-      after_total_views: after?.other_total_views || 0,
+      after_total_views: filteredViews,
       third_party_videos: afterVideos,
       third_party_count: afterVideos.length,
     };
@@ -234,11 +309,11 @@ export async function generateCampaignReport(
   // ============================
   let videoMetricsReport: InsertCampaignReport["videoMetricsReport"] = undefined;
 
-  if (ownVideoData && ownVideoData.length > 0) {
-    const baselineMetrics = baseline.ownVideoMetrics || {};
+  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
+    const baselineMetrics = baseline?.ownVideoMetrics || {};
     const measurementMetrics = measurement.ownVideoMetrics || {};
 
-    videoMetricsReport = ownVideoData.map(v => {
+    videoMetricsReport = ownVideoDataFull.map(v => {
       const bm = baselineMetrics[v.videoId] || null;
       const am = measurementMetrics[v.videoId] || null;
 
@@ -251,10 +326,11 @@ export async function generateCampaignReport(
         saveCount: v.saveCount || 0,
       };
 
-      const effectiveBefore = bm || fallbackMetrics;
+      // baseline が null の場合は before も null（比較データなし）
+      const effectiveBefore = baseline ? (bm || fallbackMetrics) : null;
       const effectiveAfter = am || fallbackMetrics;
 
-      const beforeViews = effectiveBefore.viewCount || 0;
+      const beforeViews = effectiveBefore?.viewCount || 0;
       const afterViews = effectiveAfter.viewCount || 0;
 
       // ER計算
@@ -275,7 +351,7 @@ export async function generateCampaignReport(
         duration: (v as any).duration || 0,
         before: effectiveBefore,
         after: effectiveAfter,
-        viewsChangePct: beforeViews > 0
+        viewsChangePct: (baseline && beforeViews > 0)
           ? ((afterViews - beforeViews) / beforeViews * 100).toFixed(1)
           : null,
         er,
@@ -288,19 +364,21 @@ export async function generateCampaignReport(
   // ============================
   let crossPlatformData: InsertCampaignReport["crossPlatformData"] = undefined;
 
-  if (keywords.length > 0 && baseline.capturedAt && measurement.capturedAt) {
+  if (keywords.length > 0 && measurement.capturedAt) {
     try {
       const primaryKw = keywords[0];
-      const startDate = new Date(baseline.capturedAt);
+      const startDate = baseline?.capturedAt
+        ? new Date(baseline.capturedAt)
+        : new Date(measurement.capturedAt);
       startDate.setDate(startDate.getDate() - 30); // 30日前から
       const endDate = new Date(measurement.capturedAt);
 
       const trendsData = await fetchGoogleTrends(primaryKw, startDate, endDate);
 
       // ownVideoDataから日別集計（ownVideoMetricsが空の場合はownVideoDataのメトリクスをフォールバック）
-      const videoTimeline = ownVideoData
+      const videoTimeline = ownVideoDataFull
         ? aggregateVideosByDay(
-            ownVideoData.map(v => ({
+            ownVideoDataFull.map(v => ({
               postedAt: v.createTime ? new Date(v.createTime * 1000) : null,
               viewCount: (measurement.ownVideoMetrics?.[v.videoId]?.viewCount) || v.viewCount || 0,
             }))
@@ -308,7 +386,7 @@ export async function generateCampaignReport(
         : [];
 
       // ownVideoDataからマーカー生成
-      const videoMarkers = (ownVideoData || [])
+      const videoMarkers = (ownVideoDataFull || [])
         .filter(v => v.createTime)
         .map(v => ({
           date: new Date(v.createTime * 1000).toISOString().split("T")[0],
@@ -317,15 +395,34 @@ export async function generateCampaignReport(
           description: v.description.slice(0, 50),
         }));
 
-      // 相関係数算出
+      // 相関係数算出（施策動画 + 第三者投稿の合算再生数 × Google Trends）
       let correlation: number | null = null;
-      if (trendsData.length >= 3 && videoTimeline.length >= 3) {
+      {
         const trendMap = new Map(trendsData.map(t => [t.date, t.value]));
-        const commonDates = videoTimeline.filter(v => trendMap.has(v.date)).map(v => v.date);
-        if (commonDates.length >= 3) {
+        // 施策動画の日次再生数
+        const combinedViewsMap = new Map<string, number>();
+        for (const v of videoTimeline) {
+          combinedViewsMap.set(v.date, (combinedViewsMap.get(v.date) || 0) + (v.totalViews || 0));
+        }
+        // 第三者投稿の日次再生数を加算（タグ間の重複除外）
+        const rippleData = measurement.rippleEffect || {};
+        const seenVideos = new Set<string>();
+        for (const tagData of Object.values(rippleData)) {
+          const videos = (tagData as any)?.third_party_videos || [];
+          for (const v of videos) {
+            if (!v.posted_at || !v.views) continue;
+            const key = v.video_url || `${v.creator}:${v.description}`;
+            if (seenVideos.has(key)) continue;
+            seenVideos.add(key);
+            const date = new Date(v.posted_at).toISOString().split("T")[0];
+            combinedViewsMap.set(date, (combinedViewsMap.get(date) || 0) + (v.views || 0));
+          }
+        }
+        const commonDates = [...combinedViewsMap.keys()].filter(d => trendMap.has(d)).sort();
+        if (trendsData.length >= 3 && commonDates.length >= 3) {
           correlation = pearsonCorrelation(
             commonDates.map(d => trendMap.get(d)!),
-            commonDates.map(d => videoTimeline.find(v => v.date === d)!.totalViews),
+            commonDates.map(d => combinedViewsMap.get(d)!),
           );
         }
       }
@@ -368,10 +465,10 @@ export async function generateCampaignReport(
   let videoScores: InsertCampaignReport["videoScores"] = undefined;
   let aiOverallReport: InsertCampaignReport["aiOverallReport"] = undefined;
 
-  if (ownVideoData && ownVideoData.length > 0) {
+  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
     // 動画スコアリング
     const measurementMetrics2 = measurement.ownVideoMetrics || {};
-    const scored = ownVideoData.map(v => {
+    const scored = ownVideoDataFull.map(v => {
       const metrics = measurementMetrics2[v.videoId];
       const score = calculateScoresFromData({
         desc: v.description,
@@ -398,7 +495,7 @@ export async function generateCampaignReport(
     // LLMで動画評価 + 総合レポート生成（1バッチ呼び出し）
     try {
       const videoSummaries = scored.map(s => {
-        const v = ownVideoData.find(d => d.videoId === s.videoId);
+        const v = ownVideoDataFull.find(d => d.videoId === s.videoId);
         const metrics = measurementMetrics2[s.videoId];
         return {
           videoId: s.videoId,
@@ -485,7 +582,7 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
       competitorPositions?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number }>;
       totalResults: number;
     };
-    const baselineBigKW = (baseline as any).bigKeywordResults as Record<string, BigKWSnapshot> | undefined;
+    const baselineBigKW = (baseline as any)?.bigKeywordResults as Record<string, BigKWSnapshot> | undefined;
     const measurementBigKW = (measurement as any).bigKeywordResults as Record<string, BigKWSnapshot> | undefined;
 
     bigKeywordReport = bigKeywords.map(kw => {
@@ -526,6 +623,51 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
         }
       }
 
+      // 動画詳細を付与（複数ソースからフォールバック）
+      const videoDataMap = new Map((ownVideoDataFull || []).map(v => [v.videoId, v]));
+      // searchResults.all_videos から videoId→username+description のルックアップ
+      const allVideoLookup = new Map<string, { username: string; description: string }>();
+      for (const srData of Object.values(measurement.searchResults || {})) {
+        for (const v of (srData as any)?.all_videos || []) {
+          if (v.video_id && v.creator_username && !allVideoLookup.has(v.video_id)) {
+            allVideoLookup.set(v.video_id, { username: v.creator_username, description: v.description || "" });
+          }
+        }
+      }
+      // 施策KW関連フィルタ: 施策KW/ハッシュタグの内容が含まれる動画のみ
+      const campaignTerms = [
+        ...keywords.map(k => k.replace(/^#/, "").toLowerCase()),
+        ...campaignHashtags.map(h => h.replace(/^#/, "").toLowerCase()),
+      ].filter(Boolean);
+      const ownVideos = (mk?.ownVideosInTop30 || []).map((ov: any) => {
+        const vd = videoDataMap.get(ov.videoId);
+        const srMatch = allVideoLookup.get(ov.videoId);
+        const desc = (vd?.description || ov.description || srMatch?.description || "").toLowerCase();
+        const username = (vd as any)?.authorUniqueId
+          || vd?.videoUrl?.match(/@([^/]+)/)?.[1]
+          || ov.username
+          || srMatch?.username
+          || (campaign.ownAccountIds || [])[0]
+          || "";
+        return {
+          videoId: ov.videoId,
+          username,
+          description: (vd?.description || ov.description || srMatch?.description || "").slice(0, 40),
+          rank: ov.rank,
+          viewCount: ov.viewCount,
+          _desc: desc, // フィルタ用
+        };
+      }).filter((v: any) => {
+        // 登録済み施策動画はそのまま通す
+        if (campaignVideoIds.has(v.videoId)) return true;
+        // 施策KW検索結果にも出現した動画は関連性あり
+        if (allVideoLookup.has(v.videoId)) return true;
+        // descriptionがある場合は施策KW関連のコンテンツかチェック
+        if (v._desc && campaignTerms.some(term => v._desc.includes(term))) return true;
+        // いずれにも該当しない → 施策と無関係
+        return false;
+      }).map(({ _desc, ...rest }: any) => rest);
+
       return {
         keyword: kw,
         before: {
@@ -533,10 +675,11 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
           bestRank: bk?.ownVideosInTop30?.[0]?.rank ?? null,
         },
         after: {
-          ownVideoCount: mk?.ownVideosInTop30?.length || 0,
-          bestRank: mk?.ownVideosInTop30?.[0]?.rank ?? null,
+          ownVideoCount: ownVideos.length,
+          bestRank: ownVideos.length > 0 ? Math.min(...ownVideos.map((v: any) => v.rank)) : null,
         },
         competitors: Array.from(compMap.values()),
+        ownVideos,
       };
     });
   }
@@ -544,24 +687,108 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
   // ============================
   // サマリー
   // ============================
-  const mainKw = positionReport[0];
+  // 最もパフォーマンスが良いKW（after_rank があるものを優先、なければ after_views が最大）
+  const mainKw = positionReport.find(p => p.after_rank != null)
+    || positionReport.reduce((best, p) => (p.after_views > (best?.after_views || 0) ? p : best), positionReport[0]);
+  const mainKwName = mainKw?.keyword || keywords[0] || "";
   const mainRipple = campaignHashtags[0] ? rippleReport[campaignHashtags[0]] : undefined;
-  const mainSov = keywords[0] ? sovReport[keywords[0]] : undefined;
+
+  // 平均検索順位（ランクインしているKWのみ）
+  const rankedKws = positionReport.filter(p => p.after_rank != null);
+  const avgRankAfter = rankedKws.length > 0
+    ? Number((rankedKws.reduce((s, p) => s + p.after_rank!, 0) / rankedKws.length).toFixed(1))
+    : null;
+  const rankedKwsBefore = positionReport.filter(p => p.before_rank != null);
+  const avgRankBefore = rankedKwsBefore.length > 0
+    ? Number((rankedKwsBefore.reduce((s, p) => s + p.before_rank!, 0) / rankedKwsBefore.length).toFixed(1))
+    : null;
+
+  // 施策動画全体の合算メトリクス
+  let totalViewsAfter = 0, totalViewsBefore = 0;
+  let totalLikesAfter = 0, totalCommentsAfter = 0, totalSharesAfter = 0;
+  let totalLikesBefore = 0, totalCommentsBefore = 0, totalSharesBefore = 0;
+  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
+    const mMetrics = measurement.ownVideoMetrics || {};
+    const bMetrics = baseline?.ownVideoMetrics || {};
+    for (const v of ownVideoDataFull) {
+      const am = mMetrics[v.videoId];
+      totalViewsAfter += am?.viewCount || v.viewCount || 0;
+      totalLikesAfter += am?.likeCount || v.likeCount || 0;
+      totalCommentsAfter += am?.commentCount || v.commentCount || 0;
+      totalSharesAfter += am?.shareCount || v.shareCount || 0;
+      if (baseline) {
+        const bm = bMetrics[v.videoId];
+        if (bm) {
+          totalViewsBefore += bm.viewCount || 0;
+          totalLikesBefore += bm.likeCount || 0;
+          totalCommentsBefore += bm.commentCount || 0;
+          totalSharesBefore += bm.shareCount || 0;
+        }
+      }
+    }
+  }
+  const campaignErAfter = totalViewsAfter > 0
+    ? Number(((totalLikesAfter + totalCommentsAfter + totalSharesAfter) / totalViewsAfter * 100).toFixed(2))
+    : 0;
+  const campaignErBefore = totalViewsBefore > 0
+    ? Number(((totalLikesBefore + totalCommentsBefore + totalSharesBefore) / totalViewsBefore * 100).toFixed(2))
+    : 0;
+
+  // SOV: 最もSOVが高いKWを採用
+  let bestSovEntry: { keyword: string; sov: any } | null = null;
+  for (const [kw, sov] of Object.entries(sovReport)) {
+    const pct = parseFloat(sov.after?.percentage || "0");
+    if (!bestSovEntry || pct > parseFloat(bestSovEntry.sov.after?.percentage || "0")) {
+      bestSovEntry = { keyword: kw, sov };
+    }
+  }
+
+  // 第三者投稿の重複除外集計（施策動画が十分に上位表示されたタグのみ）
+  // ブランド全体タグ（SOV own_count < 2）を除外し、施策KW固有の波及のみカウント
+  const specificSovTags = new Set<string>();
+  for (const [kw, sov] of Object.entries(sovReport)) {
+    if ((sov.after?.own_count || 0) >= 2) {
+      specificSovTags.add(kw.trim().toLowerCase());
+    }
+  }
+  const seenRippleVideos = new Set<string>();
+  let thirdPartyCount = 0, thirdPartyTotalViews = 0;
+  for (const [tag, tagData] of Object.entries(rippleReport)) {
+    const isSpecific = specificSovTags.size === 0 || specificSovTags.has(tag.trim().toLowerCase());
+    for (const v of (tagData.third_party_videos || [])) {
+      const key = v.video_url || `${v.creator}:${v.description}`;
+      if (seenRippleVideos.has(key)) continue;
+      seenRippleVideos.add(key);
+      if (isSpecific) {
+        thirdPartyCount++;
+        thirdPartyTotalViews += v.views || 0;
+      }
+    }
+  }
 
   const summary: NonNullable<InsertCampaignReport["summary"]> = {
-    primary_keyword: keywords[0] || "",
+    primary_keyword: mainKwName,
     rank_before: mainKw?.before_rank ?? null,
     rank_after: mainKw?.after_rank ?? null,
     rank_change: mainKw?.rank_change ?? null,
-    views_before: mainKw?.before_views || 0,
-    views_after: mainKw?.after_views || 0,
-    er_before: mainKw?.before_er || 0,
-    er_after: mainKw?.after_er || 0,
-    sov_before: mainSov?.before?.percentage || "0",
-    sov_after: mainSov?.after?.percentage || "0",
+    views_before: totalViewsBefore || mainKw?.before_views || 0,
+    views_after: totalViewsAfter || mainKw?.after_views || 0,
+    er_before: campaignErBefore || mainKw?.before_er || 0,
+    er_after: campaignErAfter || mainKw?.after_er || 0,
+    sov_before: bestSovEntry?.sov?.before?.percentage || "0",
+    sov_after: bestSovEntry?.sov?.after?.percentage || "0",
     related_posts_before: mainRipple?.before_posts || 0,
     related_posts_after: mainRipple?.after_posts || 0,
     omaage_count: mainRipple?.third_party_count || mainRipple?.omaage_count || 0,
+    // 新フィールド
+    avg_rank_after: avgRankAfter,
+    avg_rank_before: avgRankBefore,
+    ranked_keyword_count: rankedKws.length,
+    total_keyword_count: positionReport.length,
+    campaign_video_count: ownVideoDataFull?.length || 0,
+    best_sov_keyword: bestSovEntry?.keyword || "",
+    third_party_count_deduped: thirdPartyCount,
+    third_party_total_views: thirdPartyTotalViews,
   };
 
   // ============================
@@ -576,7 +803,7 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
 
   return {
     campaignId: campaign.id,
-    baselineDate: baseline.capturedAt,
+    baselineDate: baseline?.capturedAt ?? null,
     measurementDate: measurement.capturedAt,
     summary,
     positionReport,
@@ -584,7 +811,6 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     sovReport,
     competitorFrequencyReport,
     rippleReport,
-    screenshots,
     notes,
     videoMetricsReport,
     crossPlatformData,

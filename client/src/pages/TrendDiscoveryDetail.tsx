@@ -130,13 +130,14 @@ export default function TrendDiscoveryDetail() {
             </div>
           </div>
           {job.status === "completed" && (
-            <div className="flex items-center gap-2">
-              <Button onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
                 <FileText className="h-4 w-4 mr-2" />
                 施策レポート作成
               </Button>
               <Button
                 variant="outline"
+                size="sm"
                 onClick={() => recomputeMutation.mutate({ jobId })}
                 disabled={recomputeMutation.isPending}
               >
@@ -147,9 +148,22 @@ export default function TrendDiscoveryDetail() {
                 )}
                 統計再計算
               </Button>
-              <Button variant="outline" onClick={handleExportCsv}>
+              <Button variant="outline" size="sm" onClick={handleExportCsv}>
                 <Download className="h-4 w-4 mr-2" />
                 CSV出力
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const keywords = (job.expandedKeywords as string[] || []).slice(0, 3);
+                  const params = new URLSearchParams({ from: "trend", trendJobId: String(jobId) });
+                  if (keywords.length > 0) params.set("keywords", keywords.join(","));
+                  setLocation(`/analysis/new?${params.toString()}`);
+                }}
+              >
+                <Search className="h-4 w-4 mr-2" />
+                SEO分析を開始
               </Button>
             </div>
           )}

@@ -26,6 +26,7 @@ import {
   Lightbulb, Users, Ruler, Play, Zap, Megaphone, Sparkles, Plus, ChevronDown,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useCountUp } from "@/hooks/useCountUp";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
@@ -52,6 +53,9 @@ export default function Dashboard() {
   const { data: insights } = trpc.analysis.platformInsights.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,
   });
+
+  const animatedTotalAnalyses = useCountUp(data?.kpi.totalAnalyses ?? 0);
+  const animatedTotalVideos = useCountUp(insights?.stats.totalVideos ?? 0);
 
   const cancelAnalysis = trpc.analysis.cancel.useMutation({
     onSuccess: () => utils.analysis.dashboard.invalidate(),
@@ -123,11 +127,11 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold">ダッシュボード</h1>
-            <p className="text-[13px] text-muted-foreground mt-0.5">コンテンツ戦略の全体像</p>
+            <p className="text-sm text-muted-foreground mt-0.5">コンテンツ戦略の全体像</p>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="gradient-primary text-white h-8 text-[13px]">
+              <Button size="sm" className="gradient-primary text-white h-8 text-sm">
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 新規作成
                 <ChevronDown className="h-3 w-3 ml-1 opacity-70" />
@@ -215,10 +219,10 @@ export default function Dashboard() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">分析実行数</p>
-                  <div className="text-2xl font-bold mt-1 tabular-nums">{data?.kpi.totalAnalyses || 0}</div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">分析実行数</p>
+                  <div className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalAnalyses}</div>
                   {(data?.kpi.weeklyDelta ?? 0) > 0 && (
-                    <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
                       <TrendingUp className="h-3 w-3" />今週 +{data!.kpi.weeklyDelta}
                     </p>
                   )}
@@ -233,9 +237,9 @@ export default function Dashboard() {
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">解析済み動画</p>
-                  <div className="text-2xl font-bold mt-1 tabular-nums">{insights?.stats.totalVideos?.toLocaleString() || "0"}</div>
-                  <p className="text-[11px] text-muted-foreground mt-1">全期間</p>
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">解析済み動画</p>
+                  <div className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalVideos}</div>
+                  <p className="text-xs text-muted-foreground mt-1">全期間</p>
                 </div>
                 <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950 flex items-center justify-center">
                   <Play className="h-5 w-5 text-purple-500" />
@@ -276,7 +280,7 @@ export default function Dashboard() {
                       onClick={() => setLocation(`/analysis/${item.jobId}`)}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">SEO</Badge>
+                        <Badge variant="secondary" className="shrink-0 text-xs px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">SEO</Badge>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{item.keyword}</div>
                           <div className="text-xs text-muted-foreground">
@@ -300,7 +304,7 @@ export default function Dashboard() {
                       onClick={() => setLocation(`/trend-discovery/${item.jobId}`)}
                     >
                       <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">トレンド</Badge>
+                        <Badge variant="secondary" className="shrink-0 text-xs px-1.5 py-0.5 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">トレンド</Badge>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{item.persona}</div>
                           <div className="text-xs text-muted-foreground">
@@ -311,7 +315,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-3">
                         <div className="flex gap-1">
                           {item.topTags.map(tag => (
-                            <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-600 dark:border-purple-700 dark:text-purple-400">
+                            <Badge key={tag} variant="outline" className="text-xs px-1.5 py-0 border-purple-300 text-purple-600 dark:border-purple-700 dark:text-purple-400">
                               #{tag}
                             </Badge>
                           ))}
@@ -323,7 +327,7 @@ export default function Dashboard() {
                 ))}
               </div>
               <div className="pt-2 border-t mt-2">
-                <Button variant="ghost" size="sm" className="w-full text-[13px] text-muted-foreground h-8" onClick={() => setLocation("/activity")}>
+                <Button variant="ghost" size="sm" className="w-full text-sm text-muted-foreground h-8" onClick={() => setLocation("/activity")}>
                   すべての履歴を見る
                   <ArrowRight className="h-3 w-3 ml-1" />
                 </Button>
@@ -356,7 +360,7 @@ export default function Dashboard() {
                 <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
                 コンテンツ戦略インテリジェンス
               </CardTitle>
-              <CardDescription className="text-[12px]">
+              <CardDescription className="text-xs">
                 {insights.stats.totalVideos.toLocaleString()}本の動画データに基づく戦略分析（直近30日） — ER = エンゲージメント率
               </CardDescription>
             </CardHeader>
@@ -364,24 +368,24 @@ export default function Dashboard() {
               {/* サマリー行 */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <div className="p-2.5 rounded-lg bg-muted/40 border">
-                  <div className="text-[11px] text-muted-foreground">解析動画</div>
+                  <div className="text-xs text-muted-foreground">解析動画</div>
                   <div className="text-base font-semibold mt-0.5 tabular-nums">{insights.stats.totalVideos.toLocaleString()}本</div>
                 </div>
                 {rankedDurations.length > 0 && (
                   <div className="p-2.5 rounded-lg bg-teal-50/50 dark:bg-teal-950/20 border border-teal-200 dark:border-teal-800">
-                    <div className="text-[11px] text-muted-foreground">最適フォーマット</div>
+                    <div className="text-xs text-muted-foreground">最適フォーマット</div>
                     <div className="text-base font-semibold mt-0.5 text-teal-700 dark:text-teal-400">{rankedDurations[0]?.label}</div>
                   </div>
                 )}
                 {insights.topHashtags.length > 0 && (
                   <div className="p-2.5 rounded-lg bg-sky-50/50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800">
-                    <div className="text-[11px] text-muted-foreground">Top ハッシュタグ</div>
+                    <div className="text-xs text-muted-foreground">Top ハッシュタグ</div>
                     <div className="text-base font-semibold mt-0.5 text-sky-700 dark:text-sky-400 truncate">#{insights.topHashtags[0]?.tag}</div>
                   </div>
                 )}
                 {insights.bestHeatmapSlot && insights.bestHeatmapSlot.er > 0 && (
                   <div className="p-2.5 rounded-lg bg-orange-50/50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800">
-                    <div className="text-[11px] text-muted-foreground">最適投稿時間</div>
+                    <div className="text-xs text-muted-foreground">最適投稿時間</div>
                     <div className="text-base font-semibold mt-0.5 text-orange-700 dark:text-orange-400">{insights.bestHeatmapSlot.day}曜・{insights.bestHeatmapSlot.band}</div>
                   </div>
                 )}
@@ -421,7 +425,7 @@ export default function Dashboard() {
                             ER {d.avgER}%
                           </Badge>
                           <span className="text-xs text-muted-foreground w-10 text-right">{d.count}本</span>
-                          <Badge variant="outline" className={`text-[10px] px-1.5 ${
+                          <Badge variant="outline" className={`text-xs px-1.5 ${
                             d.verdict === "Best" ? "border-teal-400 text-teal-700 dark:text-teal-400" :
                             d.verdict === "Good" ? "border-blue-300 text-blue-600 dark:text-blue-400" :
                             "border-amber-300 text-amber-600 dark:text-amber-400"
@@ -463,7 +467,7 @@ export default function Dashboard() {
                               <div className="h-full bg-sky-500 rounded-full" style={{ width: `${(h.avgER / maxER) * 100}%` }} />
                             </div>
                             <span className="text-xs text-muted-foreground w-10 text-right shrink-0">{h.count}本</span>
-                            <Badge variant="outline" className="text-[10px] shrink-0">ER {h.avgER}%</Badge>
+                            <Badge variant="outline" className="text-xs shrink-0">ER {h.avgER}%</Badge>
                           </div>
                         );
                       })}
@@ -489,7 +493,7 @@ export default function Dashboard() {
                               <span className="flex-1 truncate">
                                 {combo.tags.map(t => `#${t}`).join(" + ")}
                               </span>
-                              <Badge variant="outline" className="text-[10px]">{formatNumber(combo.avgViews)}再生</Badge>
+                              <Badge variant="outline" className="text-xs">{formatNumber(combo.avgViews)}再生</Badge>
                             </div>
                           ))}
                         </div>
@@ -524,7 +528,7 @@ export default function Dashboard() {
                           </div>
                           <div className="text-right shrink-0">
                             <div className="text-xs tabular-nums">{formatNumber(creator.totalPlays)}再生</div>
-                            <Badge variant="outline" className="text-[10px]">ER {creator.avgER}%</Badge>
+                            <Badge variant="outline" className="text-xs">ER {creator.avgER}%</Badge>
                           </div>
                         </div>
                       ))}
@@ -633,7 +637,7 @@ export default function Dashboard() {
                                     <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
                                   </div>
                                   <span className="w-8 text-right tabular-nums">{pct}%</span>
-                                  <Badge variant="outline" className="text-[10px]">ER {s.avgER}%</Badge>
+                                  <Badge variant="outline" className="text-xs">ER {s.avgER}%</Badge>
                                 </div>
                               );
                             })}
@@ -680,7 +684,7 @@ export default function Dashboard() {
                             <div className="w-16 h-2 bg-muted rounded-full overflow-hidden shrink-0">
                               <div className="h-full bg-amber-400 rounded-full" style={{ width: `${(hook.avgER / maxER) * 100}%` }} />
                             </div>
-                            <Badge variant={i === 0 ? "default" : "outline"} className={`text-[10px] shrink-0 ${i === 0 ? "bg-amber-600 hover:bg-amber-600" : ""}`}>
+                            <Badge variant={i === 0 ? "default" : "outline"} className={`text-xs shrink-0 ${i === 0 ? "bg-amber-600 hover:bg-amber-600" : ""}`}>
                               ER {hook.avgER}%
                             </Badge>
                             <span className="text-xs text-muted-foreground w-8 text-right">{hook.count}本</span>
@@ -787,13 +791,13 @@ export default function Dashboard() {
                               <span className={`text-xs font-medium ${quadrant.textColor}`}>
                                 {quadrant.label}
                               </span>
-                              <Badge variant="outline" className={`text-[10px] ${quadrant.badgeColor}`}>
+                              <Badge variant="outline" className={`text-xs ${quadrant.badgeColor}`}>
                                 ER {qData.avgER}%
                               </Badge>
                             </div>
                             <div className="flex flex-wrap gap-1">
                               {qData.words.slice(0, 8).map((w: any) => (
-                                <Badge key={w.word} variant="outline" className={`text-[10px] px-1.5 ${quadrant.badgeColor}`}>
+                                <Badge key={w.word} variant="outline" className={`text-xs px-1.5 ${quadrant.badgeColor}`}>
                                   {w.word}
                                   {w.count > 1 && <span className="ml-0.5 opacity-50">×{w.count}</span>}
                                 </Badge>

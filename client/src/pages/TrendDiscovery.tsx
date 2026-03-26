@@ -4,14 +4,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import DashboardLayout from "@/components/DashboardLayout";
 import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useLocation } from "wouter";
-import { Compass, Loader2 } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
+import { Compass, Hash, Loader2, Sparkles, TrendingUp } from "lucide-react";
+
+const STEPS = [
+  { icon: Compass, label: "ペルソナ入力", desc: "ターゲット層を設定" },
+  { icon: Hash, label: "KW・タグ拡張", desc: "AIが検索クエリを生成" },
+  { icon: TrendingUp, label: "TikTok横断分析", desc: "動画データを一括収集" },
+  { icon: Sparkles, label: "AIレポート", desc: "インサイト・戦略提案" },
+];
 
 export default function TrendDiscovery() {
   const [, setLocation] = useLocation();
-  const [persona, setPersona] = useState("");
+  const searchString = useSearch();
+  const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
+  const [persona, setPersona] = useState(params.get("keyword") ?? "");
   const createMutation = trpc.trendDiscovery.create.useMutation({
     onSuccess: (data) => {
       setLocation(`/trend-discovery/${data.jobId}`);
@@ -29,7 +38,7 @@ export default function TrendDiscovery() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-8">
+      <div className="max-w-3xl mx-auto space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Compass className="h-6 w-6" />
@@ -42,7 +51,7 @@ export default function TrendDiscovery() {
 
         <Card>
           <CardHeader>
-            <CardTitle>新しいトレンド分析</CardTitle>
+            <CardTitle className="text-base">新しいトレンド分析</CardTitle>
             <CardDescription>
               ターゲットとなるペルソナや界隈名を入力してください（例: 韓国コスメ、筋トレ初心者、Z世代ファッション）
             </CardDescription>
@@ -66,6 +75,28 @@ export default function TrendDiscovery() {
                 分析開始
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        {/* How it works */}
+        <Card className="bg-muted/30 border-dashed">
+          <CardHeader>
+            <CardTitle className="text-base">分析の流れ</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {STEPS.map(({ icon: Icon, label, desc }, i) => (
+                <div key={i} className="text-center space-y-2">
+                  <div className="mx-auto h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{label}</div>
+                    <div className="text-xs text-muted-foreground">{desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>

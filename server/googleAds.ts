@@ -60,8 +60,8 @@ async function getAccessToken(): Promise<string> {
 // ── Keyword Volume API ─────────────────────────────────
 
 /**
- * Google Ads Keyword Planner API v18 で検索ボリュームを取得
- * https://developers.google.com/google-ads/api/rest/reference/rest/v18/customers/generateKeywordHistoricalMetrics
+ * Google Ads Keyword Planner API v19 で検索ボリュームを取得
+ * https://developers.google.com/google-ads/api/rest/reference/rest/v19/customers/generateKeywordHistoricalMetrics
  */
 export async function fetchKeywordVolume(
   keywords: string[],
@@ -71,7 +71,7 @@ export async function fetchKeywordVolume(
   const accessToken = await getAccessToken();
   const customerId = ENV.googleAdsCustomerId.replace(/-/g, "");
 
-  const url = `https://googleads.googleapis.com/v18/customers/${customerId}:generateKeywordHistoricalMetrics`;
+  const url = `https://googleads.googleapis.com/v20/customers/${customerId}:generateKeywordHistoricalMetrics`;
 
   const res = await fetch(url, {
     method: "POST",
