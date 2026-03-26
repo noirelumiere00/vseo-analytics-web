@@ -55,3 +55,60 @@ export function isPromotionVideo(hashtags: string[]): boolean {
     return AD_HASHTAG_PATTERNS.some(pattern => pattern.test(cleanTag));
   });
 }
+
+// ============================
+// SOV スロットマップ用 分類・ラベル
+// ============================
+
+export type VideoGenre = "recommend" | "howto" | "entertainment" | "negative" | "other";
+export type TikTokLabel = "promotion" | "paid_partnership" | "aigc";
+
+const GENRE_PATTERNS: { genre: VideoGenre; keywords: string[] }[] = [
+  { genre: "negative", keywords: ["やめて", "注意", "危険", "失敗", "ダメ", "後悔", "最悪"] },
+  { genre: "howto", keywords: ["方法", "やり方", "コツ", "解説", "塗り方", "使い方", "チュートリアル"] },
+  { genre: "entertainment", keywords: ["やってみた", "検証", "チャレンジ", "vlog", "日常", "ルーティン"] },
+  { genre: "recommend", keywords: ["おすすめ", "レビュー", "紹介", "比較", "ランキング", "買った", "良かった", "推し"] },
+];
+
+export function classifyVideoGenre(description: string, hashtags: string[]): VideoGenre {
+  const text = (description + " " + hashtags.join(" ")).toLowerCase();
+  for (const { genre, keywords } of GENRE_PATTERNS) {
+    if (keywords.some(kw => text.includes(kw))) return genre;
+  }
+  return "other";
+}
+
+const PARTNERSHIP_HASHTAGS = ["タイアップ", "提供", "pr", "案件", "コラボ"];
+const AIGC_HASHTAGS = ["ai生成", "ai", "aiアート", "aigc"];
+
+export function detectVideoLabels(
+  description: string,
+  hashtags: string[],
+  isAd?: boolean,
+  aigcDescription?: string,
+): TikTokLabel[] {
+  const labels: TikTokLabel[] = [];
+  const cleanTags = hashtags.map(t => t.replace(/^#/, "").trim().toLowerCase());
+
+  // 1. Promotion vs Paid Partnership
+  if (isAd != null) {
+    if (isAd) {
+      const hasPartnershipTag = cleanTags.some(t => PARTNERSHIP_HASHTAGS.includes(t));
+      labels.push(hasPartnershipTag ? "paid_partnership" : "promotion");
+    }
+  } else {
+    // Fallback for old snapshots without isAd
+    if (isPromotionVideo(hashtags)) {
+      labels.push("paid_partnership");
+    }
+  }
+
+  // 2. AIGC
+  if (aigcDescription && aigcDescription.length > 0) {
+    labels.push("aigc");
+  } else if (cleanTags.some(t => AIGC_HASHTAGS.includes(t))) {
+    labels.push("aigc");
+  }
+
+  return labels;
+}

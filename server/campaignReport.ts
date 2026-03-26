@@ -4,8 +4,9 @@
  * baseline が null の場合は measurement のみで絶対値レポートを生成
  */
 
-import type { Campaign, CampaignSnapshot, InsertCampaignReport } from "../drizzle/schema";
+import type { Campaign, CampaignSnapshot, InsertCampaignReport, SovSlot } from "../drizzle/schema";
 import { estimatePostingFrequency } from "./campaignSnapshot";
+import { classifyVideoGenre, detectVideoLabels } from "../shared/const";
 import { fetchGoogleTrends, aggregateVideosByDay, pearsonCorrelation } from "./googleTrends";
 import { fetchKeywordVolume } from "./googleAds";
 import { calculateScoresFromData } from "./videoAnalysis";
@@ -16,6 +17,61 @@ function calcER(v: { view_count: number; like_count: number; comment_count: numb
   return Number(
     ((v.like_count + v.comment_count + v.share_count) / v.view_count * 100).toFixed(2)
   );
+}
+
+function buildSlots(
+  resultData: any,
+  campaignVideoIds: Set<string>,
+  ownAccountIdsLower: Set<string>,
+  campaignAuthorIds: Set<string>,
+  competitorsMap: Map<string, string>,
+): SovSlot[] {
+  if (!resultData?.all_videos) return [];
+
+  const allVideos = (resultData.all_videos as any[])
+    .filter((v: any) => v.search_rank <= 10)
+    .sort((a: any, b: any) => a.search_rank - b.search_rank);
+
+  return allVideos.map((v: any): SovSlot => {
+    const userLower = (v.creator_username || "").toLowerCase();
+    const isOwnAccount = ownAccountIdsLower.has(userLower);
+    const isCampaignVideo = campaignVideoIds.has(v.video_id) || campaignAuthorIds.has(userLower);
+    const competitorName = competitorsMap.get(userLower);
+
+    let owner: SovSlot["owner"] = "other";
+    let ownerDetail: SovSlot["owner_detail"] = undefined;
+    let ownerName: string | undefined = undefined;
+
+    if (isOwnAccount) {
+      owner = "own";
+      ownerDetail = "official";
+    } else if (isCampaignVideo) {
+      owner = "own";
+      ownerDetail = "campaign";
+    } else if (competitorName != null) {
+      owner = "competitor";
+      ownerName = competitorName;
+    }
+
+    return {
+      rank: v.search_rank,
+      video_id: v.video_id,
+      video_url: v.video_url || `https://www.tiktok.com/@${v.creator_username}/video/${v.video_id}`,
+      creator_username: v.creator_username || "",
+      description: (v.description || "").slice(0, 80),
+      hashtags: v.hashtags || [],
+      view_count: v.view_count || 0,
+      like_count: v.like_count || 0,
+      comment_count: v.comment_count || 0,
+      share_count: v.share_count || 0,
+      owner,
+      owner_name: ownerName,
+      owner_detail: ownerDetail,
+      genre: classifyVideoGenre(v.description || "", v.hashtags || []),
+      tiktok_labels: detectVideoLabels(v.description || "", v.hashtags || [], v.is_ad, v.aigc_description),
+      cover_url: v.cover_url || "",
+    };
+  });
 }
 
 export async function generateCampaignReport(
@@ -39,6 +95,20 @@ export async function generateCampaignReport(
     ...(ownVideoData || []).map(v => v.videoId).filter(Boolean),
   ]);
   const ownAccountIdsLower = new Set((campaign.ownAccountIds || []).map((id: string) => id.toLowerCase()));
+
+  // 施策動画の投稿者ID（buildSlots用）
+  const ownVideoDataForAuthors = (campaign as any).ownVideoData as Array<{ videoId: string; authorUniqueId: string }> | undefined;
+  const campaignAuthorIds = new Set<string>();
+  if (ownVideoDataForAuthors) {
+    for (const v of ownVideoDataForAuthors) {
+      if (v.authorUniqueId) campaignAuthorIds.add(v.authorUniqueId.toLowerCase());
+    }
+  }
+  // 競合のルックアップマップ（accountId → 表示名）
+  const competitorsMap = new Map<string, string>();
+  for (const c of competitors) {
+    competitorsMap.set(c.account_id.toLowerCase(), c.name);
+  }
 
   // all_videos から施策動画を検索するヘルパー
   const findCampaignVideosInResults = (resultData: any): any[] => {
@@ -169,7 +239,31 @@ export async function generateCampaignReport(
     sovReport[kw] = {
       before: recalcSov(before),
       after: recalcSov(after),
+      before_slots: before ? buildSlots(before, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap) : undefined,
+      after_slots: buildSlots(after, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap),
     };
+  }
+
+  // ビッグKWのSOVスロット生成（施策動画がTop10に入っている場合のみ）
+  const bigKws = (campaign as any).bigKeywords as string[] | undefined;
+  const measurementBigKW = (measurement as any).bigKeywordResults as Record<string, any> | undefined;
+  const baselineBigKW = (baseline as any)?.bigKeywordResults as Record<string, any> | undefined;
+  if (bigKws && measurementBigKW) {
+    for (const bkw of bigKws) {
+      const mk = measurementBigKW[bkw];
+      if (!mk?.all_videos) continue;
+      const afterSlots = buildSlots(mk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap);
+      const hasOwnInTop10 = afterSlots.some(s => s.owner === "own");
+      if (!hasOwnInTop10) continue;
+      const bk = baselineBigKW?.[bkw];
+      sovReport[bkw] = {
+        before: recalcSov(bk),
+        after: recalcSov(mk),
+        before_slots: bk?.all_videos ? buildSlots(bk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap) : undefined,
+        after_slots: afterSlots,
+        _isBigKeyword: true,
+      };
+    }
   }
 
   // ownVideoData は上部で取得済み（施策動画マッチ用）— 投稿頻度・動画メトリクスでも使う

@@ -10,7 +10,8 @@ import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, ReferenceArea, Cell } from "recharts";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 // ============================
 // Utilities
@@ -236,8 +237,7 @@ export default function CampaignReport() {
 
   const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
-  const hasKeywordVolumes = crossPlatform?.keywordSearchVolumes?.length > 0;
-  const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0 || hasKeywordVolumes);
+  const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0);
   const hasBigKW = bigKeywordReport && bigKeywordReport.length > 0;
   const hasCompetitors = campaign?.competitors && campaign.competitors.length > 0;
 
@@ -423,20 +423,18 @@ function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, sovReport
     return Object.entries(sovReport).filter(([, d]) => (d.after?.own_count || 0) >= 2);
   }, [sovReport]);
 
-  // 期間内の第三者投稿数・再生数
+  // 第三者投稿数・再生数（波及セクションと同じ全データ集計）
   const tpStats = useMemo(() => {
     let count = 0, views = 0;
     if (!ripple) return { count: thirdPartyCount, views: 0 };
     for (const [, data] of Object.entries(ripple)) {
       for (const v of (data.third_party_videos || data.omaage_videos || [])) {
-        if (v.posted_at && campaignStart && campaignEnd) {
-          const d = v.posted_at.split("T")[0];
-          if (d >= campaignStart && d <= campaignEnd) { count++; views += v.views || 0; }
-        } else { count++; views += v.views || 0; }
+        count++;
+        views += v.views || 0;
       }
     }
     return { count, views };
-  }, [ripple, campaignStart, campaignEnd, thirdPartyCount]);
+  }, [ripple, thirdPartyCount]);
 
   if (hasBaseline) {
     const cards = [
@@ -751,7 +749,7 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
               <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <Tooltip content={({ active, payload, label }: any) => {
+              <RechartsTooltip content={({ active, payload, label }: any) => {
                 if (!active || !payload?.length) return null;
                 return (
                   <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
@@ -781,7 +779,7 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
               <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <Tooltip content={({ active, payload }: any) => {
+              <RechartsTooltip content={({ active, payload }: any) => {
                 if (!active || !payload?.length) return null;
                 const d = payload[0]?.payload;
                 return (
@@ -1018,7 +1016,7 @@ function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, k
                     <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                     <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
                     <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                    <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
                     <Legend />
                     <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
                     <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
@@ -1064,7 +1062,7 @@ function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, k
                   <XAxis dataKey="name" ticks={ticks} tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
                   <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => v.toLocaleString()} />
+                  <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
                   <Legend />
                   <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
                   <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
@@ -1104,7 +1102,7 @@ function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, k
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={<SlantedXTick urlMap={chartUrlMap} />} interval={0} height={70} />
                     <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                    <Tooltip content={<VideoChartTooltip />} />
+                    <RechartsTooltip content={<VideoChartTooltip />} />
                     <Bar dataKey="views" name="再生数" radius={[4, 4, 0, 0]}>
                       {chartData.map((entry, idx) => (
                         <Cell key={idx} fill={entry.views === maxViews ? "#2563eb" : "#93c5fd"} />
@@ -1131,7 +1129,7 @@ function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, k
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={<SlantedXTick urlMap={chartUrlMap} />} interval={0} height={70} />
                     <YAxis tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                    <Tooltip content={<VideoChartTooltip />} />
+                    <RechartsTooltip content={<VideoChartTooltip />} />
                     <Bar dataKey="likes" name="いいね" fill="#ef4444" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="comments" name="コメント" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="saves" name="保存" fill="#22c55e" radius={[4, 4, 0, 0]} />
@@ -1232,78 +1230,242 @@ function VideoThumbnail({ url, className }: { url?: string; className?: string }
 
 // ============================
 // ============================
-// SovVideoList — 上位10件 + もっと見る
+// Section 4: 検索結果占有マップ（SOVスロットマップ）
 // ============================
 
-const SOV_INITIAL_SHOW = 10;
+const GENRE_CONFIG: Record<string, { label: string; cls: string }> = {
+  recommend: { label: "レコメンド", cls: "bg-emerald-600/80 text-white" },
+  howto: { label: "How-to", cls: "bg-sky-600/80 text-white" },
+  entertainment: { label: "エンタメ", cls: "bg-fuchsia-600/80 text-white" },
+  negative: { label: "ネガティブ", cls: "bg-red-600/80 text-white" },
+  other: { label: "その他", cls: "bg-slate-600/80 text-white" },
+};
 
-function SovVideoList({ videos, officialIds, campaignAuthorIds }: {
-  videos: Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>;
-  officialIds: Set<string>;
-  campaignAuthorIds: Set<string>;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  // 上位10位以内と11位以降に分割
-  const top = videos.filter(v => v.search_rank <= 10);
-  const rest = videos.filter(v => v.search_rank > 10);
-  const visibleVideos = expanded ? videos : top;
-  const hiddenCount = rest.length;
+const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
+  official: { text: "公式", cls: "bg-blue-100 text-blue-700 border-blue-300" },
+  campaign: { text: "施策", cls: "bg-purple-100 text-purple-700 border-purple-300" },
+  competitor: { text: "競合", cls: "bg-orange-100 text-orange-700 border-orange-300" },
+};
 
-  const renderRow = (v: typeof videos[0], i: number) => {
-    const uLower = v.username.toLowerCase();
-    const isOfficial = officialIds.has(uLower);
-    const isCampaign = !isOfficial && campaignAuthorIds.has(uLower);
-    const videoUrl = v.username && v.video_id
-      ? `https://www.tiktok.com/@${v.username}/video/${v.video_id}`
-      : null;
-    return (
-      <a
-        key={v.video_id || i}
-        href={videoUrl || "#"}
-        target={videoUrl ? "_blank" : undefined}
-        rel="noopener noreferrer"
-        className={`flex items-center gap-3 px-3 py-1.5 ${videoUrl ? "hover:bg-muted/40 transition-colors" : ""}`}
-      >
-        <span className={`w-6 text-center text-xs font-bold ${
-          v.search_rank <= 3 ? "text-amber-500" : v.search_rank <= 10 ? "text-blue-500" : "text-slate-400"
-        }`}>
-          {v.search_rank}
-        </span>
-        <div className="flex-1 min-w-0 flex items-center gap-1.5 text-sm truncate">
-          {isOfficial && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-blue-300 text-blue-700 bg-blue-50">公式</Badge>}
-          {isCampaign && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-purple-300 text-purple-700 bg-purple-50">施策</Badge>}
-          <span className={`font-medium ${isOfficial ? "text-blue-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>
-            @{v.username}
-          </span>
-          <span className="text-muted-foreground truncate">{v.description}</span>
+const TIKTOK_LABEL_CONFIG: Record<string, { text: string; dot: string }> = {
+  promotion: { text: "プロモーション", dot: "bg-amber-400" },
+  paid_partnership: { text: "有償パートナーシップ", dot: "bg-pink-400" },
+  aigc: { text: "AI生成メディアを含む", dot: "bg-violet-400" },
+};
+
+interface SlotData {
+  rank: number;
+  video_id: string;
+  video_url: string;
+  creator_username: string;
+  description: string;
+  hashtags: string[];
+  view_count: number;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  owner: "own" | "competitor" | "other";
+  owner_name?: string;
+  owner_detail?: "official" | "campaign";
+  genre: string;
+  tiktok_labels: string[];
+  cover_url?: string;
+}
+
+function SovSlotCell({ slot, maxViewCount }: { slot: SlotData; maxViewCount: number }) {
+  const ownerBg = slot.owner === "own" ? "bg-blue-500" : slot.owner === "competitor" ? "bg-orange-400" : "bg-slate-400";
+  const opacity = maxViewCount > 0 ? 0.3 + 0.7 * (slot.view_count / maxViewCount) : 0.5;
+  const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
+
+  const ownerBadgeKey = slot.owner === "own" ? slot.owner_detail : slot.owner === "competitor" ? "competitor" : null;
+  const ownerBadge = ownerBadgeKey ? OWNER_LABEL_CONFIG[ownerBadgeKey] : null;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <a
+          href={slot.video_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="relative w-16 h-24 cursor-pointer transition-all duration-200 hover:scale-110 hover:z-10 group"
+          onClick={(e) => { e.stopPropagation(); }}
+        >
+          {/* Colored card behind (peek layer) — opacity = view count */}
+          <div className={`absolute inset-0 rounded-md ${ownerBg}`} style={{ opacity }} />
+
+          {/* Thumbnail inset: 1px sides, 1px top, 4px bottom peek */}
+          <div className="absolute top-[1px] left-[1px] right-[1px] bottom-[4px] rounded-sm overflow-hidden bg-slate-100">
+            {slot.cover_url ? (
+              <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+            ) : (
+              <div className={`w-full h-full flex items-center justify-center ${ownerBg}`} style={{ opacity: 0.3 }}>
+                <span className="text-lg text-white/60">{slot.rank}</span>
+              </div>
+            )}
+
+            {/* Rank number - top left on thumbnail */}
+            <span className="absolute top-0 left-0.5 text-[9px] font-bold text-white z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{slot.rank}</span>
+
+            {/* Genre text tag - bottom of thumbnail */}
+            <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 ${genreInfo.cls}`}>
+              {genreInfo.label}
+            </span>
+
+            {/* TikTok label dots */}
+            {slot.tiktok_labels.length > 0 && (
+              <div className="absolute top-0 right-0.5 flex gap-0.5 z-10">
+                {slot.tiktok_labels.map(label => {
+                  const cfg = TIKTOK_LABEL_CONFIG[label];
+                  return cfg ? <span key={label} className={`w-1.5 h-1.5 rounded-full ${cfg.dot} shadow-sm`} /> : null;
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Owner label badge - floating above */}
+          {ownerBadge && (
+            <span className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] px-1 py-0 rounded border whitespace-nowrap z-10 ${ownerBadge.cls}`}>
+              {ownerBadge.text}
+            </span>
+          )}
+        </a>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs bg-white text-foreground border shadow-lg p-3 space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <span className="font-semibold text-xs">#{slot.rank}</span>
+          <span className="text-xs text-blue-600">@{slot.creator_username}</span>
+          {ownerBadge && <span className={`text-[9px] px-1 rounded border ${ownerBadge.cls}`}>{ownerBadge.text}</span>}
+          {slot.owner === "competitor" && slot.owner_name && (
+            <span className="text-[9px] text-orange-600">({slot.owner_name})</span>
+          )}
         </div>
-        <span className="text-xs text-muted-foreground shrink-0">{fmt(v.view_count)}</span>
-        {videoUrl && <ExternalLink className="h-3 w-3 text-muted-foreground/30 shrink-0" />}
-      </a>
+        <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
+        <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
+          <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(slot.like_count)}</span>
+          <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(slot.comment_count)}</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
+          {slot.tiktok_labels.map(label => {
+            const cfg = TIKTOK_LABEL_CONFIG[label];
+            return cfg ? (
+              <span key={label} className="inline-flex items-center gap-1 text-[9px]">
+                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                {cfg.text}
+              </span>
+            ) : null;
+          })}
+        </div>
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: {
+  keyword: string;
+  data: any;
+  hasBaseline: boolean;
+  isBigKeyword?: boolean;
+}) {
+  const afterSlots: SlotData[] = data.after_slots || [];
+  const beforeSlots: SlotData[] = data.before_slots || [];
+  const afterSov = data.after || { own_count: 0, total_count: 0, percentage: "0" };
+
+  const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
+  const afterCompCount = afterSlots.filter(s => s.owner === "competitor").length;
+  const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
+  const ownChange = afterOwnCount - beforeOwnCount;
+
+  // Max view count for opacity scaling (across both before/after)
+  const allSlots = [...afterSlots, ...beforeSlots];
+  const maxViewCount = allSlots.length > 0 ? Math.max(...allSlots.map(s => s.view_count)) : 1;
+
+  // Pad slots to 10 for display
+  const padSlots = (slots: SlotData[]) => {
+    const result: (SlotData | null)[] = [];
+    for (let i = 1; i <= 10; i++) {
+      result.push(slots.find(s => s.rank === i) || null);
+    }
+    return result;
+  };
+
+  const renderSlotRow = (slots: SlotData[], label: string) => {
+    const padded = padSlots(slots);
+    return (
+      <div className="flex items-center gap-1">
+        {hasBaseline && (
+          <span className="text-[9px] text-slate-400 w-8 shrink-0 text-right">{label}</span>
+        )}
+        <div className="flex items-center gap-0.5">
+          {/* Top 5 zone with highlight */}
+          <div className="flex items-center gap-0.5 rounded-md bg-amber-50/60 px-0.5 py-0.5">
+            {padded.slice(0, 5).map((slot, i) =>
+              slot ? (
+                <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
+              ) : (
+                <div key={`empty-${i}`} className="w-16 h-24 rounded-md border border-dashed border-slate-200 flex items-center justify-center">
+                  <span className="text-[9px] text-slate-300">{i + 1}</span>
+                </div>
+              )
+            )}
+          </div>
+          {/* Slots 6-10 */}
+          <div className="flex items-center gap-0.5 opacity-75">
+            {padded.slice(5, 10).map((slot, i) =>
+              slot ? (
+                <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
+              ) : (
+                <div key={`empty-${i + 5}`} className="w-16 h-24 rounded-md border border-dashed border-slate-200 flex items-center justify-center">
+                  <span className="text-[9px] text-slate-300">{i + 6}</span>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+        {/* Counts */}
+        <div className="flex flex-col items-end shrink-0 ml-2 gap-0.5">
+          <span className="text-xs font-semibold text-blue-600">{slots.filter(s => s.owner === "own").length}<span className="text-slate-400 font-normal">/10</span></span>
+          {slots.filter(s => s.owner === "competitor").length > 0 && (
+            <span className="text-[10px] text-orange-500">競合{slots.filter(s => s.owner === "competitor").length}</span>
+          )}
+        </div>
+      </div>
     );
   };
 
   return (
-    <div className="divide-y">
-      {visibleVideos.map(renderRow)}
-      {hiddenCount > 0 && (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-        >
-          {expanded ? (
-            <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
-          ) : (
-            <><ChevronDown className="h-3.5 w-3.5" />11位以下を表示（{hiddenCount}件）</>
+    <div className="rounded-lg border bg-white">
+      {/* KW Header */}
+      <div className={`flex items-center gap-2 px-3 py-2 border-b ${isBigKeyword ? "bg-gradient-to-r from-amber-50/80 to-slate-50/80" : "bg-slate-50/80"}`}>
+        <Search className={`h-3.5 w-3.5 ${isBigKeyword ? "text-amber-600" : "text-muted-foreground"}`} />
+        <span className="font-medium text-sm">{keyword}</span>
+        {isBigKeyword && <Badge className="text-[9px] px-1 py-0 h-4 bg-amber-100 text-amber-700 border-amber-300">ビッグKW</Badge>}
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
+            {afterSov.own_count}/{afterSov.total_count}本 ({afterSov.percentage}%)
+          </Badge>
+          {hasBaseline && ownChange !== 0 && (
+            <span className={`text-[10px] font-medium ${ownChange > 0 ? "text-green-600" : "text-red-500"}`}>
+              {ownChange > 0 ? "+" : ""}{ownChange}
+            </span>
           )}
-        </button>
-      )}
+        </div>
+      </div>
+      {/* Slot rows */}
+      <div className="px-3 py-2.5 space-y-2">
+        {afterSlots.length > 0 ? (
+          <>
+            {hasBaseline && beforeSlots.length > 0 && renderSlotRow(beforeSlots, "前")}
+            {renderSlotRow(afterSlots, hasBaseline ? "後" : "")}
+          </>
+        ) : (
+          <div className="text-xs text-muted-foreground italic py-1">スロットデータなし</div>
+        )}
+      </div>
     </div>
   );
 }
-
-// Section 4: 検索上位シェア率
-// ============================
 
 function SovSection({ sovReport, positions, hasBaseline, campaign }: {
   sovReport: Record<string, any>;
@@ -1313,104 +1475,56 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
 }) {
   const sovEntries = Object.entries(sovReport);
 
-  // 公式 / 施策動画 判定用
-  const officialIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const id of campaign?.ownAccountIds || []) s.add(id.toLowerCase());
-    return s;
-  }, [campaign]);
-  const campaignAuthorIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const v of campaign?.ownVideoData || []) {
-      if (v.authorUniqueId) s.add(v.authorUniqueId.toLowerCase());
-    }
-    return s;
-  }, [campaign]);
-
-  // positionReport を keyword でルックアップ
-  const posMap = useMemo(() => {
-    const m = new Map<string, any>();
-    for (const p of positions) m.set(p.keyword, p);
-    return m;
-  }, [positions]);
-
-  // Chart data
+  // Aggregate stats (from the existing sov percentage data)
   const chartData = sovEntries
     .map(([kw, data]) => ({
       keyword: kw,
       own: data.after?.own_count || 0,
-      other: (data.after?.total_count || 0) - (data.after?.own_count || 0),
       total: data.after?.total_count || 0,
       pct: parseFloat(data.after?.percentage) || 0,
+      afterSlots: (data.after_slots || []) as SlotData[],
     }))
     .filter(d => d.total > 0);
 
-  // Aggregate stats
   const totalOwn = chartData.reduce((s, d) => s + d.own, 0);
   const totalScanned = chartData.reduce((s, d) => s + d.total, 0);
   const avgPct = totalScanned > 0 ? Math.round((totalOwn / totalScanned) * 100 * 10) / 10 : 0;
-  const maxPctEntry = chartData.length > 0 ? chartData.reduce((a, b) => a.pct > b.pct ? a : b) : null;
 
-  // SVG ring chart helper
-  const ShareRing = ({ pct, size = 80, stroke = 7 }: { pct: number; size?: number; stroke?: number }) => {
-    const r = (size - stroke) / 2;
-    const circumference = 2 * Math.PI * r;
-    const filled = (pct / 100) * circumference;
-    const color = pct >= 40 ? "#2563eb" : pct >= 25 ? "#3b82f6" : pct >= 10 ? "#60a5fa" : "#94a3b8";
-    return (
-      <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="transform -rotate-90">
-          <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
-          <circle
-            cx={size / 2} cy={size / 2} r={r} fill="none"
-            stroke={color} strokeWidth={stroke} strokeLinecap="round"
-            strokeDasharray={`${filled} ${circumference - filled}`}
-            style={{ transition: "stroke-dasharray 0.6s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold leading-none" style={{ color }}>{Math.round(pct)}</span>
-          <span className="text-[9px] text-slate-400 leading-none mt-0.5">%</span>
-        </div>
-      </div>
-    );
-  };
+  // Count slots by owner type across all KWs (top 10 only)
+  const allAfterSlots = chartData.flatMap(d => d.afterSlots);
+  const ownInTop10 = allAfterSlots.filter(s => s.owner === "own").length;
+  const compInTop10 = allAfterSlots.filter(s => s.owner === "competitor").length;
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">KW別 検索上位シェア率</CardTitle>
-          <CardDescription className="text-xs">Top30内の自社動画の占有率と露出動画</CardDescription>
+          <CardTitle className="text-base">検索結果占有マップ</CardTitle>
+          <CardDescription className="text-xs">各KWの検索Top10をサムネイルで可視化。裏カード色=所有者、濃淡=再生数、タグ=ジャンル</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
 
-          {/* === Overview Summary Banner === */}
+          {/* === Summary Banner === */}
           {chartData.length > 0 && (
             <div className="rounded-xl border bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 p-4">
               <div className="flex items-center gap-5">
-                {/* Main ring - overall average */}
                 <div className="flex flex-col items-center gap-1 shrink-0">
-                  <ShareRing pct={avgPct} size={88} stroke={8} />
-                  <span className="text-[10px] font-medium text-slate-500 mt-1">平均シェア率</span>
+                  <div className="text-3xl font-bold text-blue-600">{avgPct}<span className="text-lg text-blue-400">%</span></div>
+                  <span className="text-[10px] font-medium text-slate-500">平均シェア率</span>
                 </div>
-                {/* Stats */}
                 <div className="flex-1 min-w-0">
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">自社動画数</p>
-                      <p className="text-xl font-bold text-slate-800">{totalOwn}<span className="text-sm font-normal text-slate-400">本</span></p>
-                      <p className="text-[10px] text-slate-400">/ {totalScanned}本中</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">自社Top10</p>
+                      <p className="text-xl font-bold text-blue-600">{ownInTop10}<span className="text-sm font-normal text-slate-400">本</span></p>
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide">対象KW数</p>
                       <p className="text-xl font-bold text-slate-800">{chartData.length}<span className="text-sm font-normal text-slate-400">KW</span></p>
-                      <p className="text-[10px] text-slate-400">Top30 調査</p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">最高シェア</p>
-                      <p className="text-xl font-bold text-blue-600">{maxPctEntry?.pct ?? 0}<span className="text-sm font-normal text-blue-400">%</span></p>
-                      <p className="text-[10px] text-slate-400 truncate">{maxPctEntry?.keyword}</p>
+                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">競合Top10</p>
+                      <p className="text-xl font-bold text-orange-500">{compInTop10}<span className="text-sm font-normal text-slate-400">本</span></p>
                     </div>
                   </div>
                 </div>
@@ -1418,82 +1532,28 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
             </div>
           )}
 
-          {/* === Per-keyword Share Cards Grid === */}
-          {chartData.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-slate-500 mb-2.5 flex items-center gap-1.5">
-                <BarChart3 className="h-3.5 w-3.5" />
-                キーワード別シェア率
-              </p>
-              <div className={`grid gap-2.5 ${chartData.length <= 2 ? "grid-cols-2" : chartData.length === 3 ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"}`}>
-                {chartData.map((d) => {
-                  const tierColor = d.pct >= 40 ? "border-blue-200 bg-blue-50/40" : d.pct >= 25 ? "border-blue-100 bg-blue-50/20" : "border-slate-200 bg-white";
-                  const barColor = d.pct >= 40 ? "bg-blue-500" : d.pct >= 25 ? "bg-blue-400" : d.pct >= 10 ? "bg-blue-300" : "bg-slate-300";
-                  return (
-                    <div key={d.keyword} className={`rounded-lg border p-3 flex flex-col items-center gap-2 ${tierColor}`}>
-                      <ShareRing pct={d.pct} size={64} stroke={6} />
-                      <div className="text-center min-w-0 w-full">
-                        <p className="text-xs font-medium text-slate-700 truncate" title={d.keyword}>{d.keyword}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          <span className="font-semibold text-blue-600">{d.own}</span>
-                          <span className="text-slate-400"> / {d.total}本</span>
-                        </p>
-                      </div>
-                      {/* Mini horizontal bar */}
-                      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${barColor}`}
-                          style={{ width: `${Math.min(d.pct, 100)}%`, transition: "width 0.6s ease" }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          {/* === Legend === */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 border rounded-lg px-3 py-2 bg-slate-50/50">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500/70" /> 自社</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-400/70" /> 競合</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-400/70" /> その他</span>
+            <span className="text-slate-300">|</span>
+            <span>裏カードが濃い=再生数多い</span>
+            <span className="text-slate-300">|</span>
+            {Object.entries(GENRE_CONFIG).map(([key, { label, cls }]) => (
+              <span key={key} className={`px-1 rounded text-[9px] ${cls}`}>{label}</span>
+            ))}
+            <span className="text-slate-300">|</span>
+            {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, { text, dot }]) => (
+              <span key={key} className="flex items-center gap-0.5"><span className={`w-2 h-2 rounded-full ${dot}`} />{text}</span>
+            ))}
+          </div>
 
-          {/* === Per-keyword Video Lists === */}
+          {/* === Per-keyword Slot Maps === */}
           <div className="space-y-3">
-          {sovEntries.map(([kw, data]) => {
-            const pos = posMap.get(kw);
-            const videos = (pos?.videos || []) as Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>;
-            const afterSov = data.after || { own_count: 0, total_count: 0, percentage: "0" };
-            const pct = parseFloat(afterSov.percentage) || 0;
-            const tierBadge = pct >= 40 ? "border-blue-300 text-blue-700 bg-blue-50" :
-              pct >= 25 ? "border-blue-200 text-blue-600 bg-blue-50/50" :
-              pct >= 10 ? "border-slate-200 text-blue-500 bg-slate-50" :
-              "border-slate-200 text-slate-500";
-            const barColor = pct >= 40 ? "bg-blue-500" : pct >= 25 ? "bg-blue-400" : pct >= 10 ? "bg-blue-300" : "bg-slate-300";
-
-            return (
-              <div key={kw} className="rounded-lg border bg-white">
-                {/* KWヘッダー */}
-                <div className="flex items-center gap-2 px-3 py-2 border-b bg-slate-50/80">
-                  <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                  <span className="font-medium text-sm">{kw}</span>
-                  <div className="ml-auto flex items-center gap-2">
-                    {/* シェア率バー */}
-                    <div className="w-20 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${barColor}`}
-                        style={{ width: `${Math.min(pct, 100)}%` }}
-                      />
-                    </div>
-                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${tierBadge}`}>
-                      {afterSov.own_count}/{afterSov.total_count}本 ({afterSov.percentage}%)
-                    </Badge>
-                  </div>
-                </div>
-                {/* 動画リスト */}
-                {videos.length > 0 ? (
-                  <SovVideoList videos={videos} officialIds={officialIds} campaignAuthorIds={campaignAuthorIds} />
-                ) : (
-                  <div className="px-3 py-3 text-xs text-muted-foreground italic">該当動画なし</div>
-                )}
-              </div>
-            );
-          })}
+            {sovEntries.map(([kw, data]) => (
+              <SovOccupationMap key={kw} keyword={kw} data={data} hasBaseline={hasBaseline} isBigKeyword={!!data._isBigKeyword} />
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -1668,12 +1728,12 @@ function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; camp
   return (
     <div className="space-y-4">
       {/* Big number cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Card>
           <CardContent className="py-4 text-center">
-            <p className="text-xs text-muted-foreground">関連投稿数</p>
+            <p className="text-xs text-muted-foreground">第三者投稿</p>
             <p className="text-2xl font-bold mt-1">
-              <BeforeAfter before={totalBeforePosts} after={totalAfterPosts} />
+              <span className="text-blue-600 font-semibold">{totalThirdParty}本</span>
             </p>
           </CardContent>
         </Card>
@@ -1681,14 +1741,8 @@ function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; camp
           <CardContent className="py-4 text-center">
             <p className="text-xs text-muted-foreground">総再生数</p>
             <p className="text-2xl font-bold mt-1">
-              <BeforeAfter before={fmt(totalBeforeViews)} after={fmt(totalAfterViews)} />
+              <span className="text-blue-600 font-semibold">{fmt(totalAfterViews)}</span>
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4 text-center">
-            <p className="text-xs text-muted-foreground">第三者投稿</p>
-            <p className="text-2xl font-bold mt-1">{totalThirdParty}本</p>
           </CardContent>
         </Card>
       </div>
@@ -1712,12 +1766,8 @@ function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; camp
                 {entries.map(([tag, data]) => (
                   <tr key={tag} className="border-b last:border-0">
                     <td className="py-1.5 pr-3 font-medium">{tag}</td>
-                    <td className="py-1.5 px-2 text-right">
-                      <BeforeAfter before={data.before_posts || 0} after={data.after_posts || 0} />
-                    </td>
-                    <td className="py-1.5 px-2 text-right">
-                      <BeforeAfter before={fmt(data.before_total_views || 0)} after={fmt(data.after_total_views || 0)} />
-                    </td>
+                    <td className="py-1.5 px-2 text-right">{data.after_posts || 0}</td>
+                    <td className="py-1.5 px-2 text-right">{fmt(data.after_total_views || 0)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1825,69 +1875,64 @@ function CrossPlatformSection({ data, videoMetrics, baselineDate, measurementDat
     return dates;
   }, [data, videoMetrics]);
 
-  const hasViewsData = dailyChartData.some(d => d.views != null && d.views > 0);
+  // 表示期間フィルタ: 最初の投稿日の2週間前 〜 最後の投稿日の2ヶ月後
+  const filteredDailyChartData = useMemo(() => {
+    const markerArray = Array.from(markerDates).sort();
+    if (markerArray.length === 0) return dailyChartData;
+    const firstPost = new Date(markerArray[0]);
+    const lastPost = new Date(markerArray[markerArray.length - 1]);
+    const rangeStart = new Date(firstPost);
+    rangeStart.setDate(rangeStart.getDate() - 14);
+    const rangeEnd = new Date(lastPost);
+    rangeEnd.setMonth(rangeEnd.getMonth() + 2);
+    const startStr = rangeStart.toISOString().split("T")[0];
+    const endStr = rangeEnd.toISOString().split("T")[0];
+    return dailyChartData.filter(d => d.fullDate >= startStr && d.fullDate <= endStr);
+  }, [dailyChartData, markerDates]);
 
-  // 月別チャートデータ
-  const monthlyChartData = useMemo(() => {
-    const monthMap = new Map<string, { trends: number; views: number; tpViews: number; count: number }>();
-    for (const d of dailyChartData) {
-      const month = d.fullDate.slice(0, 7); // YYYY-MM
-      const entry = monthMap.get(month) || { trends: 0, views: 0, tpViews: 0, count: 0 };
-      entry.trends += d.trends || 0;
-      entry.count += d.trends != null ? 1 : 0;
-      entry.views = d.views || entry.views; // use latest cumulative
-      entry.tpViews += d.thirdPartyViews || 0;
-      monthMap.set(month, entry);
+  // 施策ハイライト期間: 最初の投稿日 〜 最後の投稿日+2週間
+  const highlightRange = useMemo(() => {
+    const markerArray = Array.from(markerDates).sort();
+    if (markerArray.length === 0) return null;
+    const start = markerArray[0].slice(5); // MM-DD format matching chart
+    const lastPost = new Date(markerArray[markerArray.length - 1]);
+    lastPost.setDate(lastPost.getDate() + 14);
+    const end = lastPost.toISOString().split("T")[0].slice(5);
+    return { start, end };
+  }, [markerDates]);
+
+  // 月別検索ボリュームチャートデータ
+  const keywordVolumes = data.keywordSearchVolumes as any[] | undefined;
+  const monthlyVolumeData = useMemo(() => {
+    if (!keywordVolumes || keywordVolumes.length === 0) return [];
+    // 全キーワードの月次データを集約（合計）
+    const monthMap = new Map<string, { total: number; perKw: Record<string, number> }>();
+    for (const kw of keywordVolumes) {
+      for (const mv of (kw.monthlyVolumes || [])) {
+        const key = `${mv.year}-${String(mv.month).padStart(2, "0")}`;
+        const entry = monthMap.get(key) || { total: 0, perKw: {} };
+        entry.total += mv.volume || 0;
+        entry.perKw[kw.keyword] = mv.volume || 0;
+        monthMap.set(key, entry);
+      }
     }
-    return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, d]) => ({
-      month: month.slice(2), // YY-MM
-      trends: d.count > 0 ? Math.round(d.trends / d.count) : 0,
-      views: d.views,
-      thirdPartyViews: d.tpViews > 0 ? d.tpViews : null,
-    }));
-  }, [dailyChartData]);
+    return [...monthMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, d]) => ({ month: month.slice(2), fullMonth: month, total: d.total, ...d.perKw }));
+  }, [keywordVolumes]);
 
-  const renderDailyChart = () => (
-    <ResponsiveContainer width="100%" height={350}>
-      <LineChart data={dailyChartData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-        <YAxis yAxisId="left" label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
-        <YAxis yAxisId="right" orientation="right" label={{ value: "累計再生数", angle: 90, position: "insideRight", style: { fontSize: 11 } }} />
-        <Tooltip formatter={(value: any, name: string) => {
-          if (value === null || value === undefined) return ["—", name];
-          if (name === "Google Trends") return [`${value} / 100`, name];
-          return [Number(value).toLocaleString() + " 回", name];
-        }} />
-        <Legend />
-        <Line yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
-        <Line yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} connectNulls />
-        {Array.from(markerDates).map((date: string) => (
-          <ReferenceLine key={date} x={date.slice(5)} yAxisId="left" stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  );
+  // 月別チャートの施策ハイライト月
+  const highlightMonths = useMemo(() => {
+    const markerArray = Array.from(markerDates).sort();
+    if (markerArray.length === 0) return null;
+    const startMonth = markerArray[0].slice(2, 7); // YY-MM
+    const lastPost = new Date(markerArray[markerArray.length - 1]);
+    lastPost.setDate(lastPost.getDate() + 14);
+    const endMonth = lastPost.toISOString().split("T")[0].slice(2, 7);
+    return { start: startMonth, end: endMonth };
+  }, [markerDates]);
 
-  const renderMonthlyChart = () => (
-    <ResponsiveContainer width="100%" height={350}>
-      <BarChart data={monthlyChartData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-        <YAxis yAxisId="left" label={{ value: "Trends (平均)", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
-        <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} />
-        <Tooltip />
-        <Legend />
-        <Bar yAxisId="left" dataKey="trends" name="Trends 平均" fill="#3b82f6" />
-        <Bar yAxisId="right" dataKey="views" name="累計再生数" fill="#ef4444" />
-        {monthlyChartData.some(d => d.thirdPartyViews != null) && (
-          <Bar yAxisId="right" dataKey="thirdPartyViews" name="第三者再生数" fill="#10b981" />
-        )}
-      </BarChart>
-    </ResponsiveContainer>
-  );
-
-  const hasKeywordVolumes = data.keywordSearchVolumes?.length > 0;
+  const VOLUME_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4"];
 
   return (
     <div className="space-y-4">
@@ -1904,133 +1949,55 @@ function CrossPlatformSection({ data, videoMetrics, baselineDate, measurementDat
               </span>
             )}
           </CardTitle>
-          {!hasViewsData && (
-            <CardDescription className="text-xs text-amber-600">
-              TikTok再生数データが取得できていません。動画の投稿日マーカーのみ表示しています。
-            </CardDescription>
-          )}
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="daily">
-            <TabsList className="mb-4">
-              <TabsTrigger value="daily">日次</TabsTrigger>
-              <TabsTrigger value="monthly">月次</TabsTrigger>
-            </TabsList>
-            <TabsContent value="daily">{renderDailyChart()}</TabsContent>
-            <TabsContent value="monthly">{renderMonthlyChart()}</TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Correlation interpretation card */}
-      {data.correlation != null && (
-        <Card>
-          <CardContent className="py-4">
-            <p className="text-sm">
-              {Math.abs(data.correlation) >= 0.7
-                ? "TikTok施策とGoogle検索トレンドに強い相関が認められます。施策がクロスプラットフォームで認知を押し上げている可能性があります。"
-                : Math.abs(data.correlation) >= 0.4
-                ? "一定の相関が見られます。施策が検索トレンドに寄与している可能性がありますが、他要因の影響も考えられます。"
-                : "明確な相関は認められません。TikTok施策とGoogle検索トレンドは独立して推移しています。"
-              }
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {hasKeywordVolumes && (
-        <KeywordVolumeSection data={data.keywordSearchVolumes} />
-      )}
-    </div>
-  );
-}
-
-// ============================
-// Section 8b: Keyword Search Volumes
-// ============================
-
-function KeywordVolumeSection({ data }: { data: any[] }) {
-  // 月別推移チャート用データ（直近12ヶ月）
-  const chartData = (() => {
-    if (!data || data.length === 0) return [];
-    // 全キーワードの月次データを集約
-    const monthMap = new Map<string, Record<string, number>>();
-    for (const kw of data) {
-      for (const mv of (kw.monthlyVolumes || []).slice(-12)) {
-        const key = `${mv.year}-${String(mv.month).padStart(2, "0")}`;
-        if (!monthMap.has(key)) monthMap.set(key, {});
-        monthMap.get(key)![kw.keyword] = mv.volume;
-      }
-    }
-    return [...monthMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, volumes]) => ({ month: month.slice(2), ...volumes }));
-  })();
-
-  const COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4", "#f97316", "#84cc16"];
-
-  return (
-    <div className="space-y-4 mt-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Search className="h-4 w-4" />
-            Google 検索ボリューム
-          </CardTitle>
-          <CardDescription>Google Ads Keyword Planner による月間検索ボリューム</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>キーワード</TableHead>
-                <TableHead className="text-right">月間検索数</TableHead>
-                <TableHead className="text-center">競合性</TableHead>
-                <TableHead className="text-right">競合指数</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((kw: any, i: number) => (
-                <TableRow key={i}>
-                  <TableCell className="font-medium">{kw.keyword}</TableCell>
-                  <TableCell className="text-right">{fmt(kw.avgMonthlySearches)}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={
-                      kw.competition === "HIGH" ? "destructive" :
-                      kw.competition === "MEDIUM" ? "secondary" :
-                      "outline"
-                    }>
-                      {kw.competition === "HIGH" ? "高" :
-                       kw.competition === "MEDIUM" ? "中" :
-                       kw.competition === "LOW" ? "低" : "-"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">{kw.competitionIndex}</TableCell>
-                </TableRow>
+          <ResponsiveContainer width="100%" height={350}>
+            <LineChart data={filteredDailyChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
+              <RechartsTooltip formatter={(value: any, name: string) => {
+                if (value === null || value === undefined) return ["—", name];
+                if (name === "Google Trends") return [`${value} / 100`, name];
+                return [String(value), name];
+              }} />
+              <Legend />
+              {highlightRange && (
+                <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.08} label={{ value: "施策期間", fill: "#10b981", fontSize: 10, position: "insideTopLeft" }} />
+              )}
+              <Line type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+              {Array.from(markerDates).map((date: string) => (
+                <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
               ))}
-            </TableBody>
-          </Table>
+            </LineChart>
+          </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {chartData.length > 0 && (
+      {monthlyVolumeData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">月別検索ボリューム推移</CardTitle>
-            <CardDescription>直近12ヶ月の検索ボリューム推移</CardDescription>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Google 月間検索ボリューム推移
+            </CardTitle>
+            <CardDescription>Google Ads Keyword Planner — 施策前後の検索数変化</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData}>
+              <LineChart data={monthlyVolumeData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => fmt(v)} />
+                <RechartsTooltip formatter={(value: any) => [Number(value).toLocaleString(), "検索数"]} />
                 <Legend />
-                {data.map((kw: any, i: number) => (
-                  <Bar key={kw.keyword} dataKey={kw.keyword} fill={COLORS[i % COLORS.length]} />
+                {highlightMonths && (
+                  <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#10b981" fillOpacity={0.08} label={{ value: "施策期間", fill: "#10b981", fontSize: 10, position: "insideTopLeft" }} />
+                )}
+                {keywordVolumes!.map((kw: any, i: number) => (
+                  <Line key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                 ))}
-              </BarChart>
+              </LineChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
@@ -2038,6 +2005,7 @@ function KeywordVolumeSection({ data }: { data: any[] }) {
     </div>
   );
 }
+
 
 // ============================
 // Section 9: Next Actions

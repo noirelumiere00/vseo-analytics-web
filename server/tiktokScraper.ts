@@ -36,6 +36,7 @@ export interface TikTokVideo {
   };
   hashtags: string[];
   isAd: boolean;
+  aigcDescription: string;
 }
 
 export interface TikTokSearchResult {
@@ -127,6 +128,7 @@ export function parseVideoData(item: any): TikTokVideo | null {
     },
     hashtags,
     isAd: !!v.isAd,
+    aigcDescription: v.AIGCDescription || "",
   };
 }
 
@@ -297,6 +299,7 @@ export async function searchInIncognitoContext(
               },
               hashtags,
               isAd: !!v.isAd,
+              aigcDescription: v.AIGCDescription || "",
             };
             if (!allVideos.find(ev => ev.id === video.id)) {
               allVideos.push(video);
