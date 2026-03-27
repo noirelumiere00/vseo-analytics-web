@@ -12,6 +12,10 @@ import * as path from "path";
 import { logBuffer } from "./logBuffer";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
+import { fetchYouTubeVideos } from "./youtubeScraper";
+import { fetchInstagramPosts } from "./instagramScraper";
+import { captureDailyMetrics } from "./dailyMetrics";
+import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 import { checkQuota, PLAN_LIMITS } from "./_core/quota";
 import { createCheckoutSession, createPortalSession } from "./_core/stripe";
 import { ENV } from "./_core/env";
@@ -1372,6 +1376,7 @@ export const appRouter = router({
         clientName: z.string().optional(),
         keywords: z.array(z.string()).min(1, "キーワードを1つ以上入力してください"),
         ownAccountIds: z.array(z.string()).optional(),
+        satelliteAccountIds: z.array(z.string()).optional(),
         campaignHashtags: z.array(z.string()).optional(),
         competitors: z.array(z.object({
           name: z.string(),
@@ -1388,6 +1393,11 @@ export const appRouter = router({
           .map(s => extractTikTokUsername(s))
           .filter((s): s is string => s !== null);
 
+        // サテライトアカウント: URL/ID → username抽出
+        const satelliteAccountIds = (input.satelliteAccountIds || [])
+          .map(s => extractTikTokUsername(s))
+          .filter((s): s is string => s !== null);
+
         // 競合: URL/ID → {name: username, account_id: username}
         const competitors = (input.competitors || []).map(c => {
           const parsed = extractTikTokUsername(c.account_id);
@@ -1401,6 +1411,7 @@ export const appRouter = router({
           clientName: input.clientName || null,
           keywords: input.keywords,
           ownAccountIds,
+          satelliteAccountIds,
           ownVideoIds: [],
           ownVideoUrls: [],
           campaignHashtags: input.campaignHashtags || [],
@@ -1432,6 +1443,7 @@ export const appRouter = router({
         clientName: z.string().optional(),
         keywords: z.array(z.string()).optional(),
         ownAccountIds: z.array(z.string()).optional(),
+        satelliteAccountIds: z.array(z.string()).optional(),
         ownVideoIds: z.array(z.string()).optional(),
         ownVideoUrls: z.array(z.string()).optional(),
         campaignHashtags: z.array(z.string()).optional(),
@@ -1453,6 +1465,13 @@ export const appRouter = router({
         // ownAccountIds の URL解析
         if (rawData.ownAccountIds) {
           rawData.ownAccountIds = rawData.ownAccountIds
+            .map(s => extractTikTokUsername(s))
+            .filter((s): s is string => s !== null);
+        }
+
+        // satelliteAccountIds の URL解析
+        if (rawData.satelliteAccountIds) {
+          rawData.satelliteAccountIds = rawData.satelliteAccountIds
             .map(s => extractTikTokUsername(s))
             .filter((s): s is string => s !== null);
         }
@@ -1494,14 +1513,103 @@ export const appRouter = router({
         if (urls.length === 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "施策動画URLが設定されていません" });
         }
-        const scraped = await scrapeTikTokVideosByUrls(urls);
-        const ownVideoData = Array.from(scraped.values());
 
-        // 自動でハッシュタグを抽出してcampaignHashtagsにマージ
+        // URLをプラットフォーム別にグループ分け
+        const tiktokUrls: string[] = [];
+        const youtubeIds: string[] = [];
+        const youtubeUrlMap = new Map<string, string>();
+        const instagramUrls: string[] = [];
+
+        for (const url of urls) {
+          const platform = detectPlatform(url);
+          if (platform === "tiktok") {
+            tiktokUrls.push(url);
+          } else if (platform === "youtube") {
+            const extracted = extractVideoId(url);
+            if (extracted) {
+              youtubeIds.push(extracted.id);
+              youtubeUrlMap.set(extracted.id, url);
+            }
+          } else if (platform === "instagram") {
+            instagramUrls.push(url);
+          }
+        }
+
+        const ownVideoData: any[] = [];
+
+        // TikTok
+        if (tiktokUrls.length > 0) {
+          const scraped = await scrapeTikTokVideosByUrls(tiktokUrls);
+          for (const v of scraped.values()) {
+            ownVideoData.push({ ...v, platform: "tiktok" });
+          }
+        }
+
+        // YouTube
+        if (youtubeIds.length > 0) {
+          const ytVideos = await fetchYouTubeVideos(youtubeIds);
+          for (const v of ytVideos) {
+            const originalUrl = youtubeUrlMap.get(v.videoId) || v.videoUrl;
+            ownVideoData.push({
+              platform: "youtube",
+              videoId: v.videoId,
+              videoUrl: originalUrl,
+              coverUrl: v.coverUrl,
+              description: v.description,
+              title: v.title,
+              hashtags: [],
+              duration: v.duration,
+              createTime: v.publishedAt ? Math.floor(new Date(v.publishedAt).getTime() / 1000) : 0,
+              authorUniqueId: v.channelTitle,
+              authorNickname: v.channelTitle,
+              authorAvatarUrl: "",
+              followerCount: 0,
+              viewCount: v.viewCount,
+              likeCount: v.likeCount,
+              commentCount: v.commentCount,
+              shareCount: 0,
+              saveCount: 0,
+              channelTitle: v.channelTitle,
+              publishedAt: v.publishedAt,
+            });
+          }
+        }
+
+        // Instagram
+        if (instagramUrls.length > 0) {
+          const igPosts = await fetchInstagramPosts(instagramUrls);
+          for (const p of igPosts) {
+            ownVideoData.push({
+              platform: "instagram",
+              videoId: p.videoId,
+              videoUrl: p.videoUrl,
+              coverUrl: p.coverUrl,
+              description: p.caption,
+              caption: p.caption,
+              hashtags: (p.caption.match(/#[\w\u3000-\u9FFF]+/g) || []).map((t: string) => t.replace("#", "")),
+              duration: 0,
+              createTime: p.publishedAt ? Math.floor(new Date(p.publishedAt).getTime() / 1000) : 0,
+              authorUniqueId: p.ownerUsername,
+              authorNickname: p.ownerUsername,
+              authorAvatarUrl: "",
+              followerCount: 0,
+              viewCount: p.viewCount,
+              likeCount: p.likeCount,
+              commentCount: p.commentCount,
+              shareCount: 0,
+              saveCount: 0,
+              ownerUsername: p.ownerUsername,
+              publishedAt: p.publishedAt,
+            });
+          }
+        }
+
+        // 自動でハッシュタグを抽出してcampaignHashtagsにマージ（TikTokのみ）
         const existingHashtags = new Set((campaign.campaignHashtags || []).map(t => t.toLowerCase().replace(/^#/, "")));
         const newHashtags: string[] = [];
         for (const v of ownVideoData) {
-          for (const tag of v.hashtags) {
+          if (v.platform !== "tiktok") continue;
+          for (const tag of (v.hashtags || [])) {
             const normalized = tag.toLowerCase().replace(/^#/, "");
             if (!existingHashtags.has(normalized)) {
               existingHashtags.add(normalized);
@@ -1653,6 +1761,96 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "レポートが生成されていません" });
         }
         return generateCampaignCsv(report);
+      }),
+
+    // SOVスロット編集
+    updateSovSlot: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        keyword: z.string(),
+        videoId: z.string(),
+        phase: z.enum(["before", "after"]),
+        changes: z.object({
+          owner: z.enum(["own", "competitor", "other"]).optional(),
+          owner_detail: z.enum(["official", "satellite", "campaign"]).optional(),
+          owner_name: z.string().optional(),
+          genre: z.enum(["recommend", "howto", "entertainment", "negative", "other"]).optional(),
+          tiktok_labels: z.array(z.enum(["promotion", "paid_partnership", "aigc"])).optional(),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report || !report.sovReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません" });
+        }
+
+        const sovReport = report.sovReport as Record<string, any>;
+        const kwData = sovReport[input.keyword];
+        if (!kwData) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キーワードが見つかりません" });
+        }
+
+        const slotsKey = input.phase === "before" ? "before_slots" : "after_slots";
+        const slots: any[] = kwData[slotsKey] || [];
+        const slotIdx = slots.findIndex((s: any) => s.video_id === input.videoId);
+        if (slotIdx === -1) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "スロットが見つかりません" });
+        }
+
+        // Patch the slot
+        const slot = slots[slotIdx];
+        if (input.changes.owner !== undefined) slot.owner = input.changes.owner;
+        if (input.changes.owner_detail !== undefined) slot.owner_detail = input.changes.owner_detail;
+        if (input.changes.owner_name !== undefined) slot.owner_name = input.changes.owner_name;
+        if (input.changes.genre !== undefined) slot.genre = input.changes.genre;
+        if (input.changes.tiktok_labels !== undefined) slot.tiktok_labels = input.changes.tiktok_labels;
+
+        // Clear owner_detail/owner_name when not applicable
+        if (slot.owner !== "own") {
+          delete slot.owner_detail;
+        }
+        if (slot.owner !== "competitor") {
+          delete slot.owner_name;
+        }
+
+        // Recalculate own_count for the phase
+        const phaseCountKey = input.phase;
+        const ownCount = slots.filter((s: any) => s.owner === "own").length;
+        kwData[phaseCountKey] = {
+          ...kwData[phaseCountKey],
+          own_count: ownCount,
+          total_count: slots.length,
+          percentage: ((ownCount / slots.length) * 100).toFixed(1),
+        };
+
+        await db.patchCampaignReportSovReport(input.campaignId, sovReport);
+        return { success: true };
+      }),
+
+    // 日次メトリクス手動取得
+    captureDailyMetrics: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        return captureDailyMetrics(campaign);
+      }),
+
+    // 日次メトリクス時系列データ取得
+    getDailyMetrics: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        return db.getDailyMetricsByCampaignId(input.campaignId);
       }),
   }),
 });

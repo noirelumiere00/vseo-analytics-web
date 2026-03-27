@@ -11,6 +11,81 @@ import { fetchGoogleTrends, aggregateVideosByDay, pearsonCorrelation } from "./g
 import { fetchKeywordVolume } from "./googleAds";
 import { calculateScoresFromData } from "./videoAnalysis";
 import { invokeLLM } from "./_core/llm";
+/**
+ * TikTok CDNのcover_urlは署名付きで数日で失効する。
+ * oEmbed APIから新鮮なサムネイルURLを取得して差し替える。
+ */
+async function refreshSlotThumbnails(slots: SovSlot[]): Promise<SovSlot[]> {
+  const results = await Promise.allSettled(
+    slots.map(async (slot) => {
+      if (slot.cover_url && !slot.cover_url.includes("tiktokcdn.com")) {
+        return slot;
+      }
+      const thumb = await fetchOembedThumbnail(slot.video_url);
+      return thumb ? { ...slot, cover_url: thumb } : slot;
+    }),
+  );
+  return results.map((r, i) => (r.status === "fulfilled" ? r.value : slots[i]));
+}
+
+/**
+ * oEmbed APIで単一動画のサムネURLを取得
+ */
+async function fetchOembedThumbnail(videoUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://www.tiktok.com/oembed?url=${encodeURIComponent(videoUrl)}`,
+      { signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.thumbnail_url || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * videoMetricsReport と positionReport 内の期限切れCDN URLをoEmbedでリフレッシュ
+ */
+async function refreshCoverUrls(
+  videoMetrics: any[] | null | undefined,
+  positionReport: any[] | null | undefined,
+) {
+  // videoUrl → thumbnail_url のキャッシュ（同じ動画を何度も呼ばないように）
+  const cache = new Map<string, string | null>();
+  async function resolve(videoUrl: string, currentCover: string | undefined): Promise<string> {
+    if (currentCover && !currentCover.includes("tiktokcdn.com")) return currentCover;
+    if (!videoUrl) return currentCover || "";
+    if (cache.has(videoUrl)) return cache.get(videoUrl) || currentCover || "";
+    const thumb = await fetchOembedThumbnail(videoUrl);
+    cache.set(videoUrl, thumb);
+    return thumb || currentCover || "";
+  }
+
+  // videoMetricsReport
+  if (videoMetrics) {
+    await Promise.allSettled(
+      videoMetrics.map(async (v: any) => {
+        v.coverUrl = await resolve(v.videoUrl, v.coverUrl);
+      }),
+    );
+  }
+
+  // positionReport → videos
+  if (positionReport) {
+    const tasks: Promise<void>[] = [];
+    for (const p of positionReport) {
+      for (const v of p.videos || []) {
+        const videoUrl = `https://www.tiktok.com/@${v.username}/video/${v.video_id}`;
+        tasks.push(
+          resolve(videoUrl, v.cover_url).then(url => { v.cover_url = url; }),
+        );
+      }
+    }
+    await Promise.allSettled(tasks);
+  }
+}
 
 function calcER(v: { view_count: number; like_count: number; comment_count: number; share_count: number }): number {
   if (!v.view_count || v.view_count === 0) return 0;
@@ -25,6 +100,7 @@ function buildSlots(
   ownAccountIdsLower: Set<string>,
   campaignAuthorIds: Set<string>,
   competitorsMap: Map<string, string>,
+  satelliteAccountIdsLower: Set<string> = new Set(),
 ): SovSlot[] {
   if (!resultData?.all_videos) return [];
 
@@ -35,6 +111,7 @@ function buildSlots(
   return allVideos.map((v: any): SovSlot => {
     const userLower = (v.creator_username || "").toLowerCase();
     const isOwnAccount = ownAccountIdsLower.has(userLower);
+    const isSatelliteAccount = satelliteAccountIdsLower.has(userLower);
     const isCampaignVideo = campaignVideoIds.has(v.video_id) || campaignAuthorIds.has(userLower);
     const competitorName = competitorsMap.get(userLower);
 
@@ -42,12 +119,12 @@ function buildSlots(
     let ownerDetail: SovSlot["owner_detail"] = undefined;
     let ownerName: string | undefined = undefined;
 
-    if (isOwnAccount || isCampaignVideo) {
+    if (isOwnAccount || isSatelliteAccount || isCampaignVideo) {
       owner = "own";
-      if (isOwnAccount && isCampaignVideo) {
-        ownerDetail = ["official", "campaign"];
-      } else if (isOwnAccount) {
+      if (isOwnAccount) {
         ownerDetail = "official";
+      } else if (isSatelliteAccount) {
+        ownerDetail = "satellite";
       } else {
         ownerDetail = "campaign";
       }
@@ -88,7 +165,7 @@ export async function generateCampaignReport(
 
   const positionReport: NonNullable<InsertCampaignReport["positionReport"]> = [];
   const competitorReport: NonNullable<InsertCampaignReport["competitorReport"]> = {};
-  const sovReport: NonNullable<InsertCampaignReport["sovReport"]> = {};
+  const sovReport: Record<string, any> = {};
   const rippleReport: NonNullable<InsertCampaignReport["rippleReport"]> = {};
 
   // 施策動画のビデオID集合（own_videosが空でもall_videosからマッチ可能にする）
@@ -98,6 +175,7 @@ export async function generateCampaignReport(
     ...(ownVideoData || []).map(v => v.videoId).filter(Boolean),
   ]);
   const ownAccountIdsLower = new Set((campaign.ownAccountIds || []).map((id: string) => id.toLowerCase()));
+  const satelliteAccountIdsLower = new Set<string>(((campaign as any).satelliteAccountIds || []).map((id: string) => id.toLowerCase()));
 
   // 施策動画の投稿者ID（buildSlots用）
   const ownVideoDataForAuthors = (campaign as any).ownVideoData as Array<{ videoId: string; authorUniqueId: string }> | undefined;
@@ -120,9 +198,10 @@ export async function generateCampaignReport(
     if (resultData.own_videos?.length > 0) return resultData.own_videos;
     // フォールバック: all_videos からビデオID・アカウントIDでマッチ
     if (!resultData.all_videos) return [];
-    return resultData.all_videos.filter((v: any) =>
-      campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has((v.creator_username || "").toLowerCase())
-    );
+    return resultData.all_videos.filter((v: any) => {
+      const uLower = (v.creator_username || "").toLowerCase();
+      return campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has(uLower) || satelliteAccountIdsLower.has(uLower);
+    });
   };
 
   // ============================
@@ -160,6 +239,7 @@ export async function generateCampaignReport(
         description: (v.description || "").slice(0, 40),
         search_rank: v.search_rank,
         view_count: v.view_count || 0,
+        cover_url: v.cover_url || "",
       })),
     });
 
@@ -168,6 +248,25 @@ export async function generateCampaignReport(
   // ============================
   // 軸2: 競合比較（Before/After強化）
   // ============================
+
+  // SOV再計算ヘルパー（保存値が不正確な場合はall_videosから再計算）
+  const recalcSov = (resultData: any) => {
+    if (!resultData) return { own_count: 0, total_count: 0, percentage: "0" };
+    const saved = resultData.share_of_voice;
+    if (saved && saved.own_count > 0) return saved;
+    const allVids = resultData.all_videos || [];
+    const ownCount = allVids.filter((v: any) => {
+      const uLower = (v.creator_username || "").toLowerCase();
+      return campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has(uLower) || satelliteAccountIdsLower.has(uLower);
+    }).length;
+    const total = allVids.length;
+    return {
+      own_count: ownCount,
+      total_count: total,
+      percentage: total > 0 ? (ownCount / total * 100).toFixed(1) : "0",
+    };
+  };
+
   for (const kw of keywords) {
     const before = baseline?.searchResults?.[kw];
     const after = measurement.searchResults?.[kw];
@@ -221,29 +320,11 @@ export async function generateCampaignReport(
         ),
     };
 
-    // シェア・オブ・ボイス（前後比較） — 保存値が不正確な場合はall_videosから再計算
-    const recalcSov = (resultData: any) => {
-      if (!resultData) return { own_count: 0, total_count: 0, percentage: "0" };
-      const saved = resultData.share_of_voice;
-      // saved.own_count > 0 なら信頼できる（新コードのスナップショット）
-      if (saved && saved.own_count > 0) return saved;
-      // all_videosから再計算
-      const allVids = resultData.all_videos || [];
-      const ownCount = allVids.filter((v: any) =>
-        campaignVideoIds.has(v.video_id) || ownAccountIdsLower.has((v.creator_username || "").toLowerCase())
-      ).length;
-      const total = allVids.length;
-      return {
-        own_count: ownCount,
-        total_count: total,
-        percentage: total > 0 ? (ownCount / total * 100).toFixed(1) : "0",
-      };
-    };
     sovReport[kw] = {
       before: recalcSov(before),
       after: recalcSov(after),
-      before_slots: before ? buildSlots(before, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap) : undefined,
-      after_slots: buildSlots(after, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap),
+      before_slots: before ? await refreshSlotThumbnails(buildSlots(before, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap, satelliteAccountIdsLower)) : undefined,
+      after_slots: await refreshSlotThumbnails(buildSlots(after, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap, satelliteAccountIdsLower)),
     };
   }
 
@@ -255,15 +336,16 @@ export async function generateCampaignReport(
     for (const bkw of bigKws) {
       const mk = measurementBigKW[bkw];
       if (!mk?.all_videos) continue;
-      const afterSlots = buildSlots(mk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap);
+      const afterSlots = buildSlots(mk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap, satelliteAccountIdsLower);
       const hasOwnInTop10 = afterSlots.some(s => s.owner === "own");
       if (!hasOwnInTop10) continue;
       const bk = baselineBigKW?.[bkw];
+      const bigBeforeSlots = bk?.all_videos ? buildSlots(bk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap, satelliteAccountIdsLower) : undefined;
       sovReport[bkw] = {
         before: recalcSov(bk),
         after: recalcSov(mk),
-        before_slots: bk?.all_videos ? buildSlots(bk, campaignVideoIds, ownAccountIdsLower, campaignAuthorIds, competitorsMap) : undefined,
-        after_slots: afterSlots,
+        before_slots: bigBeforeSlots ? await refreshSlotThumbnails(bigBeforeSlots) : undefined,
+        after_slots: await refreshSlotThumbnails(afterSlots),
         _isBigKeyword: true,
       };
     }
@@ -271,10 +353,15 @@ export async function generateCampaignReport(
 
   // ownVideoData は上部で取得済み（施策動画マッチ用）— 投稿頻度・動画メトリクスでも使う
   const ownVideoDataFull = (campaign as any).ownVideoData as Array<{
+    platform?: "tiktok" | "youtube" | "instagram";
     videoId: string; videoUrl: string; coverUrl: string; description: string;
     createTime: number;
     viewCount?: number; likeCount?: number; commentCount?: number;
     shareCount?: number; saveCount?: number;
+    // YouTube-specific
+    title?: string; channelTitle?: string; publishedAt?: string;
+    // Instagram-specific
+    caption?: string; ownerUsername?: string;
   }> | undefined;
 
   // 競合の投稿頻度比較
@@ -406,11 +493,14 @@ export async function generateCampaignReport(
   // ============================
   let videoMetricsReport: InsertCampaignReport["videoMetricsReport"] = undefined;
 
-  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
+  // TikTok動画のみ（既存のvideoMetricsReportはTikTok専用）
+  const tiktokVideoData = ownVideoDataFull?.filter(v => !v.platform || v.platform === "tiktok");
+
+  if (tiktokVideoData && tiktokVideoData.length > 0) {
     const baselineMetrics = baseline?.ownVideoMetrics || {};
     const measurementMetrics = measurement.ownVideoMetrics || {};
 
-    videoMetricsReport = ownVideoDataFull.map(v => {
+    videoMetricsReport = tiktokVideoData.map(v => {
       const bm = baselineMetrics[v.videoId] || null;
       const am = measurementMetrics[v.videoId] || null;
 
@@ -790,15 +880,15 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
   const mainKwName = mainKw?.keyword || keywords[0] || "";
   const mainRipple = campaignHashtags[0] ? rippleReport[campaignHashtags[0]] : undefined;
 
-  // 平均検索順位（ランクインしているKWのみ）
+  // 平均検索順位（ランクインしているKWのみ。圏外=0扱い）
   const rankedKws = positionReport.filter(p => p.after_rank != null);
   const avgRankAfter = rankedKws.length > 0
     ? Number((rankedKws.reduce((s, p) => s + p.after_rank!, 0) / rankedKws.length).toFixed(1))
-    : null;
+    : 0;
   const rankedKwsBefore = positionReport.filter(p => p.before_rank != null);
   const avgRankBefore = rankedKwsBefore.length > 0
     ? Number((rankedKwsBefore.reduce((s, p) => s + p.before_rank!, 0) / rankedKwsBefore.length).toFixed(1))
-    : null;
+    : 0;
 
   // 施策動画全体の合算メトリクス
   let totalViewsAfter = 0, totalViewsBefore = 0;
@@ -863,7 +953,7 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     }
   }
 
-  const summary: NonNullable<InsertCampaignReport["summary"]> = {
+  const summary: any = {
     primary_keyword: mainKwName,
     rank_before: mainKw?.before_rank ?? null,
     rank_after: mainKw?.after_rank ?? null,
@@ -889,6 +979,75 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
   };
 
   // ============================
+  // マルチプラットフォーム別サマリー
+  // ============================
+  let platformSummary: InsertCampaignReport["platformSummary"] = undefined;
+
+  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
+    const ytVideos = ownVideoDataFull.filter(v => v.platform === "youtube");
+    const igVideos = ownVideoDataFull.filter(v => v.platform === "instagram");
+
+    if (ytVideos.length > 0 || igVideos.length > 0) {
+      platformSummary = {};
+
+      if (ytVideos.length > 0) {
+        const totalViews = ytVideos.reduce((s, v) => s + (v.viewCount || 0), 0);
+        const totalLikes = ytVideos.reduce((s, v) => s + (v.likeCount || 0), 0);
+        const totalComments = ytVideos.reduce((s, v) => s + (v.commentCount || 0), 0);
+        const avgER = totalViews > 0
+          ? Number(((totalLikes + totalComments) / totalViews * 100).toFixed(2))
+          : 0;
+
+        platformSummary.youtube = {
+          totalVideos: ytVideos.length,
+          totalViews,
+          totalLikes,
+          avgER,
+          videos: ytVideos.map(v => ({
+            videoId: v.videoId,
+            videoUrl: v.videoUrl,
+            title: v.title || v.description || "",
+            coverUrl: v.coverUrl,
+            viewCount: v.viewCount || 0,
+            likeCount: v.likeCount || 0,
+            commentCount: v.commentCount || 0,
+            duration: (v as any).duration || 0,
+            publishedAt: v.publishedAt || "",
+            channelTitle: v.channelTitle || "",
+          })),
+        };
+      }
+
+      if (igVideos.length > 0) {
+        const totalViews = igVideos.reduce((s, v) => s + (v.viewCount || 0), 0);
+        const totalLikes = igVideos.reduce((s, v) => s + (v.likeCount || 0), 0);
+        const totalComments = igVideos.reduce((s, v) => s + (v.commentCount || 0), 0);
+        const avgER = totalViews > 0
+          ? Number(((totalLikes + totalComments) / totalViews * 100).toFixed(2))
+          : 0;
+
+        platformSummary.instagram = {
+          totalVideos: igVideos.length,
+          totalViews,
+          totalLikes,
+          avgER,
+          videos: igVideos.map(v => ({
+            videoId: v.videoId,
+            videoUrl: v.videoUrl,
+            coverUrl: v.coverUrl,
+            caption: v.caption || v.description || "",
+            viewCount: v.viewCount || 0,
+            likeCount: v.likeCount || 0,
+            commentCount: v.commentCount || 0,
+            publishedAt: v.publishedAt || "",
+            ownerUsername: v.ownerUsername || "",
+          })),
+        };
+      }
+    }
+  }
+
+  // ============================
   // 注記
   // ============================
   const notes = [
@@ -897,6 +1056,9 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     "第三者投稿は、キャンペーンハッシュタグ検索結果のうち自社投稿を除いた動画です。",
     "本レポートは「施策実施期間中の変化」を示すものであり、全ての変化が施策に起因することを保証するものではありません。",
   ];
+
+  // oEmbed APIでサムネURLをリフレッシュ（TikTok CDN URLは数日で失効するため）
+  await refreshCoverUrls(videoMetricsReport, positionReport);
 
   return {
     campaignId: campaign.id,
@@ -914,6 +1076,7 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     videoScores,
     aiOverallReport,
     bigKeywordReport,
+    platformSummary,
   };
 }
 

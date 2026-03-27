@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, bigint } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, bigint, uniqueIndex } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -417,15 +417,21 @@ export const campaigns = mysqlTable("campaigns", {
   // 計測対象
   keywords: json("keywords").$type<string[]>().notNull(),
   ownAccountIds: json("ownAccountIds").$type<string[]>().notNull(),
+  satelliteAccountIds: json("satelliteAccountIds").$type<string[]>(),
   ownVideoIds: json("ownVideoIds").$type<string[]>(),
   ownVideoUrls: json("ownVideoUrls").$type<string[]>(),
   ownVideoData: json("ownVideoData").$type<Array<{
+    platform?: "tiktok" | "youtube" | "instagram";
     videoId: string; videoUrl: string; coverUrl: string;
     description: string; hashtags: string[]; duration: number;
     createTime: number; authorUniqueId: string; authorNickname: string;
     authorAvatarUrl: string; followerCount: number;
     viewCount: number; likeCount: number; commentCount: number;
     shareCount: number; saveCount: number;
+    // YouTube-specific
+    title?: string; channelTitle?: string; publishedAt?: string;
+    // Instagram-specific
+    caption?: string; ownerUsername?: string;
   }>>(),
   campaignHashtags: json("campaignHashtags").$type<string[]>(),
 
@@ -614,7 +620,7 @@ export interface SovSlot {
   share_count: number;
   owner: "own" | "competitor" | "other";
   owner_name?: string;
-  owner_detail?: "official" | "campaign" | Array<"official" | "campaign">;
+  owner_detail?: "official" | "satellite" | "campaign" | Array<"official" | "satellite" | "campaign">;
   genre: "recommend" | "howto" | "entertainment" | "negative" | "other";
   tiktok_labels: Array<"promotion" | "paid_partnership" | "aigc">;
   cover_url?: string;
@@ -788,9 +794,53 @@ export const campaignReports = mysqlTable("campaign_reports", {
     ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }>;
   }>>(),
 
+  // マルチプラットフォーム別サマリー
+  platformSummary: json("platformSummary").$type<{
+    youtube?: {
+      totalVideos: number; totalViews: number; totalLikes: number;
+      avgER: number;
+      videos: Array<{
+        videoId: string; videoUrl: string; title: string; coverUrl: string;
+        viewCount: number; likeCount: number; commentCount: number; duration: number;
+        publishedAt: string; channelTitle: string;
+      }>;
+    };
+    instagram?: {
+      totalVideos: number; totalViews: number; totalLikes: number;
+      avgER: number;
+      videos: Array<{
+        videoId: string; videoUrl: string; coverUrl: string;
+        caption: string; viewCount: number; likeCount: number; commentCount: number;
+        publishedAt: string; ownerUsername: string;
+      }>;
+    };
+  }>(),
+
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type CampaignReport = typeof campaignReports.$inferSelect;
 export type InsertCampaignReport = typeof campaignReports.$inferInsert;
+
+/**
+ * 日次メトリクス（マルチプラットフォーム対応）
+ */
+export const campaignDailyMetrics = mysqlTable("campaign_daily_metrics", {
+  id: int("id").autoincrement().primaryKey(),
+  campaignId: int("campaignId").notNull(),
+  videoUrl: varchar("videoUrl", { length: 512 }).notNull(),
+  platform: mysqlEnum("platform", ["tiktok", "youtube", "instagram"]).notNull(),
+  dateKey: varchar("dateKey", { length: 10 }).notNull(), // "2026-03-27"
+  viewCount: bigint("viewCount", { mode: "number" }),
+  likeCount: bigint("likeCount", { mode: "number" }),
+  commentCount: bigint("commentCount", { mode: "number" }),
+  shareCount: bigint("shareCount", { mode: "number" }),
+  saveCount: bigint("saveCount", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("uniq_campaign_video_date").on(table.campaignId, table.videoUrl, table.dateKey),
+]);
+
+export type CampaignDailyMetric = typeof campaignDailyMetrics.$inferSelect;
+export type InsertCampaignDailyMetric = typeof campaignDailyMetrics.$inferInsert;

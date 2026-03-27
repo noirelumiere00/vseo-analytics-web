@@ -148,6 +148,20 @@
       "when": 1774070400002,
       "tag": "0020_google_ads_keyword_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1774577717070,
+      "tag": "0021_luxuriant_tarot",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1774589700203,
+      "tag": "0022_sudden_rattler",
+      "breakpoints": true
     }
   ]
 }

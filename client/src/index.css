@@ -260,25 +260,9 @@
     position: relative;
     overflow: hidden;
   }
-  /* M3 State Layer: hover → Level 2 + subtle lift */
+  /* M3 hover: subtle elevation lift only (no gray overlay) */
   [data-slot="card"]:hover {
     box-shadow: var(--md-elevation-2);
-    transform: translateY(-2px);
-  }
-  /* M3 State Layer overlay on cards */
-  [data-slot="card"]::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: currentColor;
-    opacity: 0;
-    transition: opacity var(--md-dur-short3) var(--md-ease-standard);
-    pointer-events: none;
-    border-radius: inherit;
-    z-index: 1;
-  }
-  [data-slot="card"]:hover::after {
-    opacity: var(--md-state-hover);
   }
 
   /* Interactive card (clickable) — stronger elevation change */
@@ -373,6 +357,12 @@
   /* ========================================
      M3 Keyframe Animations
      ======================================== */
+
+  /* SOV bar fill — M3 emphasized decelerate */
+  @keyframes sov-bar-fill {
+    from { transform: scaleX(0); transform-origin: left; }
+    to { transform: scaleX(1); transform-origin: left; }
+  }
 
   /* Page enter — M3 standard decelerate */
   @keyframes page-enter {
