@@ -614,7 +614,7 @@ export interface SovSlot {
   share_count: number;
   owner: "own" | "competitor" | "other";
   owner_name?: string;
-  owner_detail?: "official" | "campaign";
+  owner_detail?: "official" | "campaign" | Array<"official" | "campaign">;
   genre: "recommend" | "howto" | "entertainment" | "negative" | "other";
   tiktok_labels: Array<"promotion" | "paid_partnership" | "aigc">;
   cover_url?: string;

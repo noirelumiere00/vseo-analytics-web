@@ -42,7 +42,58 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* ========================================
+   Material Design 3 — Design Tokens
+   ======================================== */
+
 :root {
+  /* --- M3 Elevation (dual-layer box-shadow) --- */
+  --md-elevation-0: none;
+  --md-elevation-1: 0px 1px 2px 0px rgba(0,0,0,0.30), 0px 1px 3px 1px rgba(0,0,0,0.15);
+  --md-elevation-2: 0px 1px 2px 0px rgba(0,0,0,0.30), 0px 2px 6px 2px rgba(0,0,0,0.15);
+  --md-elevation-3: 0px 1px 3px 0px rgba(0,0,0,0.30), 0px 4px 8px 3px rgba(0,0,0,0.15);
+  --md-elevation-4: 0px 2px 3px 0px rgba(0,0,0,0.30), 0px 6px 10px 4px rgba(0,0,0,0.15);
+  --md-elevation-5: 0px 4px 4px 0px rgba(0,0,0,0.30), 0px 8px 12px 6px rgba(0,0,0,0.15);
+
+  /* --- M3 Motion: Easing --- */
+  --md-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --md-ease-standard-decel: cubic-bezier(0, 0, 0, 1);
+  --md-ease-standard-accel: cubic-bezier(0.3, 0, 1, 1);
+  --md-ease-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --md-ease-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --md-ease-linear: cubic-bezier(0, 0, 1, 1);
+
+  /* --- M3 Motion: Duration --- */
+  --md-dur-short1: 50ms;
+  --md-dur-short2: 100ms;
+  --md-dur-short3: 150ms;
+  --md-dur-short4: 200ms;
+  --md-dur-medium1: 250ms;
+  --md-dur-medium2: 300ms;
+  --md-dur-medium3: 350ms;
+  --md-dur-medium4: 400ms;
+  --md-dur-long1: 450ms;
+  --md-dur-long2: 500ms;
+  --md-dur-long3: 550ms;
+  --md-dur-long4: 600ms;
+  --md-dur-xlong1: 700ms;
+  --md-dur-xlong2: 800ms;
+
+  /* --- M3 Shape Scale --- */
+  --md-shape-xs: 4px;
+  --md-shape-sm: 8px;
+  --md-shape-md: 12px;
+  --md-shape-lg: 16px;
+  --md-shape-xl: 28px;
+  --md-shape-full: 9999px;
+
+  /* --- M3 State Layer Opacity --- */
+  --md-state-hover: 0.08;
+  --md-state-focus: 0.10;
+  --md-state-pressed: 0.10;
+  --md-state-dragged: 0.16;
+
+  /* --- Existing color tokens --- */
   --primary: oklch(0.45 0.25 290);
   --primary-foreground: oklch(1 0 0);
   --sidebar-primary: oklch(0.45 0.25 290);
@@ -79,6 +130,12 @@
 }
 
 .dark {
+  --md-elevation-1: 0px 1px 3px 1px rgba(0,0,0,0.40), 0px 1px 2px 0px rgba(0,0,0,0.50);
+  --md-elevation-2: 0px 2px 6px 2px rgba(0,0,0,0.40), 0px 1px 2px 0px rgba(0,0,0,0.50);
+  --md-elevation-3: 0px 4px 8px 3px rgba(0,0,0,0.40), 0px 1px 3px 0px rgba(0,0,0,0.50);
+  --md-elevation-4: 0px 6px 10px 4px rgba(0,0,0,0.40), 0px 2px 3px 0px rgba(0,0,0,0.50);
+  --md-elevation-5: 0px 8px 12px 6px rgba(0,0,0,0.40), 0px 4px 4px 0px rgba(0,0,0,0.50);
+
   --primary: var(--color-blue-700);
   --primary-foreground: var(--color-blue-50);
   --sidebar-primary: var(--color-blue-500);
@@ -113,6 +170,10 @@
   --sidebar-ring: oklch(0.488 0.243 264.376);
 }
 
+/* ========================================
+   Base Layer
+   ======================================== */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -134,59 +195,50 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
-  /* Refined heading scale */
   h1 { letter-spacing: -0.025em; }
   h2 { letter-spacing: -0.02em; }
   h3 { letter-spacing: -0.015em; }
 }
 
+/* ========================================
+   Components Layer
+   ======================================== */
+
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   *
-   * This overrides Tailwind's default container behavior to:
-   * - Auto-center content (mx-auto)
-   * - Add responsive horizontal padding
-   * - Set max-width for large screens
-   *
-   * Usage: <div className="container">...</div>
-   *
-   * For custom widths, use max-w-* utilities directly:
-   * <div className="max-w-6xl mx-auto px-4">...</div>
-   */
+  /* --- Container --- */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem; /* 16px - mobile padding */
+    padding-left: 1rem;
     padding-right: 1rem;
   }
-
   .flex {
     min-height: 0;
     min-width: 0;
   }
-
   @media (min-width: 640px) {
     .container {
-      padding-left: 1.5rem; /* 24px - tablet padding */
+      padding-left: 1.5rem;
       padding-right: 1.5rem;
     }
   }
-
   @media (min-width: 1024px) {
     .container {
-      padding-left: 2rem; /* 32px - desktop padding */
+      padding-left: 2rem;
       padding-right: 2rem;
-      max-width: 1280px; /* Standard content width */
+      max-width: 1280px;
     }
   }
 
-  /* Gradient utilities — modern blue-violet accent */
+  /* --- Gradient utilities --- */
   .gradient-primary {
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+    transition: filter var(--md-dur-short4) var(--md-ease-standard);
   }
-
+  .gradient-primary:hover {
+    filter: brightness(1.08);
+  }
   .gradient-text {
     background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
     -webkit-background-clip: text;
@@ -194,18 +246,60 @@
     background-clip: text;
   }
 
-  /* Interactive card hover — Stripe-style subtle lift */
-  .card-interactive {
-    transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  /* ========================================
+     M3 Card System — Elevation + State Layers
+     ======================================== */
+
+  /* Base card: M3 Level 1 elevation with emphasized-decel transitions */
+  [data-slot="card"] {
+    box-shadow: var(--md-elevation-1);
+    transition:
+      transform var(--md-dur-short4) var(--md-ease-standard),
+      box-shadow var(--md-dur-short4) var(--md-ease-standard),
+      border-color var(--md-dur-short4) var(--md-ease-standard);
+    position: relative;
+    overflow: hidden;
   }
-  .card-interactive:hover {
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  /* M3 State Layer: hover → Level 2 + subtle lift */
+  [data-slot="card"]:hover {
+    box-shadow: var(--md-elevation-2);
     transform: translateY(-2px);
-    border-color: oklch(0.85 0.015 290);
+  }
+  /* M3 State Layer overlay on cards */
+  [data-slot="card"]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--md-dur-short3) var(--md-ease-standard);
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 1;
+  }
+  [data-slot="card"]:hover::after {
+    opacity: var(--md-state-hover);
   }
 
-  /* Stat card — compact metric display */
+  /* Interactive card (clickable) — stronger elevation change */
+  .card-interactive {
+    box-shadow: var(--md-elevation-1);
+    transition:
+      box-shadow var(--md-dur-short4) var(--md-ease-standard),
+      transform var(--md-dur-short4) var(--md-ease-standard),
+      border-color var(--md-dur-short4) var(--md-ease-standard);
+  }
+  .card-interactive:hover {
+    box-shadow: var(--md-elevation-3);
+    transform: translateY(-3px);
+    border-color: oklch(0.85 0.015 290);
+  }
+  .card-interactive:active {
+    box-shadow: var(--md-elevation-1);
+    transform: translateY(0);
+  }
+
+  /* Stat card — M3 accent bar reveal */
   .stat-card {
     position: relative;
     overflow: hidden;
@@ -216,36 +310,299 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 3px;
     background: linear-gradient(90deg, oklch(0.45 0.25 290), oklch(0.55 0.22 290));
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition:
+      opacity var(--md-dur-short3) var(--md-ease-standard),
+      transform var(--md-dur-medium2) var(--md-ease-emphasized-decel);
   }
   .stat-card:hover::before {
     opacity: 1;
+    transform: scaleX(1);
   }
 
   /* Page section wrapper */
   .page-section {
     @apply rounded-xl border bg-card p-5 md:p-6;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    box-shadow: var(--md-elevation-1);
   }
 
-  /* Staggered entrance animation for lists */
-  .animate-list-item {
-    animation: list-enter 0.3s ease-out both;
+  /* ========================================
+     M3 Button Effects
+     ======================================== */
+
+  .btn-hover-lift {
+    transition:
+      transform var(--md-dur-short4) var(--md-ease-standard),
+      box-shadow var(--md-dur-short4) var(--md-ease-standard);
   }
-  @keyframes list-enter {
+  .btn-hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--md-elevation-2);
+  }
+  .btn-hover-lift:active {
+    transform: translateY(0);
+    box-shadow: var(--md-elevation-1);
+  }
+
+  /* M3 Ripple press effect */
+  .md-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+  .md-ripple::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity var(--md-dur-short3) var(--md-ease-standard);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+  .md-ripple:hover::before {
+    opacity: var(--md-state-hover);
+  }
+  .md-ripple:active::before {
+    opacity: var(--md-state-pressed);
+  }
+
+  /* ========================================
+     M3 Keyframe Animations
+     ======================================== */
+
+  /* Page enter — M3 standard decelerate */
+  @keyframes page-enter {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  .animate-page-enter {
+    animation: page-enter var(--md-dur-medium2) var(--md-ease-standard-decel) both;
+  }
 
-  /* Slow spin for gradient ring */
+  /* Card enter — M3 emphasized decelerate with scale */
+  @keyframes card-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(16px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .animate-card-enter {
+    animation: card-enter var(--md-dur-medium3) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* List item enter — M3 standard decel */
+  @keyframes list-enter {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-list-item {
+    animation: list-enter var(--md-dur-medium2) var(--md-ease-standard-decel) both;
+  }
+
+  /* Chart fade — M3 emphasized decel */
+  @keyframes chartFade {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-chart-fade {
+    animation: chartFade var(--md-dur-medium4) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Video card stagger slide-in */
+  @keyframes videoSlide {
+    from { opacity: 0; transform: translateX(-16px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .animate-video-slide {
+    animation: videoSlide var(--md-dur-medium3) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* KPI card fade-in slide-up */
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-fade-slide-up {
+    animation: fadeSlideUp var(--md-dur-medium3) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Scroll-triggered section reveal — M3 emphasized decel */
+  .section-fade-in {
+    opacity: 0;
+    transform: translateY(32px);
+    transition:
+      opacity var(--md-dur-long2) var(--md-ease-emphasized-decel),
+      transform var(--md-dur-long2) var(--md-ease-emphasized-decel);
+  }
+  .section-fade-in.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Improvement badge pulse glow */
+  @keyframes pulseGreen {
+    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+    50% { box-shadow: 0 0 10px 6px rgba(22, 163, 74, 0.18); }
+    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  }
+  .inline-flex.text-green-600 {
+    animation: pulseGreen 1.4s var(--md-ease-standard) 0.5s 1 both;
+  }
+
+  /* ========================================
+     M3 Stagger System (up to 12 children)
+     ======================================== */
+
+  .animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .animate-stagger > *:nth-child(2) { animation-delay: 50ms; }
+  .animate-stagger > *:nth-child(3) { animation-delay: 100ms; }
+  .animate-stagger > *:nth-child(4) { animation-delay: 150ms; }
+  .animate-stagger > *:nth-child(5) { animation-delay: 200ms; }
+  .animate-stagger > *:nth-child(6) { animation-delay: 250ms; }
+  .animate-stagger > *:nth-child(7) { animation-delay: 300ms; }
+  .animate-stagger > *:nth-child(8) { animation-delay: 350ms; }
+  .animate-stagger > *:nth-child(9) { animation-delay: 400ms; }
+  .animate-stagger > *:nth-child(10) { animation-delay: 450ms; }
+  .animate-stagger > *:nth-child(11) { animation-delay: 500ms; }
+  .animate-stagger > *:nth-child(12) { animation-delay: 550ms; }
+
+  /* ========================================
+     M3 Micro-interactions
+     ======================================== */
+
+  /* Trend indicator entrance */
+  @keyframes trend-up {
+    0% { transform: translateY(6px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes trend-down {
+    0% { transform: translateY(-6px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  .animate-trend-up {
+    animation: trend-up var(--md-dur-medium2) var(--md-ease-emphasized-decel) both;
+  }
+  .animate-trend-down {
+    animation: trend-down var(--md-dur-medium2) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Number counter shimmer — for KPI values */
+  @keyframes number-reveal {
+    0% { opacity: 0; filter: blur(8px); transform: translateY(8px); }
+    60% { filter: blur(0px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .animate-number-reveal {
+    animation: number-reveal var(--md-dur-long2) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Grade badge entrance — scale + rotate */
+  @keyframes grade-enter {
+    0% { opacity: 0; transform: scale(0.3) rotate(-15deg); }
+    60% { transform: scale(1.1) rotate(3deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+  }
+  .animate-grade-enter {
+    animation: grade-enter var(--md-dur-long1) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Rank badge pop */
+  @keyframes rank-pop {
+    0% { transform: scale(0.6); opacity: 0; }
+    70% { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .animate-rank-pop {
+    animation: rank-pop var(--md-dur-medium2) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* Expand/collapse container — smooth height animation */
+  @keyframes expand-in {
+    from { opacity: 0; max-height: 0; transform: translateY(-8px); }
+    to { opacity: 1; max-height: 2000px; transform: translateY(0); }
+  }
+  @keyframes collapse-out {
+    from { opacity: 1; max-height: 2000px; }
+    to { opacity: 0; max-height: 0; }
+  }
+  .animate-expand {
+    animation: expand-in var(--md-dur-medium4) var(--md-ease-emphasized-decel) both;
+    overflow: hidden;
+  }
+
+  /* Nav pill active indicator slide */
+  @keyframes nav-pill-enter {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-nav-pill {
+    animation: nav-pill-enter var(--md-dur-short4) var(--md-ease-standard) both;
+  }
+
+  /* Floating badge pulse */
+  @keyframes float-pulse {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+  .animate-float {
+    animation: float-pulse 3s var(--md-ease-standard) infinite;
+  }
+
+  /* Progress bar fill */
+  @keyframes progress-fill {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  .animate-progress-fill {
+    transform-origin: left;
+    animation: progress-fill var(--md-dur-xlong1) var(--md-ease-emphasized-decel) both;
+  }
+
+  /* ========================================
+     M3 Shimmer / Skeleton
+     ======================================== */
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .animate-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .animate-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      rgba(255, 255, 255, 0.12) 50%,
+      transparent 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s var(--md-ease-linear) infinite;
+  }
+  .dark .animate-shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent 25%,
+      rgba(255, 255, 255, 0.06) 50%,
+      transparent 75%
+    );
+    background-size: 200% 100%;
+  }
+
+  /* ========================================
+     Logo / Utility
+     ======================================== */
+
   .animate-spin-slow {
     animation: spin 3s linear infinite;
   }
 
-  /* Logo background removal & dark mode adaptation */
   .logo-blend {
     mix-blend-mode: multiply;
     filter: contrast(1.15);
@@ -254,8 +611,6 @@
     mix-blend-mode: screen;
     filter: invert(1) contrast(1.15) brightness(1.05);
   }
-
-  /* Subtle watermark variant */
   .logo-watermark {
     mix-blend-mode: multiply;
     pointer-events: none;
@@ -266,126 +621,6 @@
     filter: invert(1);
   }
 
-  /* Page enter animation */
-  @keyframes page-enter {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  .animate-page-enter {
-    animation: page-enter 0.3s ease-out both;
-  }
-
-  /* Card enter animation */
-  @keyframes card-enter {
-    from { opacity: 0; transform: scale(0.97) translateY(6px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
-  }
-  .animate-card-enter {
-    animation: card-enter 0.35s ease-out both;
-  }
-
-  /* Stagger children — CSS only */
-  .animate-stagger > *:nth-child(1) { animation-delay: 0ms; }
-  .animate-stagger > *:nth-child(2) { animation-delay: 60ms; }
-  .animate-stagger > *:nth-child(3) { animation-delay: 120ms; }
-  .animate-stagger > *:nth-child(4) { animation-delay: 180ms; }
-  .animate-stagger > *:nth-child(5) { animation-delay: 240ms; }
-  .animate-stagger > *:nth-child(6) { animation-delay: 300ms; }
-  .animate-stagger > *:nth-child(7) { animation-delay: 360ms; }
-  .animate-stagger > *:nth-child(8) { animation-delay: 420ms; }
-
-  /* Button hover lift */
-  .btn-hover-lift {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  .btn-hover-lift:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  }
-
-  /* Gradient primary button transition */
-  .gradient-primary {
-    transition: filter 0.2s ease;
-  }
-  .gradient-primary:hover {
-    filter: brightness(1.08);
-  }
-
-  /* Shimmer skeleton animation */
-  @keyframes shimmer {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(100%); }
-  }
-  .animate-shimmer {
-    position: relative;
-    overflow: hidden;
-  }
-  .animate-shimmer::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  .dark .animate-shimmer::after {
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
-  }
-
-  /* ANIM-01: KPI card fade-in slide-up */
-  @keyframes fadeSlideUp {
-    from { opacity: 0; transform: translateY(16px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  /* ANIM-02: Scroll-triggered section fade-in */
-  .section-fade-in {
-    opacity: 0;
-    transform: translateY(24px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
-  }
-  .section-fade-in.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  /* ANIM-03: Card hover lift */
-  [data-slot="card"] {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-  [data-slot="card"]:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  }
-
-  /* ANIM-04: Improvement badge pulse glow */
-  @keyframes pulseGreen {
-    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-    50% { box-shadow: 0 0 8px 4px rgba(22, 163, 74, 0.2); }
-    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
-  }
-  .inline-flex.text-green-600 {
-    animation: pulseGreen 1.2s ease-out 0.6s 1 both;
-  }
-
-  /* ANIM-05: Chart area fade-in + slide-up */
-  @keyframes chartFade {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-chart-fade {
-    animation: chartFade 0.4s ease-out both;
-  }
-
-  /* ANIM-06: Video card stagger slide-in */
-  @keyframes videoSlide {
-    from { opacity: 0; transform: translateX(-10px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  .animate-video-slide {
-    animation: videoSlide 0.35s ease-out both;
-  }
-
-  /* Logo pulse animation for loading states */
   .animate-logo-pulse {
     animation: logo-pulse 2s ease-in-out infinite;
   }
@@ -393,11 +628,76 @@
     0%, 100% { opacity: 0.3; transform: scale(1); }
     50% { opacity: 0.6; transform: scale(1.05); }
   }
+
+  /* ========================================
+     M3 Sticky Nav Enhancement
+     ======================================== */
+
+  .sticky-nav {
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    transition: box-shadow var(--md-dur-medium2) var(--md-ease-standard);
+  }
+  .sticky-nav.is-scrolled {
+    box-shadow: var(--md-elevation-2);
+  }
+
+  /* Nav tab button — M3 state layer */
+  .nav-tab {
+    position: relative;
+    overflow: hidden;
+    transition:
+      color var(--md-dur-short3) var(--md-ease-standard),
+      background-color var(--md-dur-short3) var(--md-ease-standard),
+      transform var(--md-dur-short2) var(--md-ease-standard);
+  }
+  .nav-tab:active {
+    transform: scale(0.96);
+  }
+
+  /* ========================================
+     M3 Collapsible Content Transition
+     ======================================== */
+
+  .collapsible-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition:
+      grid-template-rows var(--md-dur-medium4) var(--md-ease-emphasized-decel),
+      opacity var(--md-dur-medium2) var(--md-ease-standard);
+  }
+  .collapsible-content.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .collapsible-content > * {
+    overflow: hidden;
+  }
 }
 
+/* ========================================
+   Accessibility: Reduced Motion
+   ======================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .section-fade-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ========================================
+   Print Styles
+   ======================================== */
+
 @media print {
-  /* ========== アコーディオン全開制御 ========== */
-  /* shadcn/ui Accordion（Radix UI）のアニメーションと高さ制限を無効化 */
   [data-state="closed"] > [role="region"],
   .accordion-content,
   [data-radix-collapsible-content] {
@@ -407,42 +707,29 @@
     visibility: visible !important;
     opacity: 1 !important;
   }
-
-  /* 開閉ボタン（Trigger）内のアイコンは非表示 */
   [data-radix-collection-item] svg,
   .accordion-icon,
   [role="button"] svg {
     display: none !important;
   }
-
-  /* ========== 改ページ制御 ========== */
-  /* 動画カード、分析セクション、アコーディオンコンテンツは途中で改ページしない */
   .video-card,
   .analysis-section,
   [role="region"],
   .accordion-item {
     page-break-inside: avoid;
   }
-
-  /* テーブル行の分割を防止 */
   tr {
     page-break-inside: avoid;
   }
-
-  /* ========== ページマージン・サイズ ========== */
   @page {
     margin: 1cm;
     size: A4;
   }
-
-  /* ========== 背景色・テキスト色 ========== */
   body {
     background: white;
     color: black;
     font-family: 'Noto Sans JP', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   }
-
-  /* グラフ・スコアボックスの背景色を保持 */
   [class*="bg-"],
   [class*="gradient"],
   .card,
@@ -450,38 +737,35 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-
-  /* ========== ヘッダー/フッター ========== */
-  /* ページ番号は Puppeteer の displayHeaderFooter で自動付与 */
   header,
   nav {
     display: none !important;
   }
-
-  /* ========== 不要な要素を非表示 ========== */
   .no-print,
   button,
   [role="button"],
   .btn-group {
     display: none !important;
   }
-
-  /* ========== リンク色 ========== */
   a {
     color: black;
     text-decoration: underline;
   }
-
-  /* ========== 画像・グラフの最適化 ========== */
   img,
   canvas,
   svg {
     max-width: 100%;
     page-break-inside: avoid;
   }
-
-  /* ========== 日本語フォント指定 ========== */
   * {
     font-family: 'Noto Sans JP', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  }
+  /* Disable all animations/shadows for print */
+  [data-slot="card"] {
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  [data-slot="card"]::after {
+    display: none !important;
   }
 }

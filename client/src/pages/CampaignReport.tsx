@@ -628,6 +628,15 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
   bigKeywords?: string[];
   campaign?: any;
 }) {
+  // Tab-based view state
+  const [kwViewMode, setKwViewMode] = useState<"video" | "keyword">("video");
+  const [videoViewExpanded, setVideoViewExpanded] = useState(false);
+  const [kwCardExpanded, setKwCardExpanded] = useState<Set<string>>(new Set());
+  const [closedKwCards, setClosedKwCards] = useState<Set<string>>(new Set());
+
+  const VIDEO_VIEW_LIMIT = 5;
+  const KW_VIDEO_LIMIT = 5;
+
   // 公式アカウント（ownAccountIds）
   const officialAccountIds = useMemo(() => {
     const ids = new Set<string>();
@@ -642,6 +651,16 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
     }
     return ids;
   }, [campaign]);
+
+  // coverUrl map: videoId → coverUrl from ownVideoData
+  const coverUrlMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const v of campaign?.ownVideoData || []) {
+      if (v.videoId && v.coverUrl) map.set(v.videoId, v.coverUrl);
+    }
+    return map;
+  }, [campaign]);
+
   // 全KW × 各動画の行を統合
   type VideoRow = { keyword: string; kwType: "施策KW" | "ビッグKW"; username: string; description: string; rank: number | null; viewCount: number; videoId: string };
   const allRows: VideoRow[] = [];
@@ -667,41 +686,70 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
     }
   }
 
-  // 全KW名を収集（色決定用）
+  // 全KW名を収集
   const allKwList: Array<{ keyword: string; kwType: string }> = [];
   const kwSeen = new Set<string>();
   for (const r of allRows) {
     if (!kwSeen.has(r.keyword)) { kwSeen.add(r.keyword); allKwList.push({ keyword: r.keyword, kwType: r.kwType }); }
   }
-  // KW色パレット（施策KW=青系、ビッグKW=緑系）
-  const blueShades = ["#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"];
-  const greenShades = ["#22c55e", "#4ade80", "#86efac", "#bbf7d0"];
-  let bIdx = 0, gIdx = 0;
-  const kwColorMap: Record<string, string> = {};
-  for (const kw of allKwList) {
-    if (kw.kwType === "ビッグKW") { kwColorMap[kw.keyword] = greenShades[gIdx % greenShades.length]; gIdx++; }
-    else { kwColorMap[kw.keyword] = blueShades[bIdx % blueShades.length]; bIdx++; }
-  }
 
-  // 動画別グラフ: videos付き（新データ）→ X軸=動画, 各KWバー
+  // Rank tier helper (モック準拠: top=1-3, mid=4-10, low=11-20, bad=21+)
+  const rankTier = (rank: number | null): "top" | "mid" | "low" | "bad" | null => {
+    if (rank == null || rank > 30) return null;
+    if (rank <= 3) return "top";
+    if (rank <= 10) return "mid";
+    if (rank <= 20) return "low";
+    return "bad";
+  };
+  const chipCls = (t: "top" | "mid" | "low" | "bad" | null) => {
+    switch (t) {
+      case "top": return "bg-green-100 text-green-800";
+      case "mid": return "bg-blue-100 text-blue-800";
+      case "low": return "bg-yellow-100 text-yellow-800";
+      case "bad": return "bg-red-100 text-red-800";
+      default: return "bg-slate-50 text-slate-400";
+    }
+  };
+  const pillCls = chipCls; // 同じ色体系
+  const barFillCls = (t: "top" | "mid" | "low" | "bad" | null) => {
+    switch (t) {
+      case "top": return "bg-green-500";
+      case "mid": return "bg-blue-500";
+      case "low": return "bg-yellow-400";
+      case "bad": return "bg-red-400";
+      default: return "bg-slate-200";
+    }
+  };
+  const bestCls = (rank: number) => {
+    if (rank <= 1) return "text-yellow-600";
+    if (rank <= 2) return "text-slate-500";
+    if (rank <= 3) return "text-orange-600";
+    return "text-slate-400";
+  };
+
+  // 動画別ビュー: ユニーク動画ごとにKWランクを集約
+  const videoViewData = useMemo(() => {
+    const vMap = new Map<string, { username: string; description: string; videoId: string; kwRanks: Record<string, number | null> }>();
+    for (const r of allRows) {
+      if (!r.username || !r.videoId) continue;
+      const key = r.videoId || r.username;
+      if (!vMap.has(key)) {
+        vMap.set(key, { username: r.username, description: r.description, videoId: r.videoId, kwRanks: {} });
+      }
+      const entry = vMap.get(key)!;
+      const existing = entry.kwRanks[r.keyword];
+      if (existing == null || (r.rank != null && r.rank < existing)) {
+        entry.kwRanks[r.keyword] = r.rank;
+      }
+    }
+    return [...vMap.values()].sort((a, b) => {
+      const bestA = Math.min(...Object.values(a.kwRanks).filter((v): v is number => v != null && v <= 30), 999);
+      const bestB = Math.min(...Object.values(b.kwRanks).filter((v): v is number => v != null && v <= 30), 999);
+      return bestA - bestB;
+    });
+  }, [allRows, allKwList]);
+
   const hasVideoData = allRows.some(r => r.username !== "");
-  // ユニーク動画リスト
-  const videoMap = new Map<string, { username: string; description: string }>();
-  for (const r of allRows) {
-    if (!r.username) continue;
-    if (!videoMap.has(r.username)) videoMap.set(r.username, { username: r.username, description: r.description });
-  }
-  const chartVideos = hasVideoData
-    ? [...videoMap.entries()].map(([username, info]) => {
-        const row: Record<string, any> = { label: `@${username}\n${info.description.slice(0, 10)}` };
-        for (const kw of allKwList) {
-          const match = allRows.find(r => r.username === username && r.keyword === kw.keyword && r.rank != null && r.rank <= 30);
-          row[kw.keyword] = match ? 31 - match.rank! : 0;
-          row[`${kw.keyword}_actual`] = match ? match.rank : null;
-        }
-        return row;
-      })
-    : null;
 
   // フォールバック: videos無し（旧データ）→ X軸=KW, 最上位順位バー
   const chartFallback = !hasVideoData
@@ -716,7 +764,7 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
   const yTicks = [0, 6, 11, 16, 21, 26, 30];
   const rankLabel = (v: number) => v <= 0 ? "圏外" : `${31 - v}位`;
 
-  // テーブル表示: KWごとにグループ化（同一KWは最初の行のみKW名表示）
+  // テーブル表示: KWごとにグループ化
   const tableGroups: Array<{ keyword: string; kwType: string; rows: VideoRow[] }> = [];
   const seen = new Set<string>();
   for (const r of allRows) {
@@ -726,89 +774,332 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
     }
   }
 
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">KW別検索順位</CardTitle>
-          <div className="flex items-center gap-3 flex-wrap">
-            {allKwList.map(kw => (
-              <span key={kw.keyword} className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: kwColorMap[kw.keyword] }} />
-                {kw.keyword}
-              </span>
-            ))}
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* グラフ: 新データ=動画×KW、旧データ=KW別最上位 */}
-        {chartVideos && chartVideos.length > 0 && allKwList.length > 0 && (
-          <ResponsiveContainer width="100%" height={340}>
-            <BarChart data={chartVideos} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
-              <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <RechartsTooltip content={({ active, payload, label }: any) => {
-                if (!active || !payload?.length) return null;
-                return (
-                  <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
-                    <p className="font-medium mb-1 whitespace-pre-line">{label}</p>
-                    {payload.map((entry: any, i: number) => {
-                      const actual = entry.payload[`${entry.name}_actual`];
-                      return (
-                        <div key={i} className="flex items-center gap-1.5">
-                          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                          <span className="text-muted-foreground">{entry.name}:</span>
-                          <span className="font-medium">{actual != null ? `${actual}位` : "圏外"}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              }} />
-              {allKwList.map(kw => (
-                <Bar key={kw.keyword} dataKey={kw.keyword} name={kw.keyword} fill={kwColorMap[kw.keyword]} radius={[4, 4, 0, 0]} barSize={20} />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-        {chartFallback && chartFallback.length > 0 && (
-          <ResponsiveContainer width="100%" height={340}>
-            <BarChart data={chartFallback} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
-              <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <RechartsTooltip content={({ active, payload }: any) => {
-                if (!active || !payload?.length) return null;
-                const d = payload[0]?.payload;
-                return (
-                  <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
-                    <p className="font-medium mb-1">{d?.label}</p>
-                    <div className="flex items-center gap-1.5">
-                      <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: payload[0]?.color }} />
-                      <span className="font-medium">{d?.actualRank}位</span>
-                    </div>
-                  </div>
-                );
-              }} />
-              <Bar dataKey="順位" radius={[4, 4, 0, 0]} barSize={28}>
-                {chartFallback.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.kwType === "ビッグKW" ? "#86efac" : "#93c5fd"} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+  // KW別 前後比較 data
+  const comparisonRows = useMemo(() => {
+    const rows: Array<{ keyword: string; kwType: string; beforeRank: number | null; afterRank: number | null; rankChange: number | null }> = [];
+    for (const p of positions) {
+      rows.push({
+        keyword: p.keyword,
+        kwType: "施策KW",
+        beforeRank: p.before_rank ?? null,
+        afterRank: p.after_rank ?? null,
+        rankChange: p.rank_change ?? (p.before_rank != null && p.after_rank != null ? p.before_rank - p.after_rank : null),
+      });
+    }
+    for (const item of bigKeywordReport || []) {
+      rows.push({
+        keyword: item.keyword,
+        kwType: "ビッグKW",
+        beforeRank: item.before.bestRank,
+        afterRank: item.after.bestRank,
+        rankChange: item.before.bestRank != null && item.after.bestRank != null ? item.before.bestRank - item.after.bestRank : null,
+      });
+    }
+    return rows;
+  }, [positions, bigKeywordReport]);
 
-        {/* KWごとのカード */}
-        <div className="space-y-3">
-          {tableGroups.map((group) => (
-            <KwVideoCard key={group.keyword} group={group} ownAccountIds={campaignVideoAccountIds} officialAccountIds={officialAccountIds} />
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-0">
+          <CardTitle className="text-base">KW別検索順位</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-3 space-y-4">
+          {/* タブバー（モック準拠） */}
+          {hasVideoData && (
+            <div className="flex border-b">
+              <button
+                onClick={() => setKwViewMode("video")}
+                className={`px-5 py-3 text-sm font-semibold border-b-[3px] transition-colors ${
+                  kwViewMode === "video"
+                    ? "text-blue-600 border-blue-600"
+                    : "text-slate-400 border-transparent hover:text-blue-600"
+                }`}
+              >
+                動画から見る
+                <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full font-bold ${kwViewMode === "video" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+                  {videoViewData.length}本
+                </span>
+              </button>
+              <button
+                onClick={() => setKwViewMode("keyword")}
+                className={`px-5 py-3 text-sm font-semibold border-b-[3px] transition-colors ${
+                  kwViewMode === "keyword"
+                    ? "text-blue-600 border-blue-600"
+                    : "text-slate-400 border-transparent hover:text-blue-600"
+                }`}
+              >
+                キーワードから見る
+                <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full font-bold ${kwViewMode === "keyword" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+                  {allKwList.length}個
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* ===== 動画から見る（モック準拠: # / 動画 / 最高順位 / ハッシュタグ別順位） ===== */}
+          {hasVideoData && kwViewMode === "video" && (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b-2 border-slate-200">
+                    <th className="py-2.5 pl-5 pr-2 text-left text-xs font-semibold text-slate-500 w-7"></th>
+                    <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500">動画</th>
+                    <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">最高順位</th>
+                    <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500">ハッシュタグ別順位</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(videoViewExpanded ? videoViewData : videoViewData.slice(0, VIDEO_VIEW_LIMIT)).map((v, idx) => {
+                    const videoUrl = v.username && v.videoId
+                      ? `https://www.tiktok.com/@${v.username}/video/${v.videoId}`
+                      : null;
+                    // 各KWのランクをチップに
+                    const tags = allKwList
+                      .map(kw => ({ keyword: kw.keyword, rank: v.kwRanks[kw.keyword] ?? null }))
+                      .filter(t => t.rank != null && t.rank <= 30)
+                      .sort((a, b) => a.rank! - b.rank!);
+                    const best = tags.length > 0 ? tags[0].rank! : null;
+
+                    return (
+                      <tr key={v.videoId || v.username} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                        {/* # */}
+                        <td className="py-3 pl-5 pr-2 text-xs font-bold text-slate-300">{idx + 1}</td>
+                        {/* 動画 */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <VideoThumbnail url={coverUrlMap.get(v.videoId)} className="w-10 h-14 rounded" />
+                            <div className="min-w-0">
+                              {videoUrl ? (
+                                <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-800 hover:text-blue-600 transition-colors">
+                                  @{v.username}
+                                </a>
+                              ) : (
+                                <span className="text-sm font-semibold text-slate-800">@{v.username}</span>
+                              )}
+                              <p className="text-xs text-slate-400 truncate max-w-[160px]">{v.description?.slice(0, 25)}</p>
+                            </div>
+                          </div>
+                        </td>
+                        {/* 最高順位 */}
+                        <td className="py-3 px-3 text-center">
+                          {best != null ? (
+                            <div>
+                              <span className={`text-xl font-extrabold leading-none ${bestCls(best)}`}>{best}</span>
+                              <div className="text-[10px] text-slate-400">位</div>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-slate-300">—</span>
+                          )}
+                        </td>
+                        {/* ハッシュタグ別順位チップ */}
+                        <td className="py-3 px-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            {tags.map((t, ti) => {
+                              const tier = rankTier(t.rank);
+                              return (
+                                <span
+                                  key={t.keyword}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${chipCls(tier)} ${ti === 0 ? "ring-2 ring-yellow-500/50" : ""}`}
+                                >
+                                  <span className="font-extrabold min-w-[18px] text-center">{t.rank}</span>
+                                  <span className="font-medium opacity-80">{t.keyword.length > 10 ? t.keyword.slice(0, 10) + "…" : t.keyword}</span>
+                                </span>
+                              );
+                            })}
+                            {tags.length === 0 && <span className="text-xs text-slate-300">—</span>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {videoViewData.length > VIDEO_VIEW_LIMIT && (
+                <button
+                  onClick={() => setVideoViewExpanded(!videoViewExpanded)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors mt-1 rounded-b-lg"
+                >
+                  {videoViewExpanded ? (
+                    <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
+                  ) : (
+                    <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{videoViewData.length - VIDEO_VIEW_LIMIT}件）</>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ===== キーワードから見る（モック準拠: アコーディオン + 平均順位） ===== */}
+          {hasVideoData && kwViewMode === "keyword" && (
+            <div className="space-y-3">
+              {tableGroups.map((group) => {
+                const rankedRows = group.rows.filter(r => r.rank != null && r.rank <= 30).sort((a, b) => a.rank! - b.rank!);
+                const hasRanked = rankedRows.length > 0;
+                const bestRank = hasRanked ? rankedRows[0].rank! : 999;
+                const avgRank = hasRanked ? Math.round(rankedRows.reduce((s, r) => s + r.rank!, 0) / rankedRows.length * 10) / 10 : 0;
+                const isOpen = !closedKwCards.has(group.keyword);
+                const isExpanded = kwCardExpanded.has(group.keyword);
+                const visibleRows = isExpanded ? rankedRows : rankedRows.slice(0, KW_VIDEO_LIMIT);
+                const hiddenCount = rankedRows.length - KW_VIDEO_LIMIT;
+                const bestTier = rankTier(bestRank);
+                const tierTextCls = bestTier === "top" ? "text-green-600" : bestTier === "mid" ? "text-blue-600" : bestTier === "low" ? "text-yellow-600" : "text-red-500";
+
+                return (
+                  <div key={group.keyword} className={`rounded-xl border shadow-sm overflow-hidden ${hasRanked ? "bg-white" : "bg-muted/30 border-dashed"}`}>
+                    {/* KWヘッダー */}
+                    <button
+                      onClick={() => {
+                        const next = new Set(closedKwCards);
+                        if (next.has(group.keyword)) next.delete(group.keyword);
+                        else next.add(group.keyword);
+                        setClosedKwCards(next);
+                      }}
+                      className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-bold text-[15px] text-slate-800">{group.keyword}</span>
+                        <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rankedRows.length}本</span>
+                      </div>
+                      <div className="flex items-center gap-3.5">
+                        {hasRanked && (
+                          <>
+                            <span className="text-xs text-slate-400">平均 {avgRank}位</span>
+                            <span className={`text-sm font-extrabold ${tierTextCls}`}>最高 {bestRank}位</span>
+                          </>
+                        )}
+                        {!hasRanked && <span className="text-xs text-slate-400">圏外</span>}
+                        <ChevronDown className={`h-4 w-4 text-slate-300 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                      </div>
+                    </button>
+                    {/* 動画リスト (accordion) */}
+                    {hasRanked && isOpen && (
+                      <div className="border-t border-slate-100">
+                        {visibleRows.map((r, ri) => {
+                          const tier = rankTier(r.rank);
+                          const barWidth = r.rank != null && r.rank <= 30 ? Math.max(100 - (r.rank / 27) * 100, 4) : 0;
+                          const videoUrl = r.username && r.videoId
+                            ? `https://www.tiktok.com/@${r.username}/video/${r.videoId}`
+                            : null;
+                          return (
+                            <div key={`${r.videoId || ri}`} className="grid grid-cols-[50px_1fr] items-center px-5 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                              {/* Rank pill */}
+                              <span className={`inline-flex items-center justify-center w-[42px] h-7 rounded-lg text-sm font-extrabold ${pillCls(tier)}`}>
+                                {r.rank != null ? `${r.rank}位` : "-"}
+                              </span>
+                              {/* Video info + bar */}
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <VideoThumbnail url={coverUrlMap.get(r.videoId)} className="w-8 h-11 rounded" />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {videoUrl ? (
+                                        <a href={videoUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-sm font-semibold text-slate-800 hover:text-blue-600 transition-colors truncate">
+                                          @{r.username}
+                                        </a>
+                                      ) : (
+                                        <span className="text-sm font-semibold text-slate-800 truncate">@{r.username}</span>
+                                      )}
+                                      <span className="text-xs text-slate-400 truncate">{r.description?.slice(0, 20)}</span>
+                                    </div>
+                                    {/* Bar indicator */}
+                                    <div className="mt-1 h-1 rounded-full bg-slate-100 overflow-hidden">
+                                      <div className={`h-full rounded-full transition-all duration-400 ${barFillCls(tier)}`} style={{ width: `${barWidth}%` }} />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {hiddenCount > 0 && (
+                          <button
+                            onClick={() => {
+                              const next = new Set(kwCardExpanded);
+                              if (next.has(group.keyword)) next.delete(group.keyword);
+                              else next.add(group.keyword);
+                              setKwCardExpanded(next);
+                            }}
+                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
+                          >
+                            {isExpanded ? (
+                              <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
+                            ) : (
+                              <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{hiddenCount}件）</>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Legacy fallback chart for old data without video info */}
+          {chartFallback && chartFallback.length > 0 && (
+            <ResponsiveContainer width="100%" height={340}>
+              <BarChart data={chartFallback} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
+                <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                <RechartsTooltip content={({ active, payload }: any) => {
+                  if (!active || !payload?.length) return null;
+                  const d = payload[0]?.payload;
+                  return (
+                    <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+                      <p className="font-medium mb-1">{d?.label}</p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: payload[0]?.color }} />
+                        <span className="font-medium">{d?.actualRank}位</span>
+                      </div>
+                    </div>
+                  );
+                }} />
+                <Bar dataKey="順位" radius={[4, 4, 0, 0]} barSize={28}>
+                  {chartFallback.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.kwType === "ビッグKW" ? "#86efac" : "#93c5fd"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* KW別 前後比較 */}
+      {hasBaseline && comparisonRows.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">KW別 前後比較</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y">
+              {comparisonRows.map((row) => (
+                <div key={row.keyword} className="flex items-center justify-between py-4 px-5">
+                  <div className="flex items-center gap-2.5">
+                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${row.kwType === "ビッグKW" ? "bg-green-400" : "bg-blue-400"}`} />
+                    <span className="font-medium text-sm">{row.keyword}</span>
+                    {row.kwType === "ビッグKW" && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-green-700 border-green-300 bg-green-50">ビッグKW</Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-400">{row.beforeRank != null ? `${row.beforeRank}位` : "圏外"}</span>
+                    <span className="text-muted-foreground">&rarr;</span>
+                    <span className="text-sm font-semibold text-blue-600">{row.afterRank != null ? `${row.afterRank}位` : "圏外"}</span>
+                    <span className="w-16 text-right">
+                      <ChangeIndicator value={row.rankChange} suffix="位" />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -1272,13 +1563,77 @@ interface SlotData {
   cover_url?: string;
 }
 
-function SovSlotCell({ slot, maxViewCount }: { slot: SlotData; maxViewCount: number }) {
-  const ownerBg = slot.owner === "own" ? "bg-blue-500" : slot.owner === "competitor" ? "bg-orange-400" : "bg-slate-400";
-  const opacity = maxViewCount > 0 ? 0.3 + 0.7 * (slot.view_count / maxViewCount) : 0.5;
-  const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
+// SOV slot visual config — color accent per ownership type
+const SOV_SLOT_CONFIG = {
+  official: {
+    // Top cap label
+    capBg: "bg-blue-600",
+    capText: "text-white",
+    capLabel: "公式",
+    // Left accent bar
+    accentBar: "bg-blue-500",
+    // Rank badge
+    rankBg: "bg-blue-600",
+    rankText: "text-white",
+    // Card wrapper
+    wrapperBorder: "border-blue-400",
+    wrapperShadow: "shadow-[0_4px_16px_rgba(59,130,246,0.35)]",
+    // Empty thumbnail fallback
+    emptyBg: "bg-blue-50",
+    emptyText: "text-blue-300",
+  },
+  campaign: {
+    capBg: "bg-purple-600",
+    capText: "text-white",
+    capLabel: "施策",
+    accentBar: "bg-purple-500",
+    rankBg: "bg-purple-600",
+    rankText: "text-white",
+    wrapperBorder: "border-purple-400",
+    wrapperShadow: "shadow-[0_4px_16px_rgba(147,51,234,0.35)]",
+    emptyBg: "bg-purple-50",
+    emptyText: "text-purple-300",
+  },
+  competitor: {
+    capBg: "bg-orange-500",
+    capText: "text-white",
+    capLabel: "競合",
+    accentBar: "bg-orange-400",
+    rankBg: "bg-black/50",
+    rankText: "text-white",
+    wrapperBorder: "border-orange-300",
+    wrapperShadow: "shadow-sm",
+    emptyBg: "bg-orange-50",
+    emptyText: "text-orange-300",
+  },
+  other: {
+    capBg: "",
+    capText: "",
+    capLabel: "",
+    accentBar: "",
+    rankBg: "bg-black/40",
+    rankText: "text-white",
+    wrapperBorder: "border-slate-200",
+    wrapperShadow: "shadow-none",
+    emptyBg: "bg-slate-100",
+    emptyText: "text-slate-300",
+  },
+};
 
-  const ownerBadgeKey = slot.owner === "own" ? slot.owner_detail : slot.owner === "competitor" ? "competitor" : null;
-  const ownerBadge = ownerBadgeKey ? OWNER_LABEL_CONFIG[ownerBadgeKey] : null;
+function SovSlotCell({ slot }: { slot: SlotData; maxViewCount: number }) {
+  const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
+  const isOwn = slot.owner === "own";
+  const isCompetitor = slot.owner === "competitor";
+
+  const configKey: keyof typeof SOV_SLOT_CONFIG = isOwn
+    ? (slot.owner_detail === "campaign" ? "campaign" : "official")
+    : isCompetitor ? "competitor" : "other";
+  const cfg = SOV_SLOT_CONFIG[configKey];
+  const isLabeled = isOwn || isCompetitor;
+
+  // 自社=大サイズ（9:16比維持）、その他=通常サイズ
+  const cardW = isOwn ? "w-20" : "w-16";
+  const thumbH = isOwn ? "h-[142px]" : "h-[114px]";
 
   return (
     <Tooltip>
@@ -1287,56 +1642,64 @@ function SovSlotCell({ slot, maxViewCount }: { slot: SlotData; maxViewCount: num
           href={slot.video_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="relative w-16 h-24 cursor-pointer transition-all duration-200 hover:scale-110 hover:z-10 group"
+          className={`relative flex flex-col ${cardW} shrink-0 cursor-pointer transition-all duration-200 hover:scale-110 hover:z-10 group`}
           onClick={(e) => { e.stopPropagation(); }}
         >
-          {/* Colored card behind (peek layer) — opacity = view count */}
-          <div className={`absolute inset-0 rounded-md ${ownerBg}`} style={{ opacity }} />
+          {/* トップキャップ: 公式/施策/競合 ラベル */}
+          {isLabeled && cfg.capLabel ? (
+            <div className={`${cfg.capBg} ${cfg.capText} text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0`}>
+              {cfg.capLabel}
+            </div>
+          ) : (
+            <div className="h-[14px] shrink-0" />
+          )}
 
-          {/* Thumbnail inset: 1px sides, 1px top, 4px bottom peek */}
-          <div className="absolute top-[1px] left-[1px] right-[1px] bottom-[4px] rounded-sm overflow-hidden bg-slate-100">
+          {/* サムネイル */}
+          <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-slate-200/70"}`}>
+            {/* 左アクセントバー */}
+            {isLabeled && (
+              <div className={`absolute top-0 left-0 bottom-0 w-[3px] ${cfg.accentBar} z-10`} />
+            )}
+
             {slot.cover_url ? (
               <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
             ) : (
-              <div className={`w-full h-full flex items-center justify-center ${ownerBg}`} style={{ opacity: 0.3 }}>
-                <span className="text-lg text-white/60">{slot.rank}</span>
+              <div className={`w-full h-full flex items-center justify-center ${cfg.emptyBg}`}>
+                <span className={`text-lg font-bold ${cfg.emptyText}`}>{slot.rank}</span>
               </div>
             )}
 
-            {/* Rank number - top left on thumbnail */}
-            <span className="absolute top-0 left-0.5 text-[9px] font-bold text-white z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{slot.rank}</span>
-
-            {/* Genre text tag - bottom of thumbnail */}
-            <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 ${genreInfo.cls}`}>
-              {genreInfo.label}
+            {/* 順位バッジ */}
+            <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${cfg.rankBg} ${cfg.rankText}`}>
+              {slot.rank}
             </span>
 
-            {/* TikTok label dots */}
+            {/* TikTokラベルドット（プロモーション/有償/AI） */}
             {slot.tiktok_labels.length > 0 && (
-              <div className="absolute top-0 right-0.5 flex gap-0.5 z-10">
+              <div className="absolute top-1 left-1 flex gap-0.5 z-20">
                 {slot.tiktok_labels.map(label => {
-                  const cfg = TIKTOK_LABEL_CONFIG[label];
-                  return cfg ? <span key={label} className={`w-1.5 h-1.5 rounded-full ${cfg.dot} shadow-sm`} /> : null;
+                  const lCfg = TIKTOK_LABEL_CONFIG[label];
+                  return lCfg ? <span key={label} className={`w-2 h-2 rounded-full ${lCfg.dot} shadow-sm ring-1 ring-white/50`} /> : null;
                 })}
               </div>
             )}
-          </div>
 
-          {/* Owner label badge - floating above */}
-          {ownerBadge && (
-            <span className={`absolute -top-2 left-1/2 -translate-x-1/2 text-[7px] px-1 py-0 rounded border whitespace-nowrap z-10 ${ownerBadge.cls}`}>
-              {ownerBadge.text}
+            {/* ジャンルタグ */}
+            <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 z-10 ${genreInfo.cls}`}>
+              {genreInfo.label}
             </span>
-          )}
+          </div>
         </a>
       </TooltipTrigger>
       <TooltipContent side="top" className="max-w-xs bg-white text-foreground border shadow-lg p-3 space-y-1.5">
         <div className="flex items-center gap-1.5">
           <span className="font-semibold text-xs">#{slot.rank}</span>
           <span className="text-xs text-blue-600">@{slot.creator_username}</span>
-          {ownerBadge && <span className={`text-[9px] px-1 rounded border ${ownerBadge.cls}`}>{ownerBadge.text}</span>}
-          {slot.owner === "competitor" && slot.owner_name && (
-            <span className="text-[9px] text-orange-600">({slot.owner_name})</span>
+          {isOwn && cfg.capLabel && (
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
+          )}
+          {isCompetitor && slot.owner_name && (
+            <span className="text-[9px] text-orange-600 font-medium">競合: {slot.owner_name}</span>
           )}
         </div>
         <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
@@ -1348,11 +1711,10 @@ function SovSlotCell({ slot, maxViewCount }: { slot: SlotData; maxViewCount: num
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
           {slot.tiktok_labels.map(label => {
-            const cfg = TIKTOK_LABEL_CONFIG[label];
-            return cfg ? (
+            const lCfg = TIKTOK_LABEL_CONFIG[label];
+            return lCfg ? (
               <span key={label} className="inline-flex items-center gap-1 text-[9px]">
-                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                {cfg.text}
+                <span className={`w-2 h-2 rounded-full ${lCfg.dot}`} />{lCfg.text}
               </span>
             ) : null;
           })}
@@ -1392,43 +1754,34 @@ function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: 
 
   const renderSlotRow = (slots: SlotData[], label: string) => {
     const padded = padSlots(slots);
+    const ownCount = slots.filter(s => s.owner === "own").length;
+
+    const renderSlot = (slot: SlotData | null, idx: number) =>
+      slot ? (
+        <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
+      ) : (
+        <div key={`empty-${idx}`} className="relative flex flex-col w-16 shrink-0">
+          <div className="h-[14px] shrink-0" />
+          <div className="w-full h-[114px] rounded-md border border-dashed border-slate-200/50 flex items-center justify-center">
+            <span className="text-[9px] text-slate-200">{idx + 1}</span>
+          </div>
+        </div>
+      );
+
     return (
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         {hasBaseline && (
           <span className="text-[9px] text-slate-400 w-8 shrink-0 text-right">{label}</span>
         )}
-        <div className="flex items-center gap-0.5">
-          {/* Top 5 zone with highlight */}
-          <div className="flex items-center gap-0.5 rounded-md bg-amber-50/60 px-0.5 py-0.5">
-            {padded.slice(0, 5).map((slot, i) =>
-              slot ? (
-                <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
-              ) : (
-                <div key={`empty-${i}`} className="w-16 h-24 rounded-md border border-dashed border-slate-200 flex items-center justify-center">
-                  <span className="text-[9px] text-slate-300">{i + 1}</span>
-                </div>
-              )
-            )}
-          </div>
-          {/* Slots 6-10 */}
-          <div className="flex items-center gap-0.5 opacity-75">
-            {padded.slice(5, 10).map((slot, i) =>
-              slot ? (
-                <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
-              ) : (
-                <div key={`empty-${i + 5}`} className="w-16 h-24 rounded-md border border-dashed border-slate-200 flex items-center justify-center">
-                  <span className="text-[9px] text-slate-300">{i + 6}</span>
-                </div>
-              )
-            )}
-          </div>
+        <div className="flex items-end gap-1.5">
+          {padded.map((slot, i) => renderSlot(slot, i))}
         </div>
-        {/* Counts */}
-        <div className="flex flex-col items-end shrink-0 ml-2 gap-0.5">
-          <span className="text-xs font-semibold text-blue-600">{slots.filter(s => s.owner === "own").length}<span className="text-slate-400 font-normal">/10</span></span>
-          {slots.filter(s => s.owner === "competitor").length > 0 && (
-            <span className="text-[10px] text-orange-500">競合{slots.filter(s => s.owner === "competitor").length}</span>
-          )}
+        {/* 自社カウント — 占有率を直感的に見せるミニバー */}
+        <div className="shrink-0 ml-3 flex flex-col items-center gap-0.5">
+          <span className="text-lg font-bold text-blue-600">{ownCount}<span className="text-xs font-normal text-slate-400">/10</span></span>
+          <div className="w-10 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${ownCount * 10}%` }} />
+          </div>
         </div>
       </div>
     );
@@ -1436,19 +1789,21 @@ function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: 
 
   return (
     <div className="rounded-lg border bg-white">
-      {/* KW Header */}
-      <div className={`flex items-center gap-2 px-3 py-2 border-b ${isBigKeyword ? "bg-gradient-to-r from-amber-50/80 to-slate-50/80" : "bg-slate-50/80"}`}>
-        <Search className={`h-3.5 w-3.5 ${isBigKeyword ? "text-amber-600" : "text-muted-foreground"}`} />
-        <span className="font-medium text-sm">{keyword}</span>
+      {/* KWヘッダー — キーワード名 + 自社占有バー */}
+      <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${isBigKeyword ? "bg-gradient-to-r from-amber-50/80 to-slate-50/80" : "bg-slate-50/80"}`}>
+        <Search className={`h-3.5 w-3.5 ${isBigKeyword ? "text-amber-600" : "text-slate-400"}`} />
+        <span className="font-semibold text-sm">{keyword}</span>
         {isBigKeyword && <Badge className="text-[9px] px-1 py-0 h-4 bg-amber-100 text-amber-700 border-amber-300">ビッグKW</Badge>}
-        <div className="ml-auto flex items-center gap-2">
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5">
-            {afterSov.own_count}/{afterSov.total_count}本 ({afterSov.percentage}%)
-          </Badge>
+        <div className="ml-auto flex items-center gap-2.5">
+          {/* ミニ占有バー + 数値 */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${(afterOwnCount / 10) * 100}%` }} />
+            </div>
+            <span className="text-sm font-bold text-blue-600">{afterOwnCount}<span className="text-xs font-normal text-slate-400">/10</span></span>
+          </div>
           {hasBaseline && ownChange !== 0 && (
-            <span className={`text-[10px] font-medium ${ownChange > 0 ? "text-green-600" : "text-red-500"}`}>
-              {ownChange > 0 ? "+" : ""}{ownChange}
-            </span>
+            <ChangeIndicator value={ownChange} suffix="本" />
           )}
         </div>
       </div>
@@ -1500,31 +1855,54 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">検索結果占有マップ</CardTitle>
-          <CardDescription className="text-xs">各KWの検索Top10をサムネイルで可視化。裏カード色=所有者、濃淡=再生数、タグ=ジャンル</CardDescription>
+          <CardDescription className="text-xs">各KWの検索Top10をサムネイルで可視化。タグ=ジャンル</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
 
-          {/* === Summary Banner === */}
+          {/* === サマリー — 直感的な占有率表示 === */}
           {chartData.length > 0 && (
-            <div className="rounded-xl border bg-gradient-to-br from-slate-50 via-blue-50/30 to-slate-50 p-4">
-              <div className="flex items-center gap-5">
-                <div className="flex flex-col items-center gap-1 shrink-0">
-                  <div className="text-3xl font-bold text-blue-600">{avgPct}<span className="text-lg text-blue-400">%</span></div>
-                  <span className="text-[10px] font-medium text-slate-500">平均シェア率</span>
+            <div className="rounded-xl border bg-gradient-to-br from-blue-50/40 to-slate-50 p-5">
+              <div className="flex items-center gap-6">
+                {/* 大きな占有率 */}
+                <div className="shrink-0 text-center">
+                  <div className="text-4xl font-extrabold text-blue-600">{avgPct}<span className="text-xl text-blue-400">%</span></div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">上位10件中の自社割合</p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">自社Top10</p>
-                      <p className="text-xl font-bold text-blue-600">{ownInTop10}<span className="text-sm font-normal text-slate-400">本</span></p>
+                {/* 内訳 */}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden flex">
+                      <div className="h-full bg-blue-500 transition-all" style={{ width: `${totalScanned > 0 ? (totalOwn / totalScanned) * 100 : 0}%` }} />
                     </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">対象KW数</p>
-                      <p className="text-xl font-bold text-slate-800">{chartData.length}<span className="text-sm font-normal text-slate-400">KW</span></p>
+                    <span className="text-sm font-bold text-blue-600">{totalOwn}</span>
+                    <span className="text-xs text-slate-400">/ {totalScanned}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                    <div className="flex items-center gap-1.5">
+                      {/* Mini replica of the official cap+bar indicator */}
+                      <span className="flex flex-col items-center gap-px shrink-0">
+                        <span className="w-3 h-1.5 rounded-t bg-blue-600" />
+                        <span className="w-3 h-4 rounded-b border-2 border-blue-400 flex items-center justify-center">
+                          <span className="w-0.5 h-full bg-blue-500 rounded" />
+                        </span>
+                      </span>
+                      <span className="text-slate-600">公式</span>
+                      <span className="font-bold text-blue-600 ml-auto">{allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length}本</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase tracking-wide">競合Top10</p>
-                      <p className="text-xl font-bold text-orange-500">{compInTop10}<span className="text-sm font-normal text-slate-400">本</span></p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex flex-col items-center gap-px shrink-0">
+                        <span className="w-3 h-1.5 rounded-t bg-purple-600" />
+                        <span className="w-3 h-4 rounded-b border-2 border-purple-400 flex items-center justify-center">
+                          <span className="w-0.5 h-full bg-purple-500 rounded" />
+                        </span>
+                      </span>
+                      <span className="text-slate-600">施策</span>
+                      <span className="font-bold text-purple-600 ml-auto">{allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length}本</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-5 rounded border border-slate-200 bg-slate-100 shrink-0" />
+                      <span className="text-slate-600">その他</span>
+                      <span className="font-bold text-slate-500 ml-auto">{allAfterSlots.filter(s => s.owner !== "own").length}本</span>
                     </div>
                   </div>
                 </div>
@@ -1532,14 +1910,8 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
             </div>
           )}
 
-          {/* === Legend === */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 border rounded-lg px-3 py-2 bg-slate-50/50">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-blue-500/70" /> 自社</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-orange-400/70" /> 競合</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-400/70" /> その他</span>
-            <span className="text-slate-300">|</span>
-            <span>裏カードが濃い=再生数多い</span>
-            <span className="text-slate-300">|</span>
+          {/* ジャンル + TikTokラベル凡例 */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
             {Object.entries(GENRE_CONFIG).map(([key, { label, cls }]) => (
               <span key={key} className={`px-1 rounded text-[9px] ${cls}`}>{label}</span>
             ))}
@@ -1778,9 +2150,19 @@ function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; camp
 
       {/* Top third-party videos (all tags combined) */}
       {(() => {
-        const allVideos = entries.flatMap(([, data]) =>
+        const allVideosRaw = entries.flatMap(([, data]) =>
           (data.third_party_videos || data.omaage_videos || [])
-        ).sort((a: any, b: any) => (b.views || 0) - (a.views || 0)).slice(0, 5);
+        );
+        const seenVideoUrls = new Set<string>();
+        const allVideos = allVideosRaw
+          .sort((a: any, b: any) => (b.views || 0) - (a.views || 0))
+          .filter((v: any) => {
+            const key = v.video_url || v.video_id || `${v.creator}-${v.description}`;
+            if (seenVideoUrls.has(key)) return false;
+            seenVideoUrls.add(key);
+            return true;
+          })
+          .slice(0, 5);
         return allVideos.length > 0 && (
           <Card>
             <CardHeader className="pb-2">

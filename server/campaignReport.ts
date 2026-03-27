@@ -42,12 +42,15 @@ function buildSlots(
     let ownerDetail: SovSlot["owner_detail"] = undefined;
     let ownerName: string | undefined = undefined;
 
-    if (isOwnAccount) {
+    if (isOwnAccount || isCampaignVideo) {
       owner = "own";
-      ownerDetail = "official";
-    } else if (isCampaignVideo) {
-      owner = "own";
-      ownerDetail = "campaign";
+      if (isOwnAccount && isCampaignVideo) {
+        ownerDetail = ["official", "campaign"];
+      } else if (isOwnAccount) {
+        ownerDetail = "official";
+      } else {
+        ownerDetail = "campaign";
+      }
     } else if (competitorName != null) {
       owner = "competitor";
       ownerName = competitorName;
