@@ -11,6 +11,7 @@ import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Vid
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
+import { detectPlatform, platformLabel } from "@shared/videoUrl";
 
 function extractTikTokUsername(input: string): string | null {
   const trimmed = input.trim();
@@ -373,7 +374,14 @@ export default function CampaignDetail() {
                       <img src={v.coverUrl} alt="" className="w-16 h-20 rounded object-cover flex-shrink-0" loading="lazy" />
                     )}
                     <div className="min-w-0 flex-1 text-xs">
-                      <p className="font-medium truncate">{v.description?.slice(0, 40) || v.videoId}</p>
+                      <div className="flex items-center gap-1.5">
+                        {v.platform && v.platform !== "tiktok" && (
+                          <Badge variant="outline" className={`text-[9px] px-1 py-0 ${
+                            v.platform === "youtube" ? "border-red-300 text-red-600" : "border-purple-300 text-purple-600"
+                          }`}>{platformLabel(v.platform)}</Badge>
+                        )}
+                        <p className="font-medium truncate">{v.title || v.description?.slice(0, 40) || v.videoId}</p>
+                      </div>
                       <p className="text-muted-foreground">@{v.authorUniqueId}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-muted-foreground">
                         <span>{(v.viewCount || 0).toLocaleString()} 再生</span>
@@ -474,6 +482,7 @@ function PostCampaignRegistration({
 }) {
   const [videoUrl, setVideoUrl] = useState("");
   const [accountUrl, setAccountUrl] = useState("");
+  const [satelliteUrl, setSatelliteUrl] = useState("");
   const [competitorUrl, setCompetitorUrl] = useState("");
 
   const updateMutation = trpc.campaign.update.useMutation({
@@ -487,8 +496,8 @@ function PostCampaignRegistration({
     const lines = videoUrl.split("\n").map(s => s.trim()).filter(Boolean);
     if (lines.length === 0) { toast.error("URLを入力してください"); return; }
 
-    const invalid = lines.filter(u => !u.includes("tiktok.com"));
-    if (invalid.length > 0) { toast.error(`TikTok以外のURLが${invalid.length}件あります`); return; }
+    const invalid = lines.filter(u => detectPlatform(u) === null);
+    if (invalid.length > 0) { toast.error(`対応していないURLが${invalid.length}件あります（TikTok/YouTube/Instagram対応）`); return; }
 
     const existing = new Set((campaign.ownVideoUrls as string[]) || []);
     const newUrls = lines.filter(u => !existing.has(u));
@@ -530,6 +539,30 @@ function PostCampaignRegistration({
     });
   };
 
+  const handleAddSatellites = () => {
+    const lines = satelliteUrl.split("\n").map(s => s.trim()).filter(Boolean);
+    if (lines.length === 0) { toast.error("アカウントを入力してください"); return; }
+
+    const parsed = lines.map(l => extractTikTokUsername(l));
+    const invalid = lines.filter((_, i) => !parsed[i]);
+    if (invalid.length > 0) { toast.error(`解析できないアカウントが${invalid.length}件あります`); return; }
+
+    const validIds = parsed.filter(Boolean) as string[];
+    const existing = new Set(((campaign as any).satelliteAccountIds as string[]) || []);
+    const newIds = validIds.filter(id => !existing.has(id));
+    if (newIds.length === 0) { toast.error("全て登録済みのアカウントです"); return; }
+
+    updateMutation.mutate({
+      id: campaignId,
+      satelliteAccountIds: [...existing, ...newIds],
+    }, {
+      onSuccess: () => {
+        toast.success(`${newIds.length}件のサテライトアカウントを追加しました`);
+        setSatelliteUrl("");
+      },
+    });
+  };
+
   const handleAddCompetitors = () => {
     const lines = competitorUrl.split("\n").map(s => s.trim()).filter(Boolean);
     if (lines.length === 0) { toast.error("競合アカウントを入力してください"); return; }
@@ -556,6 +589,7 @@ function PostCampaignRegistration({
   };
 
   const accountLines = accountUrl.split("\n").map(s => s.trim()).filter(Boolean);
+  const satelliteLines = satelliteUrl.split("\n").map(s => s.trim()).filter(Boolean);
   const competitorLines = competitorUrl.split("\n").map(s => s.trim()).filter(Boolean);
 
   return (
@@ -572,22 +606,43 @@ function PostCampaignRegistration({
         {/* 施策動画 */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">施策動画URL（1行1URL）</Label>
+          {((campaign.ownVideoUrls as string[]) || []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {((campaign.ownVideoUrls as string[]) || []).map((url, i) => {
+              const plat = detectPlatform(url);
+              const platColors = plat === "youtube" ? "bg-red-50 text-red-700 border-red-200"
+                : plat === "instagram" ? "bg-purple-50 text-purple-700 border-purple-200"
+                : "bg-slate-100 text-slate-700 border-slate-200";
+              return (
+                <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${platColors}`}>
+                  {plat && <span className="font-medium">{platformLabel(plat)}</span>}
+                  <span className="truncate max-w-[200px]">{url.replace(/^https?:\/\/(www\.)?(tiktok|youtube|instagram)\.com\//, "").slice(0, 35)}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = ((campaign.ownVideoUrls as string[]) || []).filter((_, idx) => idx !== i);
+                      updateMutation.mutate({ id: campaignId, ownVideoUrls: updated }, {
+                        onSuccess: () => { toast.success("動画URLを削除しました"); onRefetch(); },
+                      });
+                    }}
+                    disabled={updateMutation.isPending}
+                    className="hover:text-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+              })}
+            </div>
+          )}
           <Textarea
             value={videoUrl}
             onChange={e => setVideoUrl(e.target.value)}
-            placeholder={"https://www.tiktok.com/@user/video/123...\nhttps://www.tiktok.com/@user2/video/456..."}
+            placeholder={"https://www.tiktok.com/@user/video/123...\nhttps://www.youtube.com/watch?v=...\nhttps://www.instagram.com/reel/..."}
             rows={4}
             className="bg-white"
           />
-          <div className="flex items-center justify-between">
-            <div className="text-xs text-muted-foreground">
-              {(campaign.ownVideoUrls as string[])?.length > 0 && (
-                <span>{(campaign.ownVideoUrls as string[]).length}件登録済み</span>
-              )}
-              {videoUrl.trim() && (
-                <span className="ml-2">+ {videoUrl.split("\n").map(s => s.trim()).filter(Boolean).length}件入力中</span>
-              )}
-            </div>
+          <div className="flex items-center justify-end">
             <Button
               size="sm"
               onClick={handleAddVideos}
@@ -601,6 +656,28 @@ function PostCampaignRegistration({
         {/* 自社アカウント */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">自社アカウント追加（1行1アカウント）</Label>
+          {((campaign.ownAccountIds as string[]) || []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {((campaign.ownAccountIds as string[]) || []).map((id, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  @{id}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = ((campaign.ownAccountIds as string[]) || []).filter((_, idx) => idx !== i);
+                      updateMutation.mutate({ id: campaignId, ownAccountIds: updated }, {
+                        onSuccess: () => { toast.success("アカウントを削除しました"); onRefetch(); },
+                      });
+                    }}
+                    disabled={updateMutation.isPending}
+                    className="hover:text-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <Textarea
             value={accountUrl}
             onChange={e => setAccountUrl(e.target.value)}
@@ -621,11 +698,7 @@ function PostCampaignRegistration({
               })}
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {(campaign.ownAccountIds as string[])?.length > 0 && `${(campaign.ownAccountIds as string[]).length}件登録済み`}
-              {accountLines.length > 0 && <span className="ml-2">+ {accountLines.length}件入力中</span>}
-            </p>
+          <div className="flex items-center justify-end">
             <Button
               size="sm"
               onClick={handleAddAccounts}
@@ -636,9 +709,87 @@ function PostCampaignRegistration({
           </div>
         </div>
 
+        {/* サテライトアカウント */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">サテライトアカウント追加（1行1アカウント）</Label>
+          {(((campaign as any).satelliteAccountIds as string[]) || []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {(((campaign as any).satelliteAccountIds as string[]) || []).map((id, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
+                  @{id}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = (((campaign as any).satelliteAccountIds as string[]) || []).filter((_, idx) => idx !== i);
+                      updateMutation.mutate({ id: campaignId, satelliteAccountIds: updated }, {
+                        onSuccess: () => { toast.success("サテライトアカウントを削除しました"); onRefetch(); },
+                      });
+                    }}
+                    disabled={updateMutation.isPending}
+                    className="hover:text-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <Textarea
+            value={satelliteUrl}
+            onChange={e => setSatelliteUrl(e.target.value)}
+            placeholder={"https://www.tiktok.com/@satellite1\n@satellite2"}
+            rows={3}
+            className="bg-white"
+          />
+          {satelliteLines.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {satelliteLines.map((line, i) => {
+                const parsed = extractTikTokUsername(line);
+                return (
+                  <span key={i} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${parsed ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-600 border border-red-200"}`}>
+                    {parsed ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    {parsed ? `@${parsed}` : line.slice(0, 30)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center justify-end">
+            <Button
+              size="sm"
+              onClick={handleAddSatellites}
+              disabled={updateMutation.isPending || !satelliteUrl.trim()}
+            >
+              {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "一括追加"}
+            </Button>
+          </div>
+        </div>
+
         {/* 競合追加 */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">競合追加（1行1アカウント）</Label>
+          {((campaign.competitors as any[]) || []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {((campaign.competitors as any[]) || []).map((c: any, i) => (
+                <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">
+                  @{c.account_id}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = ((campaign.competitors as any[]) || []).filter((_, idx) => idx !== i);
+                      updateMutation.mutate({ id: campaignId, competitors: updated }, {
+                        onSuccess: () => { toast.success("競合を削除しました"); onRefetch(); },
+                      });
+                    }}
+                    disabled={updateMutation.isPending}
+                    className="hover:text-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <Textarea
             value={competitorUrl}
             onChange={e => setCompetitorUrl(e.target.value)}
@@ -659,11 +810,7 @@ function PostCampaignRegistration({
               })}
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              {(campaign.competitors as any[])?.length > 0 && `${(campaign.competitors as any[]).length}件登録済み`}
-              {competitorLines.length > 0 && <span className="ml-2">+ {competitorLines.length}件入力中</span>}
-            </p>
+          <div className="flex items-center justify-end">
             <Button
               size="sm"
               onClick={handleAddCompetitors}

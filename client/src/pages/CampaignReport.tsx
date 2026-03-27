@@ -5,13 +5,17 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, ReferenceArea, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, ReferenceArea, Cell, AreaChart, Area } from "recharts";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 // ============================
 // Utilities
@@ -56,7 +60,8 @@ const gradeColors: Record<string, string> = {
 
 const SECTIONS = [
   { id: "summary", label: "総合", icon: Brain },
-  { id: "videos", label: "動画", icon: Eye },
+  { id: "platform", label: "全媒体", icon: Layers },
+  { id: "videos", label: "TikTok", icon: Eye },
   { id: "keyword", label: "順位・露出", icon: Search },
   { id: "sov", label: "シェア率", icon: BarChart3 },
   { id: "competitor", label: "競合", icon: Users },
@@ -76,9 +81,11 @@ export default function CampaignReport() {
 
   const campaignQuery = trpc.campaign.getById.useQuery({ id: campaignId }, { enabled: campaignId > 0 });
   const reportQuery = trpc.campaign.getReport.useQuery({ campaignId }, { enabled: campaignId > 0 });
+  const dailyMetricsQuery = trpc.campaign.getDailyMetrics.useQuery({ campaignId }, { enabled: campaignId > 0 });
 
   const campaign = campaignQuery.data?.campaign;
   const report = reportQuery.data;
+  const dailyMetrics = dailyMetricsQuery.data || [];
 
   const [activeSection, setActiveSection] = useState("summary");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -124,6 +131,60 @@ export default function CampaignReport() {
       toast.error("CSVエクスポートに失敗しました");
     }
   };
+
+  const regenerateMutation = trpc.campaign.generateReport.useMutation({
+    onSuccess: () => {
+      toast.success("レポートを再生成しました");
+      reportQuery.refetch();
+    },
+    onError: () => {
+      toast.error("レポート再生成に失敗しました");
+    },
+  });
+
+  const utils = trpc.useUtils();
+  const updateSlotMutation = trpc.campaign.updateSovSlot.useMutation({
+    onError: () => {
+      toast.error("スロット更新に失敗しました");
+      reportQuery.refetch();
+    },
+  });
+
+  const handleSlotUpdate = useCallback((
+    keyword: string,
+    phase: "before" | "after",
+    videoId: string,
+    changes: { owner?: string; owner_detail?: string; owner_name?: string; genre?: string; tiktok_labels?: string[] },
+  ) => {
+    // Optimistic update
+    utils.campaign.getReport.setData({ campaignId }, (old: any) => {
+      if (!old?.sovReport) return old;
+      const sovReport = { ...old.sovReport };
+      const kwData = { ...sovReport[keyword] };
+      const slotsKey = phase === "before" ? "before_slots" : "after_slots";
+      const slots = [...(kwData[slotsKey] || [])];
+      const idx = slots.findIndex((s: any) => s.video_id === videoId);
+      if (idx === -1) return old;
+      const slot = { ...slots[idx], ...changes };
+      if (slot.owner !== "own") delete slot.owner_detail;
+      if (slot.owner !== "competitor") delete slot.owner_name;
+      slots[idx] = slot;
+      kwData[slotsKey] = slots;
+      // Recalculate counts
+      const ownCount = slots.filter((s: any) => s.owner === "own").length;
+      kwData[phase] = { ...kwData[phase], own_count: ownCount, total_count: slots.length, percentage: ((ownCount / slots.length) * 100).toFixed(1) };
+      sovReport[keyword] = kwData;
+      return { ...old, sovReport };
+    });
+
+    updateSlotMutation.mutate({
+      campaignId,
+      keyword,
+      videoId,
+      phase,
+      changes: changes as any,
+    });
+  }, [campaignId, utils, updateSlotMutation]);
 
   // --- All hooks MUST be above early returns ---
   const videoMetrics = (report as any)?.videoMetricsReport as any[] | undefined;
@@ -235,14 +296,24 @@ export default function CampaignReport() {
   const aiReport = (report as any).aiOverallReport as any | undefined;
   const bigKeywordReport = (report as any).bigKeywordReport as Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; competitors?: Array<{ competitor_name: string; competitor_id: string; best_rank: number | null; video_count_in_top30: number; before_best_rank: number | null; before_video_count_in_top30: number; rank_change: number | null }> }> | undefined;
 
+  const platformSummary = (report as any).platformSummary as {
+    youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+  } | undefined;
+
   const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
   const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0);
   const hasBigKW = bigKeywordReport && bigKeywordReport.length > 0;
   const hasCompetitors = campaign?.competitors && campaign.competitors.length > 0;
+  const hasYoutube = platformSummary?.youtube && platformSummary.youtube.videos.length > 0;
+  const hasInstagram = platformSummary?.instagram && platformSummary.instagram.videos.length > 0;
+  const hasMultiPlatform = hasYoutube || hasInstagram;
+  const hasAnyPlatformData = hasVideoMetrics || hasYoutube || hasInstagram;
 
   // Filter visible sections
   const visibleSections = SECTIONS.filter(s => {
+    if (s.id === "platform" && !hasAnyPlatformData) return false;
     if (s.id === "videos" && !hasVideoMetrics) return false;
     if (s.id === "competitor" && !hasCompetitors) return false;
     if (s.id === "cross" && !hasCrossPlatform) return false;
@@ -277,10 +348,22 @@ export default function CampaignReport() {
               </div>
             </div>
           </div>
-          <Button variant="outline" onClick={handleCsvExport} className="gap-2">
-            <Download className="h-4 w-4" />
-            CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => regenerateMutation.mutate({ campaignId })}
+              disabled={regenerateMutation.isPending}
+              className="gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+              {regenerateMutation.isPending ? "再生成中…" : "レポート再生成"}
+            </Button>
+            <Button variant="outline" onClick={handleCsvExport} className="gap-2">
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+          </div>
         </div>
 
         {/* Sticky Navigation */}
@@ -319,13 +402,26 @@ export default function CampaignReport() {
               </CardContent>
             </Card>
           )}
-          {summary && <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={(report as any)?.sovReport} campaignStart={campaignStart} campaignEnd={campaignEnd} />}
         </div>
 
-        {/* Section: Videos */}
+        {/* Section: Multi-Platform Summary */}
+        {/* Section: All-Platform Summary */}
+        {hasAnyPlatformData && (
+          <div id="platform" ref={el => { sectionRefs.current["platform"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("platform")} title="全媒体横断サマリー" question="全プラットフォームの合計は？" />
+            <PlatformSummarySection
+              tiktokVideos={videoMetrics || []}
+              platformSummary={platformSummary || {}}
+              dailyMetrics={dailyMetrics}
+            />
+          </div>
+        )}
+
+        {/* Section: TikTok Videos */}
         {hasVideoMetrics && (
           <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
-            <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question="投稿した動画の状況は？" />
+            <SectionHeader number={sectionNumber("videos")} title="TikTok 施策動画パフォーマンス" question="TikTok動画の状況は？" />
+            <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} campaignStart={campaignStart} campaignEnd={campaignEnd} />
             <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
           </div>
         )}
@@ -339,7 +435,7 @@ export default function CampaignReport() {
         {/* Section: SOV */}
         <div id="sov" ref={el => { sectionRefs.current["sov"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("sov")} title="検索上位シェア率" question="どのKWにどの動画が露出した？" />
-          <SovSection sovReport={sovReport} positions={positions} hasBaseline={hasBaseline} campaign={campaign} />
+          <SovSection sovReport={sovReport} positions={positions} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} />
         </div>
 
         {/* Section: Competitor */}
@@ -413,7 +509,7 @@ function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, sovReport
   summary: any; thirdPartyCount: number; hasBaseline: boolean; ripple?: Record<string, any>; sovReport?: Record<string, any>; campaignStart?: string; campaignEnd?: string;
 }) {
   const fmtAvgRank = (count: number | undefined, rank: number | null | undefined) => {
-    if (rank == null || !count) return "圏外";
+    if (rank == null || rank === 0 || !count) return "圏外";
     return `${count}ワード ${rank}位`;
   };
 
@@ -442,7 +538,9 @@ function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, sovReport
         title: "平均検索順位",
         before: fmtAvgRank(summary.total_keyword_count, summary.avg_rank_before),
         after: fmtAvgRank(summary.ranked_keyword_count, summary.avg_rank_after),
-        change: summary.avg_rank_before != null && summary.avg_rank_after != null
+        change: summary.avg_rank_after != null && summary.avg_rank_after > 0 && summary.avg_rank_before === 0
+          ? <span className="text-green-600 font-medium flex items-center gap-0.5"><TrendingUp className="h-3.5 w-3.5" />圏外→{summary.avg_rank_after}位</span>
+          : summary.avg_rank_before != null && summary.avg_rank_before > 0 && summary.avg_rank_after != null && summary.avg_rank_after > 0
           ? <ChangeIndicator value={Number((summary.avg_rank_before - summary.avg_rank_after).toFixed(1))} suffix="位" />
           : null,
       },
@@ -512,7 +610,7 @@ function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, sovReport
 
 const INITIAL_SHOW = 5;
 
-function KwVideoCard({ group, ownAccountIds, officialAccountIds }: { group: { keyword: string; kwType: string; rows: Array<{ keyword: string; kwType: string; username: string; description: string; rank: number | null; viewCount: number; videoId: string }> }; ownAccountIds: Set<string>; officialAccountIds: Set<string> }) {
+function KwVideoCard({ group, ownAccountIds, officialAccountIds, satelliteAccountIds }: { group: { keyword: string; kwType: string; rows: Array<{ keyword: string; kwType: string; username: string; description: string; rank: number | null; viewCount: number; videoId: string }> }; ownAccountIds: Set<string>; officialAccountIds: Set<string>; satelliteAccountIds: Set<string> }) {
   const [expanded, setExpanded] = useState(false);
   const rankedRows = group.rows.filter(r => r.rank != null && r.rank <= 30);
   const hasRanked = rankedRows.length > 0;
@@ -563,16 +661,20 @@ function KwVideoCard({ group, ownAccountIds, officialAccountIds }: { group: { ke
                     {r.username ? (() => {
                       const uLower = r.username.toLowerCase();
                       const isOfficial = officialAccountIds.has(uLower);
-                      const isCampaign = !isOfficial && ownAccountIds.has(uLower);
+                      const isSatellite = !isOfficial && satelliteAccountIds.has(uLower);
+                      const isCampaign = !isOfficial && !isSatellite && ownAccountIds.has(uLower);
                       return (
                         <>
                           {isOfficial && (
                             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-blue-300 text-blue-700 bg-blue-50">公式</Badge>
                           )}
+                          {isSatellite && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-teal-300 text-teal-700 bg-teal-50">サテライト</Badge>
+                          )}
                           {isCampaign && (
                             <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-purple-300 text-purple-700 bg-purple-50">施策</Badge>
                           )}
-                          <span className={`font-medium ${isOfficial ? "text-blue-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>@{r.username}</span>
+                          <span className={`font-medium ${isOfficial ? "text-blue-700" : isSatellite ? "text-teal-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>@{r.username}</span>
                           {r.description && <span className="text-muted-foreground ml-0.5 truncate">{r.description}</span>}
                         </>
                       );
@@ -641,6 +743,12 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
   const officialAccountIds = useMemo(() => {
     const ids = new Set<string>();
     for (const id of campaign?.ownAccountIds || []) ids.add(id.toLowerCase());
+    return ids;
+  }, [campaign]);
+  // サテライトアカウント
+  const satelliteAccountIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of (campaign as any)?.satelliteAccountIds || []) ids.add(id.toLowerCase());
     return ids;
   }, [campaign]);
   // 施策動画投稿者（ownVideoDataのauthor、公式アカウント除く）
@@ -1076,7 +1184,7 @@ function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bi
           </CardHeader>
           <CardContent>
             <div className="divide-y">
-              {comparisonRows.map((row) => (
+              {comparisonRows.filter(row => row.afterRank != null).map((row) => (
                 <div key={row.keyword} className="flex items-center justify-between py-4 px-5">
                   <div className="flex items-center gap-2.5">
                     <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${row.kwType === "ビッグKW" ? "bg-green-400" : "bg-blue-400"}`} />
@@ -1534,6 +1642,7 @@ const GENRE_CONFIG: Record<string, { label: string; cls: string }> = {
 
 const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
   official: { text: "公式", cls: "bg-blue-100 text-blue-700 border-blue-300" },
+  satellite: { text: "サテライト", cls: "bg-teal-100 text-teal-700 border-teal-300" },
   campaign: { text: "施策", cls: "bg-purple-100 text-purple-700 border-purple-300" },
   competitor: { text: "競合", cls: "bg-orange-100 text-orange-700 border-orange-300" },
 };
@@ -1557,7 +1666,7 @@ interface SlotData {
   share_count: number;
   owner: "own" | "competitor" | "other";
   owner_name?: string;
-  owner_detail?: "official" | "campaign";
+  owner_detail?: "official" | "satellite" | "campaign";
   genre: string;
   tiktok_labels: string[];
   cover_url?: string;
@@ -1581,6 +1690,18 @@ const SOV_SLOT_CONFIG = {
     // Empty thumbnail fallback
     emptyBg: "bg-blue-50",
     emptyText: "text-blue-300",
+  },
+  satellite: {
+    capBg: "bg-teal-600",
+    capText: "text-white",
+    capLabel: "サテライト",
+    accentBar: "bg-teal-500",
+    rankBg: "bg-teal-600",
+    rankText: "text-white",
+    wrapperBorder: "border-teal-400",
+    wrapperShadow: "shadow-[0_4px_16px_rgba(20,184,166,0.35)]",
+    emptyBg: "bg-teal-50",
+    emptyText: "text-teal-300",
   },
   campaign: {
     capBg: "bg-purple-600",
@@ -1620,13 +1741,175 @@ const SOV_SLOT_CONFIG = {
   },
 };
 
-function SovSlotCell({ slot }: { slot: SlotData; maxViewCount: number }) {
+// Owner key maps to owner + owner_detail combo
+type OwnerKey = "official" | "satellite" | "campaign" | "competitor" | "other";
+function slotToOwnerKey(slot: SlotData): OwnerKey {
+  if (slot.owner === "own") return (slot.owner_detail as OwnerKey) || "official";
+  if (slot.owner === "competitor") return "competitor";
+  return "other";
+}
+function ownerKeyToChanges(key: OwnerKey): { owner: "own" | "competitor" | "other"; owner_detail?: string } {
+  if (key === "official" || key === "satellite" || key === "campaign") return { owner: "own", owner_detail: key };
+  if (key === "competitor") return { owner: "competitor" };
+  return { owner: "other" };
+}
+
+const OWNER_KEY_OPTIONS: { key: OwnerKey; label: string; color: string; activeBg: string }[] = [
+  { key: "official", label: "公式", color: "text-blue-700", activeBg: "bg-blue-100 border-blue-400 ring-1 ring-blue-300" },
+  { key: "satellite", label: "サテライト", color: "text-teal-700", activeBg: "bg-teal-100 border-teal-400 ring-1 ring-teal-300" },
+  { key: "campaign", label: "施策", color: "text-purple-700", activeBg: "bg-purple-100 border-purple-400 ring-1 ring-purple-300" },
+  { key: "competitor", label: "競合", color: "text-orange-700", activeBg: "bg-orange-100 border-orange-400 ring-1 ring-orange-300" },
+  { key: "other", label: "その他", color: "text-slate-600", activeBg: "bg-slate-100 border-slate-400 ring-1 ring-slate-300" },
+];
+
+const GENRE_OPTIONS: { key: string; label: string }[] = [
+  { key: "recommend", label: "レコメンド" },
+  { key: "howto", label: "How-to" },
+  { key: "entertainment", label: "エンタメ" },
+  { key: "negative", label: "ネガティブ" },
+  { key: "other", label: "その他" },
+];
+
+function SovSlotEditForm({ slot, onSave, onCancel }: {
+  slot: SlotData;
+  onSave: (changes: { owner: string; owner_detail?: string; owner_name?: string; genre: string; tiktok_labels: string[] }) => void;
+  onCancel: () => void;
+}) {
+  const [ownerKey, setOwnerKey] = useState<OwnerKey>(slotToOwnerKey(slot));
+  const [ownerName, setOwnerName] = useState(slot.owner_name || "");
+  const [genre, setGenre] = useState(slot.genre || "other");
+  const [labels, setLabels] = useState<string[]>([...(slot.tiktok_labels || [])]);
+
+  const toggleLabel = (l: string) => setLabels(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
+
+  const handleSave = () => {
+    const base = ownerKeyToChanges(ownerKey);
+    onSave({
+      ...base,
+      owner_name: ownerKey === "competitor" ? ownerName : undefined,
+      genre,
+      tiktok_labels: labels,
+    });
+  };
+
+  return (
+    <div className="space-y-3 w-56">
+      {/* Header */}
+      <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
+        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">スロット編集</span>
+        <span className="text-[10px] text-slate-300">@{slot.creator_username}</span>
+      </div>
+
+      {/* Owner classification */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-slate-500">分類</Label>
+        <div className="flex flex-wrap gap-1">
+          {OWNER_KEY_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setOwnerKey(opt.key)}
+              className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
+                ownerKey === opt.key
+                  ? `${opt.activeBg} ${opt.color}`
+                  : "border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {ownerKey === "competitor" && (
+          <Input
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            placeholder="競合名"
+            className="h-7 text-xs mt-1"
+          />
+        )}
+      </div>
+
+      {/* Genre */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-slate-500">ジャンル</Label>
+        <div className="flex flex-wrap gap-1">
+          {GENRE_OPTIONS.map(opt => {
+            const gi = GENRE_CONFIG[opt.key] || GENRE_CONFIG.other;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setGenre(opt.key)}
+                className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
+                  genre === opt.key
+                    ? `${gi.cls} border-transparent`
+                    : "border-slate-200 text-slate-400 hover:border-slate-300"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* TikTok labels */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-slate-500">ラベル</Label>
+        <div className="space-y-1">
+          {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, cfg]) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer group/lbl">
+              <Checkbox
+                checked={labels.includes(key)}
+                onCheckedChange={() => toggleLabel(key)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="flex items-center gap-1 text-[11px] text-slate-600 group-hover/lbl:text-slate-800">
+                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                {cfg.text}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          className="h-7 text-xs px-3 gap-1"
+        >
+          <Check className="h-3 w-3" />
+          保存
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-7 text-xs px-2 text-slate-400"
+        >
+          キャンセル
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SovSlotCell({ slot, keyword, phase, onSlotUpdate }: {
+  slot: SlotData;
+  maxViewCount: number;
+  keyword: string;
+  phase: "before" | "after";
+  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
   const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
   const isOwn = slot.owner === "own";
   const isCompetitor = slot.owner === "competitor";
 
   const configKey: keyof typeof SOV_SLOT_CONFIG = isOwn
-    ? (slot.owner_detail === "campaign" ? "campaign" : "official")
+    ? (slot.owner_detail === "campaign" ? "campaign" : slot.owner_detail === "satellite" ? "satellite" : "official")
     : isCompetitor ? "competitor" : "other";
   const cfg = SOV_SLOT_CONFIG[configKey];
   const isLabeled = isOwn || isCompetitor;
@@ -1636,99 +1919,130 @@ function SovSlotCell({ slot }: { slot: SlotData; maxViewCount: number }) {
   const thumbH = isOwn ? "h-[142px]" : "h-[114px]";
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <a
-          href={slot.video_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`relative flex flex-col ${cardW} shrink-0 cursor-pointer transition-all duration-200 hover:scale-110 hover:z-10 group`}
+    <Popover open={editOpen} onOpenChange={setEditOpen}>
+    <div className={`relative flex flex-col ${cardW} shrink-0 group/slot`}>
+      {/* 鉛筆ボタン — ホバー時に表示 */}
+      <PopoverTrigger asChild>
+        <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); }}
+          className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center
+            transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-lg
+            ${editOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/slot:opacity-100 group-hover/slot:scale-100 group-hover/slot:pointer-events-auto"}`}
         >
-          {/* トップキャップ: 公式/施策/競合 ラベル */}
-          {isLabeled && cfg.capLabel ? (
-            <div className={`${cfg.capBg} ${cfg.capText} text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0`}>
-              {cfg.capLabel}
-            </div>
-          ) : (
-            <div className="h-[14px] shrink-0" />
-          )}
+          <Pencil className="h-2.5 w-2.5 text-slate-500" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <SovSlotEditForm
+          slot={slot}
+          onSave={(changes) => {
+            onSlotUpdate(keyword, phase, slot.video_id, changes);
+            setEditOpen(false);
+            toast.success("スロットを更新しました");
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      </PopoverContent>
 
-          {/* サムネイル */}
-          <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-slate-200/70"}`}>
-            {/* 左アクセントバー */}
-            {isLabeled && (
-              <div className={`absolute top-0 left-0 bottom-0 w-[3px] ${cfg.accentBar} z-10`} />
-            )}
-
-            {slot.cover_url ? (
-              <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+      {/* カード本体 */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <a
+            href={slot.video_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`relative flex flex-col cursor-pointer transition-all duration-200 ${editOpen ? "" : "hover:scale-110 hover:z-10"}`}
+            onClick={(e) => { if (editOpen) { e.preventDefault(); } e.stopPropagation(); }}
+          >
+            {/* トップキャップ: 公式/施策/競合 ラベル */}
+            {isLabeled && cfg.capLabel ? (
+              <div className={`${cfg.capBg} ${cfg.capText} text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0`}>
+                {cfg.capLabel}
+              </div>
             ) : (
-              <div className={`w-full h-full flex items-center justify-center ${cfg.emptyBg}`}>
-                <span className={`text-lg font-bold ${cfg.emptyText}`}>{slot.rank}</span>
-              </div>
+              <div className="h-[14px] shrink-0" />
             )}
 
-            {/* 順位バッジ */}
-            <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${cfg.rankBg} ${cfg.rankText}`}>
-              {slot.rank}
-            </span>
+            {/* サムネイル */}
+            <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-slate-200/70"}`}>
+              {/* 左アクセントバー */}
+              {isLabeled && (
+                <div className={`absolute top-0 left-0 bottom-0 w-[3px] ${cfg.accentBar} z-10`} />
+              )}
 
-            {/* TikTokラベルドット（プロモーション/有償/AI） */}
-            {slot.tiktok_labels.length > 0 && (
-              <div className="absolute top-1 left-1 flex gap-0.5 z-20">
-                {slot.tiktok_labels.map(label => {
-                  const lCfg = TIKTOK_LABEL_CONFIG[label];
-                  return lCfg ? <span key={label} className={`w-2 h-2 rounded-full ${lCfg.dot} shadow-sm ring-1 ring-white/50`} /> : null;
-                })}
-              </div>
-            )}
+              {slot.cover_url ? (
+                <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+              ) : (
+                <div className={`w-full h-full flex items-center justify-center ${cfg.emptyBg}`}>
+                  <span className={`text-lg font-bold ${cfg.emptyText}`}>{slot.rank}</span>
+                </div>
+              )}
 
-            {/* ジャンルタグ */}
-            <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 z-10 ${genreInfo.cls}`}>
-              {genreInfo.label}
-            </span>
-          </div>
-        </a>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs bg-white text-foreground border shadow-lg p-3 space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="font-semibold text-xs">#{slot.rank}</span>
-          <span className="text-xs text-blue-600">@{slot.creator_username}</span>
-          {isOwn && cfg.capLabel && (
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
-          )}
-          {isCompetitor && slot.owner_name && (
-            <span className="text-[9px] text-orange-600 font-medium">競合: {slot.owner_name}</span>
-          )}
-        </div>
-        <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
-        <div className="flex items-center gap-3 text-[10px] text-slate-500">
-          <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
-          <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(slot.like_count)}</span>
-          <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(slot.comment_count)}</span>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
-          {slot.tiktok_labels.map(label => {
-            const lCfg = TIKTOK_LABEL_CONFIG[label];
-            return lCfg ? (
-              <span key={label} className="inline-flex items-center gap-1 text-[9px]">
-                <span className={`w-2 h-2 rounded-full ${lCfg.dot}`} />{lCfg.text}
+              {/* 順位バッジ */}
+              <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${cfg.rankBg} ${cfg.rankText}`}>
+                {slot.rank}
               </span>
-            ) : null;
-          })}
-        </div>
-      </TooltipContent>
-    </Tooltip>
+
+              {/* TikTokラベルドット（プロモーション/有償/AI） */}
+              {slot.tiktok_labels.length > 0 && (
+                <div className="absolute top-1 left-1 flex gap-0.5 z-20">
+                  {slot.tiktok_labels.map(label => {
+                    const lCfg = TIKTOK_LABEL_CONFIG[label];
+                    return lCfg ? <span key={label} className={`w-2 h-2 rounded-full ${lCfg.dot} shadow-sm ring-1 ring-white/50`} /> : null;
+                  })}
+                </div>
+              )}
+
+              {/* ジャンルタグ */}
+              <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 z-10 ${genreInfo.cls}`}>
+                {genreInfo.label}
+              </span>
+            </div>
+          </a>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs bg-white text-foreground border shadow-lg p-3 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-xs">#{slot.rank}</span>
+            <span className="text-xs text-blue-600">@{slot.creator_username}</span>
+            {isOwn && cfg.capLabel && (
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
+            )}
+            {isCompetitor && slot.owner_name && (
+              <span className="text-[9px] text-orange-600 font-medium">競合: {slot.owner_name}</span>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
+          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+            <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
+            <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(slot.like_count)}</span>
+            <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(slot.comment_count)}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
+            {slot.tiktok_labels.map(label => {
+              const lCfg = TIKTOK_LABEL_CONFIG[label];
+              return lCfg ? (
+                <span key={label} className="inline-flex items-center gap-1 text-[9px]">
+                  <span className={`w-2 h-2 rounded-full ${lCfg.dot}`} />{lCfg.text}
+                </span>
+              ) : null;
+            })}
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </div>
+    </Popover>
   );
 }
 
-function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: {
+function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false, campaignId, onSlotUpdate }: {
   keyword: string;
   data: any;
   hasBaseline: boolean;
   isBigKeyword?: boolean;
+  campaignId: number;
+  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
 }) {
   const afterSlots: SlotData[] = data.after_slots || [];
   const beforeSlots: SlotData[] = data.before_slots || [];
@@ -1752,13 +2066,13 @@ function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: 
     return result;
   };
 
-  const renderSlotRow = (slots: SlotData[], label: string) => {
+  const renderSlotRow = (slots: SlotData[], label: string, phase: "before" | "after") => {
     const padded = padSlots(slots);
     const ownCount = slots.filter(s => s.owner === "own").length;
 
     const renderSlot = (slot: SlotData | null, idx: number) =>
       slot ? (
-        <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} />
+        <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} keyword={keyword} phase={phase} onSlotUpdate={onSlotUpdate} />
       ) : (
         <div key={`empty-${idx}`} className="relative flex flex-col w-16 shrink-0">
           <div className="h-[14px] shrink-0" />
@@ -1811,8 +2125,8 @@ function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: 
       <div className="px-3 py-2.5 space-y-2">
         {afterSlots.length > 0 ? (
           <>
-            {hasBaseline && beforeSlots.length > 0 && renderSlotRow(beforeSlots, "前")}
-            {renderSlotRow(afterSlots, hasBaseline ? "後" : "")}
+            {hasBaseline && beforeSlots.length > 0 && renderSlotRow(beforeSlots, "前", "before")}
+            {renderSlotRow(afterSlots, hasBaseline ? "後" : "", "after")}
           </>
         ) : (
           <div className="text-xs text-muted-foreground italic py-1">スロットデータなし</div>
@@ -1822,11 +2136,13 @@ function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false }: 
   );
 }
 
-function SovSection({ sovReport, positions, hasBaseline, campaign }: {
+function SovSection({ sovReport, positions, hasBaseline, campaign, campaignId, onSlotUpdate }: {
   sovReport: Record<string, any>;
   positions: any[];
   hasBaseline: boolean;
   campaign?: any;
+  campaignId: number;
+  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
 }) {
   const sovEntries = Object.entries(sovReport);
 
@@ -1859,56 +2175,89 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
         </CardHeader>
         <CardContent className="space-y-5">
 
-          {/* === サマリー — 直感的な占有率表示 === */}
-          {chartData.length > 0 && (
-            <div className="rounded-xl border bg-gradient-to-br from-blue-50/40 to-slate-50 p-5">
-              <div className="flex items-center gap-6">
-                {/* 大きな占有率 */}
-                <div className="shrink-0 text-center">
-                  <div className="text-4xl font-extrabold text-blue-600">{avgPct}<span className="text-xl text-blue-400">%</span></div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">上位10件中の自社割合</p>
-                </div>
-                {/* 内訳 */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden flex">
-                      <div className="h-full bg-blue-500 transition-all" style={{ width: `${totalScanned > 0 ? (totalOwn / totalScanned) * 100 : 0}%` }} />
+          {/* === サマリー — M3 segmented bar + chips === */}
+          {chartData.length > 0 && (() => {
+            const officialCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
+            const satelliteCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
+            const campaignCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
+            const othersCount = allAfterSlots.filter(s => s.owner !== "own").length;
+            const totalSlots = officialCount + satelliteCount + campaignCount + othersCount;
+            const officialPct = totalSlots > 0 ? (officialCount / totalSlots) * 100 : 0;
+            const satellitePct = totalSlots > 0 ? (satelliteCount / totalSlots) * 100 : 0;
+            const campaignPct = totalSlots > 0 ? (campaignCount / totalSlots) * 100 : 0;
+            const othersPct = totalSlots > 0 ? (othersCount / totalSlots) * 100 : 0;
+            return (
+              <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/80 to-white p-5 space-y-4">
+                {/* Hero metric row */}
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 tracking-wide uppercase mb-1">自社シェア率</p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[42px] leading-none font-extrabold tracking-tight text-blue-600">{avgPct}</span>
+                      <span className="text-lg font-bold text-blue-400">%</span>
                     </div>
-                    <span className="text-sm font-bold text-blue-600">{totalOwn}</span>
-                    <span className="text-xs text-slate-400">/ {totalScanned}</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      {/* Mini replica of the official cap+bar indicator */}
-                      <span className="flex flex-col items-center gap-px shrink-0">
-                        <span className="w-3 h-1.5 rounded-t bg-blue-600" />
-                        <span className="w-3 h-4 rounded-b border-2 border-blue-400 flex items-center justify-center">
-                          <span className="w-0.5 h-full bg-blue-500 rounded" />
-                        </span>
-                      </span>
-                      <span className="text-slate-600">公式</span>
-                      <span className="font-bold text-blue-600 ml-auto">{allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length}本</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="flex flex-col items-center gap-px shrink-0">
-                        <span className="w-3 h-1.5 rounded-t bg-purple-600" />
-                        <span className="w-3 h-4 rounded-b border-2 border-purple-400 flex items-center justify-center">
-                          <span className="w-0.5 h-full bg-purple-500 rounded" />
-                        </span>
-                      </span>
-                      <span className="text-slate-600">施策</span>
-                      <span className="font-bold text-purple-600 ml-auto">{allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length}本</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-5 rounded border border-slate-200 bg-slate-100 shrink-0" />
-                      <span className="text-slate-600">その他</span>
-                      <span className="font-bold text-slate-500 ml-auto">{allAfterSlots.filter(s => s.owner !== "own").length}本</span>
-                    </div>
+                  <div className="text-right pb-1">
+                    <p className="text-sm text-slate-600">
+                      全{chartData.length}キーワードの上位10件中
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      計<span className="font-bold text-slate-600 mx-0.5">{totalOwn}</span>件 / {totalScanned}件が自社動画
+                    </p>
+                  </div>
+                </div>
+
+                {/* M3 Segmented stacked bar */}
+                <div className="space-y-2">
+                  <div
+                    className="flex h-3 rounded-full overflow-hidden bg-slate-100"
+                    role="img"
+                    aria-label={`自社シェア率: 公式${officialCount}件、サテライト${satelliteCount}件、施策${campaignCount}件、その他${othersCount}件`}
+                    style={{ animation: 'sov-bar-fill 700ms var(--md-ease-emphasized-decel) both' }}
+                  >
+                    {officialCount > 0 && (
+                      <div
+                        className="h-full bg-blue-500 transition-all duration-500"
+                        style={{ width: `${officialPct}%`, minWidth: officialCount > 0 ? '4px' : 0 }}
+                      />
+                    )}
+                    {satelliteCount > 0 && (
+                      <div
+                        className="h-full bg-teal-500 transition-all duration-500"
+                        style={{ width: `${satellitePct}%`, minWidth: satelliteCount > 0 ? '4px' : 0 }}
+                      />
+                    )}
+                    {campaignCount > 0 && (
+                      <div
+                        className="h-full bg-purple-500 transition-all duration-500"
+                        style={{ width: `${campaignPct}%`, minWidth: campaignCount > 0 ? '4px' : 0 }}
+                      />
+                    )}
+                    {/* その他 is the remaining track background */}
+                  </div>
+
+                  {/* Category chips */}
+                  <div className="flex items-center gap-3">
+                    {[
+                      { label: '公式', count: officialCount, color: 'bg-blue-500', textColor: 'text-blue-700', bgChip: 'bg-blue-50' },
+                      { label: 'サテライト', count: satelliteCount, color: 'bg-teal-500', textColor: 'text-teal-700', bgChip: 'bg-teal-50' },
+                      { label: '施策', count: campaignCount, color: 'bg-purple-500', textColor: 'text-purple-700', bgChip: 'bg-purple-50' },
+                      { label: 'その他', count: othersCount, color: 'bg-slate-300', textColor: 'text-slate-600', bgChip: 'bg-slate-50' },
+                    ].map(cat => (
+                      <div
+                        key={cat.label}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${cat.bgChip} ${cat.count === 0 ? 'opacity-40' : ''}`}
+                      >
+                        <span className={`w-2 h-2 rounded-full ${cat.color} shrink-0`} />
+                        <span className={cat.textColor}>{cat.label}</span>
+                        <span className={`font-bold ${cat.textColor} tabular-nums`}>{cat.count}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ジャンル + TikTokラベル凡例 */}
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
@@ -1924,7 +2273,7 @@ function SovSection({ sovReport, positions, hasBaseline, campaign }: {
           {/* === Per-keyword Slot Maps === */}
           <div className="space-y-3">
             {sovEntries.map(([kw, data]) => (
-              <SovOccupationMap key={kw} keyword={kw} data={data} hasBaseline={hasBaseline} isBigKeyword={!!data._isBigKeyword} />
+              <SovOccupationMap key={kw} keyword={kw} data={data} hasBaseline={hasBaseline} isBigKeyword={!!data._isBigKeyword} campaignId={campaignId} onSlotUpdate={onSlotUpdate} />
             ))}
           </div>
         </CardContent>
@@ -2439,3 +2788,284 @@ function NextActionsSection({ aiReport }: { aiReport: any }) {
     </div>
   );
 }
+
+// ============================
+// 全媒体横断サマリー
+// ============================
+
+function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMetrics }: {
+  tiktokVideos: any[];
+  platformSummary: {
+    youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+  };
+  dailyMetrics: any[];
+}) {
+  const [expandedPlatforms, setExpandedPlatforms] = useState<Set<string>>(new Set());
+  const toggleExpand = (platform: string) => {
+    setExpandedPlatforms(prev => {
+      const next = new Set(prev);
+      next.has(platform) ? next.delete(platform) : next.add(platform);
+      return next;
+    });
+  };
+
+  const tiktokViews = tiktokVideos.reduce((s, v) => s + ((v.after?.viewCount) || 0), 0);
+  const tiktokLikes = tiktokVideos.reduce((s, v) => s + ((v.after?.likeCount) || 0), 0);
+  const tiktokComments = tiktokVideos.reduce((s, v) => s + ((v.after?.commentCount) || 0), 0);
+  const tiktokShares = tiktokVideos.reduce((s, v) => s + ((v.after?.shareCount) || 0), 0);
+  const tiktokSaves = tiktokVideos.reduce((s, v) => s + ((v.after?.saveCount) || 0), 0);
+
+  const ytData = platformSummary.youtube;
+  const igData = platformSummary.instagram;
+
+  const ytComments = ytData?.videos?.reduce((s: number, v: any) => s + (v.commentCount || 0), 0) || 0;
+  const igComments = igData?.videos?.reduce((s: number, v: any) => s + (v.commentCount || 0), 0) || 0;
+
+  const totalVideos = tiktokVideos.length + (ytData?.totalVideos || 0) + (igData?.totalVideos || 0);
+  const totalViews = tiktokViews + (ytData?.totalViews || 0) + (igData?.totalViews || 0);
+  const totalLikes = tiktokLikes + (ytData?.totalLikes || 0) + (igData?.totalLikes || 0);
+  const totalComments = tiktokComments + ytComments + igComments;
+  const totalEngagement = totalLikes + totalComments;
+  const avgER = totalViews > 0 ? Number((totalEngagement / totalViews * 100).toFixed(2)) : 0;
+
+  // Normalize TikTok videos into unified video format
+  const tiktokVideoList = useMemo(() =>
+    tiktokVideos
+      .map(v => ({
+        videoUrl: v.videoUrl || "",
+        channelId: v.videoUrl?.match(/@([^/]+)/)?.[1] || "",
+        caption: (v.description || "").slice(0, 10),
+        viewCount: v.after?.viewCount || 0,
+        likeCount: v.after?.likeCount || 0,
+        commentCount: v.after?.commentCount || 0,
+        shareCount: v.after?.shareCount || 0,
+        saveCount: v.after?.saveCount || 0,
+        coverUrl: v.coverUrl || "",
+      }))
+      .sort((a, b) => b.viewCount - a.viewCount),
+    [tiktokVideos],
+  );
+
+  const ytVideoList = useMemo(() =>
+    (ytData?.videos || [])
+      .map((v: any) => ({
+        videoUrl: v.videoUrl || "",
+        channelId: v.channelTitle || "",
+        caption: (v.title || "").slice(0, 10),
+        viewCount: v.viewCount || 0,
+        likeCount: v.likeCount || 0,
+        commentCount: v.commentCount || 0,
+        shareCount: null as number | null,
+        saveCount: null as number | null,
+        coverUrl: v.coverUrl || "",
+      }))
+      .sort((a: any, b: any) => b.viewCount - a.viewCount),
+    [ytData],
+  );
+
+  const igVideoList = useMemo(() =>
+    (igData?.videos || [])
+      .map((v: any) => ({
+        videoUrl: v.videoUrl || "",
+        channelId: v.ownerUsername ? `@${v.ownerUsername}` : "",
+        caption: (v.caption || "").slice(0, 10),
+        viewCount: v.viewCount || 0,
+        likeCount: v.likeCount || 0,
+        commentCount: v.commentCount || 0,
+        shareCount: null as number | null,
+        saveCount: null as number | null,
+        coverUrl: v.coverUrl || "",
+      }))
+      .sort((a: any, b: any) => b.viewCount - a.viewCount),
+    [igData],
+  );
+
+  type PlatformConfig = {
+    key: string;
+    name: string;
+    color: string;
+    badgeClass: string;
+    videos: typeof tiktokVideoList;
+    stats: { label: string; value: number }[];
+  };
+
+  const platforms: PlatformConfig[] = [
+    ...(tiktokVideos.length > 0 ? [{
+      key: "tiktok", name: "TikTok", color: "#000000", badgeClass: "bg-slate-900 text-white",
+      videos: tiktokVideoList,
+      stats: [
+        { label: "投稿数", value: tiktokVideos.length },
+        { label: "再生数", value: tiktokViews },
+        { label: "いいね", value: tiktokLikes },
+        { label: "コメント", value: tiktokComments },
+        { label: "シェア", value: tiktokShares },
+        { label: "保存", value: tiktokSaves },
+      ],
+    }] : []),
+    ...(ytData ? [{
+      key: "youtube", name: "YouTube", color: "#dc2626", badgeClass: "bg-red-600 text-white",
+      videos: ytVideoList,
+      stats: [
+        { label: "投稿数", value: ytData.totalVideos },
+        { label: "再生数", value: ytData.totalViews },
+        { label: "いいね", value: ytData.totalLikes },
+        { label: "コメント", value: ytComments },
+      ],
+    }] : []),
+    ...(igData ? [{
+      key: "instagram", name: "Instagram", color: "#9333ea", badgeClass: "bg-gradient-to-r from-purple-600 to-pink-500 text-white",
+      videos: igVideoList,
+      stats: [
+        { label: "投稿数", value: igData.totalVideos },
+        { label: "再生数", value: igData.totalViews },
+        { label: "いいね", value: igData.totalLikes },
+        { label: "コメント", value: igComments },
+      ],
+    }] : []),
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* 1. Global summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { label: "総投稿数", value: totalVideos.toString() },
+          { label: "総再生数", value: fmt(totalViews) },
+          { label: "総いいね", value: fmt(totalLikes) },
+          { label: "総コメント", value: fmt(totalComments) },
+          { label: "平均ER", value: `${avgER}%` },
+        ].map(c => (
+          <Card key={c.label}><CardContent className="py-4 text-center">
+            <p className="text-2xl font-bold">{c.value}</p>
+            <p className="text-xs text-muted-foreground mt-1">{c.label}</p>
+          </CardContent></Card>
+        ))}
+      </div>
+
+      {/* 2. Daily trends chart */}
+      <AllPlatformDailyChart dailyMetrics={dailyMetrics} />
+
+      {/* 3. Per-platform breakdown + top 5 videos */}
+      {platforms.map(p => {
+        const isExpanded = expandedPlatforms.has(p.key);
+        const displayVideos = isExpanded ? p.videos : p.videos.slice(0, 5);
+        const hasMore = p.videos.length > 5;
+
+        return (
+          <Card key={p.key} className="overflow-hidden">
+            <CardContent className="py-4 space-y-3">
+              {/* Platform header + stats */}
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`px-2.5 py-0.5 rounded text-xs font-bold ${p.badgeClass}`}>{p.name}</span>
+              </div>
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                {p.stats.map(s => (
+                  <div key={s.label} className="text-center">
+                    <p className="text-lg font-bold">{fmt(s.value)}</p>
+                    <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Video list */}
+              {p.videos.length > 0 && (
+                <div className="border-t pt-3 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">動画一覧（再生数順）</p>
+                  {displayVideos.map((v, i) => (
+                    <div key={i} className="flex gap-3 py-1.5 px-2 rounded-lg hover:bg-muted/30 transition-colors">
+                      {v.coverUrl && (
+                        <img src={v.coverUrl} alt="" className="w-10 h-14 rounded object-cover flex-shrink-0" loading="lazy" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:underline truncate text-primary">
+                            {v.caption || "動画"}
+                          </a>
+                          <ExternalLink className="h-2.5 w-2.5 text-muted-foreground flex-shrink-0" />
+                        </div>
+                        {v.channelId && (
+                          <p className="text-[10px] text-muted-foreground truncate">{v.channelId.startsWith("@") ? v.channelId : `@${v.channelId}`}</p>
+                        )}
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-muted-foreground">
+                          <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(v.viewCount)}</span>
+                          <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(v.likeCount)}</span>
+                          <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(v.commentCount)}</span>
+                          {v.shareCount != null && <span className="flex items-center gap-0.5"><Share2 className="h-3 w-3" />{fmt(v.shareCount)}</span>}
+                          {v.saveCount != null && <span className="flex items-center gap-0.5"><Bookmark className="h-3 w-3" />{fmt(v.saveCount)}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {hasMore && (
+                    <button
+                      onClick={() => toggleExpand(p.key)}
+                      className="w-full text-center py-2 text-xs text-primary hover:bg-muted/50 rounded-lg transition-colors font-medium"
+                    >
+                      {isExpanded ? "折りたたむ" : `もっと見る（残り${p.videos.length - 5}件）`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
+  const chartData = useMemo(() => {
+    if (!dailyMetrics || dailyMetrics.length === 0) return [];
+    const byDate = new Map<string, { date: string; views: number; likes: number; comments: number }>();
+    for (const m of dailyMetrics) {
+      const existing = byDate.get(m.dateKey) || { date: m.dateKey, views: 0, likes: 0, comments: 0 };
+      existing.views += m.viewCount || 0;
+      existing.likes += m.likeCount || 0;
+      existing.comments += m.commentCount || 0;
+      byDate.set(m.dateKey, existing);
+    }
+    return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }, [dailyMetrics]);
+
+  if (chartData.length < 2) return null;
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-sm">日次推移（全媒体合算）</CardTitle></CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={260}>
+          <AreaChart data={chartData}>
+            <defs>
+              <linearGradient id="gradViews" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gradLikes" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+              </linearGradient>
+              <linearGradient id="gradComments" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+            <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+            <RechartsTooltip
+              formatter={(v: number, name: string) => [fmt(v), name === "views" ? "再生数" : name === "likes" ? "いいね" : "コメント"]}
+              labelFormatter={v => v}
+            />
+            <Legend formatter={(v) => v === "views" ? "再生数" : v === "likes" ? "いいね" : "コメント"} />
+            <Area type="monotone" dataKey="views" stroke="#3b82f6" fill="url(#gradViews)" strokeWidth={2} />
+            <Area type="monotone" dataKey="likes" stroke="#ef4444" fill="url(#gradLikes)" strokeWidth={2} />
+            <Area type="monotone" dataKey="comments" stroke="#f59e0b" fill="url(#gradComments)" strokeWidth={2} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+

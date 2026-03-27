@@ -12,6 +12,7 @@
 
 import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
 import type { Campaign, InsertCampaignSnapshot } from "../drizzle/schema";
+import { detectPlatform } from "../shared/videoUrl";
 
 // =============================
 // Types
@@ -193,10 +194,14 @@ export async function captureSnapshot(
       if (v.authorUniqueId) campaignVideoAuthors.add(v.authorUniqueId.toLowerCase());
     }
   }
-  // 施策動画の判定: 自社アカウントの動画 OR 登録済み施策ビデオID
+  // サテライトアカウント
+  const satelliteAccountIds = ((campaign as any).satelliteAccountIds || []) as string[];
+  const satelliteAccountIdsLower = new Set<string>(satelliteAccountIds.map((id: string) => id.toLowerCase()));
+
+  // 施策動画の判定: 自社アカウントの動画 OR サテライト OR 登録済み施策ビデオID
   const ownAccountIdsLower = new Set<string>(ownAccountIds.map((id: string) => id.toLowerCase()));
   const isCampaignVideo = (v: NormalizedVideo): boolean =>
-    ownAccountIdsLower.has(v.creator_username.toLowerCase()) || campaignVideoIds.has(v.video_id);
+    ownAccountIdsLower.has(v.creator_username.toLowerCase()) || satelliteAccountIdsLower.has(v.creator_username.toLowerCase()) || campaignVideoIds.has(v.video_id);
 
   // ============================
   // A. KW別の検索結果（3並列）
@@ -245,7 +250,7 @@ export async function captureSnapshot(
     // ============================
     // B. 自社+競合プロフィール（Apify一括取得）
     // ============================
-    const allProfileAccountIds = [...new Set([...ownAccountIds, ...competitors.map(c => c.account_id)])];
+    const allProfileAccountIds = [...new Set([...ownAccountIds, ...satelliteAccountIds, ...competitors.map(c => c.account_id)])];
     if (allProfileAccountIds.length > 0) {
       report("profiles", `プロフィール取得中 (${allProfileAccountIds.length}アカウント)...`, 38);
 
@@ -341,10 +346,12 @@ export async function captureSnapshot(
     let ownVideoMetrics: NonNullable<InsertCampaignSnapshot["ownVideoMetrics"]> = {};
 
     const ownVideoUrls = (campaign as any).ownVideoUrls as string[] | undefined;
-    if (ownVideoUrls && ownVideoUrls.length > 0) {
-      report("video_metrics", `施策動画メトリクス取得中 (${ownVideoUrls.length}本)...`, 68);
+    // TikTok URLのみスクレイプ（YouTube/InstagramはcampaignReport.tsのplatformSummaryで処理）
+    const tiktokVideoUrls = (ownVideoUrls || []).filter(u => !detectPlatform(u) || detectPlatform(u) === "tiktok");
+    if (tiktokVideoUrls.length > 0) {
+      report("video_metrics", `施策動画メトリクス取得中 (${tiktokVideoUrls.length}本)...`, 68);
       try {
-        const scraped = await scrapeTikTokVideosByUrls(ownVideoUrls, (msg) =>
+        const scraped = await scrapeTikTokVideosByUrls(tiktokVideoUrls, (msg) =>
           report("video_metrics", msg, 72)
         );
         for (const [, v] of scraped) {

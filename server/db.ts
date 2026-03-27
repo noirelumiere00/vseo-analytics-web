@@ -14,6 +14,7 @@ import {
   campaigns,
   campaignSnapshots,
   campaignReports,
+  campaignDailyMetrics,
   subscriptions,
   passwordResetTokens,
   InsertAnalysisJob,
@@ -661,8 +662,21 @@ export async function upsertCampaignReport(data: InsertCampaignReport) {
       videoScores: data.videoScores,
       aiOverallReport: data.aiOverallReport,
       bigKeywordReport: data.bigKeywordReport,
+      platformSummary: data.platformSummary,
     },
   });
+}
+
+export async function patchCampaignReportSovReport(
+  campaignId: number,
+  sovReport: Record<string, any>,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(campaignReports)
+    .set({ sovReport: sovReport as any })
+    .where(eq(campaignReports.campaignId, campaignId));
 }
 
 // === User Lookup (email / Google ID) ===
@@ -1269,4 +1283,14 @@ export async function getAllUsersWithSubscriptions() {
   }).from(users)
     .leftJoin(subscriptions, eq(users.id, subscriptions.userId))
     .orderBy(desc(users.createdAt));
+}
+
+// === Campaign Daily Metrics ===
+
+export async function getDailyMetricsByCampaignId(campaignId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaignDailyMetrics)
+    .where(eq(campaignDailyMetrics.campaignId, campaignId))
+    .orderBy(campaignDailyMetrics.dateKey);
 }

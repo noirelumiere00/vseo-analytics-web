@@ -34,6 +34,8 @@ export const ENV = {
   googleAdsCustomerId: process.env.GOOGLE_ADS_CUSTOMER_ID ?? "",
   // Apify
   apifyApiToken: process.env.APIFY_API_TOKEN ?? "",
+  // YouTube Data API v3
+  youtubeApiKey: process.env.YOUTUBE_API_KEY ?? "",
 };
 
 /** 起動時に必須環境変数をバリデーション */

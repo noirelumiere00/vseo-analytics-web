@@ -60,6 +60,7 @@ export default function CampaignNew() {
   const [keywords, setKeywords] = useState("");
   const [bigKeywords, setBigKeywords] = useState("");
   const [ownAccountIds, setOwnAccountIds] = useState("");
+  const [satelliteAccountIds, setSatelliteAccountIds] = useState("");
   const [campaignHashtags, setCampaignHashtags] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [brandKeywords, setBrandKeywords] = useState("");
@@ -140,6 +141,7 @@ export default function CampaignNew() {
       clientName: clientName.trim() || undefined,
       keywords: kwList,
       ownAccountIds: ownAccountIds.split("\n").map(s => s.trim()).filter(Boolean),
+      satelliteAccountIds: satelliteAccountIds.split("\n").map(s => s.trim()).filter(Boolean),
       campaignHashtags: campaignHashtags.split("\n").map(s => s.trim()).filter(Boolean),
       competitors: compList.length > 0 ? compList : undefined,
       brandKeywords: brandKeywords.split("\n").map(s => s.trim()).filter(Boolean),
@@ -264,6 +266,18 @@ export default function CampaignNew() {
               />
               <UsernamePreview input={ownAccountIds} />
               <p className="text-xs text-muted-foreground">既にアカウントがある場合のみ。なくても計測可能です</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>サテライトアカウント（URL or ID、1行1アカウント）</Label>
+              <Textarea
+                value={satelliteAccountIds}
+                onChange={e => setSatelliteAccountIds(e.target.value)}
+                placeholder={"https://www.tiktok.com/@satellite_account1\n@satellite_account2"}
+                rows={2}
+              />
+              <UsernamePreview input={satelliteAccountIds} />
+              <p className="text-xs text-muted-foreground">施策で制作したサテライトアカウントがある場合</p>
             </div>
           </CardContent>
         </Card>
