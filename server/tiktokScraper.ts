@@ -37,6 +37,7 @@ export interface TikTokVideo {
   hashtags: string[];
   isAd: boolean;
   aigcDescription: string;
+  music?: { id: string; title: string; authorName: string; original: boolean };
 }
 
 export interface TikTokSearchResult {
@@ -129,6 +130,12 @@ export function parseVideoData(item: any): TikTokVideo | null {
     hashtags,
     isAd: !!v.isAd,
     aigcDescription: v.AIGCDescription || "",
+    music: v.music ? {
+      id: v.music.id || "",
+      title: v.music.title || "",
+      authorName: v.music.authorName || "",
+      original: !!v.music.original,
+    } : undefined,
   };
 }
 
@@ -1239,6 +1246,7 @@ export interface ScrapedVideoData {
   commentCount: number;
   shareCount: number;
   saveCount: number;
+  music?: { id: string; title: string; authorName: string; original: boolean };
 }
 
 /**
@@ -1312,6 +1320,15 @@ export async function scrapeTikTokVideosByUrls(
               });
             }
 
+            // 音源情報
+            const musicRaw = v.music;
+            const music = musicRaw ? {
+              id: musicRaw.id || "",
+              title: musicRaw.title || "",
+              authorName: musicRaw.authorName || "",
+              original: !!musicRaw.original,
+            } : undefined;
+
             return {
               videoId: v.id || "",
               coverUrl: v.video?.cover || v.video?.originCover || "",
@@ -1328,6 +1345,7 @@ export async function scrapeTikTokVideosByUrls(
               commentCount: stats.commentCount || 0,
               shareCount: stats.shareCount || 0,
               saveCount: Number(stats.collectCount) || 0,
+              music,
             };
           });
 

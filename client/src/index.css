@@ -540,6 +540,14 @@
     animation: float-pulse 3s var(--md-ease-standard) infinite;
   }
 
+  /* Donut chart fill — M3 emphasized decel */
+  @keyframes donut-fill {
+    from { stroke-dasharray: 0 314; }
+  }
+  .animate-donut-fill {
+    animation: donut-fill var(--md-dur-xlong2) var(--md-ease-emphasized-decel) both;
+  }
+
   /* Progress bar fill */
   @keyframes progress-fill {
     from { transform: scaleX(0); }

@@ -679,6 +679,18 @@ export async function patchCampaignReportSovReport(
     .where(eq(campaignReports.campaignId, campaignId));
 }
 
+export async function patchCampaignReportRipple(
+  campaignId: number,
+  rippleReport: Record<string, any>,
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(campaignReports)
+    .set({ rippleReport: rippleReport as any })
+    .where(eq(campaignReports.campaignId, campaignId));
+}
+
 // === Share Token (公開共有URL) ===
 
 export async function getReportByShareToken(token: string) {
@@ -1353,4 +1365,34 @@ export async function getDailyMetricsByCampaignId(campaignId: number) {
   return db.select().from(campaignDailyMetrics)
     .where(eq(campaignDailyMetrics.campaignId, campaignId))
     .orderBy(campaignDailyMetrics.dateKey);
+}
+
+// === Daily Metrics Tracking ===
+
+export async function getTrackingEnabledCampaigns() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(campaigns).where(eq(campaigns.trackingEnabled, true));
+}
+
+export async function setTrackingEnabled(campaignId: number, enabled: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(campaigns).set({ trackingEnabled: enabled }).where(eq(campaigns.id, campaignId));
+}
+
+export async function getLastCapturedDateByVideo(campaignId: number) {
+  const db = await getDb();
+  if (!db) return new Map<string, string>();
+  const rows = await db.select({
+    videoUrl: campaignDailyMetrics.videoUrl,
+    maxDate: sql<string>`MAX(${campaignDailyMetrics.dateKey})`,
+  }).from(campaignDailyMetrics)
+    .where(eq(campaignDailyMetrics.campaignId, campaignId))
+    .groupBy(campaignDailyMetrics.videoUrl);
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    map.set(row.videoUrl, row.maxDate);
+  }
+  return map;
 }

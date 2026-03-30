@@ -11,8 +11,7 @@ import {
   SummaryCards,
   PlatformSummarySection,
   VideoSection,
-  KeywordSection,
-  SovSection,
+  UnifiedKeywordSovSection,
   CompetitorSection,
   RippleSection,
   CrossPlatformSection,
@@ -223,16 +222,10 @@ export default function SharedReport() {
           </div>
         )}
 
-        {/* Keyword */}
-        <div id="keyword" ref={el => { sectionRefs.current["keyword"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("keyword")} title="検索順位・露出" question="検索順位はどう変わった？" />
-          <KeywordSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} hasBaseline={hasBaseline} />
-        </div>
-
-        {/* SOV (read-only) */}
-        <div id="sov" ref={el => { sectionRefs.current["sov"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("sov")} title="検索上位シェア率" question="どのKWにどの動画が露出した？" />
-          <SovSection sovReport={sovReport} positions={positions} hasBaseline={hasBaseline} campaignId={0} onSlotUpdate={() => {}} />
+        {/* Keyword + SOV (unified) */}
+        <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("keyword-sov")} title="検索順位・上位シェア率" question="検索上位にどの動画が露出した？" />
+          <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaignId={0} onSlotUpdate={() => {}} />
         </div>
 
         {/* Ripple */}

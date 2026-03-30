@@ -15,6 +15,7 @@ export interface InstagramPostData {
   commentCount: number;
   publishedAt: string;
   ownerUsername: string;
+  musicInfo?: { title: string; artistName: string } | null;
 }
 
 /**
@@ -63,6 +64,12 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
       const shortcode = item.shortCode || item.id || "";
       const postUrl = item.url || (shortcode ? `https://www.instagram.com/p/${shortcode}` : "");
 
+      // 音源情報（Apifyレスポンスに含まれる場合がある）
+      const rawMusic = item.musicInfo || item.music;
+      const musicInfo = rawMusic
+        ? { title: rawMusic.title || rawMusic.music_title || "", artistName: rawMusic.artistName || rawMusic.music_author || rawMusic.artist_name || "" }
+        : null;
+
       results.push({
         videoId: shortcode,
         videoUrl: postUrl,
@@ -73,6 +80,7 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
         commentCount: item.commentsCount || 0,
         publishedAt: item.timestamp || "",
         ownerUsername: item.ownerUsername || "",
+        musicInfo: musicInfo && (musicInfo.title || musicInfo.artistName) ? musicInfo : null,
       });
     }
 

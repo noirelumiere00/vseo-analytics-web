@@ -287,10 +287,10 @@ function DashboardLayoutContent({
         />
       </div>
 
-      <SidebarInset>
+      <SidebarInset className="h-svh overflow-hidden flex flex-col">
         {/* Mobile header */}
         {isMobile && (
-          <div className="flex border-b h-12 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="flex border-b h-12 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur shrink-0 z-40">
             <div className="flex items-center gap-2">
               <SidebarTrigger className="h-8 w-8 rounded-lg" />
               <span className="text-sm font-medium tracking-tight text-foreground">
@@ -301,11 +301,11 @@ function DashboardLayoutContent({
         )}
         {/* Desktop breadcrumb bar */}
         {!isMobile && (
-          <div className="border-b h-11 flex items-center px-6 bg-background/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur sticky top-0 z-40">
+          <div className="border-b h-11 flex items-center px-6 bg-background/80 backdrop-blur supports-[backdrop-filter]:backdrop-blur shrink-0 z-40">
             <PageBreadcrumb />
           </div>
         )}
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-2 md:p-3">{children}</main>
       </SidebarInset>
     </>
   );

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation, useParams } from "wouter";
@@ -52,6 +52,26 @@ function BeforeAfter({ before, after, suffix = "" }: { before: string | number; 
   );
 }
 
+// Sentiment analysis from caption text
+const POS_WORDS = /最高|美味し|おいし|すごい|すごく|良い|いい感じ|おすすめ|オススメ|楽し|好き|可愛|かわいい|カワイイ|嬉し|素敵|綺麗|きれい|最強|神$|神す|ヤバい|やばい|やばす|感動|面白|おもしろ|幸せ|大好き|ハマ|リピ|推し|優勝|天才|完璧|完成度|満足|虜|沼|飯テロ|至福|贅沢|絶品|旨|うま|ウマ|映え|バズ|お気に入り|抜群|極上|最上|一番|ベスト|感謝|ありがと|👍|🔥|❤|💕|😍|🥰|✨|💯|👏|😋|🤤/i;
+const NEG_WORDS = /最悪|まずい|マズい|ダメ|だめ|微妙|残念|嫌い|きらい|ひどい|酷い|悪い|がっかり|ガッカリ|不味|後悔|失敗|期待はずれ|いまいち|イマイチ|つまらな|詐欺|ぼったくり|高すぎ|不満|苦手|やめた|無理|クソ|ゴミ|💩|😤|😡|👎/i;
+
+function analyzeSentiment(text: string | undefined): "positive" | "neutral" | "negative" {
+  if (!text) return "neutral";
+  const hasPos = POS_WORDS.test(text);
+  const hasNeg = NEG_WORDS.test(text);
+  if (hasPos && !hasNeg) return "positive";
+  if (hasNeg && !hasPos) return "negative";
+  if (hasPos && hasNeg) return "neutral"; // mixed → neutral
+  return "neutral";
+}
+
+const SENTIMENT_CONFIG = {
+  positive: { label: "ポジティブ", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", dotColor: "bg-emerald-500", Icon: TrendingUp },
+  neutral:  { label: "ナチュラル", color: "text-slate-500", bg: "bg-slate-50 border-slate-200", dotColor: "bg-slate-400", Icon: Minus },
+  negative: { label: "ネガティブ", color: "text-red-500", bg: "bg-red-50 border-red-200", dotColor: "bg-red-500", Icon: TrendingDown },
+} as const;
+
 export const gradeColors: Record<string, string> = {
   S: "bg-yellow-500 text-white",
   A: "bg-green-500 text-white",
@@ -64,8 +84,7 @@ export const SECTIONS = [
   { id: "summary", label: "総合", icon: Brain },
   { id: "platform", label: "全媒体", icon: Layers },
   { id: "videos", label: "TikTok", icon: Eye },
-  { id: "keyword", label: "順位・露出", icon: Search },
-  { id: "sov", label: "シェア率", icon: BarChart3 },
+  { id: "keyword-sov", label: "順位・シェア", icon: Search },
   { id: "competitor", label: "競合", icon: Users },
   { id: "ripple", label: "波及", icon: Share2 },
   { id: "cross", label: "相関", icon: Globe },
@@ -346,53 +365,57 @@ export default function CampaignReport() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">{campaign?.name || "施策効果レポート"}</h1>
-              <p className="text-sm text-muted-foreground">
-                {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
-              </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                <CalendarDays className="h-3.5 w-3.5" />
-                <span>施策期間:</span>
-                <input type="date" value={campaignStart} onChange={e => setCampaignStart(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
-                <span>〜</span>
-                <input type="date" value={campaignEnd} onChange={e => setCampaignEnd(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
-                {(campaignStart !== defaultStart || campaignEnd !== defaultEnd) && (
-                  <button onClick={() => { setCampaignStart(defaultStart); setCampaignEnd(defaultEnd); }} className="text-xs text-primary hover:underline">リセット</button>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => regenerateMutation.mutate({ campaignId })}
-              disabled={regenerateMutation.isPending}
-              className="gap-2"
-            >
-              <RefreshCw className={`h-4 w-4 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
-              {regenerateMutation.isPending ? "再生成中…" : "レポート再生成"}
-            </Button>
-            <Button variant="outline" onClick={handleCsvExport} className="gap-2">
-              <Download className="h-4 w-4" />
-              CSV
-            </Button>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Link2 className="h-4 w-4" />
-                  共有
+      <div className="flex flex-col h-full">
+        {/* Fixed Header + Nav */}
+        <div className="shrink-0 bg-background z-20 border-b">
+          <div className="max-w-[1600px] mx-auto px-2 md:px-3">
+            {/* Header */}
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
+                  <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
+                <div>
+                  <h1 className="text-lg font-bold tracking-tight leading-tight">{campaign?.name || "施策効果レポート"}</h1>
+                  <p className="text-xs text-muted-foreground">
+                    {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span>施策期間:</span>
+                    <input type="date" value={campaignStart} onChange={e => setCampaignStart(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
+                    <span>〜</span>
+                    <input type="date" value={campaignEnd} onChange={e => setCampaignEnd(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
+                    {(campaignStart !== defaultStart || campaignEnd !== defaultEnd) && (
+                      <button onClick={() => { setCampaignStart(defaultStart); setCampaignEnd(defaultEnd); }} className="text-xs text-primary hover:underline">リセット</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <TrackingToggle campaignId={campaignId} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => regenerateMutation.mutate({ campaignId })}
+                  disabled={regenerateMutation.isPending}
+                  className="gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+                  {regenerateMutation.isPending ? "再生成中…" : "レポート再生成"}
+                </Button>
+                <Button variant="outline" onClick={handleCsvExport} className="gap-2">
+                  <Download className="h-4 w-4" />
+                  CSV
+                </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <Link2 className="h-4 w-4" />
+                      共有
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-medium">公開リンク共有</div>
@@ -434,31 +457,37 @@ export default function CampaignReport() {
                 </div>
               </PopoverContent>
             </Popover>
+              </div>
+            </div>
+
+            {/* Navigation */}
+            <nav className="py-1 overflow-x-auto">
+              <div className="flex gap-1 min-w-max">
+                {visibleSections.map((sec) => {
+                  const Icon = sec.icon;
+                  return (
+                    <button
+                      key={sec.id}
+                      onClick={() => scrollTo(sec.id)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors whitespace-nowrap ${
+                        activeSection === sec.id
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {sec.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
           </div>
         </div>
 
-        {/* Sticky Navigation */}
-        <nav className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b py-2 -mx-4 px-4 overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
-            {visibleSections.map((sec) => {
-              const Icon = sec.icon;
-              return (
-                <button
-                  key={sec.id}
-                  onClick={() => scrollTo(sec.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                    activeSection === sec.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {sec.label}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[1600px] mx-auto px-2 md:px-3 space-y-4 pt-4 pb-8">
 
         {/* Section: Executive Summary */}
         <div id="summary" ref={el => { sectionRefs.current["summary"] = el; }} className="scroll-mt-16 section-fade-in">
@@ -499,20 +528,16 @@ export default function CampaignReport() {
           <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
             <SectionHeader number={sectionNumber("videos")} title="TikTok 施策動画パフォーマンス" question="TikTok動画の状況は？" />
             <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
-            <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+            <div className="mt-5">
+              <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+            </div>
           </div>
         )}
 
-        {/* Section: Keyword (merged Position + BigKeyword) */}
-        <div id="keyword" ref={el => { sectionRefs.current["keyword"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("keyword")} title="検索順位・露出" question="検索順位はどう変わった？" />
-          <KeywordSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} hasBaseline={hasBaseline} keywords={campaign?.keywords} bigKeywords={campaign?.bigKeywords} campaign={campaign} />
-        </div>
-
-        {/* Section: SOV */}
-        <div id="sov" ref={el => { sectionRefs.current["sov"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("sov")} title="検索上位シェア率" question="どのKWにどの動画が露出した？" />
-          <SovSection sovReport={sovReport} positions={positions} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} />
+        {/* Section: Keyword + SOV (unified) */}
+        <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("keyword-sov")} title="検索順位・上位シェア率" question="検索上位にどの動画が露出した？" />
+          <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} />
         </div>
 
         {/* Section: Competitor */}
@@ -526,7 +551,7 @@ export default function CampaignReport() {
         {/* Section: Ripple */}
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
-          <RippleSection ripple={ripple} campaign={campaign} />
+          <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} />
         </div>
 
         {/* Section: Cross Platform */}
@@ -557,6 +582,8 @@ export default function CampaignReport() {
             </CardContent>
           </Card>
         )}
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   );
@@ -610,47 +637,46 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
   }, [ripple, thirdPartyCount]);
 
   if (hasBaseline) {
-    const cards = [
+    const cards: { title: string; value: string; before?: string; after?: string; change?: React.ReactNode }[] = [
       {
         title: "平均検索順位",
-        before: fmtAvgRank(summary.total_keyword_count, summary.avg_rank_before),
-        after: fmtAvgRank(summary.ranked_keyword_count, summary.avg_rank_after),
-        change: summary.avg_rank_after != null && summary.avg_rank_after > 0 && summary.avg_rank_before === 0
-          ? <span className="text-green-600 font-medium flex items-center gap-0.5"><TrendingUp className="h-3.5 w-3.5" />圏外→{summary.avg_rank_after}位</span>
-          : summary.avg_rank_before != null && summary.avg_rank_before > 0 && summary.avg_rank_after != null && summary.avg_rank_after > 0
-          ? <ChangeIndicator value={Number((summary.avg_rank_before - summary.avg_rank_after).toFixed(1))} suffix="位" />
-          : null,
+        value: fmtAvgRank(summary.ranked_keyword_count, summary.avg_rank_after),
       },
       {
         title: "平均ER",
-        before: `${summary.er_before}%`,
-        after: `${summary.er_after}%`,
-        change: <ChangeIndicator value={Number((summary.er_after - summary.er_before).toFixed(2))} suffix="pt" />,
+        value: `${summary.er_after}%`,
       },
       {
         title: "上位表示率",
         before: `${summary.sov_before}%`,
         after: `${summary.sov_after}%`,
+        value: "",
         change: <ChangeIndicator value={Number((parseFloat(summary.sov_after) - parseFloat(summary.sov_before)).toFixed(1))} suffix="pt" />,
       },
     ];
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {cards.map((card) => (
           <Card key={card.title}>
-            <CardContent className="py-3 px-4 space-y-1">
+            <CardContent className="py-3 px-4 space-y-1 text-center">
               <p className="text-xs text-muted-foreground">{card.title}</p>
-              <p className="text-base font-bold">
-                <span className="text-slate-400">{card.before}</span>
-                <span className="text-muted-foreground mx-1">&rarr;</span>
-                <span className="text-blue-600">{card.after}</span>
-              </p>
-              {card.change && <div className="text-sm">{card.change}</div>}
+              {card.before != null ? (
+                <>
+                  <p className="text-base font-bold">
+                    <span className="text-slate-400">{card.before}</span>
+                    <span className="text-muted-foreground mx-1">&rarr;</span>
+                    <span className="text-blue-600">{card.after}</span>
+                  </p>
+                  {card.change && <div className="text-sm">{card.change}</div>}
+                </>
+              ) : (
+                <p className="text-xl font-bold text-blue-600">{card.value}</p>
+              )}
             </CardContent>
           </Card>
         ))}
         <Card>
-          <CardContent className="py-3 px-4 space-y-1">
+          <CardContent className="py-3 px-4 space-y-1 text-center">
             <p className="text-xs text-muted-foreground">第三者投稿</p>
             <p className="text-xl font-bold text-blue-600">{tpStats.count}本</p>
             {tpStats.views > 0 && <p className="text-xs text-muted-foreground">{fmt(tpStats.views)} 再生</p>}
@@ -682,605 +708,515 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
 }
 
 // ============================
-// KwVideoCard — KWカード（5件表示 + もっと見る）
+// OwnVideoCard with inline edit
 // ============================
 
-const INITIAL_SHOW = 5;
-
-function KwVideoCard({ group, ownAccountIds, officialAccountIds, satelliteAccountIds }: { group: { keyword: string; kwType: string; rows: Array<{ keyword: string; kwType: string; username: string; description: string; rank: number | null; viewCount: number; videoId: string }> }; ownAccountIds: Set<string>; officialAccountIds: Set<string>; satelliteAccountIds: Set<string> }) {
-  const [expanded, setExpanded] = useState(false);
-  const rankedRows = group.rows.filter(r => r.rank != null && r.rank <= 30);
-  const hasRanked = rankedRows.length > 0;
-  const bestRank = hasRanked ? Math.min(...rankedRows.map(r => r.rank!)) : 999;
-  const visibleRows = expanded ? rankedRows : rankedRows.slice(0, INITIAL_SHOW);
-  const hiddenCount = rankedRows.length - INITIAL_SHOW;
+function OwnVideoCard({ slot, keyword, onSlotUpdate }: {
+  slot: SlotData;
+  keyword: string;
+  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const configKey: keyof typeof SOV_SLOT_CONFIG = slot.owner_detail === "campaign" ? "campaign" : slot.owner_detail === "satellite" ? "satellite" : "official";
+  const cfg = SOV_SLOT_CONFIG[configKey];
+  const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
 
   return (
-    <div className={`rounded-lg border ${hasRanked ? "bg-white" : "bg-muted/30 border-dashed"}`}>
-      {/* KWヘッダー */}
-      <div className={`flex items-center gap-2 px-3 py-2 ${hasRanked ? "border-b bg-slate-50/80" : ""}`}>
-        <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${group.kwType === "ビッグKW" ? "bg-green-400" : "bg-blue-400"}`} />
-        <span className="font-medium text-sm">{group.keyword}</span>
-        {group.kwType === "ビッグKW" && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-green-700 border-green-300 bg-green-50">ビッグKW</Badge>
-        )}
-        {hasRanked ? (
-          <Badge className={`ml-auto text-[10px] px-1.5 py-0 h-5 ${
-            bestRank <= 3 ? "bg-amber-500 hover:bg-amber-500" :
-            bestRank <= 10 ? "bg-blue-500 hover:bg-blue-500" :
-            "bg-slate-500 hover:bg-slate-500"
-          }`}>
-            最高 {bestRank}位 / {rankedRows.length}本ランクイン
-          </Badge>
+    <div className="relative group/card">
+      <a
+        href={slot.video_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`flex items-center gap-3 rounded-lg border-l-4 bg-white p-3 hover:shadow-md transition-all ${
+          configKey === "official" ? "border-l-blue-500" : configKey === "satellite" ? "border-l-teal-500" : "border-l-purple-500"
+        }`}
+      >
+        {slot.cover_url ? (
+          <img src={slot.cover_url} alt="" className="w-12 h-16 rounded object-cover flex-shrink-0" loading="lazy" />
         ) : (
-          <span className="ml-auto text-xs text-muted-foreground">圏外</span>
+          <div className={`w-12 h-16 rounded flex items-center justify-center ${cfg.emptyBg} flex-shrink-0`}>
+            <span className={`text-lg font-bold ${cfg.emptyText}`}>{slot.rank}</span>
+          </div>
         )}
-      </div>
-      {/* 動画リスト */}
-      {hasRanked && (
-        <div className="divide-y">
-          {visibleRows.map((r, ri) => {
-            const videoUrl = r.username && r.videoId
-              ? `https://www.tiktok.com/@${r.username}/video/${r.videoId}`
-              : null;
-            const Row = (
-              <div className={`flex items-center gap-3 px-3 py-2 ${videoUrl ? "hover:bg-muted/40 transition-colors" : ""}`}>
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm ${
-                  r.rank! <= 3 ? "bg-gradient-to-br from-amber-400 to-amber-500 text-white shadow-sm" :
-                  r.rank! <= 10 ? "bg-gradient-to-br from-blue-400 to-blue-500 text-white shadow-sm" :
-                  r.rank! <= 20 ? "bg-slate-100 text-slate-600" :
-                  "bg-slate-50 text-slate-400"
-                }`}>
-                  {r.rank}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate flex items-center gap-1.5">
-                    {r.username ? (() => {
-                      const uLower = r.username.toLowerCase();
-                      const isOfficial = officialAccountIds.has(uLower);
-                      const isSatellite = !isOfficial && satelliteAccountIds.has(uLower);
-                      const isCampaign = !isOfficial && !isSatellite && ownAccountIds.has(uLower);
-                      return (
-                        <>
-                          {isOfficial && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-blue-300 text-blue-700 bg-blue-50">公式</Badge>
-                          )}
-                          {isSatellite && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-teal-300 text-teal-700 bg-teal-50">サテライト</Badge>
-                          )}
-                          {isCampaign && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 shrink-0 border-purple-300 text-purple-700 bg-purple-50">施策</Badge>
-                          )}
-                          <span className={`font-medium ${isOfficial ? "text-blue-700" : isSatellite ? "text-teal-700" : isCampaign ? "text-purple-700" : "text-foreground"}`}>@{r.username}</span>
-                          {r.description && <span className="text-muted-foreground ml-0.5 truncate">{r.description}</span>}
-                        </>
-                      );
-                    })() : (
-                      <span className="text-muted-foreground italic text-xs">該当動画なし</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-sm font-medium ${r.viewCount >= 1_000_000 ? "text-amber-600" : r.viewCount >= 100_000 ? "text-blue-600" : "text-muted-foreground"}`}>
-                    {fmt(r.viewCount)}
-                  </span>
-                  {videoUrl
-                    ? <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40" />
-                    : <Eye className="h-3 w-3 text-muted-foreground/50" />
-                  }
-                </div>
-              </div>
-            );
-            return videoUrl ? (
-              <a key={`${r.videoId || ri}`} href={videoUrl} target="_blank" rel="noopener noreferrer" className="block">{Row}</a>
-            ) : (
-              <div key={`${r.videoId || ri}`}>{Row}</div>
-            );
-          })}
-          {hiddenCount > 0 && (
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            >
-              {expanded ? (
-                <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
-              ) : (
-                <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{hiddenCount}件）</>
-              )}
-            </button>
-          )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
+            <span className="text-sm font-semibold text-slate-800 truncate">@{slot.creator_username}</span>
+          </div>
+          <p className="text-xs text-slate-400 truncate mt-0.5">{slot.description?.slice(0, 40)}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
+            <span className="text-xs font-bold text-slate-600">#{slot.rank}</span>
+            <span className="text-[10px] text-slate-400 flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
+          </div>
         </div>
-      )}
+      </a>
+      {/* Edit button */}
+      <Popover open={editOpen} onOpenChange={setEditOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-md ${
+              editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/card:opacity-100 group-hover/card:scale-100 group-hover/card:pointer-events-auto"
+            }`}
+          >
+            <Pencil className="h-3 w-3 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="left" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <SovSlotEditForm
+            slot={slot}
+            onSave={(changes) => {
+              onSlotUpdate(keyword, "after", slot.video_id, changes);
+              setEditOpen(false);
+              toast.success("分類を更新しました");
+            }}
+            onCancel={() => setEditOpen(false)}
+          />
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
 
 // ============================
-// KeywordSection (merged Position + BigKeyword)
+// Unified Keyword + SOV Section
 // ============================
 
-export function KeywordSection({ positions, bigKeywordReport, hasBaseline, keywords, bigKeywords, campaign }: {
+export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate }: {
   positions: any[];
   bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }> }>;
+  sovReport: Record<string, any>;
   hasBaseline: boolean;
-  keywords?: string[];
-  bigKeywords?: string[];
   campaign?: any;
+  campaignId: number;
+  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
 }) {
-  // Tab-based view state
-  const [kwViewMode, setKwViewMode] = useState<"video" | "keyword">("video");
-  const [videoViewExpanded, setVideoViewExpanded] = useState(false);
-  const [kwCardExpanded, setKwCardExpanded] = useState<Set<string>>(new Set());
-  const [closedKwCards, setClosedKwCards] = useState<Set<string>>(new Set());
+  const [activeKw, setActiveKw] = useState<string | null>(null);
 
-  const VIDEO_VIEW_LIMIT = 5;
-  const KW_VIDEO_LIMIT = 5;
+  // --- SOV aggregate data ---
+  const sovEntries = Object.entries(sovReport);
+  const chartData = sovEntries
+    .map(([kw, data]) => {
+      const afterSlots = (data.after_slots || []) as SlotData[];
+      const beforeSlots = (data.before_slots || []) as SlotData[];
+      // Use slot-based counts (Top10) for consistency
+      const slotTotal = afterSlots.length;
+      const slotOwn = afterSlots.filter(s => s.owner === "own").length;
+      return {
+        keyword: kw,
+        own: slotOwn,
+        total: slotTotal,
+        pct: slotTotal > 0 ? Math.round((slotOwn / slotTotal) * 100 * 10) / 10 : 0,
+        afterSlots,
+        beforeSlots,
+        before: data.before || {},
+        after: data.after || {},
+        beforeOwn: beforeSlots.filter(s => s.owner === "own").length,
+        isBigKeyword: !!data._isBigKeyword,
+      };
+    })
+    .filter(d => d.total > 0);
 
-  // 公式アカウント（ownAccountIds）
-  const officialAccountIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of campaign?.ownAccountIds || []) ids.add(id.toLowerCase());
-    return ids;
-  }, [campaign]);
-  // サテライトアカウント
-  const satelliteAccountIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of (campaign as any)?.satelliteAccountIds || []) ids.add(id.toLowerCase());
-    return ids;
-  }, [campaign]);
-  // 施策動画投稿者（ownVideoDataのauthor、公式アカウント除く）
-  const campaignVideoAccountIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const v of campaign?.ownVideoData || []) {
-      if (v.authorUniqueId) ids.add(v.authorUniqueId.toLowerCase());
-    }
-    return ids;
-  }, [campaign]);
+  const allAfterSlots = chartData.flatMap(d => d.afterSlots);
+  const totalOwn = chartData.reduce((s, d) => s + d.own, 0);
+  const totalScanned = chartData.reduce((s, d) => s + d.total, 0);
+  const avgPct = totalScanned > 0 ? Math.round((totalOwn / totalScanned) * 100 * 10) / 10 : 0;
 
-  // coverUrl map: videoId → coverUrl from ownVideoData
-  const coverUrlMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const v of campaign?.ownVideoData || []) {
-      if (v.videoId && v.coverUrl) map.set(v.videoId, v.coverUrl);
-    }
-    return map;
-  }, [campaign]);
+  const officialCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
+  const satelliteCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
+  const campaignCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
 
-  // 全KW × 各動画の行を統合
-  type VideoRow = { keyword: string; kwType: "施策KW" | "ビッグKW"; username: string; description: string; rank: number | null; viewCount: number; videoId: string };
-  const allRows: VideoRow[] = [];
-
-  for (const p of positions) {
-    const videos = (p.videos as Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number }>) || [];
-    if (videos.length > 0) {
-      for (const v of videos) {
-        allRows.push({ keyword: p.keyword, kwType: "施策KW", username: v.username, description: v.description, rank: v.search_rank, viewCount: v.view_count, videoId: v.video_id });
-      }
-    } else {
-      allRows.push({ keyword: p.keyword, kwType: "施策KW", username: "", description: "", rank: p.after_rank, viewCount: 0, videoId: "" });
-    }
-  }
-  for (const item of bigKeywordReport || []) {
-    const videos = item.ownVideos || [];
-    if (videos.length > 0) {
-      for (const v of videos) {
-        allRows.push({ keyword: item.keyword, kwType: "ビッグKW", username: v.username, description: v.description, rank: v.rank, viewCount: v.viewCount, videoId: v.videoId });
-      }
-    } else {
-      allRows.push({ keyword: item.keyword, kwType: "ビッグKW", username: "", description: "", rank: item.after.bestRank, viewCount: 0, videoId: "" });
-    }
-  }
-
-  // 全KW名を収集
-  const allKwList: Array<{ keyword: string; kwType: string }> = [];
-  const kwSeen = new Set<string>();
-  for (const r of allRows) {
-    if (!kwSeen.has(r.keyword)) { kwSeen.add(r.keyword); allKwList.push({ keyword: r.keyword, kwType: r.kwType }); }
-  }
-
-  // Rank tier helper (モック準拠: top=1-3, mid=4-10, low=11-20, bad=21+)
-  const rankTier = (rank: number | null): "top" | "mid" | "low" | "bad" | null => {
-    if (rank == null || rank > 30) return null;
-    if (rank <= 3) return "top";
-    if (rank <= 10) return "mid";
-    if (rank <= 20) return "low";
-    return "bad";
-  };
-  const chipCls = (t: "top" | "mid" | "low" | "bad" | null) => {
-    switch (t) {
-      case "top": return "bg-green-100 text-green-800";
-      case "mid": return "bg-blue-100 text-blue-800";
-      case "low": return "bg-yellow-100 text-yellow-800";
-      case "bad": return "bg-red-100 text-red-800";
-      default: return "bg-slate-50 text-slate-400";
-    }
-  };
-  const pillCls = chipCls; // 同じ色体系
-  const barFillCls = (t: "top" | "mid" | "low" | "bad" | null) => {
-    switch (t) {
-      case "top": return "bg-green-500";
-      case "mid": return "bg-blue-500";
-      case "low": return "bg-yellow-400";
-      case "bad": return "bg-red-400";
-      default: return "bg-slate-200";
-    }
-  };
-  const bestCls = (rank: number) => {
-    if (rank <= 1) return "text-yellow-600";
-    if (rank <= 2) return "text-slate-500";
-    if (rank <= 3) return "text-orange-600";
-    return "text-slate-400";
-  };
-
-  // 動画別ビュー: ユニーク動画ごとにKWランクを集約
-  const videoViewData = useMemo(() => {
-    const vMap = new Map<string, { username: string; description: string; videoId: string; kwRanks: Record<string, number | null> }>();
-    for (const r of allRows) {
-      if (!r.username || !r.videoId) continue;
-      const key = r.videoId || r.username;
-      if (!vMap.has(key)) {
-        vMap.set(key, { username: r.username, description: r.description, videoId: r.videoId, kwRanks: {} });
-      }
-      const entry = vMap.get(key)!;
-      const existing = entry.kwRanks[r.keyword];
-      if (existing == null || (r.rank != null && r.rank < existing)) {
-        entry.kwRanks[r.keyword] = r.rank;
-      }
-    }
-    return [...vMap.values()].sort((a, b) => {
-      const bestA = Math.min(...Object.values(a.kwRanks).filter((v): v is number => v != null && v <= 30), 999);
-      const bestB = Math.min(...Object.values(b.kwRanks).filter((v): v is number => v != null && v <= 30), 999);
-      return bestA - bestB;
-    });
-  }, [allRows, allKwList]);
-
-  const hasVideoData = allRows.some(r => r.username !== "");
-
-  // フォールバック: videos無し（旧データ）→ X軸=KW, 最上位順位バー
-  const chartFallback = !hasVideoData
-    ? allRows.filter(r => r.rank != null && r.rank <= 30).map(r => ({
-        label: r.keyword.length > 10 ? r.keyword.slice(0, 10) + "…" : r.keyword,
-        順位: 31 - r.rank!,
-        actualRank: r.rank!,
-        kwType: r.kwType,
-      }))
-    : null;
-
-  const yTicks = [0, 6, 11, 16, 21, 26, 30];
-  const rankLabel = (v: number) => v <= 0 ? "圏外" : `${31 - v}位`;
-
-  // テーブル表示: KWごとにグループ化
-  const tableGroups: Array<{ keyword: string; kwType: string; rows: VideoRow[] }> = [];
-  const seen = new Set<string>();
-  for (const r of allRows) {
-    if (!seen.has(r.keyword)) {
-      seen.add(r.keyword);
-      tableGroups.push({ keyword: r.keyword, kwType: r.kwType, rows: allRows.filter(ar => ar.keyword === r.keyword) });
-    }
-  }
-
-  // KW別 前後比較 data
-  const comparisonRows = useMemo(() => {
-    const rows: Array<{ keyword: string; kwType: string; beforeRank: number | null; afterRank: number | null; rankChange: number | null }> = [];
+  // --- Position data integration ---
+  const positionMap = useMemo(() => {
+    const map = new Map<string, { beforeRank: number | null; afterRank: number | null; rankChange: number | null }>();
     for (const p of positions) {
-      rows.push({
-        keyword: p.keyword,
-        kwType: "施策KW",
+      map.set(p.keyword, {
         beforeRank: p.before_rank ?? null,
         afterRank: p.after_rank ?? null,
         rankChange: p.rank_change ?? (p.before_rank != null && p.after_rank != null ? p.before_rank - p.after_rank : null),
       });
     }
     for (const item of bigKeywordReport || []) {
-      rows.push({
-        keyword: item.keyword,
-        kwType: "ビッグKW",
+      map.set(item.keyword, {
         beforeRank: item.before.bestRank,
         afterRank: item.after.bestRank,
         rankChange: item.before.bestRank != null && item.after.bestRank != null ? item.before.bestRank - item.after.bestRank : null,
       });
     }
-    return rows;
+    return map;
   }, [positions, bigKeywordReport]);
 
+  // --- Unified KW list: from sovEntries + positions ---
+  const kwList = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ keyword: string; isBigKeyword: boolean; sovData: typeof chartData[0] | null; posData: { beforeRank: number | null; afterRank: number | null; rankChange: number | null } | null }> = [];
+    for (const d of chartData) {
+      seen.add(d.keyword);
+      list.push({ keyword: d.keyword, isBigKeyword: d.isBigKeyword, sovData: d, posData: positionMap.get(d.keyword) || null });
+    }
+    for (const [kw, pos] of positionMap) {
+      if (!seen.has(kw)) {
+        list.push({ keyword: kw, isBigKeyword: false, sovData: null, posData: pos });
+      }
+    }
+    return list;
+  }, [chartData, positionMap]);
+
+  // Set default active KW
+  const effectiveActiveKw = activeKw || (kwList.length > 0 ? kwList[0].keyword : null);
+  const activeKwData = kwList.find(k => k.keyword === effectiveActiveKw);
+
+  // Best rank across all KWs
+  const bestRankOverall = useMemo(() => {
+    let best = 999;
+    for (const [, pos] of positionMap) {
+      if (pos.afterRank != null && pos.afterRank < best) best = pos.afterRank;
+    }
+    return best < 999 ? best : null;
+  }, [positionMap]);
+
+  // --- Pad slots to 10 ---
+  const padSlots = (slots: SlotData[]) => {
+    const result: (SlotData | null)[] = [];
+    for (let i = 1; i <= 10; i++) {
+      result.push(slots.find(s => s.rank === i) || null);
+    }
+    return result;
+  };
+
+  // Max view count for slot display
+  const maxViewCount = useMemo(() => {
+    const all = chartData.flatMap(d => [...d.afterSlots, ...d.beforeSlots]);
+    return all.length > 0 ? Math.max(...all.map(s => s.view_count)) : 1;
+  }, [chartData]);
+
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-0">
-          <CardTitle className="text-base">KW別検索順位</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-3 space-y-4">
-          {/* タブバー（モック準拠） */}
-          {hasVideoData && (
-            <div className="flex border-b">
-              <button
-                onClick={() => setKwViewMode("video")}
-                className={`px-5 py-3 text-sm font-semibold border-b-[3px] transition-colors ${
-                  kwViewMode === "video"
-                    ? "text-blue-600 border-blue-600"
-                    : "text-slate-400 border-transparent hover:text-blue-600"
-                }`}
-              >
-                動画から見る
-                <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full font-bold ${kwViewMode === "video" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-                  {videoViewData.length}本
-                </span>
-              </button>
-              <button
-                onClick={() => setKwViewMode("keyword")}
-                className={`px-5 py-3 text-sm font-semibold border-b-[3px] transition-colors ${
-                  kwViewMode === "keyword"
-                    ? "text-blue-600 border-blue-600"
-                    : "text-slate-400 border-transparent hover:text-blue-600"
-                }`}
-              >
-                キーワードから見る
-                <span className={`ml-1.5 text-[11px] px-1.5 py-0.5 rounded-full font-bold ${kwViewMode === "keyword" ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-                  {allKwList.length}個
-                </span>
-              </button>
-            </div>
-          )}
+    <div className="space-y-5">
+      {/* ======== HeroCard ======== */}
+      {chartData.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-0 md:divide-x divide-slate-100">
+              {/* Donut */}
+              <div className="flex flex-col items-center justify-center py-6 px-4">
+                <svg viewBox="0 0 120 120" className="w-28 h-28">
+                  <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                  <circle
+                    cx="60" cy="60" r="50" fill="none"
+                    stroke="#3b82f6" strokeWidth="12"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(avgPct / 100) * 314} 314`}
+                    transform="rotate(-90 60 60)"
+                    className="animate-donut-fill"
+                  />
+                  <text x="60" y="54" textAnchor="middle" className="text-[28px] font-extrabold fill-blue-600">{avgPct}</text>
+                  <text x="60" y="72" textAnchor="middle" className="text-[11px] fill-slate-400">%シェア</text>
+                </svg>
+                <p className="text-xs text-slate-400 mt-1.5">{totalOwn}/{totalScanned}本が自社</p>
+              </div>
 
-          {/* ===== 動画から見る（モック準拠: # / 動画 / 最高順位 / ハッシュタグ別順位） ===== */}
-          {hasVideoData && kwViewMode === "video" && (
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b-2 border-slate-200">
-                    <th className="py-2.5 pl-5 pr-2 text-left text-xs font-semibold text-slate-500 w-7"></th>
-                    <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500">動画</th>
-                    <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">最高順位</th>
-                    <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500">ハッシュタグ別順位</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(videoViewExpanded ? videoViewData : videoViewData.slice(0, VIDEO_VIEW_LIMIT)).map((v, idx) => {
-                    const videoUrl = v.username && v.videoId
-                      ? `https://www.tiktok.com/@${v.username}/video/${v.videoId}`
-                      : null;
-                    // 各KWのランクをチップに
-                    const tags = allKwList
-                      .map(kw => ({ keyword: kw.keyword, rank: v.kwRanks[kw.keyword] ?? null }))
-                      .filter(t => t.rank != null && t.rank <= 30)
-                      .sort((a, b) => a.rank! - b.rank!);
-                    const best = tags.length > 0 ? tags[0].rank! : null;
-
-                    return (
-                      <tr key={v.videoId || v.username} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
-                        {/* # */}
-                        <td className="py-3 pl-5 pr-2 text-xs font-bold text-slate-300">{idx + 1}</td>
-                        {/* 動画 */}
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-2.5">
-                            <VideoThumbnail url={coverUrlMap.get(v.videoId)} className="w-10 h-14 rounded" />
-                            <div className="min-w-0">
-                              {videoUrl ? (
-                                <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-800 hover:text-blue-600 transition-colors">
-                                  @{v.username}
-                                </a>
-                              ) : (
-                                <span className="text-sm font-semibold text-slate-800">@{v.username}</span>
-                              )}
-                              <p className="text-xs text-slate-400 truncate max-w-[160px]">{v.description?.slice(0, 25)}</p>
-                            </div>
-                          </div>
-                        </td>
-                        {/* 最高順位 */}
-                        <td className="py-3 px-3 text-center">
-                          {best != null ? (
-                            <div>
-                              <span className={`text-xl font-extrabold leading-none ${bestCls(best)}`}>{best}</span>
-                              <div className="text-[10px] text-slate-400">位</div>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-slate-300">—</span>
-                          )}
-                        </td>
-                        {/* ハッシュタグ別順位チップ */}
-                        <td className="py-3 px-3">
-                          <div className="flex flex-wrap gap-1.5">
-                            {tags.map((t, ti) => {
-                              const tier = rankTier(t.rank);
-                              return (
-                                <span
-                                  key={t.keyword}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${chipCls(tier)} ${ti === 0 ? "ring-2 ring-yellow-500/50" : ""}`}
-                                >
-                                  <span className="font-extrabold min-w-[18px] text-center">{t.rank}</span>
-                                  <span className="font-medium opacity-80">{t.keyword.length > 10 ? t.keyword.slice(0, 10) + "…" : t.keyword}</span>
-                                </span>
-                              );
-                            })}
-                            {tags.length === 0 && <span className="text-xs text-slate-300">—</span>}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {videoViewData.length > VIDEO_VIEW_LIMIT && (
-                <button
-                  onClick={() => setVideoViewExpanded(!videoViewExpanded)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors mt-1 rounded-b-lg"
-                >
-                  {videoViewExpanded ? (
-                    <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
-                  ) : (
-                    <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{videoViewData.length - VIDEO_VIEW_LIMIT}件）</>
-                  )}
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* ===== キーワードから見る（モック準拠: アコーディオン + 平均順位） ===== */}
-          {hasVideoData && kwViewMode === "keyword" && (
-            <div className="space-y-3">
-              {tableGroups.map((group) => {
-                const rankedRows = group.rows.filter(r => r.rank != null && r.rank <= 30).sort((a, b) => a.rank! - b.rank!);
-                const hasRanked = rankedRows.length > 0;
-                const bestRank = hasRanked ? rankedRows[0].rank! : 999;
-                const avgRank = hasRanked ? Math.round(rankedRows.reduce((s, r) => s + r.rank!, 0) / rankedRows.length * 10) / 10 : 0;
-                const isOpen = !closedKwCards.has(group.keyword);
-                const isExpanded = kwCardExpanded.has(group.keyword);
-                const visibleRows = isExpanded ? rankedRows : rankedRows.slice(0, KW_VIDEO_LIMIT);
-                const hiddenCount = rankedRows.length - KW_VIDEO_LIMIT;
-                const bestTier = rankTier(bestRank);
-                const tierTextCls = bestTier === "top" ? "text-green-600" : bestTier === "mid" ? "text-blue-600" : bestTier === "low" ? "text-yellow-600" : "text-red-500";
-
-                return (
-                  <div key={group.keyword} className={`rounded-xl border shadow-sm overflow-hidden ${hasRanked ? "bg-white" : "bg-muted/30 border-dashed"}`}>
-                    {/* KWヘッダー */}
-                    <button
-                      onClick={() => {
-                        const next = new Set(closedKwCards);
-                        if (next.has(group.keyword)) next.delete(group.keyword);
-                        else next.add(group.keyword);
-                        setClosedKwCards(next);
-                      }}
-                      className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="font-bold text-[15px] text-slate-800">{group.keyword}</span>
-                        <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full font-semibold">{rankedRows.length}本</span>
-                      </div>
-                      <div className="flex items-center gap-3.5">
-                        {hasRanked && (
-                          <>
-                            <span className="text-xs text-slate-400">平均 {avgRank}位</span>
-                            <span className={`text-sm font-extrabold ${tierTextCls}`}>最高 {bestRank}位</span>
-                          </>
-                        )}
-                        {!hasRanked && <span className="text-xs text-slate-400">圏外</span>}
-                        <ChevronDown className={`h-4 w-4 text-slate-300 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-                      </div>
-                    </button>
-                    {/* 動画リスト (accordion) */}
-                    {hasRanked && isOpen && (
-                      <div className="border-t border-slate-100">
-                        {visibleRows.map((r, ri) => {
-                          const tier = rankTier(r.rank);
-                          const barWidth = r.rank != null && r.rank <= 30 ? Math.max(100 - (r.rank / 27) * 100, 4) : 0;
-                          const videoUrl = r.username && r.videoId
-                            ? `https://www.tiktok.com/@${r.username}/video/${r.videoId}`
-                            : null;
-                          return (
-                            <div key={`${r.videoId || ri}`} className="grid grid-cols-[50px_1fr] items-center px-5 py-2.5 border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                              {/* Rank pill */}
-                              <span className={`inline-flex items-center justify-center w-[42px] h-7 rounded-lg text-sm font-extrabold ${pillCls(tier)}`}>
-                                {r.rank != null ? `${r.rank}位` : "-"}
-                              </span>
-                              {/* Video info + bar */}
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <VideoThumbnail url={coverUrlMap.get(r.videoId)} className="w-8 h-11 rounded" />
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-1.5">
-                                      {videoUrl ? (
-                                        <a href={videoUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-sm font-semibold text-slate-800 hover:text-blue-600 transition-colors truncate">
-                                          @{r.username}
-                                        </a>
-                                      ) : (
-                                        <span className="text-sm font-semibold text-slate-800 truncate">@{r.username}</span>
-                                      )}
-                                      <span className="text-xs text-slate-400 truncate">{r.description?.slice(0, 20)}</span>
-                                    </div>
-                                    {/* Bar indicator */}
-                                    <div className="mt-1 h-1 rounded-full bg-slate-100 overflow-hidden">
-                                      <div className={`h-full rounded-full transition-all duration-400 ${barFillCls(tier)}`} style={{ width: `${barWidth}%` }} />
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                        {hiddenCount > 0 && (
-                          <button
-                            onClick={() => {
-                              const next = new Set(kwCardExpanded);
-                              if (next.has(group.keyword)) next.delete(group.keyword);
-                              else next.add(group.keyword);
-                              setKwCardExpanded(next);
-                            }}
-                            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors"
-                          >
-                            {isExpanded ? (
-                              <><ChevronUp className="h-3.5 w-3.5" />閉じる</>
-                            ) : (
-                              <><ChevronDown className="h-3.5 w-3.5" />もっと見る（{hiddenCount}件）</>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    )}
+              {/* 4 stat boxes */}
+              <div className="grid grid-cols-2 gap-px bg-slate-100">
+                {[
+                  { label: "キーワード数", value: `${kwList.length}`, sub: "KW" },
+                  { label: "Top10 自社動画", value: `${totalOwn}`, sub: "本" },
+                  { label: "最高順位", value: bestRankOverall != null ? `${bestRankOverall}` : "—", sub: bestRankOverall != null ? "位" : "" },
+                  { label: "施策比", value: hasBaseline ? (() => {
+                    // 施策で新たにTop10入りした自社動画数（afterにいてbeforeにいない）
+                    let added = 0;
+                    for (const d of chartData) {
+                      const beforeIds = new Set(d.beforeSlots.filter(s => s.owner === "own").map(s => s.video_id));
+                      added += d.afterSlots.filter(s => s.owner === "own" && !beforeIds.has(s.video_id)).length;
+                    }
+                    return `+${added}`;
+                  })() : "—", sub: hasBaseline ? "本" : "" },
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white flex flex-col items-center justify-center py-4 px-3">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">{stat.label}</p>
+                    <p className="text-2xl font-extrabold text-slate-800 leading-none">{stat.value}<span className="text-sm font-normal text-slate-400 ml-0.5">{stat.sub}</span></p>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                ))}
+              </div>
 
-          {/* Legacy fallback chart for old data without video info */}
-          {chartFallback && chartFallback.length > 0 && (
-            <ResponsiveContainer width="100%" height={340}>
-              <BarChart data={chartFallback} margin={{ top: 10, right: 10, left: 0, bottom: 60 }} barCategoryGap="20%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="label" tick={<SlantedXTick />} interval={0} height={70} />
-                <YAxis domain={[0, 30]} ticks={yTicks} tickFormatter={rankLabel} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                <RechartsTooltip content={({ active, payload }: any) => {
-                  if (!active || !payload?.length) return null;
-                  const d = payload[0]?.payload;
+              {/* Account breakdown */}
+              <div className="flex flex-col justify-center py-5 px-5 gap-3">
+                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">アカウント内訳</p>
+                {[
+                  { label: "公式", count: officialCount, color: "bg-blue-500", textColor: "text-blue-700" },
+                  { label: "サテライト", count: satelliteCount, color: "bg-teal-500", textColor: "text-teal-700" },
+                  { label: "施策", count: campaignCount, color: "bg-purple-500", textColor: "text-purple-700" },
+                ].map(cat => {
+                  const pct = totalOwn > 0 ? (cat.count / totalOwn) * 100 : 0;
                   return (
-                    <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
-                      <p className="font-medium mb-1">{d?.label}</p>
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: payload[0]?.color }} />
-                        <span className="font-medium">{d?.actualRank}位</span>
+                    <div key={cat.label} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={`font-medium ${cat.textColor}`}>{cat.label}</span>
+                        <span className="text-slate-500 tabular-nums">{cat.count}本</span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <div className={`h-full rounded-full ${cat.color} transition-all`} style={{ width: `${pct}%`, minWidth: cat.count > 0 ? '4px' : 0 }} />
                       </div>
                     </div>
                   );
-                }} />
-                <Bar dataKey="順位" radius={[4, 4, 0, 0]} barSize={28}>
-                  {chartFallback.map((entry, idx) => (
-                    <Cell key={idx} fill={entry.kwType === "ビッグKW" ? "#86efac" : "#93c5fd"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* KW別 前後比較 */}
-      {hasBaseline && comparisonRows.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">KW別 前後比較</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {comparisonRows.filter(row => row.afterRank != null).map((row) => (
-                <div key={row.keyword} className="flex items-center justify-between py-4 px-5">
-                  <div className="flex items-center gap-2.5">
-                    <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${row.kwType === "ビッグKW" ? "bg-green-400" : "bg-blue-400"}`} />
-                    <span className="font-medium text-sm">{row.keyword}</span>
-                    {row.kwType === "ビッグKW" && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-green-700 border-green-300 bg-green-50">ビッグKW</Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-slate-400">{row.beforeRank != null ? `${row.beforeRank}位` : "圏外"}</span>
-                    <span className="text-muted-foreground">&rarr;</span>
-                    <span className="text-sm font-semibold text-blue-600">{row.afterRank != null ? `${row.afterRank}位` : "圏外"}</span>
-                    <span className="w-16 text-right">
-                      <ChangeIndicator value={row.rankChange} suffix="位" />
-                    </span>
-                  </div>
-                </div>
-              ))}
+                })}
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ======== KwTabBar ======== */}
+      {kwList.length > 0 && (
+        <div className="overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            {kwList.map(kw => {
+              const isActive = kw.keyword === effectiveActiveKw;
+              const ownCount = kw.sovData?.own || 0;
+              const totalCount = kw.sovData?.total || 0;
+              return (
+                <button
+                  key={kw.keyword}
+                  onClick={() => setActiveKw(kw.keyword)}
+                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                    isActive
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {kw.keyword}
+                  {totalCount > 0 && (
+                    <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-blue-200" : "text-slate-400"}`}>
+                      {ownCount}/{totalCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ======== KwTabContent ======== */}
+      {activeKwData && (
+        <div className="space-y-5">
+          {/* OwnVideoCards */}
+          {activeKwData.sovData && (() => {
+            const ownSlots = activeKwData.sovData.afterSlots.filter(s => s.owner === "own");
+            if (ownSlots.length === 0) return null;
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {ownSlots.map(slot => (
+                  <OwnVideoCard key={slot.video_id} slot={slot} keyword={activeKwData.keyword} onSlotUpdate={onSlotUpdate} />
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* OccupationMap (前後比較 — サイドバイサイド) */}
+          {activeKwData.sovData && (() => {
+            const sovData = activeKwData.sovData;
+            const afterSlots = sovData.afterSlots;
+            const beforeSlots = sovData.beforeSlots;
+            const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
+            const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
+            const ownChange = afterOwnCount - beforeOwnCount;
+            const paddedBefore = padSlots(beforeSlots);
+            const paddedAfter = padSlots(afterSlots);
+            const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / afterSlots.length) * 100 * 10) / 10 : 0;
+
+            const renderEmptySlot = (i: number, isBefore: boolean) => (
+              <div className={`relative flex flex-col ${isBefore ? "w-14" : "w-16"} shrink-0`}>
+                <div className="h-[14px] shrink-0" />
+                <div className={`w-full ${isBefore ? "h-[100px]" : "h-[114px]"} rounded-md border border-dashed ${isBefore ? "border-slate-200/30" : "border-slate-200/50"} flex items-center justify-center ${isBefore ? "opacity-40" : ""}`}>
+                  <span className="text-[9px] text-slate-200">{i + 1}</span>
+                </div>
+              </div>
+            );
+
+            return afterSlots.length > 0 ? (
+              <Card>
+                <CardContent className="px-3 py-4 space-y-3">
+                  {/* Legend */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                    {hasBaseline && beforeSlots.length > 0 && (
+                      <>
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-slate-300/60 border border-slate-200" />
+                          <span className="text-slate-400">施策前</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-3 h-3 rounded-sm bg-gradient-to-br from-blue-400 to-blue-600 border border-blue-300" />
+                          <span>施策後</span>
+                        </span>
+                        <span className="text-slate-300">|</span>
+                      </>
+                    )}
+                    {Object.entries(GENRE_CONFIG).map(([key, { label, cls }]) => (
+                      <span key={key} className={`px-1 rounded text-[9px] ${cls}`}>{label}</span>
+                    ))}
+                    <span className="text-slate-300">|</span>
+                    {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, { text, dot }]) => (
+                      <span key={key} className="flex items-center gap-0.5"><span className={`w-2 h-2 rounded-full ${dot}`} />{text}</span>
+                    ))}
+                  </div>
+
+                  {/* Slot pairs — side by side */}
+                  <div className="flex items-end gap-2 overflow-x-auto pb-2">
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const bSlot = paddedBefore[i];
+                      const aSlot = paddedAfter[i];
+                      const isSameVideo = bSlot && aSlot && bSlot.video_id === aSlot.video_id;
+                      const isNew = !bSlot && aSlot;
+                      const isLost = bSlot && !aSlot;
+                      const isSwapped = bSlot && aSlot && bSlot.video_id !== aSlot.video_id;
+
+                      return (
+                        <div key={i} className="flex flex-col items-center gap-1 shrink-0">
+                          {/* 順位ラベル */}
+                          <span className="text-[9px] font-bold text-slate-400">#{i + 1}</span>
+                          {/* Before/After ペア */}
+                          <div className="flex gap-0.5 items-end">
+                            {hasBaseline && beforeSlots.length > 0 && (
+                              bSlot ? (
+                                <SovSlotCell slot={bSlot} maxViewCount={maxViewCount} keyword={activeKwData.keyword} phase="before" isBefore={true} onSlotUpdate={onSlotUpdate} />
+                              ) : renderEmptySlot(i, true)
+                            )}
+                            {aSlot ? (
+                              <SovSlotCell slot={aSlot} maxViewCount={maxViewCount} keyword={activeKwData.keyword} phase="after" isBefore={false} onSlotUpdate={onSlotUpdate} />
+                            ) : renderEmptySlot(i, false)}
+                          </div>
+                          {/* 変化インジケータ */}
+                          {hasBaseline && beforeSlots.length > 0 && (
+                            <span className={`text-[8px] font-medium leading-none ${
+                              isSameVideo ? "text-slate-300" :
+                              isSwapped ? "text-amber-500" :
+                              isNew ? "text-emerald-500" :
+                              isLost ? "text-red-400" : "text-slate-300"
+                            }`}>
+                              {isSameVideo ? "—" :
+                               isSwapped ? "入替" :
+                               isNew ? "★NEW" :
+                               isLost ? "退出" : "—"}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Stats cards below thumbnails */}
+                  {(() => {
+                    const beforePct = beforeSlots.length > 0
+                      ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
+                    const pctChange = Number((afterPct - beforePct).toFixed(1));
+                    const afterRank = activeKwData.posData?.afterRank;
+                    const rankChange = activeKwData.posData?.rankChange;
+
+                    return (
+                      <div className="grid grid-cols-3 gap-2">
+                        {/* シェア率 */}
+                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
+                          <span className="text-[10px] text-slate-400 font-medium">シェア率</span>
+                          <span className="text-xl font-bold text-blue-600">{afterPct}<span className="text-sm font-normal">%</span></span>
+                          {hasBaseline && beforeSlots.length > 0 && (
+                            <ChangeIndicator value={pctChange} suffix="pt" />
+                          )}
+                        </div>
+                        {/* 自社動画数 */}
+                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
+                          <span className="text-[10px] text-slate-400 font-medium">自社動画数</span>
+                          <span className="text-xl font-bold text-slate-700">{afterOwnCount}<span className="text-sm font-normal text-slate-400"> /{afterSlots.length}</span></span>
+                          {hasBaseline && beforeSlots.length > 0 && (
+                            <ChangeIndicator value={ownChange} suffix="本" />
+                          )}
+                        </div>
+                        {/* 最高順位 */}
+                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
+                          <span className="text-[10px] text-slate-400 font-medium">最高順位</span>
+                          {afterRank != null ? (
+                            <>
+                              <span className="text-xl font-bold text-slate-700">{afterRank}<span className="text-sm font-normal">位</span></span>
+                              {hasBaseline && rankChange != null && (
+                                <ChangeIndicator value={rankChange} suffix="位" />
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-xl font-bold text-slate-300">—</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            ) : null;
+          })()}
+        </div>
+      )}
+
+      {/* ======== KwSummaryTable (常時表示) ======== */}
+      {kwList.length > 0 && (
+        <Card>
+          <CardContent className="p-0">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500">キーワード</th>
+                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500 w-40">シェア率</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">自社動画</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">最高順位</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">順位変動</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kwList.map(kw => {
+                  const pct = kw.sovData?.pct || 0;
+                  const own = kw.sovData?.own || 0;
+                  const afterRank = kw.posData?.afterRank;
+                  const rankChange = kw.posData?.rankChange;
+                  return (
+                    <tr
+                      key={kw.keyword}
+                      className={`border-b border-slate-50 hover:bg-blue-50/40 transition-colors cursor-pointer ${kw.keyword === effectiveActiveKw ? "bg-blue-50/60" : ""}`}
+                      onClick={() => setActiveKw(kw.keyword)}
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-slate-800">{kw.keyword}</span>
+                          {kw.isBigKeyword && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-amber-700 border-amber-300 bg-amber-50">ビッグKW</Badge>}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-blue-600 tabular-nums w-10 text-right">{pct}%</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span className="text-sm font-bold text-slate-700">{own}<span className="text-xs font-normal text-slate-400">/{kw.sovData?.total || 0}</span></span>
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {afterRank != null ? (
+                          <span className={`text-sm font-bold ${afterRank <= 3 ? "text-green-600" : afterRank <= 10 ? "text-blue-600" : "text-slate-600"}`}>{afterRank}位</span>
+                        ) : (
+                          <span className="text-xs text-slate-300">圏外</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {hasBaseline && rankChange != null ? (
+                          <ChangeIndicator value={rankChange} suffix="位" />
+                        ) : (
+                          <span className="text-xs text-slate-300">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
       )}
@@ -1331,6 +1267,28 @@ function VideoChartTooltip({ active, payload, label }: any) {
   );
 }
 
+function TrackingToggle({ campaignId }: { campaignId: number }) {
+  const statusQuery = trpc.campaign.getTrackingStatus.useQuery({ campaignId }, { enabled: campaignId > 0 });
+  const toggleMut = trpc.campaign.toggleDailyTracking.useMutation({
+    onSuccess: () => { statusQuery.refetch(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const status = statusQuery.data;
+  if (!status) return null;
+
+  return (
+    <div className="flex items-center gap-1.5 border rounded-md px-2 py-1">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">定期観測</span>
+      <Switch
+        checked={status.enabled}
+        onCheckedChange={(checked) => toggleMut.mutate({ campaignId, enabled: checked })}
+        disabled={toggleMut.isPending}
+        className="scale-75"
+      />
+    </div>
+  );
+}
+
 export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMetrics, keywords, bigKeywords }: { videos: any[]; videoScores?: any[]; hasBaseline?: boolean; dailyMetrics?: any[]; keywords?: string[]; bigKeywords?: string[] }) {
   const kwSet = useMemo(() => new Set((keywords || []).map(k => k.replace(/^#/, "").toLowerCase())), [keywords]);
   const bigKwSet = useMemo(() => new Set((bigKeywords || []).map(k => k.replace(/^#/, "").toLowerCase())), [bigKeywords]);
@@ -1350,38 +1308,68 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
     return views > (best.views || 0) ? { id: v.videoId, views } : best;
   }, { id: "", views: 0 }).id;
 
-  // サマリー
-  const totalViews = videos.reduce((s, v) => s + (v.after?.viewCount || 0), 0);
-  const totalLikes = videos.reduce((s, v) => s + (v.after?.likeCount || 0), 0);
-  const totalComments = videos.reduce((s, v) => s + (v.after?.commentCount || 0), 0);
-  const totalShares = videos.reduce((s, v) => s + (v.after?.shareCount || 0), 0);
-  const totalSaves = videos.reduce((s, v) => s + (v.after?.saveCount || 0), 0);
-  const avgEr = totalViews > 0 ? Number(((totalLikes + totalComments + totalShares) / totalViews * 100).toFixed(2)) : 0;
+  // dailyMetricsから各動画の最新値を取得
+  const latestByUrl = useMemo(() => {
+    const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>();
+    if (!dailyMetrics) return map;
+    for (const dm of dailyMetrics) {
+      if (dm.platform && dm.platform !== "tiktok") continue;
+      const url = dm.videoUrl;
+      if (!url) continue;
+      const existing = map.get(url);
+      const dateKey = dm.dateKey || "";
+      if (!existing || dateKey > (existing as any)._dk) {
+        map.set(url, {
+          viewCount: dm.viewCount || 0, likeCount: dm.likeCount || 0,
+          commentCount: dm.commentCount || 0, shareCount: dm.shareCount || 0,
+          saveCount: dm.saveCount || 0, _dk: dateKey,
+        } as any);
+      }
+    }
+    return map;
+  }, [dailyMetrics]);
 
-  // ソート
+  // サマリー（dailyMetrics最新値を優先）
+  const { totalViews, totalLikes, totalComments, totalShares, totalSaves, avgEr } = useMemo(() => {
+    let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+    for (const v of videos) {
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      views += Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+      likes += Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+      comments += Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+      shares += Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+      saves += Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
+    }
+    const er = views > 0 ? Number(((likes + comments + shares) / views * 100).toFixed(2)) : 0;
+    return { totalViews: views, totalLikes: likes, totalComments: comments, totalShares: shares, totalSaves: saves, avgEr: er };
+  }, [videos, latestByUrl]);
+
+  // ソート（dailyMetrics最新値を優先して正確な値でソート）
   const sortedVideos = useMemo(() => {
     return [...videos].sort((a, b) => {
       const getVal = (v: any) => {
+        const url = v.videoUrl || "";
+        const dm = latestByUrl.get(url);
+        const vw = Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+        const lk = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+        const cm = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+        const sh = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+        const sv = Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
         switch (sortBy) {
-          case "views": return v.after?.viewCount || 0;
-          case "likes": return v.after?.likeCount || 0;
-          case "comments": return v.after?.commentCount || 0;
-          case "saves": return v.after?.saveCount || 0;
-          case "shares": return v.after?.shareCount || 0;
-          case "er": {
-            const vw = v.after?.viewCount || 0;
-            const lk = v.after?.likeCount || 0;
-            const cm = v.after?.commentCount || 0;
-            const sh = v.after?.shareCount || 0;
-            return vw > 0 ? (lk + cm + sh) / vw * 100 : 0;
-          }
+          case "views": return vw;
+          case "likes": return lk;
+          case "comments": return cm;
+          case "saves": return sv;
+          case "shares": return sh;
+          case "er": return vw > 0 ? (lk + cm + sh) / vw * 100 : 0;
           case "date": return v.postedAt ? new Date(v.postedAt).getTime() : 0;
           default: return 0;
         }
       };
       return getVal(b) - getVal(a);
     });
-  }, [videos, sortBy]);
+  }, [videos, sortBy, latestByUrl]);
 
   // dailyMetrics累積チャート
   const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
@@ -1389,7 +1377,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
   return (
     <div className="space-y-4">
       {/* サマリー */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card><CardContent className="py-3 px-4 text-center">
           <p className="text-xs text-muted-foreground">動画数</p>
           <p className="text-xl font-bold">{videos.length}</p>
@@ -1419,22 +1407,27 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
       {/* Report A: 累積パフォーマンス推移 */}
       {hasBaseline && videos.length > 0 && (() => {
         if (hasDailyData) {
-          // 実測値ベースの累積チャート
-          const dayMap = new Map<string, { views: number; likes: number; comments: number }>();
+          // 実測値ベースの累積チャート (TikTokのみ)
+          const dayMap = new Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>();
           for (const dm of dailyMetrics!) {
+            if (dm.platform && dm.platform !== "tiktok") continue;
             const dateKey = dm.date?.split("T")[0] || dm.dateKey;
             if (!dateKey) continue;
-            const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0 };
+            const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
             entry.views += dm.viewCount || 0;
             entry.likes += dm.likeCount || 0;
             entry.comments += dm.commentCount || 0;
+            entry.shares += dm.shareCount || 0;
+            entry.saves += dm.saveCount || 0;
             dayMap.set(dateKey, entry);
           }
           const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
           const lineData = sortedDays.map(([dateKey, d]) => ({
             name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
-            再生数: d.views, いいね: d.likes, コメント: d.comments,
+            再生数: d.views, いいね: d.likes, コメント: d.comments, シェア: d.shares, 保存: d.saves,
           }));
+          const hasShares = lineData.some(d => d.シェア > 0);
+          const hasSaves = lineData.some(d => d.保存 > 0);
           return lineData.length > 0 ? (
             <Card>
               <CardHeader>
@@ -1453,6 +1446,8 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
                     <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
                     <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
                     <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
+                    {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
                   </LineChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -1544,6 +1539,8 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
   const sparks = useMemo(() => {
     // Group daily metrics by videoUrl
     const byVideo = new Map<string, Array<{ dateKey: string; value: number }>>();
+    // 最新メトリクス（ER計算用）
+    const latestDm = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number; dateKey: string }>();
     if (hasDailyData) {
       for (const dm of dailyMetrics) {
         if (dm.platform !== "tiktok") continue;
@@ -1554,6 +1551,14 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
           dateKey: dm.dateKey,
           value: Number(dm[SPARK_KEY[sparkMetric]]) || 0,
         });
+        const prev = latestDm.get(url);
+        if (!prev || dm.dateKey > prev.dateKey) {
+          latestDm.set(url, {
+            viewCount: dm.viewCount || 0, likeCount: dm.likeCount || 0,
+            commentCount: dm.commentCount || 0, shareCount: dm.shareCount || 0,
+            saveCount: dm.saveCount || 0, dateKey: dm.dateKey,
+          });
+        }
       }
     }
 
@@ -1575,7 +1580,18 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         }
       }
 
-      const latestVal = sorted.length > 0 ? sorted[sorted.length - 1].value : 0;
+      const latestDailyVal = sorted.length > 0 ? sorted[sorted.length - 1].value : 0;
+      const snapshotVal = Number(v.after?.[metricKey]) || 0;
+      const latestVal = Math.max(latestDailyVal, snapshotVal);
+
+      // ER計算（dailyMetrics最新値を優先）
+      const dm = latestDm.get(url);
+      const vw = Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+      const lk = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+      const cm = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+      const sh = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+      const er = vw > 0 ? Number(((lk + cm + sh) / vw * 100).toFixed(2)) : 0;
+
       return {
         videoUrl: url,
         caption: (v.description || "").slice(0, 18),
@@ -1583,6 +1599,8 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         coverUrl: v.coverUrl || "",
         latestVal,
         data: sorted,
+        er,
+        postedAt: v.postedAt || "",
       };
     }).filter(s => s.data.length >= 2);
   }, [videos, dailyMetrics, sparkMetric, metricKey, hasDailyData]);
@@ -1592,11 +1610,13 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
 
   if (sparks.length === 0) return null;
 
-  const topVal = Math.max(...sparks.map(s => s.latestVal), 1);
+  const topVal = sortBy === "er"
+    ? Math.max(...sparks.map(s => s.er), 1)
+    : Math.max(...sparks.map(s => s.latestVal), 1);
   const visibleSparks = sparks.slice(0, sparkDisplayCount);
   const sparkRemaining = sparks.length - sparkDisplayCount;
 
-  return (
+  return (<>
     <Card>
       <CardContent className="py-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1606,7 +1626,11 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
           </div>
           <div className="flex gap-1 flex-wrap">
             {sortOptions.map(opt => (
-              <button key={opt.key} onClick={() => { setSortBy(opt.key); const map: Record<string, "views" | "likes" | "shares" | "saves"> = { views: "views", likes: "likes", shares: "shares", saves: "saves" }; if (map[opt.key]) setSparkMetric(map[opt.key]); }}
+              <button key={opt.key} onClick={() => {
+                setSortBy(opt.key);
+                const sparkMap: Record<string, "views" | "likes" | "shares" | "saves"> = { views: "views", likes: "likes", shares: "shares", saves: "saves", comments: "views", er: "views", date: "views" };
+                setSparkMetric(sparkMap[opt.key] || "views");
+              }}
                 className={`px-2 py-1 rounded text-[11px] transition-colors ${sortBy === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
                 {opt.label}
               </button>
@@ -1616,132 +1640,181 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {visibleSparks.map((s, idx) => {
             const vals = s.data.map(d => d.value);
-            const max = Math.max(...vals, 1);
-            const min = Math.min(...vals, 0);
-            const range = max - min || 1;
-            const W = 200;
-            const H = 50;
-            const points = vals.map((v, i) => {
-              const x = vals.length > 1 ? (i / (vals.length - 1)) * W : W / 2;
-              const y = H - ((v - min) / range) * (H - 4) - 2;
+            const sMax = Math.max(...vals, 1);
+            const sMin = Math.min(...vals, 0);
+            const sRange = sMax - sMin || 1;
+            const W = 200, H = 40;
+            const pts = vals.map((sv, si) => {
+              const x = vals.length > 1 ? (si / (vals.length - 1)) * W : W / 2;
+              const y = H - ((sv - sMin) / sRange) * (H - 4) - 2;
               return `${x},${y}`;
             });
-            const polyline = points.join(" ");
-            const polygon = `0,${H} ${polyline} ${W},${H}`;
-            const gradId = `spk-${idx}`;
-            const intensity = topVal > 0 ? Math.min(s.latestVal / topVal, 1) : 0.5;
-            const strokeColor = intensity > 0.5 ? "#6366f1" : intensity > 0.2 ? "#818cf8" : "#a5b4fc";
-
+            const poly = pts.join(" ");
+            const polyFill = `0,${H} ${poly} ${W},${H}`;
+            const displayVal = sortBy === "er" ? s.er : s.latestVal;
+            const intensity = topVal > 0 ? Math.min(displayVal / topVal, 1) : 0.5;
+            const sc = intensity > 0.5 ? "#6366f1" : intensity > 0.2 ? "#818cf8" : "#a5b4fc";
+            const gId = `spk-${idx}`;
             return (
-              <a key={s.videoUrl || idx} href={s.videoUrl} target="_blank" rel="noopener noreferrer" className="block rounded-lg border bg-background hover:bg-muted/30 transition-colors p-3 group">
-                <div className="flex items-start gap-2.5 mb-2">
-                  {s.coverUrl && <img src={s.coverUrl} alt="" className="w-12 h-16 rounded-md object-cover flex-shrink-0" loading="lazy" />}
+              <a key={s.videoUrl || idx} href={s.videoUrl} target="_blank" rel="noopener noreferrer"
+                className="block rounded-lg border bg-background hover:border-slate-300 hover:shadow-md transition-all overflow-hidden group">
+                {/* 上部: サムネ + ユーザー名 + キャプション + 大きな数値 */}
+                <div className="flex items-start gap-2.5 p-3 pb-2">
+                  {s.coverUrl ? (
+                    <img src={s.coverUrl} alt="" className="w-11 h-[62px] rounded-md object-cover flex-shrink-0" loading="lazy" />
+                  ) : (
+                    <div className="w-11 h-[62px] rounded-md bg-gradient-to-br from-indigo-400 to-purple-500 flex-shrink-0 flex items-center justify-center">
+                      <Play className="h-3 w-3 text-white/80" />
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium leading-tight line-clamp-2 group-hover:text-primary transition-colors">{s.caption || "動画"}</p>
-                    {s.username && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{s.username}</p>}
+                    {s.username && <p className="text-[10px] font-bold text-slate-600 truncate">{s.username}</p>}
+                    <p className="text-[10px] text-slate-400 truncate leading-snug">{s.caption || "動画"}</p>
+                    <p className="text-2xl font-extrabold tabular-nums text-slate-800 leading-tight mt-0.5">
+                      {sortBy === "er" ? `${s.er}%` : sortBy === "date" ? (s.postedAt ? s.postedAt.split("T")[0] : "-") : fmt(s.latestVal)}
+                    </p>
+                    <p className="text-[9px] text-slate-400 font-medium">
+                      {sortBy === "er" ? "ER" : sortBy === "date" ? "投稿日" : SPARK_LABELS[sparkMetric]}
+                    </p>
                   </div>
                 </div>
-                <p className="text-lg font-bold tabular-nums mb-1">{fmt(s.latestVal)}</p>
-                <div className="h-[50px]">
-                  <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
-                    <defs>
-                      <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={strokeColor} stopOpacity={0.3} />
-                        <stop offset="100%" stopColor={strokeColor} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <polygon fill={`url(#${gradId})`} points={polygon} />
-                    <polyline fill="none" stroke={strokeColor} strokeWidth="2" points={polyline} />
-                  </svg>
-                </div>
+                {/* 下部: スパークライン */}
+                {vals.length >= 2 && (
+                  <div className="px-3 pb-2">
+                    <div className="h-[40px]">
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
+                        <defs>
+                          <linearGradient id={gId} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={sc} stopOpacity={0.25} />
+                            <stop offset="100%" stopColor={sc} stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <polygon fill={`url(#${gId})`} points={polyFill} />
+                        <polyline fill="none" stroke={sc} strokeWidth="2" points={poly} />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </a>
             );
           })}
         </div>
         {sparkRemaining > 0 && (
-          <div className="flex justify-center pt-1">
+          <div className="flex justify-center pt-3">
             <Button variant="ghost" size="sm" onClick={() => setSparkDisplayCount(prev => prev + SPARK_PAGE)}
               className="text-xs text-muted-foreground hover:text-foreground">
               <ChevronDown className="h-3.5 w-3.5 mr-1" />もっと見る（残り{sparkRemaining}件）
             </Button>
           </div>
         )}
+      </CardContent>
+    </Card>
 
-        {/* 動画詳細リスト */}
-        <div className="space-y-2 pt-2 border-t">
-          {visibleSparks.map((s, i) => {
-            const v = videos[videos.findIndex(vid => (vid.videoUrl || "") === s.videoUrl)];
-            if (!v) return null;
-            const score = scoreMap.get(v.videoId);
-            const isBest = v.videoId === bestVideoId;
-            const views = v.after?.viewCount || 0;
-            const likes = v.after?.likeCount || 0;
-            const comments = v.after?.commentCount || 0;
-            const shares = v.after?.shareCount || 0;
-            const saves = v.after?.saveCount || 0;
-            const erPercent = v.er != null ? v.er : (views > 0 ? Number(((likes + comments + shares) / views * 100).toFixed(2)) : 0);
-            const hashtags: string[] = v.hashtags || [];
-            const duration: number = v.duration || 0;
-            const durationStr = duration > 0 ? `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, "0")}` : null;
+    {/* 下段: 動画詳細カード (スパークラインなし) */}
+    <PostDetailCardGrid videos={videos} dailyMetrics={dailyMetrics} />
+  </>
+  );
+}
 
-            return (
-              <div key={s.videoUrl || i} className={`flex gap-3 py-2 px-3 rounded-lg border ${isBest ? "border-yellow-300 bg-yellow-50/30" : "hover:bg-muted/30"}`}>
-                <VideoThumbnail url={v.coverUrl} className="w-12 h-16" />
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    {isBest && <Crown className="h-3 w-3 text-yellow-500 flex-shrink-0" />}
-                    <p className="text-xs font-medium truncate">{v.description?.slice(0, 60) || v.videoId}</p>
-                    {score && (
-                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium border ${getScoreGradeColor(score.overallScore)}`}>
-                        <Star className="h-2.5 w-2.5" />{score.overallScore}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><Eye className="h-3 w-3" />{fmt(views)}</span>
-                    <span className="flex items-center gap-1"><Heart className="h-3 w-3" />{fmt(likes)}</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" />{fmt(comments)}</span>
-                    <span className="flex items-center gap-1"><Bookmark className="h-3 w-3" />{fmt(saves)}</span>
-                    <span className="flex items-center gap-1"><Share2 className="h-3 w-3" />{fmt(shares)}</span>
-                    <span className="font-medium text-foreground">ER {erPercent}%</span>
-                    {v.postedAt && <span>{new Date(v.postedAt).toLocaleDateString("ja-JP")}</span>}
-                    {durationStr && <span>{durationStr}</span>}
-                    {v.videoUrl && (
-                      <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-primary hover:underline">
-                        <ExternalLink className="h-3 w-3" />TikTok
-                      </a>
-                    )}
-                  </div>
-                  {hashtags.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {hashtags.slice(0, 8).map((tag, ti) => {
-                        const lower = tag.toLowerCase();
-                        const isBigKw = bigKwSet.has(lower);
-                        const isKw = kwSet.has(lower);
-                        const colorCls = isBigKw
-                          ? "bg-green-50 text-green-700 border-green-200"
-                          : isKw
-                          ? "bg-blue-50 text-blue-600 border-blue-200"
-                          : "bg-slate-50 text-slate-500 border-slate-200";
-                        return (
-                          <span key={ti} className={`inline-block px-1.5 py-0 rounded-full text-[10px] border ${colorCls}`}>
-                            #{tag}
-                          </span>
-                        );
-                      })}
-                      {hashtags.length > 8 && <span className="text-[10px] text-muted-foreground">+{hashtags.length - 8}</span>}
+const DETAIL_PAGE = 8;
+
+function PostDetailCardGrid({ videos, dailyMetrics }: { videos: any[]; dailyMetrics?: any[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const displayed = showAll ? videos : videos.slice(0, DETAIL_PAGE);
+  const remaining = videos.length - DETAIL_PAGE;
+
+  // dailyMetricsから各動画の最新値を取得
+  const latestByUrl = useMemo(() => {
+    const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>();
+    if (!dailyMetrics) return map;
+    for (const dm of dailyMetrics) {
+      const url = dm.videoUrl;
+      if (!url) continue;
+      const existing = map.get(url);
+      const dateKey = dm.dateKey || "";
+      if (!existing || dateKey > (existing as any)._dk) {
+        map.set(url, {
+          viewCount: dm.viewCount || 0,
+          likeCount: dm.likeCount || 0,
+          commentCount: dm.commentCount || 0,
+          shareCount: dm.shareCount || 0,
+          saveCount: dm.saveCount || 0,
+          _dk: dateKey,
+        } as any);
+      }
+    }
+    return map;
+  }, [dailyMetrics]);
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800">動画詳細</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">施策動画の詳細情報</p>
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {displayed.map((v: any, i: number) => {
+              const url = v.videoUrl || "";
+              const username = url.match(/@([^/]+)/)?.[1] || "";
+              const tags = (v.hashtags || []).slice(0, 4);
+              // 最新のdailyMetricsがあればそちらを優先、なければスナップショット値
+              const dm = latestByUrl.get(url);
+              const views = Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+              const likes = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+              const comments = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+              const shares = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+              const saves = Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
+
+              return (
+                <a key={url || i} href={url} target="_blank" rel="noopener noreferrer"
+                  className="flex gap-3 rounded-xl bg-slate-50/80 border border-slate-100 p-3.5 hover:border-slate-300 hover:shadow-md transition-all">
+                  {/* Thumbnail */}
+                  {v.coverUrl ? (
+                    <img src={v.coverUrl} alt="" className="w-[56px] h-[100px] rounded-lg object-cover flex-shrink-0" loading="lazy" />
+                  ) : (
+                    <div className="w-[56px] h-[100px] rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 flex-shrink-0 flex items-center justify-center">
+                      <Play className="h-4 w-4 text-white/80" />
                     </div>
                   )}
-                </div>
-              </div>
-            );
-          })}
-          {sparkRemaining > 0 && (
-            <div className="flex justify-center pt-2">
-              <Button variant="ghost" size="sm" onClick={() => setSparkDisplayCount(prev => prev + SPARK_PAGE)}
-                className="text-xs text-muted-foreground hover:text-foreground">
-                <ChevronDown className="h-3.5 w-3.5 mr-1" />もっと見る（残り{sparkRemaining}件）
-              </Button>
+                  {/* Meta */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
+                    <div>
+                      {username && <p className="text-xs font-bold text-slate-800 truncate">@{username}</p>}
+                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug mt-0.5">{(v.description || "").slice(0, 80)}</p>
+                    </div>
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {tags.map((tag: string, ti: number) => (
+                          <span key={ti} className="text-[9px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-px">
+                            #{tag.replace(/^#/, "")}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-[10px] text-slate-400 flex-wrap">
+                      <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(views)}</strong></span>
+                      <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(likes)}</strong></span>
+                      <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(comments)}</strong></span>
+                      <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(shares)}</strong></span>
+                      {saves > 0 && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(saves)}</strong></span>}
+                      {views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-slate-700">{(((likes || 0) + (comments || 0)) / views * 100).toFixed(2)}%</strong></span>}
+                    </div>
+                    {v.postedAt && <p className="text-[10px] text-slate-400">{new Date(v.postedAt).toLocaleDateString("ja-JP")}</p>}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+          {remaining > 0 && (
+            <div className="text-center mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={(e) => { e.preventDefault(); setShowAll(!showAll); }}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-4 py-1.5 rounded-full transition-colors"
+              >
+                {showAll ? "閉じる" : `もっと見る（残り ${remaining} 件）`}
+              </button>
             </div>
           )}
         </div>
@@ -2028,11 +2101,12 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
   );
 }
 
-function SovSlotCell({ slot, keyword, phase, onSlotUpdate }: {
+function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate }: {
   slot: SlotData;
   maxViewCount: number;
   keyword: string;
   phase: "before" | "after";
+  isBefore?: boolean;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -2046,13 +2120,26 @@ function SovSlotCell({ slot, keyword, phase, onSlotUpdate }: {
   const cfg = SOV_SLOT_CONFIG[configKey];
   const isLabeled = isOwn || isCompetitor;
 
-  // 自社=大サイズ（9:16比維持）、その他=通常サイズ
-  const cardW = isOwn ? "w-20" : "w-16";
-  const thumbH = isOwn ? "h-[142px]" : "h-[114px]";
+  // サイズ: isBefore=true は縮小、After自社はサイズアップ
+  const cardW = isBefore
+    ? (isOwn ? "w-16" : "w-14")
+    : (isOwn ? "w-20" : "w-16");
+  const thumbH = isBefore
+    ? (isOwn ? "h-[114px]" : "h-[100px]")
+    : (isOwn ? "h-[142px]" : "h-[114px]");
+
+  // Before側: 彩度低・opacity低
+  const beforeFilter = isBefore
+    ? "opacity-60 saturate-[0.4] hover:opacity-80 hover:saturate-[0.7]"
+    : "";
+  // After自社: elevation + ring
+  const ownAfterElevation = !isBefore && isOwn
+    ? "shadow-[0_4px_16px_rgba(59,130,246,0.25)] ring-2 ring-blue-400/50"
+    : "";
 
   return (
     <Popover open={editOpen} onOpenChange={setEditOpen}>
-    <div className={`relative flex flex-col ${cardW} shrink-0 group/slot`}>
+    <div className={`relative flex flex-col ${cardW} shrink-0 group/slot transition-all duration-200 ${beforeFilter}`}>
       {/* 鉛筆ボタン — ホバー時に表示 */}
       <PopoverTrigger asChild>
         <button
@@ -2084,7 +2171,7 @@ function SovSlotCell({ slot, keyword, phase, onSlotUpdate }: {
             href={slot.video_url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`relative flex flex-col cursor-pointer transition-all duration-200 ${editOpen ? "" : "hover:scale-110 hover:z-10"}`}
+            className={`relative flex flex-col cursor-pointer transition-all duration-200 ${editOpen ? "" : "hover:scale-110 hover:z-10"} ${ownAfterElevation ? `rounded-md ${ownAfterElevation}` : ""}`}
             onClick={(e) => { if (editOpen) { e.preventDefault(); } e.stopPropagation(); }}
           >
             {/* トップキャップ: 公式/施策/競合 ラベル */}
@@ -2168,253 +2255,7 @@ function SovSlotCell({ slot, keyword, phase, onSlotUpdate }: {
   );
 }
 
-function SovOccupationMap({ keyword, data, hasBaseline, isBigKeyword = false, campaignId, onSlotUpdate }: {
-  keyword: string;
-  data: any;
-  hasBaseline: boolean;
-  isBigKeyword?: boolean;
-  campaignId: number;
-  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
-}) {
-  const afterSlots: SlotData[] = data.after_slots || [];
-  const beforeSlots: SlotData[] = data.before_slots || [];
-  const afterSov = data.after || { own_count: 0, total_count: 0, percentage: "0" };
-
-  const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
-  const afterCompCount = afterSlots.filter(s => s.owner === "competitor").length;
-  const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
-  const ownChange = afterOwnCount - beforeOwnCount;
-
-  // Max view count for opacity scaling (across both before/after)
-  const allSlots = [...afterSlots, ...beforeSlots];
-  const maxViewCount = allSlots.length > 0 ? Math.max(...allSlots.map(s => s.view_count)) : 1;
-
-  // Pad slots to 10 for display
-  const padSlots = (slots: SlotData[]) => {
-    const result: (SlotData | null)[] = [];
-    for (let i = 1; i <= 10; i++) {
-      result.push(slots.find(s => s.rank === i) || null);
-    }
-    return result;
-  };
-
-  const renderSlotRow = (slots: SlotData[], label: string, phase: "before" | "after") => {
-    const padded = padSlots(slots);
-    const ownCount = slots.filter(s => s.owner === "own").length;
-
-    const renderSlot = (slot: SlotData | null, idx: number) =>
-      slot ? (
-        <SovSlotCell key={slot.video_id} slot={slot} maxViewCount={maxViewCount} keyword={keyword} phase={phase} onSlotUpdate={onSlotUpdate} />
-      ) : (
-        <div key={`empty-${idx}`} className="relative flex flex-col w-16 shrink-0">
-          <div className="h-[14px] shrink-0" />
-          <div className="w-full h-[114px] rounded-md border border-dashed border-slate-200/50 flex items-center justify-center">
-            <span className="text-[9px] text-slate-200">{idx + 1}</span>
-          </div>
-        </div>
-      );
-
-    return (
-      <div className="flex items-center gap-1.5">
-        {hasBaseline && (
-          <span className="text-[9px] text-slate-400 w-8 shrink-0 text-right">{label}</span>
-        )}
-        <div className="flex items-end gap-1.5">
-          {padded.map((slot, i) => renderSlot(slot, i))}
-        </div>
-        {/* 自社カウント — 占有率を直感的に見せるミニバー */}
-        <div className="shrink-0 ml-3 flex flex-col items-center gap-0.5">
-          <span className="text-lg font-bold text-blue-600">{ownCount}<span className="text-xs font-normal text-slate-400">/10</span></span>
-          <div className="w-10 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${ownCount * 10}%` }} />
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="rounded-lg border bg-white">
-      {/* KWヘッダー — キーワード名 + 自社占有バー */}
-      <div className={`flex items-center gap-3 px-4 py-2.5 border-b ${isBigKeyword ? "bg-gradient-to-r from-amber-50/80 to-slate-50/80" : "bg-slate-50/80"}`}>
-        <Search className={`h-3.5 w-3.5 ${isBigKeyword ? "text-amber-600" : "text-slate-400"}`} />
-        <span className="font-semibold text-sm">{keyword}</span>
-        {isBigKeyword && <Badge className="text-[9px] px-1 py-0 h-4 bg-amber-100 text-amber-700 border-amber-300">ビッグKW</Badge>}
-        <div className="ml-auto flex items-center gap-2.5">
-          {/* ミニ占有バー + 数値 */}
-          <div className="flex items-center gap-1.5">
-            <div className="w-16 h-2 rounded-full bg-slate-100 overflow-hidden">
-              <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${(afterOwnCount / 10) * 100}%` }} />
-            </div>
-            <span className="text-sm font-bold text-blue-600">{afterOwnCount}<span className="text-xs font-normal text-slate-400">/10</span></span>
-          </div>
-          {hasBaseline && ownChange !== 0 && (
-            <ChangeIndicator value={ownChange} suffix="本" />
-          )}
-        </div>
-      </div>
-      {/* Slot rows */}
-      <div className="px-3 py-2.5 space-y-2">
-        {afterSlots.length > 0 ? (
-          <>
-            {hasBaseline && beforeSlots.length > 0 && renderSlotRow(beforeSlots, "前", "before")}
-            {renderSlotRow(afterSlots, hasBaseline ? "後" : "", "after")}
-          </>
-        ) : (
-          <div className="text-xs text-muted-foreground italic py-1">スロットデータなし</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function SovSection({ sovReport, positions, hasBaseline, campaign, campaignId, onSlotUpdate }: {
-  sovReport: Record<string, any>;
-  positions: any[];
-  hasBaseline: boolean;
-  campaign?: any;
-  campaignId: number;
-  onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
-}) {
-  const sovEntries = Object.entries(sovReport);
-
-  // Aggregate stats (from the existing sov percentage data)
-  const chartData = sovEntries
-    .map(([kw, data]) => ({
-      keyword: kw,
-      own: data.after?.own_count || 0,
-      total: data.after?.total_count || 0,
-      pct: parseFloat(data.after?.percentage) || 0,
-      afterSlots: (data.after_slots || []) as SlotData[],
-    }))
-    .filter(d => d.total > 0);
-
-  const totalOwn = chartData.reduce((s, d) => s + d.own, 0);
-  const totalScanned = chartData.reduce((s, d) => s + d.total, 0);
-  const avgPct = totalScanned > 0 ? Math.round((totalOwn / totalScanned) * 100 * 10) / 10 : 0;
-
-  // Count slots by owner type across all KWs (top 10 only)
-  const allAfterSlots = chartData.flatMap(d => d.afterSlots);
-  const ownInTop10 = allAfterSlots.filter(s => s.owner === "own").length;
-  const compInTop10 = allAfterSlots.filter(s => s.owner === "competitor").length;
-
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">検索結果占有マップ</CardTitle>
-          <CardDescription className="text-xs">各KWの検索Top10をサムネイルで可視化。タグ=ジャンル</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-
-          {/* === サマリー — M3 segmented bar + chips === */}
-          {chartData.length > 0 && (() => {
-            const officialCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
-            const satelliteCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
-            const campaignCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
-            const othersCount = allAfterSlots.filter(s => s.owner !== "own").length;
-            const totalSlots = officialCount + satelliteCount + campaignCount + othersCount;
-            const officialPct = totalSlots > 0 ? (officialCount / totalSlots) * 100 : 0;
-            const satellitePct = totalSlots > 0 ? (satelliteCount / totalSlots) * 100 : 0;
-            const campaignPct = totalSlots > 0 ? (campaignCount / totalSlots) * 100 : 0;
-            const othersPct = totalSlots > 0 ? (othersCount / totalSlots) * 100 : 0;
-            return (
-              <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-slate-50/80 to-white p-5 space-y-4">
-                {/* Hero metric row */}
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 tracking-wide uppercase mb-1">自社シェア率</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-[42px] leading-none font-extrabold tracking-tight text-blue-600">{avgPct}</span>
-                      <span className="text-lg font-bold text-blue-400">%</span>
-                    </div>
-                  </div>
-                  <div className="text-right pb-1">
-                    <p className="text-sm text-slate-600">
-                      全{chartData.length}キーワードの上位10件中
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      計<span className="font-bold text-slate-600 mx-0.5">{totalOwn}</span>件 / {totalScanned}件が自社動画
-                    </p>
-                  </div>
-                </div>
-
-                {/* M3 Segmented stacked bar */}
-                <div className="space-y-2">
-                  <div
-                    className="flex h-3 rounded-full overflow-hidden bg-slate-100"
-                    role="img"
-                    aria-label={`自社シェア率: 公式${officialCount}件、サテライト${satelliteCount}件、施策${campaignCount}件、その他${othersCount}件`}
-                    style={{ animation: 'sov-bar-fill 700ms var(--md-ease-emphasized-decel) both' }}
-                  >
-                    {officialCount > 0 && (
-                      <div
-                        className="h-full bg-blue-500 transition-all duration-500"
-                        style={{ width: `${officialPct}%`, minWidth: officialCount > 0 ? '4px' : 0 }}
-                      />
-                    )}
-                    {satelliteCount > 0 && (
-                      <div
-                        className="h-full bg-teal-500 transition-all duration-500"
-                        style={{ width: `${satellitePct}%`, minWidth: satelliteCount > 0 ? '4px' : 0 }}
-                      />
-                    )}
-                    {campaignCount > 0 && (
-                      <div
-                        className="h-full bg-purple-500 transition-all duration-500"
-                        style={{ width: `${campaignPct}%`, minWidth: campaignCount > 0 ? '4px' : 0 }}
-                      />
-                    )}
-                    {/* その他 is the remaining track background */}
-                  </div>
-
-                  {/* Category chips */}
-                  <div className="flex items-center gap-3">
-                    {[
-                      { label: '公式', count: officialCount, color: 'bg-blue-500', textColor: 'text-blue-700', bgChip: 'bg-blue-50' },
-                      { label: 'サテライト', count: satelliteCount, color: 'bg-teal-500', textColor: 'text-teal-700', bgChip: 'bg-teal-50' },
-                      { label: '施策', count: campaignCount, color: 'bg-purple-500', textColor: 'text-purple-700', bgChip: 'bg-purple-50' },
-                      { label: 'その他', count: othersCount, color: 'bg-slate-300', textColor: 'text-slate-600', bgChip: 'bg-slate-50' },
-                    ].map(cat => (
-                      <div
-                        key={cat.label}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${cat.bgChip} ${cat.count === 0 ? 'opacity-40' : ''}`}
-                      >
-                        <span className={`w-2 h-2 rounded-full ${cat.color} shrink-0`} />
-                        <span className={cat.textColor}>{cat.label}</span>
-                        <span className={`font-bold ${cat.textColor} tabular-nums`}>{cat.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ジャンル + TikTokラベル凡例 */}
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
-            {Object.entries(GENRE_CONFIG).map(([key, { label, cls }]) => (
-              <span key={key} className={`px-1 rounded text-[9px] ${cls}`}>{label}</span>
-            ))}
-            <span className="text-slate-300">|</span>
-            {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, { text, dot }]) => (
-              <span key={key} className="flex items-center gap-0.5"><span className={`w-2 h-2 rounded-full ${dot}`} />{text}</span>
-            ))}
-          </div>
-
-          {/* === Per-keyword Slot Maps === */}
-          <div className="space-y-3">
-            {sovEntries.map(([kw, data]) => (
-              <SovOccupationMap key={kw} keyword={kw} data={data} hasBaseline={hasBaseline} isBigKeyword={!!data._isBigKeyword} campaignId={campaignId} onSlotUpdate={onSlotUpdate} />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// (BigKeywordSection merged into KeywordSection above)
+// (Old SovOccupationMap + SovSection removed — functionality now in UnifiedKeywordSovSection)
 
 // ============================
 // Section 6: Competitor
@@ -2555,10 +2396,190 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
 }
 
 // ============================
+// UGC Card Grid (used in RippleSection)
+// ============================
+
+function UgcCardGrid({ videos, initialShow, overrides, onSentimentChange }: {
+  videos: any[];
+  initialShow: number;
+  overrides: Record<string, "positive" | "neutral" | "negative">;
+  onSentimentChange: (key: string, val: "positive" | "neutral" | "negative") => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const displayed = showAll ? videos : videos.slice(0, initialShow);
+
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-bold text-slate-800">注目の第三者投稿（再生数上位）</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">施策の波及で生まれたオーガニック投稿</p>
+        </div>
+        <div className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {displayed.map((v: any, i: number) => {
+              const vKey = v.video_url || `${v.creator}-${i}`;
+              return <UgcCard key={vKey} v={v} vKey={vKey} sentiment={overrides[vKey]} onSentimentChange={onSentimentChange} />;
+            })}
+          </div>
+          {/* Show more / less button */}
+          {videos.length > initialShow && (
+            <div className="text-center mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={(e) => { e.preventDefault(); setShowAll(!showAll); }}
+                className="text-xs font-semibold text-purple-600 hover:text-purple-700 hover:bg-purple-50 px-4 py-1.5 rounded-full transition-colors"
+              >
+                {showAll ? `閉じる` : `もっと見る（残り ${videos.length - initialShow} 件）`}
+              </button>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const SENTIMENT_KEYS = ["positive", "neutral", "negative"] as const;
+
+function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
+  v: any;
+  vKey: string;
+  sentiment?: "positive" | "neutral" | "negative";
+  onSentimentChange: (key: string, val: "positive" | "neutral" | "negative") => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const tags = (v.hashtags || []).slice(0, 3);
+  const sentiment = overrideSentiment || analyzeSentiment(v.description);
+  const sentCfg = SENTIMENT_CONFIG[sentiment];
+
+  return (
+    <div className="relative group/ugc">
+      <a
+        href={v.video_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex gap-3 rounded-xl bg-slate-50/80 border border-slate-100 p-3.5 hover:border-slate-300 hover:shadow-md transition-all"
+      >
+        {/* Thumbnail */}
+        <div className="relative flex-shrink-0">
+          {v.cover_url ? (
+            <img src={v.cover_url} alt="" className="w-[56px] h-[100px] rounded-lg object-cover" loading="lazy" />
+          ) : (
+            <div className="w-[56px] h-[100px] rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
+              <Play className="h-4 w-4 text-white/80" />
+            </div>
+          )}
+          <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border shadow-sm flex items-center justify-center ${sentCfg.bg}`}>
+            <sentCfg.Icon className={`h-2.5 w-2.5 ${sentCfg.color}`} />
+          </span>
+        </div>
+        {/* Meta */}
+        <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-bold text-slate-800 truncate">@{v.creator}</p>
+              <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded-full border ${sentCfg.bg} ${sentCfg.color} flex-shrink-0`}>
+                <sentCfg.Icon className="h-2 w-2" />
+                {sentCfg.label}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug mt-0.5">{v.description?.slice(0, 80)}</p>
+          </div>
+          {tags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {tags.map((tag: string, ti: number) => (
+                <span key={ti} className="text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-100 rounded-full px-1.5 py-px">
+                  #{tag.replace(/^#/, "")}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
+            <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.views)}</strong></span>
+            <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.likes)}</strong></span>
+            <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.comments)}</strong></span>
+            <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.shares)}</strong></span>
+            {v.saves != null && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.saves)}</strong></span>}
+            {v.views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-slate-700">{(((v.likes || 0) + (v.comments || 0)) / v.views * 100).toFixed(2)}%</strong></span>}
+          </div>
+          {v.posted_at && <p className="text-[10px] text-slate-400">{new Date(v.posted_at).toLocaleDateString("ja-JP")}</p>}
+        </div>
+      </a>
+      {/* Edit pencil */}
+      <Popover open={editOpen} onOpenChange={setEditOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-md ${
+              editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/ugc:opacity-100 group-hover/ugc:scale-100 group-hover/ugc:pointer-events-auto"
+            }`}
+          >
+            <Pencil className="h-3 w-3 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="left" align="start" className="p-3 w-48 z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">センチメント分類</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              {SENTIMENT_KEYS.map(key => {
+                const cfg = SENTIMENT_CONFIG[key];
+                const isActive = sentiment === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { onSentimentChange(vKey, key); setEditOpen(false); }}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      isActive ? `${cfg.bg} ${cfg.color} border` : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <cfg.Icon className={`h-3.5 w-3.5 ${isActive ? cfg.color : "text-slate-400"}`} />
+                    {cfg.label}
+                    {isActive && <Check className="h-3 w-3 ml-auto" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+// ============================
 // Section 7: Ripple
 // ============================
 
-export function RippleSection({ ripple, campaign }: { ripple: Record<string, any>; campaign?: any }) {
+export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record<string, any>; campaign?: any; campaignId?: number }) {
+  // Load saved sentiments from ripple data
+  const savedSentiments = useMemo(() => {
+    const map: Record<string, "positive" | "neutral" | "negative"> = {};
+    for (const [, tagData] of Object.entries(ripple)) {
+      for (const v of (tagData.third_party_videos || tagData.omaage_videos || [])) {
+        if (v.sentiment && v.video_url) {
+          map[v.video_url] = v.sentiment;
+        }
+      }
+    }
+    return map;
+  }, [ripple]);
+
+  const [sentimentOverrides, setSentimentOverrides] = useState<Record<string, "positive" | "neutral" | "negative">>(savedSentiments);
+
+  const updateSentimentMutation = trpc.campaign.updateThirdPartySentiment.useMutation({
+    onError: () => toast.error("センチメント更新に失敗しました"),
+  });
+
+  const handleSentimentChange = useCallback((key: string, val: "positive" | "neutral" | "negative") => {
+    setSentimentOverrides(prev => ({ ...prev, [key]: val }));
+    if (campaignId) {
+      updateSentimentMutation.mutate({ campaignId, videoUrl: key, sentiment: val });
+    }
+  }, [campaignId, updateSentimentMutation]);
+
   const entries = Object.entries(ripple);
 
   if (entries.length === 0) {
@@ -2578,98 +2599,239 @@ export function RippleSection({ ripple, campaign }: { ripple: Record<string, any
   const totalAfterViews = entries.reduce((sum, [, d]) => sum + (d.after_total_views || 0), 0);
   const totalThirdParty = entries.reduce((sum, [, d]) => sum + (d.third_party_count || d.omaage_count || 0), 0);
 
+  // All third-party videos (deduped, sorted by views)
+  const allVideosRaw = entries.flatMap(([, data]) =>
+    (data.third_party_videos || data.omaage_videos || [])
+  );
+  const seenVideoUrls = new Set<string>();
+  const allVideos = allVideosRaw
+    .sort((a: any, b: any) => (b.views || 0) - (a.views || 0))
+    .filter((v: any) => {
+      const key = v.video_url || v.video_id || `${v.creator}-${v.description}`;
+      if (seenVideoUrls.has(key)) return false;
+      seenVideoUrls.add(key);
+      return true;
+    });
+
+  // Aggregate KPIs
+  const allViews = allVideos.map((v: any) => v.views || 0);
+  const avgViews = allVideos.length > 0 ? Math.round(allViews.reduce((s, v) => s + v, 0) / allVideos.length) : 0;
+  const maxViews = allViews.length > 0 ? Math.max(...allViews) : 0;
+
+  // Max views across tags (for bar normalization)
+  const maxTagViews = Math.max(...entries.map(([, d]) => d.after_total_views || 0), 1);
+
+  // Filter out zero entries & sort by views desc
+  const sortedEntries = [...entries]
+    .filter(([, d]) => {
+      const count = d.third_party_count || d.omaage_count || 0;
+      const beforeCount = d.before_posts || 0;
+      return count > 0 || beforeCount > 0;
+    })
+    .sort(([, a], [, b]) => (b.after_total_views || 0) - (a.after_total_views || 0));
+
   return (
-    <div className="space-y-4">
-      {/* Big number cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card>
-          <CardContent className="py-4 text-center">
-            <p className="text-xs text-muted-foreground">第三者投稿</p>
-            <p className="text-2xl font-bold mt-1">
-              <span className="text-blue-600 font-semibold">{totalThirdParty}本</span>
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-4 text-center">
-            <p className="text-xs text-muted-foreground">総再生数</p>
-            <p className="text-2xl font-bold mt-1">
-              <span className="text-blue-600 font-semibold">{fmt(totalAfterViews)}</span>
-            </p>
-          </CardContent>
-        </Card>
+    <div className="space-y-5">
+      {/* ======== Hero KPI Row (4 cards) ======== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: "第三者投稿", value: totalThirdParty, unit: "本", color: "text-blue-600", change: null },
+          { label: "総再生数", value: totalAfterViews, unit: "", color: "text-purple-600", change: null, fmtVal: true },
+          { label: "平均再生数", value: avgViews, unit: "", color: "text-amber-600", change: null, fmtVal: true },
+          { label: "最高再生", value: maxViews, unit: "", color: "text-green-600", change: null, fmtVal: true },
+        ].map((kpi, i) => (
+          <Card key={i}>
+            <CardContent className="py-3 px-4 text-center">
+              <p className="text-[11px] text-muted-foreground font-semibold tracking-wide uppercase mb-2">{kpi.label}</p>
+              <p className={`text-3xl font-extrabold leading-none ${kpi.color}`}>
+                {kpi.fmtVal ? fmt(kpi.value) : kpi.value}
+                {kpi.unit && <span className="text-base font-semibold ml-0.5">{kpi.unit}</span>}
+              </p>
+              {kpi.change != null && kpi.change !== 0 && (
+                <div className="mt-2">
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${kpi.change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                    {kpi.change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {kpi.change > 0 ? "+" : ""}{kpi.fmtVal ? fmt(kpi.change) : kpi.change} vs 施策前
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Per-tag table (compact) */}
+      {/* ======== Hashtag Breakdown Table ======== */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">ハッシュタグ別内訳</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h3 className="text-sm font-bold text-slate-800">ハッシュタグ別内訳</h3>
+          </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full">
               <thead>
-                <tr className="border-b text-left text-xs text-muted-foreground">
-                  <th className="py-1.5 pr-3">タグ</th>
-                  <th className="py-1.5 px-2 text-right">投稿数</th>
-                  <th className="py-1.5 px-2 text-right">総再生数</th>
+                <tr className="bg-slate-50/80">
+                  <th className="py-2.5 px-5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">タグ</th>
+                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">投稿数</th>
+                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider min-w-[180px]">総再生数</th>
+                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">施策前比</th>
                 </tr>
               </thead>
               <tbody>
-                {entries.map(([tag, data]) => (
-                  <tr key={tag} className="border-b last:border-0">
-                    <td className="py-1.5 pr-3 font-medium">{tag}</td>
-                    <td className="py-1.5 px-2 text-right">{data.after_posts || 0}</td>
-                    <td className="py-1.5 px-2 text-right">{fmt(data.after_total_views || 0)}</td>
-                  </tr>
-                ))}
+                {sortedEntries.map(([tag, data]) => {
+                  const count = data.third_party_count || data.omaage_count || 0;
+                  const views = data.after_total_views || 0;
+                  const beforeCount = data.before_posts || 0;
+                  const change = count - beforeCount;
+                  const barPct = maxTagViews > 0 ? (views / maxTagViews) * 100 : 0;
+                  return (
+                    <tr key={tag} className="border-b border-slate-50 last:border-0">
+                      <td className="py-3 px-5 text-sm font-bold text-slate-800">{tag}</td>
+                      <td className="py-3 px-4 text-right text-sm font-medium text-slate-600">{count}</td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${barPct}%` }} />
+                          </div>
+                          <span className="text-sm font-medium text-slate-700 tabular-nums">{fmt(views)}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        {change !== 0 ? (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                            {change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                            {change > 0 ? "+" : ""}{change}本
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">±0</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Top third-party videos (all tags combined) */}
-      {(() => {
-        const allVideosRaw = entries.flatMap(([, data]) =>
-          (data.third_party_videos || data.omaage_videos || [])
-        );
-        const seenVideoUrls = new Set<string>();
-        const allVideos = allVideosRaw
-          .sort((a: any, b: any) => (b.views || 0) - (a.views || 0))
-          .filter((v: any) => {
-            const key = v.video_url || v.video_id || `${v.creator}-${v.description}`;
-            if (seenVideoUrls.has(key)) return false;
-            seenVideoUrls.add(key);
-            return true;
-          })
-          .slice(0, 5);
-        return allVideos.length > 0 && (
+      {/* ======== Sentiment Analysis ======== */}
+      {allVideos.length > 0 && (() => {
+        const sentCounts = { positive: 0, neutral: 0, negative: 0 };
+        for (const v of allVideos) {
+          const vKey = v.video_url || `${v.creator}-${allVideos.indexOf(v)}`;
+          sentCounts[sentimentOverrides[vKey] || analyzeSentiment(v.description)]++;
+        }
+        const total = allVideos.length;
+        const posPct = Math.round((sentCounts.positive / total) * 100);
+        const neuPct = Math.round((sentCounts.neutral / total) * 100);
+        const negPct = 100 - posPct - neuPct;
+        const segments = [
+          { key: "positive" as const, pct: posPct, count: sentCounts.positive },
+          { key: "neutral" as const, pct: neuPct, count: sentCounts.neutral },
+          { key: "negative" as const, pct: negPct, count: sentCounts.negative },
+        ].filter(s => s.count > 0);
+        // Donut SVG params
+        const radius = 42;
+        const circumference = 2 * Math.PI * radius;
+        let cumulativeOffset = 0;
+        const donutSegments = segments.map(s => {
+          const dash = (s.pct / 100) * circumference;
+          const offset = cumulativeOffset;
+          cumulativeOffset += dash;
+          return { ...s, dash, offset };
+        });
+        const donutColors = { positive: "#10b981", neutral: "#94a3b8", negative: "#ef4444" };
+
+        return (
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">注目の第三者投稿（再生数上位）</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="divide-y">
-                {allVideos.map((v: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between py-1.5 text-sm">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium shrink-0">
-                        @{v.creator}
-                      </a>
-                      <span className="text-xs text-muted-foreground truncate">{v.description?.slice(0, 40)}</span>
-                    </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground shrink-0 ml-2">
-                      <span>{fmt(v.views)} 再生</span>
-                      <span>{fmt(v.likes)} いいね</span>
+            <CardContent className="p-0">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-800">センチメント分析</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">第三者投稿のキャプションから感情を自動分類</p>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center gap-8">
+                  {/* Donut chart */}
+                  <div className="flex-shrink-0 relative">
+                    <svg width="120" height="120" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                      {donutSegments.map((seg) => (
+                        <circle
+                          key={seg.key}
+                          cx="60" cy="60" r={radius}
+                          fill="none"
+                          stroke={donutColors[seg.key]}
+                          strokeWidth="12"
+                          strokeDasharray={`${seg.dash} ${circumference - seg.dash}`}
+                          strokeDashoffset={-seg.offset}
+                          strokeLinecap="round"
+                          transform="rotate(-90 60 60)"
+                          className="animate-donut-fill"
+                          style={{ opacity: 0.85 }}
+                        />
+                      ))}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-slate-800">{total}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">投稿</span>
                     </div>
                   </div>
-                ))}
+
+                  {/* Breakdown bars */}
+                  <div className="flex-1 space-y-3">
+                    {([
+                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: "bg-emerald-500", textColor: "text-emerald-600", iconColor: "text-emerald-500" },
+                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: "bg-slate-400", textColor: "text-slate-500", iconColor: "text-slate-400" },
+                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: "bg-red-500", textColor: "text-red-500", iconColor: "text-red-400" },
+                    ]).map((row) => {
+                      const count = sentCounts[row.key];
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={row.key}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                              <row.Icon className={`h-3.5 w-3.5 ${row.iconColor}`} />
+                              {row.label}
+                            </span>
+                            <span className="text-xs tabular-nums">
+                              <strong className={row.textColor}>{count}</strong>
+                              <span className="text-slate-400 ml-1">({pct}%)</span>
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${row.color} transition-all duration-700 ease-out`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         );
       })()}
+
+      {/* ======== UGC Cards (top third-party videos) ======== */}
+      {allVideos.length > 0 && (
+        <UgcCardGrid videos={allVideos} initialShow={6} overrides={sentimentOverrides} onSentimentChange={handleSentimentChange} />
+      )}
+
+      {/* ======== Story Connector ======== */}
+      <div className="flex items-center justify-center gap-3 py-2 text-xs font-semibold text-slate-400">
+        <span>TikTokでの拡散</span>
+        <div className="w-8 h-px bg-slate-300 relative">
+          <div className="absolute -right-1 -top-[3px] border-l-[6px] border-l-slate-300 border-y-[4px] border-y-transparent" />
+        </div>
+        <span>Google検索への波及</span>
+        <div className="w-8 h-px bg-slate-300 relative">
+          <div className="absolute -right-1 -top-[3px] border-l-[6px] border-l-slate-300 border-y-[4px] border-y-transparent" />
+        </div>
+        <span>認知度の向上</span>
+      </div>
     </div>
   );
 }
@@ -2797,71 +2959,209 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
 
   const VOLUME_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4"];
 
+  // Correlation strength helpers
+  const corr = data.correlation as number | null | undefined;
+  const corrAbs = corr != null ? Math.abs(corr) : 0;
+  const corrStrength = corrAbs >= 0.7 ? "強い" : corrAbs >= 0.4 ? "中程度" : "弱い";
+  const corrColor = corrAbs >= 0.7 ? "emerald" : corrAbs >= 0.4 ? "amber" : "slate";
+  const corrBgClass = corrAbs >= 0.7 ? "bg-emerald-50 border-emerald-200" : corrAbs >= 0.4 ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200";
+  const corrTextClass = corrAbs >= 0.7 ? "text-emerald-700" : corrAbs >= 0.4 ? "text-amber-700" : "text-slate-500";
+  const corrBadgeBg = corrAbs >= 0.7 ? "bg-emerald-100 text-emerald-700 border-emerald-300" : corrAbs >= 0.4 ? "bg-amber-100 text-amber-700 border-amber-300" : "bg-slate-100 text-slate-500 border-slate-300";
+  const corrDesc = corrAbs >= 0.7 ? "TikTok施策がGoogle検索トレンドに明確な影響を与えています" : corrAbs >= 0.4 ? "TikTok施策とGoogle検索に一定の関連が見られます" : "TikTok施策とGoogle検索の直接的な関連は限定的です";
+
+  // Monthly volume: compute peak spike
+  const peakMonth = useMemo(() => {
+    if (monthlyVolumeData.length < 2) return null;
+    let maxIdx = 0;
+    let maxVal = 0;
+    monthlyVolumeData.forEach((d: any, i: number) => { if (d.total > maxVal) { maxVal = d.total; maxIdx = i; } });
+    const prevVal = maxIdx > 0 ? monthlyVolumeData[maxIdx - 1].total : 0;
+    const pctChange = prevVal > 0 ? Math.round(((maxVal - prevVal) / prevVal) * 100) : 0;
+    return { month: monthlyVolumeData[maxIdx].month, total: maxVal, pctChange };
+  }, [monthlyVolumeData]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* ====== Correlation Hero Card ====== */}
+      {corr != null && (
+        <Card className={`border ${corrBgClass} relative overflow-hidden`}>
+          {/* Decorative gradient accent */}
+          <div className={`absolute inset-0 bg-gradient-to-r ${corrAbs >= 0.7 ? "from-emerald-500/5 to-transparent" : corrAbs >= 0.4 ? "from-amber-500/5 to-transparent" : "from-slate-500/5 to-transparent"}`} />
+          <CardContent className="py-5 relative">
+            <div className="flex items-center gap-6">
+              {/* Coefficient Circle */}
+              <div className="flex-shrink-0">
+                <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center ${corrAbs >= 0.7 ? "bg-emerald-600" : corrAbs >= 0.4 ? "bg-amber-500" : "bg-slate-400"} text-white shadow-lg`}
+                  style={{ boxShadow: `0 8px 24px ${corrAbs >= 0.7 ? "rgba(16,185,129,0.3)" : corrAbs >= 0.4 ? "rgba(245,158,11,0.3)" : "rgba(100,116,139,0.2)"}` }}>
+                  <span className="text-[10px] font-medium opacity-80 tracking-wider uppercase">相関</span>
+                  <span className="text-2xl font-black tabular-nums leading-none mt-0.5">{corr.toFixed(2)}</span>
+                </div>
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <h3 className="text-base font-bold text-slate-800">Google Trends × TikTok 相関分析</h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${corrBadgeBg}`}>{corrStrength}</span>
+                </div>
+                <p className={`text-sm ${corrTextClass}`}>{corrDesc}</p>
+                <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Google Trends</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> TikTok 施策投稿</span>
+                  <span className="flex items-center gap-1"><span className="w-6 h-px bg-emerald-400 border-dashed border-t" /> 投稿日マーカー</span>
+                </div>
+              </div>
+              {/* Strength meter */}
+              <div className="flex-shrink-0 hidden sm:flex flex-col items-center gap-1">
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Strength</span>
+                <div className="flex gap-0.5">
+                  {[0.2, 0.4, 0.6, 0.8, 1.0].map((t, i) => (
+                    <div key={i} className={`w-2 rounded-full transition-all ${corrAbs >= t ? (corrAbs >= 0.7 ? "bg-emerald-500 h-6" : corrAbs >= 0.4 ? "bg-amber-400 h-5" : "bg-slate-300 h-4") : "bg-slate-200 h-3"}`}
+                      style={{ height: `${12 + i * 4}px` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ====== Trends × TikTok Chart ====== */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Google Trends x TikTok
-            {data.correlation != null && (
-              <span className={`ml-2 text-sm font-normal ${
-                Math.abs(data.correlation) >= 0.7 ? "text-green-600" :
-                Math.abs(data.correlation) >= 0.4 ? "text-yellow-600" : "text-muted-foreground"
-              }`}>
-                相関: {data.correlation.toFixed(3)}
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <Globe className="h-4 w-4 text-blue-500" />
+                Google Trends × TikTok 施策タイムライン
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">検索トレンドの推移と施策投稿の時系列を重ね合わせて表示</CardDescription>
+            </div>
+            {highlightRange && (
+              <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" />
+                施策期間
               </span>
             )}
-          </CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={filteredDailyChartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis label={{ value: "Trends", angle: -90, position: "insideLeft", style: { fontSize: 11 } }} />
-              <RechartsTooltip formatter={(value: any, name: string) => {
-                if (value === null || value === undefined) return ["—", name];
-                if (name === "Google Trends") return [`${value} / 100`, name];
-                return [String(value), name];
-              }} />
-              <Legend />
+          <ResponsiveContainer width="100%" height={320}>
+            <ComposedChart data={filteredDailyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+              <RechartsTooltip
+                contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
+                formatter={(value: any, name: string) => {
+                  if (value === null || value === undefined) return ["—", name];
+                  if (name === "Google Trends") return [`${value} / 100`, name];
+                  return [String(value), name];
+                }}
+              />
               {highlightRange && (
-                <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.08} label={{ value: "施策期間", fill: "#10b981", fontSize: 10, position: "insideTopLeft" }} />
+                <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.06} />
               )}
-              <Line type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2} dot={false} connectNulls />
+              <Area type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
               {Array.from(markerDates).map((date: string) => (
-                <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeDasharray="3 3" label={{ value: "投稿", fill: "#10b981", fontSize: 10 }} />
+                <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 3">
+                  <label position="top" offset={8}>
+                    <text style={{ fontSize: 9, fill: "#10b981", fontWeight: 600 }}>
+                      <tspan>&#9658;</tspan>
+                    </text>
+                  </label>
+                </ReferenceLine>
               ))}
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
+          {/* Event marker legend below chart */}
+          {markerDates.size > 0 && (
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
+              {Array.from(markerDates).sort().map((date: string) => (
+                <span key={date} className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 flex items-center gap-1">
+                  <Play className="h-2.5 w-2.5 fill-emerald-500 text-emerald-500" />
+                  {date.slice(5).replace("-", "/")} 投稿
+                </span>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
+      {/* ====== Google Monthly Search Volume ====== */}
       {monthlyVolumeData.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Search className="h-4 w-4" />
-              Google 月間検索ボリューム推移
-            </CardTitle>
-            <CardDescription>Google Ads Keyword Planner — 施策前後の検索数変化</CardDescription>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                  <Search className="h-4 w-4 text-indigo-500" />
+                  Google 月間検索ボリューム推移
+                </CardTitle>
+                <CardDescription className="text-xs mt-0.5">Google Ads Keyword Planner — 施策前後の検索数変化</CardDescription>
+              </div>
+              {peakMonth && peakMonth.pctChange > 0 && (
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  ピーク月 +{peakMonth.pctChange}%
+                </span>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={monthlyVolumeData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => fmt(v)} />
-                <RechartsTooltip formatter={(value: any) => [Number(value).toLocaleString(), "検索数"]} />
-                <Legend />
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={monthlyVolumeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <defs>
+                  {keywordVolumes!.map((kw: any, i: number) => (
+                    <linearGradient key={kw.keyword} id={`volFill-${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={VOLUME_COLORS[i % VOLUME_COLORS.length]} stopOpacity={0.2} />
+                      <stop offset="95%" stopColor={VOLUME_COLORS[i % VOLUME_COLORS.length]} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v: number) => fmt(v)} axisLine={false} tickLine={false} />
+                <RechartsTooltip
+                  contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
+                  formatter={(value: any, name: string) => [Number(value).toLocaleString(), name]}
+                />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                 {highlightMonths && (
-                  <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#10b981" fillOpacity={0.08} label={{ value: "施策期間", fill: "#10b981", fontSize: 10, position: "insideTopLeft" }} />
+                  <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#6366f1" fillOpacity={0.05} />
                 )}
                 {keywordVolumes!.map((kw: any, i: number) => (
-                  <Line key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                  <Area key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} fill={`url(#volFill-${i})`} dot={{ r: 2.5, strokeWidth: 0, fill: VOLUME_COLORS[i % VOLUME_COLORS.length] }} connectNulls />
                 ))}
-              </LineChart>
+              </AreaChart>
             </ResponsiveContainer>
+            {/* Keyword chips below chart */}
+            {keywordVolumes && keywordVolumes.length > 1 && (
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                {keywordVolumes.map((kw: any, i: number) => {
+                  const vols = (kw.monthlyVolumes || []) as any[];
+                  const lastVol = vols.length > 0 ? vols[vols.length - 1].volume : 0;
+                  const prevVol = vols.length > 1 ? vols[vols.length - 2].volume : 0;
+                  const change = prevVol > 0 ? Math.round(((lastVol - prevVol) / prevVol) * 100) : 0;
+                  return (
+                    <span key={kw.keyword} className="text-[10px] bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: VOLUME_COLORS[i % VOLUME_COLORS.length] }} />
+                      <span className="font-medium text-slate-600">{kw.keyword}</span>
+                      {change !== 0 && (
+                        <span className={`font-bold ${change > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                          {change > 0 ? "+" : ""}{change}%
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -2938,6 +3238,8 @@ type UnifiedVideo = {
   platform: "tiktok" | "youtube" | "instagram";
   publishedAt: string;
   er: number;
+  hashtags: string[];
+  musicInfo?: { title: string; artist: string; isOriginal?: boolean } | null;
 };
 
 const PLATFORM_COLORS = {
@@ -2960,80 +3262,149 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
   const [tablePlatformFilter, setTablePlatformFilter] = useState<"all" | "tiktok" | "youtube" | "instagram">("all");
   const [tableSortKey, setTableSortKey] = useState<"views" | "likes" | "comments" | "shares" | "saves" | "er" | "date">("views");
   const [tableSortDir, setTableSortDir] = useState<"asc" | "desc">("desc");
-  const TABLE_PAGE_SIZE = 8;
+  const TABLE_PAGE_SIZE = 5;
   const [tableDisplayCount, setTableDisplayCount] = useState(TABLE_PAGE_SIZE);
 
-  // === Aggregate metrics ===
-  const tiktokViews = tiktokVideos.reduce((s, v) => s + ((v.after?.viewCount) || 0), 0);
-  const tiktokLikes = tiktokVideos.reduce((s, v) => s + ((v.after?.likeCount) || 0), 0);
-  const tiktokComments = tiktokVideos.reduce((s, v) => s + ((v.after?.commentCount) || 0), 0);
-  const tiktokShares = tiktokVideos.reduce((s, v) => s + ((v.after?.shareCount) || 0), 0);
-  const tiktokSaves = tiktokVideos.reduce((s, v) => s + ((v.after?.saveCount) || 0), 0);
+  // === Latest values from dailyMetrics (per-video, per-platform) ===
+  const latestByUrl = useMemo(() => {
+    const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number; platform: string }>();
+    if (!dailyMetrics) return map;
+    for (const dm of dailyMetrics) {
+      const url = dm.videoUrl;
+      if (!url) continue;
+      const existing = map.get(url);
+      const dateKey = dm.dateKey || "";
+      if (!existing || dateKey > (existing as any)._dk) {
+        map.set(url, {
+          viewCount: dm.viewCount || 0,
+          likeCount: dm.likeCount || 0,
+          commentCount: dm.commentCount || 0,
+          shareCount: dm.shareCount || 0,
+          saveCount: dm.saveCount || 0,
+          platform: dm.platform || "",
+          _dk: dateKey,
+        } as any);
+      }
+    }
+    return map;
+  }, [dailyMetrics]);
 
+  // === Aggregate metrics (prefer dailyMetrics latest values) ===
   const ytData = platformSummary.youtube;
   const igData = platformSummary.instagram;
-  const ytComments = ytData?.videos?.reduce((s: number, v: any) => s + (v.commentCount || 0), 0) || 0;
-  const igComments = igData?.videos?.reduce((s: number, v: any) => s + (v.commentCount || 0), 0) || 0;
+
+  const computeAgg = useMemo(() => {
+    let ttViews = 0, ttLikes = 0, ttComments = 0, ttShares = 0, ttSaves = 0;
+    for (const v of tiktokVideos) {
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      ttViews += Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+      ttLikes += Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+      ttComments += Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+      ttShares += Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+      ttSaves += Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
+    }
+
+    let ytViews = 0, ytLikes = 0, ytCommentsSum = 0;
+    for (const v of (ytData?.videos || [])) {
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      ytViews += Math.max(dm?.viewCount || 0, v.viewCount || 0);
+      ytLikes += Math.max(dm?.likeCount || 0, v.likeCount || 0);
+      ytCommentsSum += Math.max(dm?.commentCount || 0, v.commentCount || 0);
+    }
+
+    let igViews = 0, igLikes = 0, igCommentsSum = 0;
+    for (const v of (igData?.videos || [])) {
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      igViews += Math.max(dm?.viewCount || 0, v.viewCount || 0);
+      igLikes += Math.max(dm?.likeCount || 0, v.likeCount || 0);
+      igCommentsSum += Math.max(dm?.commentCount || 0, v.commentCount || 0);
+    }
+
+    return { ttViews, ttLikes, ttComments, ttShares, ttSaves, ytViews, ytLikes, ytCommentsSum, igViews, igLikes, igCommentsSum };
+  }, [tiktokVideos, ytData, igData, latestByUrl]);
+
+  const { ttViews: tiktokViews, ttLikes: tiktokLikes, ttComments: tiktokComments, ttShares: tiktokShares, ttSaves: tiktokSaves,
+    ytViews, ytLikes, ytCommentsSum: ytComments, igViews, igLikes, igCommentsSum: igComments } = computeAgg;
 
   const totalVideos = tiktokVideos.length + (ytData?.totalVideos || 0) + (igData?.totalVideos || 0);
-  const totalViews = tiktokViews + (ytData?.totalViews || 0) + (igData?.totalViews || 0);
-  const totalLikes = tiktokLikes + (ytData?.totalLikes || 0) + (igData?.totalLikes || 0);
+  const totalViews = tiktokViews + ytViews + igViews;
+  const totalLikes = tiktokLikes + ytLikes + igLikes;
   const totalComments = tiktokComments + ytComments + igComments;
   const totalEngagement = totalLikes + totalComments;
   const avgER = totalViews > 0 ? Number((totalEngagement / totalViews * 100).toFixed(2)) : 0;
 
-  // === Unified video list (all platforms merged) ===
+  // === Unified video list (all platforms merged, prefer dailyMetrics latest) ===
   const allVideos: UnifiedVideo[] = useMemo(() => {
     const vids: UnifiedVideo[] = [];
 
     // TikTok
     for (const v of tiktokVideos) {
-      const views = v.after?.viewCount || 0;
-      const likes = v.after?.likeCount || 0;
-      const comments = v.after?.commentCount || 0;
-      const shares = v.after?.shareCount || 0;
-      const saves = v.after?.saveCount || 0;
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      const views = Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
+      const likes = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
+      const comments = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
+      const shares = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+      const saves = Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
       const eng = likes + comments + shares + saves;
+      const ttMusic = (v as any).music;
       vids.push({
-        videoUrl: v.videoUrl || "", channelId: v.videoUrl?.match(/@([^/]+)/)?.[1] || "",
+        videoUrl: url, channelId: url.match(/@([^/]+)/)?.[1] || "",
         caption: v.description || "", viewCount: views, likeCount: likes, commentCount: comments,
         shareCount: shares, saveCount: saves, coverUrl: v.coverUrl || "",
         platform: "tiktok", publishedAt: v.postedAt || "",
         er: views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0,
+        hashtags: v.hashtags || [],
+        musicInfo: ttMusic ? { title: ttMusic.title || "", artist: ttMusic.authorName || "", isOriginal: !!ttMusic.original } : null,
       });
     }
 
     // YouTube
     for (const v of (ytData?.videos || [])) {
-      const views = v.viewCount || 0;
-      const likes = v.likeCount || 0;
-      const comments = v.commentCount || 0;
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      const views = Math.max(dm?.viewCount || 0, v.viewCount || 0);
+      const likes = Math.max(dm?.likeCount || 0, v.likeCount || 0);
+      const comments = Math.max(dm?.commentCount || 0, v.commentCount || 0);
       const eng = likes + comments;
+      // Extract hashtags from title/description
+      const ytTags = ((v.title || "") + " " + (v.description || "")).match(/#[^\s#]+/g)?.map((t: string) => t.replace(/^#/, "")) || [];
       vids.push({
-        videoUrl: v.videoUrl || "", channelId: v.channelTitle || "",
+        videoUrl: url, channelId: v.channelTitle || "",
         caption: v.title || "", viewCount: views, likeCount: likes, commentCount: comments,
         shareCount: null, saveCount: null, coverUrl: v.coverUrl || "",
         platform: "youtube", publishedAt: v.publishedAt || "",
         er: views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0,
+        hashtags: ytTags,
+        musicInfo: null,
       });
     }
 
     // Instagram
     for (const v of (igData?.videos || [])) {
-      const views = v.viewCount || 0;
-      const likes = v.likeCount || 0;
-      const comments = v.commentCount || 0;
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      const views = Math.max(dm?.viewCount || 0, v.viewCount || 0);
+      const likes = Math.max(dm?.likeCount || 0, v.likeCount || 0);
+      const comments = Math.max(dm?.commentCount || 0, v.commentCount || 0);
       const eng = likes + comments;
+      const igTags = ((v.caption || "")).match(/#[^\s#]+/g)?.map((t: string) => t.replace(/^#/, "")) || [];
+      const igMusic = (v as any).musicInfo;
       vids.push({
-        videoUrl: v.videoUrl || "", channelId: v.ownerUsername ? `@${v.ownerUsername}` : "",
+        videoUrl: url, channelId: v.ownerUsername ? `@${v.ownerUsername}` : "",
         caption: v.caption || "", viewCount: views, likeCount: likes, commentCount: comments,
         shareCount: null, saveCount: null, coverUrl: v.coverUrl || "",
         platform: "instagram", publishedAt: v.publishedAt || "",
         er: views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0,
+        hashtags: igTags,
+        musicInfo: igMusic ? { title: igMusic.title || "", artist: igMusic.artistName || "" } : null,
       });
     }
     return vids;
-  }, [tiktokVideos, ytData, igData]);
+  }, [tiktokVideos, ytData, igData, latestByUrl]);
 
   // === Best/Worst sorted ===
   const sortedForBestWorst = useMemo(() => {
@@ -3063,7 +3434,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
 
   // === CSV Export ===
   const handleTableCsvExport = useCallback(() => {
-    const header = ["#", "動画", "媒体", "再生数", "いいね", "コメント", "シェア", "保存", "ER(%)", "投稿日"];
+    const header = ["#", "動画", "媒体", "再生数", "いいね", "コメント", "シェア", "保存", "ER(%)", "音源", "投稿日"];
     const rows = tableVideos.map((v, i) => [
       i + 1,
       `"${(v.caption || "動画").replace(/"/g, '""')}"`,
@@ -3074,6 +3445,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       v.shareCount ?? "",
       v.saveCount ?? "",
       v.er,
+      v.musicInfo?.title ? `"${(v.musicInfo.title + (v.musicInfo.artist ? ` - ${v.musicInfo.artist}` : "")).replace(/"/g, '""')}"` : "",
       v.publishedAt ? v.publishedAt.split("T")[0] : "",
     ].join(","));
     const csv = [header.join(","), ...rows].join("\n");
@@ -3099,25 +3471,27 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
     }> = [];
 
     if (ytData) {
+      const ytER = ytViews > 0 ? Number(((ytLikes + ytComments) / ytViews * 100).toFixed(2)) : 0;
       cards.push({
         key: "youtube", name: "YouTube", videoCount: ytData.totalVideos,
         stats: [
-          { label: "再生数", value: ytData.totalViews, icon: Eye },
-          { label: "いいね", value: ytData.totalLikes, icon: Heart },
+          { label: "再生数", value: ytViews, icon: Eye },
+          { label: "いいね", value: ytLikes, icon: Heart },
           { label: "コメント", value: ytComments, icon: MessageCircle },
-          { label: "平均ER", value: ytData.avgER, icon: TrendingUp },
+          { label: "平均ER", value: ytER, icon: TrendingUp },
         ],
       });
     }
 
     if (igData) {
+      const igER = igViews > 0 ? Number(((igLikes + igComments) / igViews * 100).toFixed(2)) : 0;
       cards.push({
         key: "instagram", name: "Instagram", videoCount: igData.totalVideos,
         stats: [
-          { label: "再生数", value: igData.totalViews, icon: Eye },
-          { label: "いいね", value: igData.totalLikes, icon: Heart },
+          { label: "再生数", value: igViews, icon: Eye },
+          { label: "いいね", value: igLikes, icon: Heart },
           { label: "コメント", value: igComments, icon: MessageCircle },
-          { label: "平均ER", value: igData.avgER, icon: TrendingUp },
+          { label: "平均ER", value: igER, icon: TrendingUp },
         ],
       });
     }
@@ -3137,7 +3511,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       });
     }
     return cards;
-  }, [ytData, igData, tiktokVideos, tiktokViews, tiktokLikes, tiktokComments, tiktokShares, tiktokSaves, ytComments, igComments]);
+  }, [ytData, igData, tiktokVideos, tiktokViews, tiktokLikes, tiktokComments, tiktokShares, tiktokSaves, ytViews, ytLikes, ytComments, igViews, igLikes, igComments]);
 
   return (
     <div className="space-y-5">
@@ -3179,27 +3553,27 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
           {platformCards.map(p => {
             const colors = PLATFORM_COLORS[p.key];
             return (
-              <Card key={p.key} className={`border-l-4 ${colors.border} ${colors.bg} overflow-hidden`}>
-                <CardContent className="py-4 px-4 space-y-3">
+              <Card key={p.key} className={`border-l-3 ${colors.border} ${colors.bg} overflow-hidden`}>
+                <CardContent className="py-2.5 px-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-7 h-7 rounded-md flex items-center justify-center text-[10px] font-black text-white ${p.key === "youtube" ? "bg-red-600" : p.key === "instagram" ? "bg-gradient-to-br from-purple-600 to-pink-500" : "bg-slate-900"}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-5 h-5 rounded flex items-center justify-center text-[8px] font-black text-white ${p.key === "youtube" ? "bg-red-600" : p.key === "instagram" ? "bg-gradient-to-br from-purple-600 to-pink-500" : "bg-slate-900"}`}>
                         {PLATFORM_ICONS[p.key]}
                       </span>
-                      <span className="font-semibold text-sm">{p.name}</span>
+                      <span className="font-semibold text-xs">{p.name}</span>
                     </div>
-                    <Badge variant="secondary" className="text-[10px] px-1.5">{p.videoCount}本</Badge>
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0">{p.videoCount}本</Badge>
                   </div>
-                  <div className={`grid ${p.stats.length <= 4 ? "grid-cols-2" : "grid-cols-3"} gap-2`}>
+                  <div className={`grid ${p.stats.length <= 4 ? "grid-cols-2" : "grid-cols-3"} gap-1.5`}>
                     {p.stats.map(s => {
                       const SIcon = s.icon;
                       return (
-                        <div key={s.label} className="bg-background/60 rounded-lg px-2.5 py-2">
-                          <div className="flex items-center gap-1 mb-0.5">
-                            <SIcon className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[10px] text-muted-foreground">{s.label}</span>
+                        <div key={s.label} className="bg-background/60 rounded-md px-2 py-1.5">
+                          <div className="flex items-center gap-0.5 mb-0.5">
+                            <SIcon className="h-2.5 w-2.5 text-muted-foreground" />
+                            <span className="text-[9px] text-muted-foreground">{s.label}</span>
                           </div>
-                          <p className="text-sm font-bold">{s.label === "平均ER" ? `${s.value}%` : fmt(s.value)}</p>
+                          <p className="text-xs font-bold">{s.label === "平均ER" ? `${s.value}%` : fmt(s.value)}</p>
                         </div>
                       );
                     })}
@@ -3217,10 +3591,10 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       {/* ── 2d. Best / Worst Videos ── */}
       {allVideos.length >= 3 && (
         <Card>
-          <CardHeader className="pb-3">
+          <CardHeader className="py-2.5 px-4">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-amber-500" />
+              <CardTitle className="text-xs flex items-center gap-1.5">
+                <Trophy className="h-3.5 w-3.5 text-amber-500" />
                 Best / Worst パフォーマンス
               </CardTitle>
               <div className="flex gap-1">
@@ -3228,7 +3602,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                   <button
                     key={val}
                     onClick={() => setBestWorstSort(val)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors ${bestWorstSort === val ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${bestWorstSort === val ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
                   >
                     {label}
                   </button>
@@ -3236,12 +3610,12 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent className="pt-0 pb-3 px-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Best 3 */}
               <div>
-                <p className="text-xs font-semibold text-emerald-600 mb-2 flex items-center gap-1"><TrendingUp className="h-3 w-3" /> TOP 3</p>
-                <div className="space-y-2">
+                <p className="text-sm font-semibold text-emerald-600 mb-2 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> TOP 3</p>
+                <div className="space-y-1.5">
                   {bestVideos.map((v, i) => (
                     <BestWorstVideoCard key={`best-${i}`} video={v} rank={i + 1} type="best" sortKey={bestWorstSort} />
                   ))}
@@ -3249,8 +3623,8 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
               </div>
               {/* Worst 3 */}
               <div>
-                <p className="text-xs font-semibold text-orange-500 mb-2 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> 改善候補 3</p>
-                <div className="space-y-2">
+                <p className="text-sm font-semibold text-orange-500 mb-2 flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> 改善候補 3</p>
+                <div className="space-y-1.5">
                   {worstVideos.map((v, i) => (
                     <BestWorstVideoCard key={`worst-${i}`} video={v} rank={allVideos.length - 2 + i} type="worst" sortKey={bestWorstSort} />
                   ))}
@@ -3264,16 +3638,16 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       {/* ── 2e. Video Data Table ── */}
       {allVideos.length > 0 && (
         <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardHeader className="pb-1.5 pt-3 px-3">
+            <div className="flex items-center justify-between flex-wrap gap-1.5">
               <CardTitle className="text-sm flex items-center gap-2">
                 <BarChart3 className="h-4 w-4" />
                 動画データ一覧
                 <Badge variant="secondary" className="text-[10px] ml-1">{tableVideos.length}件</Badge>
               </CardTitle>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 {/* Platform filter chips */}
-                <div className="flex gap-1">
+                <div className="flex gap-0.5">
                   {(["all", "tiktok", "youtube", "instagram"] as const).map(pf => {
                     const active = tablePlatformFilter === pf;
                     const count = pf === "all" ? allVideos.length : allVideos.filter(v => v.platform === pf).length;
@@ -3282,46 +3656,49 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                       <button
                         key={pf}
                         onClick={() => { setTablePlatformFilter(pf); setTableDisplayCount(TABLE_PAGE_SIZE); }}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}
                       >
                         {pf === "all" ? "全て" : pf === "tiktok" ? "TikTok" : pf === "youtube" ? "YouTube" : "Instagram"}
-                        <span className="ml-1 opacity-70">{count}</span>
+                        <span className="ml-0.5 opacity-70">{count}</span>
                       </button>
                     );
                   })}
                 </div>
-                <button onClick={handleTableCsvExport} className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-medium bg-muted hover:bg-muted/80 transition-colors text-muted-foreground">
+                <button onClick={handleTableCsvExport} className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-medium bg-muted hover:bg-muted/80 transition-colors text-muted-foreground">
                   <FileDown className="h-3 w-3" /> CSV
                 </button>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0 overflow-x-auto">
+          <CardContent className="pt-0 px-3 pb-2 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8 text-[10px]">#</TableHead>
-                  <TableHead className="text-[10px] min-w-[180px]">動画</TableHead>
-                  <TableHead className="text-[10px] w-14">媒体</TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("views")}>
+                  <TableHead className="w-8 text-xs">#</TableHead>
+                  <TableHead className="text-xs min-w-[180px]">動画</TableHead>
+                  <TableHead className="text-xs w-14">媒体</TableHead>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("views")}>
                     <span className="flex items-center gap-0.5">再生数{tableSortKey === "views" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("likes")}>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("likes")}>
                     <span className="flex items-center gap-0.5">いいね{tableSortKey === "likes" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("comments")}>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("comments")}>
                     <span className="flex items-center gap-0.5">コメント{tableSortKey === "comments" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("shares")}>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("shares")}>
                     <span className="flex items-center gap-0.5">シェア{tableSortKey === "shares" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("saves")}>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("saves")}>
                     <span className="flex items-center gap-0.5">保存{tableSortKey === "saves" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("er")}>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("er")}>
                     <span className="flex items-center gap-0.5">ER{tableSortKey === "er" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
-                  <TableHead className="text-[10px] cursor-pointer hover:text-foreground" onClick={() => toggleSort("date")}>
+                  <TableHead className="text-xs min-w-[120px]">
+                    <span className="flex items-center gap-0.5"><Music className="h-3 w-3" />音源</span>
+                  </TableHead>
+                  <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("date")}>
                     <span className="flex items-center gap-0.5">投稿日{tableSortKey === "date" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
                 </TableRow>
@@ -3331,15 +3708,15 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                   const colors = PLATFORM_COLORS[v.platform];
                   return (
                     <TableRow key={`${v.videoUrl}-${i}`} className="group">
-                      <TableCell className="text-[11px] text-muted-foreground font-mono">{i + 1}</TableCell>
-                      <TableCell>
+                      <TableCell className="text-xs text-muted-foreground font-mono py-1.5">{i + 1}</TableCell>
+                      <TableCell className="py-1.5">
                         <div className="flex items-center gap-2 min-w-0">
-                          {v.coverUrl && <img src={v.coverUrl} alt="" className="w-8 h-11 rounded object-cover flex-shrink-0" loading="lazy" />}
+                          {v.coverUrl && <img src={v.coverUrl} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0" loading="lazy" />}
                           <div className="min-w-0">
-                            <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium hover:underline text-primary truncate block max-w-[200px]">
+                            <a href={v.videoUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-medium hover:underline text-primary truncate block max-w-[220px]">
                               {(v.caption || "動画").slice(0, 30)}{(v.caption || "").length > 30 ? "…" : ""}
                             </a>
-                            {v.channelId && <p className="text-[9px] text-muted-foreground truncate">{v.channelId.startsWith("@") ? v.channelId : `@${v.channelId}`}</p>}
+                            {v.channelId && <p className="text-[10px] text-muted-foreground truncate">{v.channelId.startsWith("@") ? v.channelId : `@${v.channelId}`}</p>}
                           </div>
                         </div>
                       </TableCell>
@@ -3349,22 +3726,30 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                           {PLATFORM_ICONS[v.platform]}
                         </span>
                       </TableCell>
-                      <TableCell className="text-[11px] font-medium tabular-nums">{fmt(v.viewCount)}</TableCell>
-                      <TableCell className="text-[11px] tabular-nums">{fmt(v.likeCount)}</TableCell>
-                      <TableCell className="text-[11px] tabular-nums">{fmt(v.commentCount)}</TableCell>
-                      <TableCell className="text-[11px] tabular-nums">{v.shareCount != null ? fmt(v.shareCount) : "-"}</TableCell>
-                      <TableCell className="text-[11px] tabular-nums">{v.saveCount != null ? fmt(v.saveCount) : "-"}</TableCell>
-                      <TableCell className="text-[11px] font-medium tabular-nums">{v.er}%</TableCell>
-                      <TableCell className="text-[10px] text-muted-foreground whitespace-nowrap">{v.publishedAt ? v.publishedAt.split("T")[0] : "-"}</TableCell>
+                      <TableCell className="text-xs font-medium tabular-nums py-1.5">{fmt(v.viewCount)}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{fmt(v.likeCount)}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{fmt(v.commentCount)}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.shareCount != null ? fmt(v.shareCount) : "-"}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.saveCount != null ? fmt(v.saveCount) : "-"}</TableCell>
+                      <TableCell className="text-xs font-medium tabular-nums py-1.5">{v.er}%</TableCell>
+                      <TableCell className="py-1.5">
+                        {v.musicInfo && v.musicInfo.title ? (
+                          <div className="flex items-center gap-1 text-[10px] text-violet-600 dark:text-violet-400 max-w-[150px]">
+                            <Music className="h-3 w-3 flex-shrink-0" />
+                            <span className="truncate">{v.musicInfo.title}</span>
+                          </div>
+                        ) : <span className="text-[10px] text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell className="text-[11px] text-muted-foreground whitespace-nowrap py-1.5">{v.publishedAt ? v.publishedAt.split("T")[0] : "-"}</TableCell>
                     </TableRow>
                   );
                 })}
               </TableBody>
             </Table>
             {tableVideos.length > tableDisplayCount && (
-              <div className="flex justify-center py-3">
+              <div className="flex justify-center py-1.5">
                 <Button variant="ghost" size="sm" onClick={() => setTableDisplayCount(prev => prev + TABLE_PAGE_SIZE)}
-                  className="text-xs text-muted-foreground hover:text-foreground">
+                  className="text-[10px] h-7 text-muted-foreground hover:text-foreground">
                   <ChevronDown className="h-3.5 w-3.5 mr-1" />もっと見る（残り{tableVideos.length - tableDisplayCount}件）
                 </Button>
               </div>
@@ -3389,27 +3774,50 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
   const highlightLabel = sortKey === "views" ? "再生" : sortKey === "likes" ? "いいね" : sortKey === "comments" ? "コメント" : "ER";
 
   return (
-    <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/40 transition-colors group">
-      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${rankColors}`}>
+    <div className="flex items-center gap-4 px-3 py-2.5 rounded-xl hover:bg-muted/40 transition-colors group">
+      <span className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${rankColors}`}>
         {type === "best" ? rank : "!"}
       </span>
-      {video.coverUrl && <img src={video.coverUrl} alt="" className="w-9 h-12 rounded object-cover flex-shrink-0" loading="lazy" />}
+      {video.coverUrl && <img src={video.coverUrl} alt="" className="w-20 h-28 rounded-lg object-cover flex-shrink-0" loading="lazy" />}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
-          <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium hover:underline truncate text-primary">
-            {(video.caption || "動画").slice(0, 25)}{(video.caption || "").length > 25 ? "…" : ""}
+        <div className="flex items-center gap-1">
+          <a href={video.videoUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium hover:underline line-clamp-2 text-primary leading-snug">
+            {(video.caption || "動画").slice(0, 50)}{(video.caption || "").length > 50 ? "…" : ""}
           </a>
         </div>
-        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(video.viewCount)}</span>
-          <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(video.likeCount)}</span>
-          <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" />{fmt(video.commentCount)}</span>
+        {video.hashtags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1">
+            {video.hashtags.slice(0, 3).map((tag, ti) => (
+              <span key={ti} className="text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-px dark:text-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-800">
+                #{tag.replace(/^#/, "")}
+              </span>
+            ))}
+          </div>
+        )}
+        {video.musicInfo && video.musicInfo.title && (
+          <div className="flex items-center gap-1 mt-1 text-[10px] text-violet-600 dark:text-violet-400">
+            <Music className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate max-w-[200px]">{video.musicInfo.title}{video.musicInfo.artist ? ` - ${video.musicInfo.artist}` : ""}</span>
+            {video.musicInfo.isOriginal && <span className="text-[9px] bg-violet-100 dark:bg-violet-900/40 rounded px-1 py-px font-medium flex-shrink-0">Original</span>}
+          </div>
+        )}
+        <div className="flex items-center flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-1">
+          <span className="flex items-center gap-1"><Eye className="h-3.5 w-3.5" />{fmt(video.viewCount)}</span>
+          <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" />{fmt(video.likeCount)}</span>
+          <span className="flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" />{fmt(video.commentCount)}</span>
+          {video.shareCount != null && <span className="flex items-center gap-1"><Share2 className="h-3.5 w-3.5" />{fmt(video.shareCount)}</span>}
+          {video.saveCount != null && <span className="flex items-center gap-1"><Bookmark className="h-3.5 w-3.5" />{fmt(video.saveCount)}</span>}
+          <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" />{video.er}%</span>
         </div>
+        {video.publishedAt && (
+          <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
+            <CalendarDays className="h-3 w-3" />{video.publishedAt.split("T")[0]}
+          </p>
+        )}
       </div>
       <div className="text-right flex-shrink-0">
-        <p className={`text-sm font-bold ${type === "best" ? "text-emerald-600" : "text-orange-500"}`}>{highlightValue}</p>
-        <p className="text-[9px] text-muted-foreground">{highlightLabel}</p>
+        <p className={`text-base font-bold ${type === "best" ? "text-emerald-600" : "text-orange-500"}`}>{highlightValue}</p>
+        <p className="text-[11px] text-muted-foreground">{highlightLabel}</p>
       </div>
     </div>
   );
