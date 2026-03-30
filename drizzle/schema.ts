@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, bigint, uniqueIndex } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, json, bigint, uniqueIndex, boolean } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -815,6 +815,10 @@ export const campaignReports = mysqlTable("campaign_reports", {
       }>;
     };
   }>(),
+
+  // 共有リンク
+  shareToken: varchar("shareToken", { length: 64 }).unique(),
+  shareEnabled: boolean("shareEnabled").default(false),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -679,6 +679,66 @@ export async function patchCampaignReportSovReport(
     .where(eq(campaignReports.campaignId, campaignId));
 }
 
+// === Share Token (公開共有URL) ===
+
+export async function getReportByShareToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select({
+      report: campaignReports,
+      campaignName: campaigns.name,
+    })
+    .from(campaignReports)
+    .innerJoin(campaigns, eq(campaigns.id, campaignReports.campaignId))
+    .where(and(eq(campaignReports.shareToken, token), eq(campaignReports.shareEnabled, true)))
+    .limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function setShareToken(campaignId: number, token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(campaignReports)
+    .set({ shareToken: token, shareEnabled: true })
+    .where(eq(campaignReports.campaignId, campaignId));
+}
+
+export async function clearShareToken(campaignId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(campaignReports)
+    .set({ shareToken: null, shareEnabled: false })
+    .where(eq(campaignReports.campaignId, campaignId));
+}
+
+export async function getShareToken(campaignId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db
+    .select({ shareToken: campaignReports.shareToken, shareEnabled: campaignReports.shareEnabled })
+    .from(campaignReports)
+    .where(eq(campaignReports.campaignId, campaignId))
+    .limit(1);
+  return result[0] ?? undefined;
+}
+
+export async function getDailyMetricsByShareToken(token: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const reportRow = await db
+    .select({ campaignId: campaignReports.campaignId })
+    .from(campaignReports)
+    .where(and(eq(campaignReports.shareToken, token), eq(campaignReports.shareEnabled, true)))
+    .limit(1);
+  if (!reportRow[0]) return [];
+  return db.select().from(campaignDailyMetrics)
+    .where(eq(campaignDailyMetrics.campaignId, reportRow[0].campaignId))
+    .orderBy(campaignDailyMetrics.dateKey);
+}
+
 // === User Lookup (email / Google ID) ===
 
 export async function getUserByEmail(email: string) {
