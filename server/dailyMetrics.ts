@@ -15,8 +15,8 @@ import { sql } from "drizzle-orm";
 /**
  * キャンペーンの全施策動画の最新メトリクスを取得してDB保存
  */
-export async function captureDailyMetrics(campaign: Campaign): Promise<{ captured: number }> {
-  const urls = (campaign.ownVideoUrls || []) as string[];
+export async function captureDailyMetrics(campaign: Campaign, targetUrls?: string[]): Promise<{ captured: number }> {
+  const urls = targetUrls || (campaign.ownVideoUrls || []) as string[];
   if (urls.length === 0) return { captured: 0 };
 
   const dateKey = new Date().toISOString().slice(0, 10); // "2026-03-27"

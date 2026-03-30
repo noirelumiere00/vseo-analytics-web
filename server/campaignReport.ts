@@ -542,6 +542,7 @@ export async function generateCampaignReport(
           ? ((afterViews - beforeViews) / beforeViews * 100).toFixed(1)
           : null,
         er,
+        music: (v as any).music || null,
       };
     });
   }
@@ -1041,6 +1042,7 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
             commentCount: v.commentCount || 0,
             publishedAt: v.publishedAt || "",
             ownerUsername: v.ownerUsername || "",
+            musicInfo: (v as any).musicInfo || null,
           })),
         };
       }

@@ -432,6 +432,9 @@ export const campaigns = mysqlTable("campaigns", {
     title?: string; channelTitle?: string; publishedAt?: string;
     // Instagram-specific
     caption?: string; ownerUsername?: string;
+    musicInfo?: { title: string; artistName: string } | null;
+    // TikTok music
+    music?: { id: string; title: string; authorName: string; original: boolean } | null;
   }>>(),
   campaignHashtags: json("campaignHashtags").$type<string[]>(),
 
@@ -450,6 +453,9 @@ export const campaigns = mysqlTable("campaigns", {
   // スナップショットリンク
   baselineSnapshotId: int("baselineSnapshotId"),
   measurementSnapshotId: int("measurementSnapshotId"),
+
+  // 定期観測
+  trackingEnabled: boolean("trackingEnabled").default(true),
 
   status: mysqlEnum("status", ["draft", "baseline_captured", "measurement_captured", "report_ready"]).default("draft").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -749,6 +755,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
     before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
     after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
     viewsChangePct: string | null;
+    music?: { id: string; title: string; authorName: string; original: boolean } | null;
   }>>(),
 
   // ハッシュタグSOVレポート（Phase 2）
@@ -812,6 +819,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
         videoId: string; videoUrl: string; coverUrl: string;
         caption: string; viewCount: number; likeCount: number; commentCount: number;
         publishedAt: string; ownerUsername: string;
+        musicInfo?: { title: string; artistName: string } | null;
       }>;
     };
   }>(),

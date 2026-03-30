@@ -15,6 +15,7 @@ import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
 import { fetchInstagramPosts } from "./instagramScraper";
 import { captureDailyMetrics } from "./dailyMetrics";
+import { getVideoPhase } from "./dailyMetricsScheduler";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 import { checkQuota, PLAN_LIMITS } from "./_core/quota";
 import { createCheckoutSession, createPortalSession } from "./_core/stripe";
@@ -1600,6 +1601,7 @@ export const appRouter = router({
               saveCount: 0,
               ownerUsername: p.ownerUsername,
               publishedAt: p.publishedAt,
+              musicInfo: p.musicInfo || null,
             });
           }
         }
@@ -1831,6 +1833,42 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // 第三者動画センチメント更新
+    updateThirdPartySentiment: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        videoUrl: z.string(),
+        sentiment: z.enum(["positive", "neutral", "negative"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report || !report.rippleReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません" });
+        }
+
+        const rippleReport = report.rippleReport as Record<string, any>;
+        let found = false;
+        for (const [, tagData] of Object.entries(rippleReport)) {
+          const videos: any[] = tagData.third_party_videos || tagData.omaage_videos || [];
+          for (const v of videos) {
+            if (v.video_url === input.videoUrl) {
+              v.sentiment = input.sentiment;
+              found = true;
+            }
+          }
+        }
+        if (!found) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "動画が見つかりません" });
+        }
+
+        await db.patchCampaignReportRipple(input.campaignId, rippleReport);
+        return { success: true };
+      }),
+
     // 日次メトリクス手動取得
     captureDailyMetrics: protectedProcedure
       .input(z.object({ campaignId: z.number() }))
@@ -1851,6 +1889,56 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
         }
         return db.getDailyMetricsByCampaignId(input.campaignId);
+      }),
+
+    // 定期観測 ON/OFF
+    toggleDailyTracking: protectedProcedure
+      .input(z.object({ campaignId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        await db.setTrackingEnabled(input.campaignId, input.enabled);
+        return { success: true, enabled: input.enabled };
+      }),
+
+    // 定期観測ステータス
+    getTrackingStatus: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const ownVideoData = (campaign.ownVideoData || []) as Array<{
+          videoUrl: string; createTime: number; publishedAt?: string;
+        }>;
+        const ownVideoUrls = (campaign.ownVideoUrls || []) as string[];
+        const lastCapturedMap = await db.getLastCapturedDateByVideo(input.campaignId);
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const videoPhases = ownVideoUrls.map(url => {
+          const vd = ownVideoData.find(v => v.videoUrl === url);
+          const postedAt = vd?.publishedAt
+            ? new Date(vd.publishedAt)
+            : vd?.createTime
+              ? new Date(vd.createTime * 1000)
+              : null;
+          const elapsed = postedAt
+            ? Math.floor((today.getTime() - postedAt.getTime()) / (1000 * 60 * 60 * 24))
+            : null;
+          const phase = elapsed !== null ? getVideoPhase(elapsed) : "daily";
+          const lastCaptured = lastCapturedMap.get(url) || null;
+          return { videoUrl: url, phase, elapsedDays: elapsed, lastCaptured };
+        });
+
+        return {
+          enabled: campaign.trackingEnabled ?? false,
+          videoPhases,
+        };
       }),
 
     // 共有リンク ON/OFF

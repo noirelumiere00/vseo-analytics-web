@@ -332,9 +332,11 @@ export async function captureSnapshot(
           third_party_videos: thirdPartyVideos.map(v => ({
             video_url: v.video_url, creator: v.creator_username,
             views: v.view_count, likes: v.like_count,
+            comments: v.comment_count, shares: v.share_count,
             description: v.description, hashtags: v.hashtags,
             posted_at: v.created_at,
             search_rank: v.search_rank,
+            cover_url: v.cover_url,
           })),
         };
       }

@@ -17,6 +17,7 @@ import {
   JobCancelledError,
   type ProgressInfo,
 } from "../jobExecutor";
+import { startDailyMetricsScheduler } from "../dailyMetricsScheduler";
 
 const POLL_INTERVAL_MS = 3000;
 const jobLimit = pLimit(2);
@@ -186,6 +187,9 @@ export async function startWorker() {
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   console.log("[Worker] Job worker started, polling every 3s");
+
+  // 日次メトリクス定期観測スケジューラ
+  startDailyMetricsScheduler();
 }
 
 // ワーカー単体起動用
