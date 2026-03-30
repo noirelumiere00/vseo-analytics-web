@@ -1852,6 +1852,59 @@ export const appRouter = router({
         }
         return db.getDailyMetricsByCampaignId(input.campaignId);
       }),
+
+    // 共有リンク ON/OFF
+    toggleShareLink: protectedProcedure
+      .input(z.object({ campaignId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが生成されていません" });
+        }
+        if (input.enabled) {
+          const existing = await db.getShareToken(input.campaignId);
+          const token = existing?.shareToken || crypto.randomUUID().replace(/-/g, "");
+          await db.setShareToken(input.campaignId, token);
+          return { enabled: true, token };
+        } else {
+          await db.clearShareToken(input.campaignId);
+          return { enabled: false, token: null };
+        }
+      }),
+
+    // 共有トークン取得
+    getShareStatus: protectedProcedure
+      .input(z.object({ campaignId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const status = await db.getShareToken(input.campaignId);
+        return { enabled: status?.shareEnabled ?? false, token: status?.shareToken ?? null };
+      }),
+
+    // 公開レポート取得（認証不要）
+    getPublicReport: publicProcedure
+      .input(z.object({ token: z.string().min(1) }))
+      .query(async ({ input }) => {
+        const result = await db.getReportByShareToken(input.token);
+        if (!result) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません、またはリンクが無効です" });
+        }
+        return { report: result.report, campaignName: result.campaignName };
+      }),
+
+    // 公開日次メトリクス取得（認証不要）
+    getPublicDailyMetrics: publicProcedure
+      .input(z.object({ token: z.string().min(1) }))
+      .query(async ({ input }) => {
+        return db.getDailyMetricsByShareToken(input.token);
+      }),
   }),
 });
 

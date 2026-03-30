@@ -30,6 +30,7 @@ const CampaignList = lazy(() => import("./pages/CampaignList"));
 const CampaignNew = lazy(() => import("./pages/CampaignNew"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const CampaignReport = lazy(() => import("./pages/CampaignReport"));
+const SharedReport = lazy(() => import("./pages/SharedReport"));
 const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
 const Activity = lazy(() => import("./pages/Activity"));
 
@@ -78,6 +79,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
+      <Route path="/share/:token" component={SharedReport} />
       {/* Protected routes */}
       <Route path={"/"} component={Home} />
       <Route path="/activity" component={Activity} />
