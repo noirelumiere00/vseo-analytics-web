@@ -84,7 +84,7 @@ export default function ForgotPassword() {
                   <p className="text-sm text-destructive">{error}</p>
                 </div>
               )}
-              <Button type="submit" className="w-full gradient-primary text-white" disabled={loading}>
+              <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading}>
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

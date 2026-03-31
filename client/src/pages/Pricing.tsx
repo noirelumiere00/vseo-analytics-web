@@ -159,7 +159,7 @@ export default function Pricing() {
                     </Button>
                   ) : (
                     <Button
-                      className={`w-full ${plan.popular ? "gradient-primary text-white" : ""}`}
+                      className={`w-full ${plan.popular ? "bg-primary text-primary-foreground" : ""}`}
                       onClick={() => handleUpgrade(plan.id)}
                       disabled={checkoutMutation.isPending}
                     >

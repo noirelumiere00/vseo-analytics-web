@@ -60,7 +60,7 @@ export default function Login() {
           <div className="lg:hidden mb-4 flex flex-col items-center gap-3">
             <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
             <h1 className="text-2xl font-bold">
-              <span className="gradient-text">VSEO Analytics</span>
+              <span>VSEO Analytics</span>
             </h1>
           </div>
           <CardTitle className="text-xl font-semibold">ログイン</CardTitle>
@@ -103,7 +103,7 @@ export default function Login() {
                 <p className="text-sm text-destructive">{error}</p>
               </div>
             )}
-            <Button type="submit" className="w-full gradient-primary text-white" disabled={loading}>
+            <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

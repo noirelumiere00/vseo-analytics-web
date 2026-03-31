@@ -180,8 +180,8 @@ function DashboardLayoutContent({
                 <img src="/favicon.png" alt="VSEO Analytics" className="h-6 w-6 object-contain logo-blend" />
               </button>
               {!isCollapsed && (
-                <span className="font-semibold text-sm tracking-tight truncate">
-                  VSEO Analytics
+                <span className="text-sm tracking-tight truncate" style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 700 }}>
+                  <span className="text-primary">V</span>SEO Analytics
                 </span>
               )}
             </div>
@@ -191,7 +191,7 @@ function DashboardLayoutContent({
             {/* Main Navigation */}
             <div className="space-y-0.5 py-2">
               {!isCollapsed && (
-                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground/70 tracking-widest px-3 mb-1.5" style={{ fontFamily: '"Shippori Mincho", serif' }}>
                   ナビゲーション
                 </p>
               )}
@@ -221,7 +221,7 @@ function DashboardLayoutContent({
             {/* Quick Actions */}
             <div className="space-y-0.5 py-2">
               {!isCollapsed && (
-                <p className="text-xs font-medium text-muted-foreground/70 uppercase tracking-widest px-3 mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground/70 tracking-widest px-3 mb-1.5" style={{ fontFamily: '"Shippori Mincho", serif' }}>
                   クイックアクション
                 </p>
               )}
@@ -234,9 +234,9 @@ function DashboardLayoutContent({
                         isActive={active}
                         onClick={() => setLocation(item.path)}
                         tooltip={item.label}
-                        className={`h-9 transition-all font-normal text-sm ${active ? "gradient-primary text-white" : ""}`}
+                        className={`h-9 transition-all font-normal text-sm ${active ? "bg-primary text-primary-foreground" : ""}`}
                       >
-                        <item.icon className={`h-4 w-4 ${active ? "text-white" : "text-muted-foreground"}`} />
+                        <item.icon className={`h-4 w-4 ${active ? "text-primary-foreground" : "text-muted-foreground"}`} />
                         <span>{item.label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

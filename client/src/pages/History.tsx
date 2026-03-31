@@ -193,14 +193,14 @@ export default function History() {
                   variant={compareMode ? "default" : "outline"}
                   size="sm"
                   onClick={toggleCompareMode}
-                  className={compareMode ? "gradient-primary text-white" : ""}
+                  className={compareMode ? "bg-primary text-primary-foreground" : ""}
                 >
                   <GitCompare className="h-4 w-4 mr-1.5" />
                   {compareMode ? "キャンセル" : "比較"}
                 </Button>
               </>
             )}
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
+            <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setLocation("/analysis/new")}>
               <Search className="h-4 w-4 mr-1.5" />
               新規分析
             </Button>
@@ -260,7 +260,7 @@ export default function History() {
             <Button
               disabled={selectedIds.length !== 2}
               onClick={handleCompare}
-              className="gradient-primary text-white"
+              className="bg-primary text-primary-foreground"
             >
               <GitCompare className="h-4 w-4 mr-2" />
               比較する
@@ -278,7 +278,7 @@ export default function History() {
                 キーワードを入力して最初のVSEO分析を開始しましょう。
               </EmptyDescription>
             </EmptyHeader>
-            <Button className="gradient-primary text-white" onClick={() => setLocation("/analysis/new")}>
+            <Button className="bg-primary text-primary-foreground" onClick={() => setLocation("/analysis/new")}>
               <Search className="mr-2 h-4 w-4" />最初の分析を開始
             </Button>
           </Empty>

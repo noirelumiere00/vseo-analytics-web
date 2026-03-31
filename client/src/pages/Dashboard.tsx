@@ -131,7 +131,7 @@ export default function Dashboard() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" className="gradient-primary text-white h-8 text-sm">
+              <Button size="sm" className="bg-primary text-primary-foreground h-8 text-sm">
                 <Plus className="h-3.5 w-3.5 mr-1.5" />
                 新規作成
                 <ChevronDown className="h-3 w-3 ml-1 opacity-70" />
@@ -346,7 +346,7 @@ export default function Dashboard() {
                 キーワードを入力して最初のVSEO分析を始めましょう。上位動画の自動収集からAIレポート生成まで、約30分で完了します。
               </EmptyDescription>
             </EmptyHeader>
-            <Button onClick={() => setLocation("/analysis/new")} className="gradient-primary text-white">
+            <Button onClick={() => setLocation("/analysis/new")} className="bg-primary text-primary-foreground">
               <Search className="mr-2 h-4 w-4" />最初の分析を始める
             </Button>
           </Empty>
