@@ -682,7 +682,9 @@ export async function generateCampaignReport(
 
     // LLMで動画評価 + 総合レポート生成（1バッチ呼び出し）
     try {
-      const videoSummaries = scored.map(s => {
+      // ベストパフォーマンス上位5本のみLLMに送る（トークン節約 + 焦点を絞る）
+      const top5Scored = [...scored].sort((a, b) => b.overallScore - a.overallScore).slice(0, 5);
+      const videoSummaries = top5Scored.map(s => {
         const v = ownVideoDataFull.find(d => d.videoId === s.videoId);
         const metrics = measurementMetrics2[s.videoId];
         return {
@@ -699,6 +701,7 @@ export async function generateCampaignReport(
         keywords,
         positionReport: positionReport.slice(0, 5),
         videos: videoSummaries,
+        totalVideoCount: scored.length,
       };
 
       const llmResult = await invokeLLM({
@@ -710,6 +713,7 @@ export async function generateCampaignReport(
           {
             role: "user",
             content: `以下の施策効果データを分析し、JSONで回答してください。
+施策動画は合計${scored.length}本ありますが、パフォーマンス上位5本のデータを提示します。
 
 データ:
 ${JSON.stringify(reportDataForLLM, null, 2)}
@@ -717,11 +721,10 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
 以下のJSON形式で回答:
 {
   "videoEvaluations": [{"videoId": "...", "evaluation": "30文字以内の一言評価"}],
-  "grade": "S/A/B/C/Dのいずれか",
+  "grade": "S/A/B/C/Dのいずれか（全体の施策効果を評価）",
   "summary": "100文字以内の総合サマリー",
   "strengths": ["強み1", "強み2"],
-  "weaknesses": ["弱み1", "弱み2"],
-  "actionProposals": ["提案1", "提案2", "提案3"]
+  "weaknesses": ["弱み1", "弱み2"]
 }`,
           },
         ],
@@ -748,7 +751,6 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
           summary: parsed.summary || "",
           strengths: parsed.strengths || [],
           weaknesses: parsed.weaknesses || [],
-          actionProposals: parsed.actionProposals || [],
         };
       }
     } catch (e) {
