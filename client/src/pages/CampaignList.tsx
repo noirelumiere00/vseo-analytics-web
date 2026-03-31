@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { Plus, Megaphone, Trash2, ChevronRight } from "lucide-react";
 import { useLocation } from "wouter";
@@ -15,6 +16,7 @@ const statusLabels: Record<string, { label: string; variant: "default" | "second
 };
 
 export default function CampaignList() {
+  usePageTitle("施策レポート");
   const [, setLocation] = useLocation();
 
   const campaignsQuery = trpc.campaign.list.useQuery();

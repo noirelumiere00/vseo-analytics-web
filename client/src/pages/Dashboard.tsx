@@ -27,7 +27,10 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useCountUp } from "@/hooks/useCountUp";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { CopyButton } from "@/components/CopyButton";
 import { useLocation } from "wouter";
+import { useState } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -38,10 +41,13 @@ function formatNumber(n: number): string {
 }
 
 export default function Dashboard() {
+  usePageTitle("ダッシュボード");
   const [, setLocation] = useLocation();
+  const [lastFetchedAt, setLastFetchedAt] = useState<string>(() => new Date().toLocaleTimeString("ja-JP"));
   const utils = trpc.useUtils();
 
   const { data, isLoading } = trpc.analysis.dashboard.useQuery(undefined, {
+    onSuccess: () => setLastFetchedAt(new Date().toLocaleTimeString("ja-JP")),
     refetchInterval: (query) => {
       const d = query.state.data as typeof data | undefined;
       if (!d) return false;
@@ -150,6 +156,29 @@ export default function Dashboard() {
           </DropdownMenu>
         </div>
 
+        {/* 最終更新タイムスタンプ */}
+        <p className="text-xs text-muted-foreground -mt-3">最終更新: {lastFetchedAt}</p>
+
+        {/* 初回ユーザー向けオンボーディングカード */}
+        {data && (data.kpi.totalAnalyses === 0) && (
+          <Card className="border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                VSEO Analyticsへようこそ
+              </CardTitle>
+              <CardDescription>最初のSEO分析を始めましょう</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => setLocation("/analysis/new")} className="bg-primary text-primary-foreground">
+                <Search className="mr-2 h-4 w-4" />
+                最初の分析を始める
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {/* === 進行中ジョブバナー === */}
         {hasActiveJobs && (
           <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
@@ -215,12 +244,15 @@ export default function Dashboard() {
 
         {/* === KPIカード === */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Card className="stat-card card-interactive">
+          <Card className="stat-card card-interactive group">
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">分析実行数</p>
-                  <div className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalAnalyses}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalAnalyses}</span>
+                    <CopyButton value={String(data?.kpi.totalAnalyses ?? 0)} className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                   {(data?.kpi.weeklyDelta ?? 0) > 0 && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
                       <TrendingUp className="h-3 w-3" />今週 +{data!.kpi.weeklyDelta}
@@ -233,12 +265,15 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-          <Card className="stat-card card-interactive">
+          <Card className="stat-card card-interactive group">
             <CardContent className="pt-5 pb-4">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">解析済み動画</p>
-                  <div className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalVideos}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-2xl font-bold mt-1 tabular-nums">{animatedTotalVideos}</span>
+                    <CopyButton value={String(insights?.stats.totalVideos ?? 0)} className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </div>
                   <p className="text-xs text-muted-foreground mt-1">全期間</p>
                 </div>
                 <div className="h-10 w-10 rounded-lg bg-purple-50 dark:bg-purple-950 flex items-center justify-center">

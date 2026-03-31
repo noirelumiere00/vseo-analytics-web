@@ -2,6 +2,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { Check, Crown, Zap, Building2 } from "lucide-react";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ const plans = [
 ];
 
 export default function Pricing() {
+  usePageTitle("プラン");
   const statusQuery = trpc.subscription.status.useQuery(undefined, { staleTime: 30_000 });
   const checkoutMutation = trpc.subscription.createCheckout.useMutation();
   const portalMutation = trpc.subscription.createPortal.useMutation();

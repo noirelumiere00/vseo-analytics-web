@@ -205,6 +205,22 @@ export async function getProcessingJobByUserId(userId: number) {
   }
 }
 
+export async function countProcessingJobsByUserId(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  try {
+    const results = await db.select({ id: analysisJobs.id }).from(analysisJobs)
+      .where(and(
+        eq(analysisJobs.userId, userId),
+        or(eq(analysisJobs.status, "processing"), eq(analysisJobs.status, "queued"))
+      ));
+    return results.length;
+  } catch (error) {
+    console.error("[Database] Error counting processing jobs:", error);
+    return 0;
+  }
+}
+
 export async function getAnalysisJobById(jobId: number) {
   const db = await getDb();
   if (!db) return undefined;

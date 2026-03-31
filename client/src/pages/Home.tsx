@@ -4,10 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, Search, Video, TrendingUp } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 
 export default function Home() {
+  usePageTitle("");
   const { loading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 

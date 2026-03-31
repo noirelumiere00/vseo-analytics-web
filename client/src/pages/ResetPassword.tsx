@@ -3,12 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PublicLayout from "@/components/PublicLayout";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
 export default function ResetPassword() {
+  usePageTitle("パスワード再設定");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [loading, setLoading] = useState(false);

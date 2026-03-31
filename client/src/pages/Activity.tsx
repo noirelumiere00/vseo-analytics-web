@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { HistorySkeleton } from "@/components/PageSkeleton";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -21,11 +23,14 @@ import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo } from "react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 type FilterType = "all" | "seo" | "trend";
 type EditMode = "normal" | "compare" | "delete";
+type SortType = "date-desc" | "date-asc" | "videos-desc";
 
 export default function Activity() {
+  usePageTitle("アクティビティ");
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
@@ -43,6 +48,8 @@ export default function Activity() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     compareWithId ? new Set([`seo-${compareWithId}`]) : new Set()
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortType, setSortType] = useState<SortType>("date-desc");
 
   // Sync filter from URL on mount
   useEffect(() => {
@@ -106,10 +113,30 @@ export default function Activity() {
     return <DashboardLayout><HistorySkeleton /></DashboardLayout>;
   }
 
-  const filtered = items?.filter(item => {
-    if (filter === "all") return true;
-    return item.type === filter;
-  }) ?? [];
+  const filtered = useMemo(() => {
+    let result = items?.filter(item => {
+      if (filter !== "all" && item.type !== filter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        return item.label.toLowerCase().includes(q);
+      }
+      return true;
+    }) ?? [];
+
+    result = [...result].sort((a, b) => {
+      switch (sortType) {
+        case "date-asc":
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        case "videos-desc":
+          return ((b as any).totalVideos ?? 0) - ((a as any).totalVideos ?? 0);
+        case "date-desc":
+        default:
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+    });
+
+    return result;
+  }, [items, filter, searchQuery, sortType]);
 
   const counts = {
     all: items?.length ?? 0,
@@ -173,7 +200,10 @@ export default function Activity() {
       if (next.has(key)) {
         next.delete(key);
       } else {
-        if (next.size >= 2) return; // max 2
+        if (next.size >= 2) {
+          toast.error("比較は2件まで選択できます");
+          return;
+        }
         next.add(key);
       }
       setSelectedIds(next);
@@ -285,6 +315,29 @@ export default function Activity() {
           ))}
         </div>
 
+        {/* Search & Sort */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="キーワード・ペルソナ名で検索..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-8 pl-8 text-sm"
+            />
+          </div>
+          <Select value={sortType} onValueChange={(v) => setSortType(v as SortType)}>
+            <SelectTrigger className="h-8 w-[140px] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">新しい順</SelectItem>
+              <SelectItem value="date-asc">古い順</SelectItem>
+              <SelectItem value="videos-desc">動画数順</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Edit mode banner */}
         {editMode !== "normal" && (
           <div className={`flex items-center justify-between p-2.5 rounded-lg border ${
@@ -357,6 +410,8 @@ export default function Activity() {
                   className={`card-interactive cursor-pointer animate-list-item transition-all ${
                     isSelected
                       ? "border-primary ring-1 ring-primary/30"
+                      : editMode === "compare" && !isSelectable
+                      ? "opacity-50 pointer-events-none"
                       : editMode !== "normal" && !isSelectable
                       ? "opacity-40 cursor-not-allowed"
                       : "hover:border-primary/40"

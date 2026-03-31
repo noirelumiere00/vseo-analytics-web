@@ -37,6 +37,7 @@ import {
   Timer,
   AlertTriangle,
 } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
@@ -214,6 +215,7 @@ function SentimentBar({ positive, neutral, negative }: { positive: number; neutr
 // Main page
 // ==============================
 export default function Comparison() {
+  usePageTitle("比較レポート");
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const search = useSearch();

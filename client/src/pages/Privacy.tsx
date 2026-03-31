@@ -1,7 +1,9 @@
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 
 export default function Privacy() {
+  usePageTitle("プライバシーポリシー");
   return (
     <div className="min-h-screen flex items-center justify-center p-8">
       <div className="max-w-2xl w-full space-y-6">
