@@ -209,9 +209,14 @@ function injectJsonSchemaInstruction(
  */
 function stripCodeFences(text: string): string {
   const trimmed = text.trim();
-  // ```json ... ``` or ``` ... ``` 形式を除去
+  // ```json ... ``` or ``` ... ``` 形式を除去（閉じタグなしの切り詰めケースも対応）
   const match = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  return match ? match[1].trim() : trimmed;
+  if (match) return match[1].trim();
+  // 閉じ ``` がない場合（max_tokensで切れた場合）
+  if (trimmed.startsWith("```")) {
+    return trimmed.replace(/^```(?:json)?\s*\n?/, "").trim();
+  }
+  return trimmed;
 }
 
 function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult {

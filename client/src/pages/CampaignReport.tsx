@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, Lightbulb, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation, useParams } from "wouter";
@@ -88,7 +88,6 @@ export const SECTIONS = [
   { id: "competitor", label: "競合", icon: Users },
   { id: "ripple", label: "波及", icon: Share2 },
   { id: "cross", label: "相関", icon: Globe },
-  { id: "next", label: "Next", icon: Lightbulb },
 ];
 
 // ============================
@@ -358,7 +357,6 @@ export default function CampaignReport() {
     if (s.id === "videos" && !hasVideoMetrics) return false;
     if (s.id === "competitor" && !hasCompetitors) return false;
     if (s.id === "cross" && !hasCrossPlatform) return false;
-    if (s.id === "next" && !aiReport) return false;
     return true;
   });
   const sectionNumber = (id: string) => visibleSections.findIndex(s => s.id === id) + 1;
@@ -519,6 +517,7 @@ export default function CampaignReport() {
               tiktokVideos={videoMetrics || []}
               platformSummary={platformSummary || {}}
               dailyMetrics={dailyMetrics}
+              hasBaseline={hasBaseline}
             />
           </div>
         )}
@@ -562,13 +561,6 @@ export default function CampaignReport() {
           </div>
         )}
 
-        {/* Section: Next Actions */}
-        {aiReport && (
-          <div id="next" ref={el => { sectionRefs.current["next"] = el; }} className="scroll-mt-16 section-fade-in">
-            <SectionHeader number={sectionNumber("next")} title="ネクストアクション" question="次に何をすべき？" />
-            <NextActionsSection aiReport={aiReport} />
-          </div>
-        )}
 
         {/* Notes */}
         {report.notes && (
@@ -711,10 +703,11 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
 // OwnVideoCard with inline edit
 // ============================
 
-function OwnVideoCard({ slot, keyword, onSlotUpdate }: {
+function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
   slot: SlotData;
   keyword: string;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+  readOnly?: boolean;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const configKey: keyof typeof SOV_SLOT_CONFIG = slot.owner_detail === "campaign" ? "campaign" : slot.owner_detail === "satellite" ? "satellite" : "official";
@@ -752,6 +745,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate }: {
         </div>
       </a>
       {/* Edit button */}
+      {!readOnly && (
       <Popover open={editOpen} onOpenChange={setEditOpen}>
         <PopoverTrigger asChild>
           <button
@@ -775,6 +769,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate }: {
           />
         </PopoverContent>
       </Popover>
+      )}
     </div>
   );
 }
@@ -783,7 +778,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate }: {
 // Unified Keyword + SOV Section
 // ============================
 
-export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate }: {
+export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate, readOnly }: {
   positions: any[];
   bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }> }>;
   sovReport: Record<string, any>;
@@ -791,6 +786,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   campaign?: any;
   campaignId: number;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+  readOnly?: boolean;
 }) {
   const [activeKw, setActiveKw] = useState<string | null>(null);
 
@@ -1007,13 +1003,13 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
             return (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {ownSlots.map(slot => (
-                  <OwnVideoCard key={slot.video_id} slot={slot} keyword={activeKwData.keyword} onSlotUpdate={onSlotUpdate} />
+                  <OwnVideoCard key={slot.video_id} slot={slot} keyword={activeKwData.keyword} onSlotUpdate={onSlotUpdate} readOnly={readOnly} />
                 ))}
               </div>
             );
           })()}
 
-          {/* OccupationMap (前後比較 — サイドバイサイド) */}
+          {/* OccupationMap (前後比較 — ジャンル可視化) */}
           {activeKwData.sovData && (() => {
             const sovData = activeKwData.sovData;
             const afterSlots = sovData.afterSlots;
@@ -1024,98 +1020,172 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
             const paddedBefore = padSlots(beforeSlots);
             const paddedAfter = padSlots(afterSlots);
             const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / afterSlots.length) * 100 * 10) / 10 : 0;
+            const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
+            const pctChange = Number((afterPct - beforePct).toFixed(1));
 
-            const renderEmptySlot = (i: number, isBefore: boolean) => (
-              <div className={`relative flex flex-col ${isBefore ? "w-14" : "w-16"} shrink-0`}>
-                <div className="h-[14px] shrink-0" />
-                <div className={`w-full ${isBefore ? "h-[100px]" : "h-[114px]"} rounded-md border border-dashed ${isBefore ? "border-slate-200/30" : "border-slate-200/50"} flex items-center justify-center ${isBefore ? "opacity-40" : ""}`}>
-                  <span className="text-[9px] text-slate-200">{i + 1}</span>
+            // Genre counting
+            const countGenres = (slots: SlotData[]) => {
+              const counts: Record<string, number> = {};
+              for (const g of Object.keys(GENRE_CONFIG)) counts[g] = 0;
+              for (const s of slots) {
+                const g = GENRE_CONFIG[s.genre] ? s.genre : "other";
+                counts[g] = (counts[g] || 0) + 1;
+              }
+              return counts;
+            };
+            const beforeGenres = countGenres(beforeSlots);
+            const afterGenres = countGenres(afterSlots);
+            const beforeNeg = beforeGenres.negative || 0;
+            const afterNeg = afterGenres.negative || 0;
+            const negChange = afterNeg - beforeNeg;
+
+            // Rank change map for after-row badges
+            const beforeVideoRankMap = new Map<string, number>();
+            for (const s of beforeSlots) beforeVideoRankMap.set(s.video_id, s.rank);
+            const getRankChange = (slot: SlotData): { label: string; color: string } | null => {
+              if (slot.owner !== "own" || !hasBaseline || beforeSlots.length === 0) return null;
+              const prevRank = beforeVideoRankMap.get(slot.video_id);
+              if (prevRank != null) {
+                const diff = prevRank - slot.rank;
+                if (diff > 0) return { label: `前#${prevRank} ↑${diff}`, color: "bg-black/55" };
+                if (diff < 0) return { label: `前#${prevRank} ↓${Math.abs(diff)}`, color: "bg-black/55" };
+                return { label: `前#${prevRank} →0`, color: "bg-black/55" };
+              }
+              return { label: "NEW", color: "bg-emerald-500" };
+            };
+
+            const renderSlotInRow = (slot: SlotData | null, i: number, isBefore: boolean) => {
+              if (!slot) return (
+                <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
+                  <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{i + 1}</span>
+                  <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-slate-200/40 flex items-center justify-center`}>
+                    <span className="text-[9px] text-slate-200">{i + 1}</span>
+                  </div>
                 </div>
-              </div>
-            );
+              );
+              const rc = !isBefore ? getRankChange(slot) : null;
+              return (
+                <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
+                  <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
+                  <SovSlotCell
+                    slot={slot} maxViewCount={maxViewCount} keyword={activeKwData.keyword}
+                    phase={isBefore ? "before" : "after"} isBefore={isBefore}
+                    onSlotUpdate={onSlotUpdate} readOnly={readOnly}
+                    rankChangeLabel={rc?.label} rankChangeBadgeColor={rc?.color}
+                  />
+                  {slot.owner === "own" && (
+                    <span className="mt-0.5 text-[9px] font-semibold text-foreground text-center max-w-[80px] truncate">
+                      @{slot.creator_username}
+                    </span>
+                  )}
+                </div>
+              );
+            };
 
             return afterSlots.length > 0 ? (
               <Card>
-                <CardContent className="px-3 py-4 space-y-3">
+                <CardContent className="px-4 py-5 space-y-3">
                   {/* Legend */}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
-                    {hasBaseline && beforeSlots.length > 0 && (
-                      <>
-                        <span className="inline-flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-sm bg-slate-300/60 border border-slate-200" />
-                          <span className="text-slate-400">施策前</span>
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-500 font-medium">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[9px] text-slate-400 font-semibold tracking-wider uppercase">アカウント</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-600" />公式</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-teal-600" />サテライト</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-purple-600" />施策</span>
+                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-200 border border-slate-300" />競合</span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-[9px] text-slate-400 font-semibold tracking-wider uppercase">ジャンル</span>
+                      {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
+                        <span key={key} className="flex items-center gap-1">
+                          <span className={`w-4 h-1.5 rounded-sm ${barCls}`} />
+                          {label}
                         </span>
-                        <span className="inline-flex items-center gap-1">
-                          <span className="w-3 h-3 rounded-sm bg-gradient-to-br from-blue-400 to-blue-600 border border-blue-300" />
-                          <span>施策後</span>
-                        </span>
-                        <span className="text-slate-300">|</span>
-                      </>
-                    )}
-                    {Object.entries(GENRE_CONFIG).map(([key, { label, cls }]) => (
-                      <span key={key} className={`px-1 rounded text-[9px] ${cls}`}>{label}</span>
-                    ))}
-                    <span className="text-slate-300">|</span>
-                    {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, { text, dot }]) => (
-                      <span key={key} className="flex items-center gap-0.5"><span className={`w-2 h-2 rounded-full ${dot}`} />{text}</span>
-                    ))}
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Slot pairs — side by side */}
-                  <div className="flex items-end gap-2 overflow-x-auto pb-2">
-                    {Array.from({ length: 10 }, (_, i) => {
-                      const bSlot = paddedBefore[i];
-                      const aSlot = paddedAfter[i];
-                      const isSameVideo = bSlot && aSlot && bSlot.video_id === aSlot.video_id;
-                      const isNew = !bSlot && aSlot;
-                      const isLost = bSlot && !aSlot;
-                      const isSwapped = bSlot && aSlot && bSlot.video_id !== aSlot.video_id;
+                  {/* ===== 施策前 ===== */}
+                  {hasBaseline && beforeSlots.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-500">施策前</span>
+                        <span className="text-[11px] text-slate-400">
+                          自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%) ｜ ネガティブ {beforeNeg}本
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
+                        {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
+                      </div>
+                    </>
+                  )}
 
-                      return (
-                        <div key={i} className="flex flex-col items-center gap-1 shrink-0">
-                          {/* 順位ラベル */}
-                          <span className="text-[9px] font-bold text-slate-400">#{i + 1}</span>
-                          {/* Before/After ペア */}
-                          <div className="flex gap-0.5 items-end">
-                            {hasBaseline && beforeSlots.length > 0 && (
-                              bSlot ? (
-                                <SovSlotCell slot={bSlot} maxViewCount={maxViewCount} keyword={activeKwData.keyword} phase="before" isBefore={true} onSlotUpdate={onSlotUpdate} />
-                              ) : renderEmptySlot(i, true)
-                            )}
-                            {aSlot ? (
-                              <SovSlotCell slot={aSlot} maxViewCount={maxViewCount} keyword={activeKwData.keyword} phase="after" isBefore={false} onSlotUpdate={onSlotUpdate} />
-                            ) : renderEmptySlot(i, false)}
-                          </div>
-                          {/* 変化インジケータ */}
-                          {hasBaseline && beforeSlots.length > 0 && (
-                            <span className={`text-[8px] font-medium leading-none ${
-                              isSameVideo ? "text-slate-300" :
-                              isSwapped ? "text-amber-500" :
-                              isNew ? "text-emerald-500" :
-                              isLost ? "text-red-400" : "text-slate-300"
-                            }`}>
-                              {isSameVideo ? "—" :
-                               isSwapped ? "入替" :
-                               isNew ? "★NEW" :
-                               isLost ? "退出" : "—"}
+                  {/* ===== ジャンル変動サマリー ===== */}
+                  {hasBaseline && beforeSlots.length > 0 && (
+                    <div className="flex justify-center items-center gap-1.5 py-3 flex-wrap">
+                      {/* 施策動画 */}
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
+                        ownChange > 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50"
+                      }`}>
+                        <span className="w-2 h-2 rounded-sm bg-emerald-500 shrink-0" />
+                        <span>施策動画</span>
+                        <span className={`font-bold ${ownChange > 0 ? "text-emerald-500" : ownChange < 0 ? "text-red-500" : "text-slate-400"}`}>
+                          {beforeOwnCount}→{afterOwnCount}本{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
+                        </span>
+                      </div>
+                      {/* Genre items */}
+                      {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => {
+                        const bCount = beforeGenres[key] || 0;
+                        const aCount = afterGenres[key] || 0;
+                        const change = aCount - bCount;
+                        const isNegReduced = key === "negative" && change < 0;
+                        return (
+                          <div key={key} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
+                            isNegReduced ? "bg-red-50 border border-red-200" : "bg-slate-50"
+                          }`}>
+                            <span className={`w-2 h-2 rounded-sm ${barCls} shrink-0`} />
+                            <span>{label}</span>
+                            <span className={`font-bold ${change > 0 ? "text-emerald-500" : change < 0 ? "text-red-500" : "text-slate-400"}`}>
+                              {bCount}→{aCount}本{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
                             </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ===== 施策後 ===== */}
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-600">
+                      {hasBaseline && beforeSlots.length > 0 ? "施策後" : "現在"}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      自社 {afterOwnCount}/{afterSlots.length} ({afterPct}%) ｜ ネガティブ {afterNeg}本
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
+                    {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
                   </div>
 
-                  {/* Stats cards below thumbnails */}
+                  {/* ===== 変化サマリー ===== */}
+                  {hasBaseline && beforeSlots.length > 0 && (
+                    <div className="flex justify-center gap-6 pt-2 text-[13px] font-semibold">
+                      <span className={pctChange > 0 ? "text-emerald-500" : pctChange < 0 ? "text-red-500" : "text-slate-400"}>
+                        シェア {beforePct}% → {afterPct}%（{pctChange > 0 ? "+" : ""}{pctChange}pt）
+                      </span>
+                      <span className="text-slate-300">｜</span>
+                      <span className={negChange < 0 ? "text-red-500" : negChange > 0 ? "text-emerald-500" : "text-slate-400"}>
+                        ネガティブ {beforeNeg}本 → {afterNeg}本（{negChange < 0 ? "" : negChange > 0 ? "+" : "±"}{negChange}本）
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Stats cards */}
                   {(() => {
-                    const beforePct = beforeSlots.length > 0
-                      ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
-                    const pctChange = Number((afterPct - beforePct).toFixed(1));
                     const afterRank = activeKwData.posData?.afterRank;
                     const rankChange = activeKwData.posData?.rankChange;
-
                     return (
                       <div className="grid grid-cols-3 gap-2">
-                        {/* シェア率 */}
                         <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
                           <span className="text-[10px] text-slate-400 font-medium">シェア率</span>
                           <span className="text-xl font-bold text-blue-600">{afterPct}<span className="text-sm font-normal">%</span></span>
@@ -1123,7 +1193,6 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                             <ChangeIndicator value={pctChange} suffix="pt" />
                           )}
                         </div>
-                        {/* 自社動画数 */}
                         <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
                           <span className="text-[10px] text-slate-400 font-medium">自社動画数</span>
                           <span className="text-xl font-bold text-slate-700">{afterOwnCount}<span className="text-sm font-normal text-slate-400"> /{afterSlots.length}</span></span>
@@ -1131,7 +1200,6 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                             <ChangeIndicator value={ownChange} suffix="本" />
                           )}
                         </div>
-                        {/* 最高順位 */}
                         <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
                           <span className="text-[10px] text-slate-400 font-medium">最高順位</span>
                           {afterRank != null ? (
@@ -1302,7 +1370,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
     { key: "date", label: "投稿日" },
   ];
   const [sortBy, setSortBy] = useState("views");
-  const [sparkMetric, setSparkMetric] = useState<"views" | "likes" | "shares" | "saves">("views");
+  const [sparkMetric, setSparkMetric] = useState<"views" | "likes" | "comments" | "shares" | "saves">("views");
   const bestVideoId = videos.reduce((best, v) => {
     const views = v.after?.viewCount || 0;
     return views > (best.views || 0) ? { id: v.videoId, views } : best;
@@ -1404,57 +1472,11 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
         </CardContent></Card>
       </div>
 
-      {/* Report A: 累積パフォーマンス推移 */}
-      {hasBaseline && videos.length > 0 && (() => {
-        if (hasDailyData) {
-          // 実測値ベースの累積チャート (TikTokのみ)
-          const dayMap = new Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>();
-          for (const dm of dailyMetrics!) {
-            if (dm.platform && dm.platform !== "tiktok") continue;
-            const dateKey = dm.date?.split("T")[0] || dm.dateKey;
-            if (!dateKey) continue;
-            const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
-            entry.views += dm.viewCount || 0;
-            entry.likes += dm.likeCount || 0;
-            entry.comments += dm.commentCount || 0;
-            entry.shares += dm.shareCount || 0;
-            entry.saves += dm.saveCount || 0;
-            dayMap.set(dateKey, entry);
-          }
-          const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
-          const lineData = sortedDays.map(([dateKey, d]) => ({
-            name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
-            再生数: d.views, いいね: d.likes, コメント: d.comments, シェア: d.shares, 保存: d.saves,
-          }));
-          const hasShares = lineData.some(d => d.シェア > 0);
-          const hasSaves = lineData.some(d => d.保存 > 0);
-          return lineData.length > 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">累積パフォーマンス推移（実測値）</CardTitle>
-                <CardDescription className="text-xs">日次取得データ</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={lineData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                    <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-                    <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
-                    <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                    <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
-                    <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                    {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
-                    {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          ) : null;
-        }
-
+      {/* Report A: パフォーマンス推移（累積 / 日次切替） */}
+      {hasBaseline && videos.length > 0 && hasDailyData && (
+        <TikTokPerformanceChart dailyMetrics={dailyMetrics!} videos={videos} />
+      )}
+      {hasBaseline && videos.length > 0 && !hasDailyData && (() => {
         // フォールバック: postedAt集約の累積チャート
         const dayMap = new Map<string, { views: number; likes: number; comments: number; saves: number; shares: number }>();
         for (const v of videos) {
@@ -1505,7 +1527,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
 
       {/* 投稿パフォーマンス推移（スモールマルチプル） */}
       {videos.length > 0 && (
-        <PostPerformanceGrid videos={sortedVideos} dailyMetrics={dailyMetrics} sparkMetric={sparkMetric} setSparkMetric={setSparkMetric} sortBy={sortBy} setSortBy={setSortBy} sortOptions={SORT_OPTIONS} videoScores={videoScores} bestVideoId={bestVideoId} kwSet={kwSet} bigKwSet={bigKwSet} />
+        <PostPerformanceGrid videos={sortedVideos} dailyMetrics={dailyMetrics} sparkMetric={sparkMetric} setSparkMetric={setSparkMetric} sortBy={sortBy} setSortBy={setSortBy} sortOptions={SORT_OPTIONS} videoScores={videoScores} bestVideoId={bestVideoId} kwSet={kwSet} bigKwSet={bigKwSet} hasBaseline={hasBaseline} />
       )}
 
     </div>
@@ -1513,13 +1535,137 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
 }
 
 // ============================
+// TikTok パフォーマンス推移（累積 / 日次増分 切替）
+// ============================
+
+function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[]; videos: any[] }) {
+  const [chartMode, setChartMode] = useState<"cumulative" | "daily">("cumulative");
+
+  const { cumulativeData, dailyData, hasShares, hasSaves } = useMemo(() => {
+    // 日付×動画URL別にスナップショットを整理
+    const dayMap = new Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>();
+    for (const dm of dailyMetrics) {
+      if (dm.platform && dm.platform !== "tiktok") continue;
+      const dateKey = dm.date?.split("T")[0] || dm.dateKey;
+      if (!dateKey) continue;
+      const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      entry.views += dm.viewCount || 0;
+      entry.likes += dm.likeCount || 0;
+      entry.comments += dm.commentCount || 0;
+      entry.shares += dm.shareCount || 0;
+      entry.saves += dm.saveCount || 0;
+      dayMap.set(dateKey, entry);
+    }
+
+    const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+    // 累積データ（スナップショット値そのまま）
+    const cumData = sortedDays.map(([dateKey, d]) => ({
+      name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
+      再生数: d.views, いいね: d.likes, コメント: d.comments, シェア: d.shares, 保存: d.saves,
+    }));
+
+    // 日次増分データ（前日との差分）
+    const dData = sortedDays.map(([dateKey, d], i) => {
+      const prev = i > 0 ? sortedDays[i - 1][1] : { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      return {
+        name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
+        再生数: Math.max(0, d.views - prev.views),
+        いいね: Math.max(0, d.likes - prev.likes),
+        コメント: Math.max(0, d.comments - prev.comments),
+        シェア: Math.max(0, d.shares - prev.shares),
+        保存: Math.max(0, d.saves - prev.saves),
+      };
+    });
+
+    const _hasShares = cumData.some(d => d.シェア > 0);
+    const _hasSaves = cumData.some(d => d.保存 > 0);
+
+    return { cumulativeData: cumData, dailyData: dData, hasShares: _hasShares, hasSaves: _hasSaves };
+  }, [dailyMetrics]);
+
+  const lineData = chartMode === "cumulative" ? cumulativeData : dailyData;
+  if (lineData.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base">パフォーマンス推移（実測値）</CardTitle>
+            <CardDescription className="text-xs mt-0.5">
+              {chartMode === "cumulative" ? "各動画の累積メトリクス合計の推移" : "日毎のメトリクス増分（前日比）"}
+            </CardDescription>
+          </div>
+          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <button
+              className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                chartMode === "cumulative"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white hover:bg-slate-50 text-slate-500"
+              }`}
+              onClick={() => setChartMode("cumulative")}
+            >
+              累計
+            </button>
+            <button
+              className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-slate-200 ${
+                chartMode === "daily"
+                  ? "bg-blue-500 text-white"
+                  : "bg-white hover:bg-slate-50 text-slate-500"
+              }`}
+              onClick={() => setChartMode("daily")}
+            >
+              日次
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          {chartMode === "cumulative" ? (
+            <LineChart data={lineData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+              <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
+              <Legend />
+              <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
+            </LineChart>
+          ) : (
+            <ComposedChart data={lineData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
+              <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
+              <Legend />
+              <Bar yAxisId="left" dataKey="再生数" fill="#3b82f6" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
+              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================
 // 投稿パフォーマンス推移（スモールマルチプル）
 // ============================
 
-const SPARK_LABELS: Record<string, string> = { views: "再生数", likes: "いいね", shares: "シェア", saves: "保存" };
-const SPARK_KEY: Record<string, string> = { views: "viewCount", likes: "likeCount", shares: "shareCount", saves: "saveCount" };
+const SPARK_LABELS: Record<string, string> = { views: "再生数", likes: "いいね", comments: "コメント", shares: "シェア", saves: "保存" };
+const SPARK_KEY: Record<string, string> = { views: "viewCount", likes: "likeCount", comments: "commentCount", shares: "shareCount", saves: "saveCount" };
 
-function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric, sortBy, setSortBy, sortOptions, videoScores, bestVideoId, kwSet, bigKwSet }: {
+function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric, sortBy, setSortBy, sortOptions, videoScores, bestVideoId, kwSet, bigKwSet, hasBaseline = true }: {
   videos: any[];
   dailyMetrics?: any[];
   sparkMetric: "views" | "likes" | "shares" | "saves";
@@ -1531,6 +1677,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
   bestVideoId?: string;
   kwSet: Set<string>;
   bigKwSet: Set<string>;
+  hasBaseline?: boolean;
 }) {
   const scoreMap = new Map((videoScores || []).map((s: any) => [s.videoId, s]));
   const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
@@ -1574,7 +1721,23 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         const bVal = Number(v.before?.[metricKey]) || 0;
         const aVal = Number(v.after?.[metricKey]) || 0;
         if (v.before && v.after) {
+          // レポートA: before→after の2点
           sorted = [{ dateKey: "before", value: bVal }, { dateKey: "after", value: aVal }];
+        } else if (!hasBaseline && aVal > 0 && v.postedAt) {
+          // レポートB: 投稿日からの経過日数で均等割り → 1日あたり上昇値の推移
+          const postedDate = new Date(v.postedAt);
+          const now = new Date();
+          const elapsedDays = Math.max(1, Math.floor((now.getTime() - postedDate.getTime()) / (1000 * 60 * 60 * 24)));
+          const dailyAvg = aVal / elapsedDays;
+          const points = Math.min(elapsedDays + 1, 30); // 最大30点でグラフ描画
+          const step = elapsedDays / (points - 1);
+          sorted = Array.from({ length: points }, (_, i) => {
+            const day = Math.round(step * i);
+            return {
+              dateKey: `${day}日`,
+              value: day === 0 ? 0 : Math.round(dailyAvg * day),
+            };
+          });
         } else if (aVal > 0) {
           sorted = [{ dateKey: "start", value: 0 }, { dateKey: "now", value: aVal }];
         }
@@ -1628,7 +1791,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
             {sortOptions.map(opt => (
               <button key={opt.key} onClick={() => {
                 setSortBy(opt.key);
-                const sparkMap: Record<string, "views" | "likes" | "shares" | "saves"> = { views: "views", likes: "likes", shares: "shares", saves: "saves", comments: "views", er: "views", date: "views" };
+                const sparkMap: Record<string, "views" | "likes" | "comments" | "shares" | "saves"> = { views: "views", likes: "likes", comments: "comments", shares: "shares", saves: "saves", er: "views", date: "views" };
                 setSparkMetric(sparkMap[opt.key] || "views");
               }}
                 className={`px-2 py-1 rounded text-[11px] transition-colors ${sortBy === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
@@ -1837,12 +2000,12 @@ function VideoThumbnail({ url, className }: { url?: string; className?: string }
 // Section 4: 検索結果占有マップ（SOVスロットマップ）
 // ============================
 
-const GENRE_CONFIG: Record<string, { label: string; cls: string }> = {
-  recommend: { label: "レコメンド", cls: "bg-emerald-600/80 text-white" },
-  howto: { label: "How-to", cls: "bg-sky-600/80 text-white" },
-  entertainment: { label: "エンタメ", cls: "bg-fuchsia-600/80 text-white" },
-  negative: { label: "ネガティブ", cls: "bg-red-600/80 text-white" },
-  other: { label: "その他", cls: "bg-slate-600/80 text-white" },
+const GENRE_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {
+  recommend: { label: "レコメンド", cls: "bg-orange-500 text-white", barCls: "bg-orange-500" },
+  howto: { label: "How-to", cls: "bg-sky-400 text-white", barCls: "bg-sky-400" },
+  entertainment: { label: "エンタメ", cls: "bg-pink-500 text-white", barCls: "bg-pink-500" },
+  negative: { label: "ネガティブ", cls: "bg-red-500 text-white", barCls: "bg-red-500" },
+  other: { label: "その他", cls: "bg-slate-400 text-white", barCls: "bg-slate-400" },
 };
 
 const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
@@ -2101,13 +2264,16 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
   );
 }
 
-function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate }: {
+function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeLabel, rankChangeBadgeColor, readOnly }: {
   slot: SlotData;
   maxViewCount: number;
   keyword: string;
   phase: "before" | "after";
   isBefore?: boolean;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+  readOnly?: boolean;
+  rankChangeLabel?: string | null;
+  rankChangeBadgeColor?: string;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const genreInfo = GENRE_CONFIG[slot.genre] || GENRE_CONFIG.other;
@@ -2141,6 +2307,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate }: {
     <Popover open={editOpen} onOpenChange={setEditOpen}>
     <div className={`relative flex flex-col ${cardW} shrink-0 group/slot transition-all duration-200 ${beforeFilter}`}>
       {/* 鉛筆ボタン — ホバー時に表示 */}
+      {!readOnly && (<>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -2163,6 +2330,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate }: {
           onCancel={() => setEditOpen(false)}
         />
       </PopoverContent>
+      </>)}
 
       {/* カード本体 */}
       <Tooltip>
@@ -2213,10 +2381,14 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate }: {
                 </div>
               )}
 
-              {/* ジャンルタグ */}
-              <span className={`absolute bottom-0 left-0 right-0 text-center text-[7px] leading-tight py-0.5 z-10 ${genreInfo.cls}`}>
-                {genreInfo.label}
-              </span>
+              {/* ジャンルバー */}
+              <div className={`absolute bottom-0 left-0 right-0 h-1.5 z-10 ${genreInfo.barCls}`} />
+              {/* ランク変動バッジ */}
+              {rankChangeLabel && (
+                <span className={`absolute bottom-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-bold text-white whitespace-nowrap z-20 ${rankChangeBadgeColor || "bg-black/55"}`}>
+                  {rankChangeLabel}
+                </span>
+              )}
             </div>
           </a>
         </TooltipTrigger>
@@ -2862,6 +3034,21 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
       for (const [date, stats] of fallbackMap) videoMap.set(date, { date, ...stats });
     }
 
+    // TikTok固有メトリクス（シェア・保存）を日別集計
+    const tiktokEngMap = new Map<string, { shares: number; saves: number }>();
+    if (videoMetrics && videoMetrics.length > 0) {
+      for (const v of videoMetrics) {
+        if (!v.postedAt) continue;
+        const platform = v.platform || "tiktok";
+        if (platform !== "tiktok") continue;
+        const date = new Date(v.postedAt).toISOString().split("T")[0];
+        const existing = tiktokEngMap.get(date) || { shares: 0, saves: 0 };
+        existing.shares += (v.after?.shareCount || 0);
+        existing.saves += (v.after?.saveCount || 0);
+        tiktokEngMap.set(date, existing);
+      }
+    }
+
     // 第三者投稿の日別再生数
     const tpDayViews = new Map<string, number>();
     if (ripple) {
@@ -2875,16 +3062,26 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
       }
     }
 
-    const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys(), ...tpDayViews.keys()])].sort();
-    let cumulativeViews = 0;
+    const allDates = [...new Set([...trendMap.keys(), ...videoMap.keys(), ...tpDayViews.keys(), ...tiktokEngMap.keys()])].sort();
+    let cumViews = 0, cumShares = 0, cumSaves = 0;
     return allDates.map((date: string) => {
       const dayViews = videoMap.get(date)?.totalViews ?? 0;
-      cumulativeViews += dayViews;
+      const eng = tiktokEngMap.get(date);
+      const dayShares = eng?.shares ?? 0;
+      const daySaves = eng?.saves ?? 0;
+      cumViews += dayViews;
+      cumShares += dayShares;
+      cumSaves += daySaves;
       return {
         date: date.slice(5),
         fullDate: date,
         trends: trendMap.get(date) ?? null,
-        views: cumulativeViews > 0 ? cumulativeViews : null,
+        dailyViews: dayViews > 0 ? dayViews : null,
+        views: cumViews > 0 ? cumViews : null,
+        dailyShares: dayShares > 0 ? dayShares : null,
+        shares: cumShares > 0 ? cumShares : null,
+        dailySaves: daySaves > 0 ? daySaves : null,
+        saves: cumSaves > 0 ? cumSaves : null,
         thirdPartyViews: tpDayViews.get(date) || null,
       };
     });
@@ -2956,6 +3153,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
     const endMonth = lastPost.toISOString().split("T")[0].slice(2, 7);
     return { start: startMonth, end: endMonth };
   }, [markerDates]);
+
 
   const VOLUME_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4"];
 
@@ -3029,12 +3227,11 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="flex items-center gap-3">
               <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
                 <Globe className="h-4 w-4 text-blue-500" />
                 Google Trends × TikTok 施策タイムライン
               </CardTitle>
-              <CardDescription className="text-xs mt-0.5">検索トレンドの推移と施策投稿の時系列を重ね合わせて表示</CardDescription>
             </div>
             {highlightRange && (
               <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -3043,42 +3240,60 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               </span>
             )}
           </div>
+          <CardDescription className="text-xs mt-0.5">
+            検索トレンドの推移と施策投稿の日次・累計再生数を重ね合わせて表示
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={filteredDailyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-              <RechartsTooltip
-                contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
-                formatter={(value: any, name: string) => {
-                  if (value === null || value === undefined) return ["—", name];
-                  if (name === "Google Trends") return [`${value} / 100`, name];
-                  return [String(value), name];
-                }}
-              />
-              {highlightRange && (
-                <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.06} />
-              )}
-              <Area type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
-              {Array.from(markerDates).map((date: string) => (
-                <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 3">
-                  <label position="top" offset={8}>
-                    <text style={{ fontSize: 9, fill: "#10b981", fontWeight: 600 }}>
-                      <tspan>&#9658;</tspan>
-                    </text>
-                  </label>
-                </ReferenceLine>
-              ))}
-            </ComposedChart>
-          </ResponsiveContainer>
+          <>
+                <div className="flex items-center justify-center gap-4 sm:gap-6 mb-3 text-xs">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-blue-500" /> Google Trends（左軸）</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded-sm bg-amber-400/70" /> 日次再生数（右軸）</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-orange-600" /> 累計再生数（右軸）</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-px bg-emerald-400 border-dashed border-t" /> 投稿日</span>
+                </div>
+                <ResponsiveContainer width="100%" height={320}>
+                  <ComposedChart data={filteredDailyChartData} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="cumViewsFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.12} />
+                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
+                    <YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#b45309" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
+                    <RechartsTooltip
+                      contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
+                      formatter={(value: any, name: string) => {
+                        if (value === null || value === undefined) return ["—", name];
+                        if (name === "Google Trends") return [`${value} / 100`, name];
+                        return [Number(value).toLocaleString() + " 回", name];
+                      }}
+                    />
+                    {highlightRange && (
+                      <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.06} />
+                    )}
+                    <Area yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
+                    <Bar yAxisId="right" dataKey="dailyViews" name="日次再生数" fill="#f59e0b" fillOpacity={0.7} radius={[2, 2, 0, 0]} barSize={6} />
+                    <Area yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ea580c" strokeWidth={2} fill="url(#cumViewsFill)" dot={false} connectNulls />
+                    {Array.from(markerDates).map((date: string) => (
+                      <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 3" yAxisId="left">
+                        <label position="top" offset={8}>
+                          <text style={{ fontSize: 9, fill: "#10b981", fontWeight: 600 }}>
+                            <tspan>&#9658;</tspan>
+                          </text>
+                        </label>
+                      </ReferenceLine>
+                    ))}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </>
           {/* Event marker legend below chart */}
           {markerDates.size > 0 && (
             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
@@ -3170,56 +3385,6 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
 }
 
 
-// ============================
-// Section 9: Next Actions
-// ============================
-
-export function NextActionsSection({ aiReport }: { aiReport: any }) {
-  return (
-    <div className="space-y-3">
-      {aiReport.strengths?.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <h3 className="text-sm font-semibold text-green-600 mb-2">強み</h3>
-            <ul className="space-y-2">
-              {aiReport.strengths.map((s: string, i: number) => (
-                <li key={i} className="text-sm border-l-4 border-green-500 pl-3 py-1">{s}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {aiReport.weaknesses?.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <h3 className="text-sm font-semibold text-red-500 mb-2">弱み</h3>
-            <ul className="space-y-2">
-              {aiReport.weaknesses.map((s: string, i: number) => (
-                <li key={i} className="text-sm border-l-4 border-red-500 pl-3 py-1">{s}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
-      {aiReport.actionProposals?.length > 0 && (
-        <Card>
-          <CardContent className="py-4">
-            <h3 className="text-sm font-semibold text-blue-600 mb-2">アクション提案</h3>
-            <ul className="space-y-2">
-              {aiReport.actionProposals.map((s: string, i: number) => (
-                <li key={i} className="text-sm border-l-4 border-blue-500 pl-3 py-1">
-                  <span className="font-medium text-blue-600 mr-1">{i + 1}.</span>{s}
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
 
 // ============================
 // 全媒体横断サマリー
@@ -3250,13 +3415,14 @@ const PLATFORM_COLORS = {
 
 const PLATFORM_ICONS: Record<string, string> = { tiktok: "TT", youtube: "YT", instagram: "IG" };
 
-export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMetrics }: {
+export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMetrics, hasBaseline = true }: {
   tiktokVideos: any[];
   platformSummary: {
     youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
     instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
   };
   dailyMetrics: any[];
+  hasBaseline?: boolean;
 }) {
   const [bestWorstSort, setBestWorstSort] = useState<"views" | "likes" | "er" | "comments">("views");
   const [tablePlatformFilter, setTablePlatformFilter] = useState<"all" | "tiktok" | "youtube" | "instagram">("all");
@@ -3585,8 +3751,8 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
         </div>
       )}
 
-      {/* ── 2c. Daily Chart (enhanced) ── */}
-      <AllPlatformDailyChart dailyMetrics={dailyMetrics} />
+      {/* ── 2c. Daily Chart (enhanced) — レポートAのみ表示 ── */}
+      {hasBaseline && <AllPlatformDailyChart dailyMetrics={dailyMetrics} />}
 
       {/* ── 2d. Best / Worst Videos ── */}
       {allVideos.length >= 3 && (
@@ -3823,11 +3989,12 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
   );
 }
 
-// === Daily Chart (enhanced with platform filter + 5 metrics) ===
+// === Daily Chart (enhanced with platform filter + 5 metrics + cumulative/daily toggle) ===
 function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
   const [chartFilter, setChartFilter] = useState<"all" | "tiktok" | "youtube" | "instagram">("all");
+  const [chartMode, setChartMode] = useState<"cumulative" | "daily">("cumulative");
 
-  const chartData = useMemo(() => {
+  const cumulativeData = useMemo(() => {
     if (!dailyMetrics || dailyMetrics.length === 0) return [];
     const filtered = chartFilter === "all" ? dailyMetrics : dailyMetrics.filter((m: any) => m.platform === chartFilter);
     const byDate = new Map<string, { date: string; views: number; likes: number; comments: number; shares: number; saves: number }>();
@@ -3843,16 +4010,32 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
     return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
   }, [dailyMetrics, chartFilter]);
 
+  const dailyIncrementData = useMemo(() => {
+    return cumulativeData.map((d, i) => {
+      const prev = i > 0 ? cumulativeData[i - 1] : { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      return {
+        date: d.date,
+        views: Math.max(0, d.views - prev.views),
+        likes: Math.max(0, d.likes - prev.likes),
+        comments: Math.max(0, d.comments - prev.comments),
+        shares: Math.max(0, d.shares - prev.shares),
+        saves: Math.max(0, d.saves - prev.saves),
+      };
+    });
+  }, [cumulativeData]);
+
+  const chartData = chartMode === "cumulative" ? cumulativeData : dailyIncrementData;
+
   // Check which platforms exist in data
   const availablePlatforms = useMemo(() => {
     if (!dailyMetrics || dailyMetrics.length === 0) return new Set<string>();
     return new Set(dailyMetrics.map((m: any) => m.platform).filter(Boolean));
   }, [dailyMetrics]);
 
-  if (chartData.length < 2) return null;
+  if (cumulativeData.length < 2) return null;
 
-  const hasShares = chartData.some(d => d.shares > 0);
-  const hasSaves = chartData.some(d => d.saves > 0);
+  const hasShares = cumulativeData.some(d => d.shares > 0);
+  const hasSaves = cumulativeData.some(d => d.saves > 0);
 
   const metricNames: Record<string, string> = { views: "再生数", likes: "いいね", comments: "コメント", shares: "シェア", saves: "保存" };
 
@@ -3860,7 +4043,31 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">日次推移</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm">メトリクス推移</CardTitle>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+              <button
+                className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                  chartMode === "cumulative"
+                    ? "bg-blue-500 text-white"
+                    : "bg-white hover:bg-slate-50 text-slate-500"
+                }`}
+                onClick={() => setChartMode("cumulative")}
+              >
+                累計
+              </button>
+              <button
+                className={`px-2 py-0.5 text-[10px] font-medium transition-colors border-l border-slate-200 ${
+                  chartMode === "daily"
+                    ? "bg-blue-500 text-white"
+                    : "bg-white hover:bg-slate-50 text-slate-500"
+                }`}
+                onClick={() => setChartMode("daily")}
+              >
+                日次
+              </button>
+            </div>
+          </div>
           <div className="flex gap-1">
             {(["all", "tiktok", "youtube", "instagram"] as const).map(pf => {
               if (pf !== "all" && !availablePlatforms.has(pf)) return null;
@@ -3880,29 +4087,49 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={chartData}>
-            <defs>
-              <linearGradient id="gradViews2" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
-            <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
-            <RechartsTooltip
-              formatter={(v: number, name: string) => [fmt(v), metricNames[name] || name]}
-              labelFormatter={v => v}
-              contentStyle={{ fontSize: 11 }}
-            />
-            <Legend formatter={(v) => metricNames[v] || v} wrapperStyle={{ fontSize: 11 }} />
-            <Area yAxisId="left" type="monotone" dataKey="views" stroke="#3b82f6" fill="url(#gradViews2)" strokeWidth={2} name="views" />
-            <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={1.5} dot={false} name="likes" />
-            <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="comments" />
-            {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="shares" />}
-            {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#10b981" strokeWidth={1.5} dot={false} name="saves" />}
-          </ComposedChart>
+          {chartMode === "cumulative" ? (
+            <ComposedChart data={chartData}>
+              <defs>
+                <linearGradient id="gradViews2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              <RechartsTooltip
+                formatter={(v: number, name: string) => [fmt(v), metricNames[name] || name]}
+                labelFormatter={v => v}
+                contentStyle={{ fontSize: 11 }}
+              />
+              <Legend formatter={(v) => metricNames[v] || v} wrapperStyle={{ fontSize: 11 }} />
+              <Area yAxisId="left" type="monotone" dataKey="views" stroke="#3b82f6" fill="url(#gradViews2)" strokeWidth={2} name="views" />
+              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={1.5} dot={false} name="likes" />
+              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="comments" />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="shares" />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#10b981" strokeWidth={1.5} dot={false} name="saves" />}
+            </ComposedChart>
+          ) : (
+            <ComposedChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              <RechartsTooltip
+                formatter={(v: number, name: string) => [fmt(v), metricNames[name] || name]}
+                labelFormatter={v => v}
+                contentStyle={{ fontSize: 11 }}
+              />
+              <Legend formatter={(v) => metricNames[v] || v} wrapperStyle={{ fontSize: 11 }} />
+              <Bar yAxisId="left" dataKey="views" fill="#3b82f6" fillOpacity={0.7} radius={[2, 2, 0, 0]} name="views" />
+              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={1.5} dot={false} name="likes" />
+              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="comments" />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="shares" />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#10b981" strokeWidth={1.5} dot={false} name="saves" />}
+            </ComposedChart>
+          )}
         </ResponsiveContainer>
       </CardContent>
     </Card>

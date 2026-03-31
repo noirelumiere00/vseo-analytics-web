@@ -15,7 +15,6 @@ import {
   CompetitorSection,
   RippleSection,
   CrossPlatformSection,
-  NextActionsSection,
 } from "./CampaignReport";
 
 export default function SharedReport() {
@@ -123,7 +122,6 @@ export default function SharedReport() {
     if (s.id === "videos" && !hasVideoMetrics) return false;
     if (s.id === "competitor") return false; // hide competitor in shared view
     if (s.id === "cross" && !hasCrossPlatform) return false;
-    if (s.id === "next" && !aiReport) return false;
     return true;
   });
   const sectionNumber = (id: string) => visibleSections.findIndex(s => s.id === id) + 1;
@@ -225,7 +223,7 @@ export default function SharedReport() {
         {/* Keyword + SOV (unified) */}
         <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("keyword-sov")} title="検索順位・上位シェア率" question="検索上位にどの動画が露出した？" />
-          <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaignId={0} onSlotUpdate={() => {}} />
+          <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaignId={0} onSlotUpdate={() => {}} readOnly />
         </div>
 
         {/* Ripple */}
@@ -242,13 +240,6 @@ export default function SharedReport() {
           </div>
         )}
 
-        {/* Next Actions */}
-        {aiReport && (
-          <div id="next" ref={el => { sectionRefs.current["next"] = el; }} className="scroll-mt-16 section-fade-in">
-            <SectionHeader number={sectionNumber("next")} title="ネクストアクション" question="次に何をすべき？" />
-            <NextActionsSection aiReport={aiReport} />
-          </div>
-        )}
 
         {/* Notes */}
         {report.notes && (
