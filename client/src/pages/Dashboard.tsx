@@ -30,7 +30,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { CopyButton } from "@/components/CopyButton";
 import { useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -80,13 +80,12 @@ export default function Dashboard() {
     data.activeJobs.campaign.length > 0
   );
 
-  // Duration performance: sort by ER desc, assign verdict
-  const rankedDurations = insights?.durationPerformance
+  const rankedDurations = useMemo(() => insights?.durationPerformance
     ? [...insights.durationPerformance].sort((a, b) => b.avgER - a.avgER).map((d, i) => ({
         ...d,
         verdict: i === 0 ? "Best" as const : i < 3 ? "Good" as const : "Weak" as const,
       }))
-    : [];
+    : [], [insights?.durationPerformance]);
 
   // Format summary for duration
   const formatSummary = (() => {
@@ -110,9 +109,9 @@ export default function Dashboard() {
     if (ratio > 0.35) return 2;
     return 1;
   };
-  const maxHeatmapER = insights?.postingHeatmap
+  const maxHeatmapER = useMemo(() => insights?.postingHeatmap
     ? Math.max(...heatmapBands.flatMap(b => heatmapDays.map(d => (insights.postingHeatmap as any)?.[b]?.[d]?.er ?? 0)), 0.01)
-    : 1;
+    : 1, [insights?.postingHeatmap]);
 
   // Sentiment best
   const sentimentBest = insights?.sentimentAnalysis

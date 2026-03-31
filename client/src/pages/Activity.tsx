@@ -153,11 +153,11 @@ export default function Activity() {
     return result;
   }, [items, filter, searchQuery, sortType]);
 
-  const counts = {
+  const counts = useMemo(() => ({
     all: items?.length ?? 0,
     seo: items?.filter(i => i.type === "seo").length ?? 0,
     trend: items?.filter(i => i.type === "trend").length ?? 0,
-  };
+  }), [items]);
 
   const getStatusBadge = (status: string) => {
     const cls = "text-xs px-1.5 py-0.5";
