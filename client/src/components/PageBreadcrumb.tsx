@@ -6,11 +6,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft } from "lucide-react";
 
-/**
- * Each entry defines a breadcrumb trail: an array of { label, path } segments.
- * The last segment is rendered as the current page (non-clickable).
- * A "__dynamic__" label is replaced at runtime with fetched data.
- */
 interface BreadcrumbSegment {
   label: string;
   path: string;
@@ -56,67 +51,73 @@ const ROUTE_MAP: Record<string, RouteDefinition> = {
   ],
 };
 
-function matchDynamicRoute(location: string): {
+type DynamicRouteResult = {
   segments: RouteDefinition;
   analysisId: number;
   trendId: number;
   campaignId: number;
   campaignReportId: number;
-} {
-  const result = {
-    segments: [] as RouteDefinition,
+};
+
+const DYNAMIC_ROUTES: {
+  regex: RegExp;
+  idKey: keyof Omit<DynamicRouteResult, "segments">;
+  segments: (location: string) => RouteDefinition;
+}[] = [
+  {
+    regex: /^\/analysis\/(\d+)$/,
+    idKey: "analysisId",
+    segments: (loc) => [
+      { label: "ダッシュボード", path: "/dashboard" },
+      { label: "アクティビティ", path: "/activity" },
+      { label: "SEO分析", path: loc },
+    ],
+  },
+  {
+    regex: /^\/trend-discovery\/(\d+)$/,
+    idKey: "trendId",
+    segments: (loc) => [
+      { label: "ダッシュボード", path: "/dashboard" },
+      { label: "トレンド発掘", path: "/trend-discovery" },
+      { label: "分析結果", path: loc },
+    ],
+  },
+  {
+    regex: /^\/campaigns\/(\d+)\/report$/,
+    idKey: "campaignReportId",
+    segments: (loc) => [
+      { label: "ダッシュボード", path: "/dashboard" },
+      { label: "施策レポート", path: "/campaigns" },
+      { label: "レポート", path: loc },
+    ],
+  },
+  {
+    regex: /^\/campaigns\/(\d+)$/,
+    idKey: "campaignId",
+    segments: (loc) => [
+      { label: "ダッシュボード", path: "/dashboard" },
+      { label: "施策レポート", path: "/campaigns" },
+      { label: "詳細", path: loc },
+    ],
+  },
+];
+
+function matchDynamicRoute(location: string): DynamicRouteResult {
+  const result: DynamicRouteResult = {
+    segments: [],
     analysisId: 0,
     trendId: 0,
     campaignId: 0,
     campaignReportId: 0,
   };
 
-  // /analysis/:id (but not /analysis/new)
-  const analysisMatch = location.match(/^\/analysis\/(\d+)$/);
-  if (analysisMatch) {
-    result.analysisId = parseInt(analysisMatch[1]);
-    result.segments = [
-      { label: "ダッシュボード", path: "/dashboard" },
-      { label: "アクティビティ", path: "/activity" },
-      { label: "SEO分析", path: location },
-    ];
-    return result;
-  }
-
-  // /trend-discovery/:id
-  const trendMatch = location.match(/^\/trend-discovery\/(\d+)$/);
-  if (trendMatch) {
-    result.trendId = parseInt(trendMatch[1]);
-    result.segments = [
-      { label: "ダッシュボード", path: "/dashboard" },
-      { label: "トレンド発掘", path: "/trend-discovery" },
-      { label: "分析結果", path: location },
-    ];
-    return result;
-  }
-
-  // /campaigns/:id/report
-  const reportMatch = location.match(/^\/campaigns\/(\d+)\/report$/);
-  if (reportMatch) {
-    result.campaignReportId = parseInt(reportMatch[1]);
-    result.segments = [
-      { label: "ダッシュボード", path: "/dashboard" },
-      { label: "施策レポート", path: "/campaigns" },
-      { label: "レポート", path: location },
-    ];
-    return result;
-  }
-
-  // /campaigns/:id (but not /campaigns/new)
-  const campaignMatch = location.match(/^\/campaigns\/(\d+)$/);
-  if (campaignMatch) {
-    result.campaignId = parseInt(campaignMatch[1]);
-    result.segments = [
-      { label: "ダッシュボード", path: "/dashboard" },
-      { label: "施策レポート", path: "/campaigns" },
-      { label: "詳細", path: location },
-    ];
-    return result;
+  for (const route of DYNAMIC_ROUTES) {
+    const match = location.match(route.regex);
+    if (match) {
+      result[route.idKey] = parseInt(match[1]);
+      result.segments = route.segments(location);
+      return result;
+    }
   }
 
   return result;
@@ -128,7 +129,6 @@ export function PageBreadcrumb() {
   const { segments: dynamicSegments, analysisId, trendId, campaignId, campaignReportId } =
     matchDynamicRoute(location);
 
-  // Fetch dynamic names when we have IDs
   const analysisQuery = trpc.analysis.getById.useQuery(
     { jobId: analysisId },
     { enabled: analysisId > 0 },
@@ -146,7 +146,6 @@ export function PageBreadcrumb() {
     { enabled: campaignReportId > 0 },
   );
 
-  // Resolve segments: use static map or dynamic match
   let segments: RouteDefinition = dynamicSegments.length > 0
     ? [...dynamicSegments]
     : ROUTE_MAP[location]
@@ -155,7 +154,6 @@ export function PageBreadcrumb() {
 
   if (segments.length === 0) return null;
 
-  // Append dynamic name to the last segment for detail pages
   if (analysisId > 0 && analysisQuery.data?.job?.keyword) {
     const keyword = analysisQuery.data.job.keyword.replace(/^#+/, "");
     segments[segments.length - 1] = {
@@ -185,7 +183,6 @@ export function PageBreadcrumb() {
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        {/* Back button */}
         <BreadcrumbItem>
           <BreadcrumbLink
             className="cursor-pointer text-xs inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
@@ -196,7 +193,6 @@ export function PageBreadcrumb() {
         </BreadcrumbItem>
         <BreadcrumbSeparator />
 
-        {/* All segments except the last are clickable links */}
         {segments.slice(0, -1).map((segment, index) => (
           <span key={segment.path} className="contents">
             <BreadcrumbItem>
@@ -211,7 +207,6 @@ export function PageBreadcrumb() {
           </span>
         ))}
 
-        {/* Last segment is the current page */}
         <BreadcrumbItem>
           <BreadcrumbPage className="text-xs">
             {segments[segments.length - 1].label}
