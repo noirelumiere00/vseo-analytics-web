@@ -73,6 +73,30 @@ function safeJsonParse(text: string): any {
  * TikTokの動画を分析し、構成要素を抽出・スコアリングする
  */
 
+export interface ProductionBriefAppealAxis {
+  type: string;
+  titleIdea: string;
+  captionTemplate: {
+    hook: string;
+    empathy: string;
+    product: string;
+    benefit: string;
+    cta: string;
+  };
+  rationale: string;
+}
+
+export interface ProductionBrief {
+  appealAxes: ProductionBriefAppealAxis[];
+  hashtagSets: string[][];
+  shootingChecklist: { recommendation: string; source: string }[];
+  ngList: { item: string; reason: string; evidence: string }[];
+  postingSchedule: {
+    top3: { day: string; hour: number; reason: string }[];
+    avoid: { day: string; hour: number; reason: string }[];
+  };
+}
+
 export interface VideoMetadata {
   url: string;
   platform: "tiktok";
@@ -1629,5 +1653,213 @@ ${videoSummaries.map((v, i) => `
     if (error instanceof LLMQuotaExhaustedError) {
       throw error;
     }
+  }
+}
+
+/**
+ * 分析データから動画制作ブリーフを生成
+ * 勝ち/負けパターン、ハッシュタグ、投稿時間、感情ワードなどの分析結果を統合し、
+ * 実践的な制作ブリーフをLLMで生成する
+ */
+export async function generateProductionBrief(
+  keyword: string,
+  winPattern: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string } | null,
+  losePattern: { summary: string; badHook: string; contentWeakness: string; formatProblems: string; hashtagMistakes: string; avoidTips: string } | null,
+  topHashtags: string[],
+  bestDuration: { range: string; avgER: number } | null,
+  bestPostingTimes: { day: string; hour: number; avgViews: number }[],
+  emotionWords: { word: string; count: number; valence: number; arousal: number }[]
+): Promise<ProductionBrief> {
+  const prompt = `
+検索キーワード: 「${keyword}」
+
+以下の分析データに基づき、TikTok動画の制作ブリーフを生成してください。
+
+【勝ちパターン分析】
+${winPattern ? `
+- 総括: ${winPattern.summary}
+- キーフック: ${winPattern.keyHook}
+- コンテンツ傾向: ${winPattern.contentTrend}
+- フォーマット特徴: ${winPattern.formatFeatures}
+- ハッシュタグ戦略: ${winPattern.hashtagStrategy}
+- VSEOアドバイス: ${winPattern.vseoTips}
+` : '（データなし）'}
+
+【負けパターン分析】
+${losePattern ? `
+- 総括: ${losePattern.summary}
+- 悪いフック: ${losePattern.badHook}
+- コンテンツ弱点: ${losePattern.contentWeakness}
+- フォーマット問題: ${losePattern.formatProblems}
+- ハッシュタグ失敗: ${losePattern.hashtagMistakes}
+- 避けるべき点: ${losePattern.avoidTips}
+` : '（データなし）'}
+
+【上位ハッシュタグ】
+${topHashtags.length > 0 ? topHashtags.join(', ') : '（データなし）'}
+
+【最適動画尺】
+${bestDuration ? `${bestDuration.range}（平均ER: ${bestDuration.avgER.toFixed(2)}%）` : '（データなし）'}
+
+【最適投稿時間】
+${bestPostingTimes.length > 0 ? bestPostingTimes.map(t => `${t.day} ${t.hour}時（平均再生数: ${t.avgViews.toLocaleString()}）`).join(', ') : '（データなし）'}
+
+【感情ワード分析】
+${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}回, 感情価${w.valence.toFixed(2)}, 覚醒度${w.arousal.toFixed(2)}）`).join(', ') : '（データなし）'}
+
+以下の項目を生成してください:
+1. appealAxes: TOP3の訴求軸。以下の10種から選定:
+   悩み起点型, 効果実感型, 成分・ロジック型, 比較・ランキング型, 購買後押し型, 生活シーン型, 共感・あるある型, 習慣化・ルーティン型, 気分価値・感情訴求型, 時短・ラク型
+   各軸にtype, titleIdea, captionTemplate（hook/empathy/product/benefit/ctaの5パート）, rationaleを含めてください。
+2. hashtagSets: 3セットの推奨ハッシュタグ（コピペでそのまま使える形式）
+3. shootingChecklist: 撮影・編集チェックリスト（recommendation と source）
+4. ngList: やってはいけないことリスト（item, reason, evidence）
+5. postingSchedule: 推奨投稿スケジュール（top3の推奨時間帯と避けるべき時間帯）
+`;
+
+  try {
+    const response = await invokeLLM({
+      maxTokens: 4096,
+      messages: [
+        {
+          role: "system",
+          content: "あなたはTikTok動画のクリエイティブディレクターです。分析データに基づき、動画制作ブリーフを生成してください。日本語で回答し、JSONで出力してください。",
+        },
+        { role: "user", content: prompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "production_brief",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              appealAxes: {
+                type: "array",
+                description: "TOP3の訴求軸（10種から選定）",
+                items: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", description: "訴求軸の種類（例: 悩み起点型, 効果実感型, etc.）" },
+                    titleIdea: { type: "string", description: "この訴求軸に基づく動画タイトル案" },
+                    captionTemplate: {
+                      type: "object",
+                      description: "キャプションテンプレート（5パート構成）",
+                      properties: {
+                        hook: { type: "string", description: "冒頭の引き（スクロール停止させる一言）" },
+                        empathy: { type: "string", description: "共感パート（視聴者の悩みや状況に寄り添う）" },
+                        product: { type: "string", description: "商品・サービス紹介パート" },
+                        benefit: { type: "string", description: "ベネフィット訴求パート" },
+                        cta: { type: "string", description: "行動喚起パート" },
+                      },
+                      required: ["hook", "empathy", "product", "benefit", "cta"],
+                      additionalProperties: false,
+                    },
+                    rationale: { type: "string", description: "この訴求軸を選んだ根拠（分析データに基づく）" },
+                  },
+                  required: ["type", "titleIdea", "captionTemplate", "rationale"],
+                  additionalProperties: false,
+                },
+              },
+              hashtagSets: {
+                type: "array",
+                description: "3セットの推奨ハッシュタグ（コピペ用）",
+                items: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+              },
+              shootingChecklist: {
+                type: "array",
+                description: "撮影・編集チェックリスト",
+                items: {
+                  type: "object",
+                  properties: {
+                    recommendation: { type: "string", description: "推奨事項" },
+                    source: { type: "string", description: "根拠となるデータソース" },
+                  },
+                  required: ["recommendation", "source"],
+                  additionalProperties: false,
+                },
+              },
+              ngList: {
+                type: "array",
+                description: "やってはいけないことリスト",
+                items: {
+                  type: "object",
+                  properties: {
+                    item: { type: "string", description: "NGアクション" },
+                    reason: { type: "string", description: "NG理由" },
+                    evidence: { type: "string", description: "根拠データ" },
+                  },
+                  required: ["item", "reason", "evidence"],
+                  additionalProperties: false,
+                },
+              },
+              postingSchedule: {
+                type: "object",
+                description: "推奨投稿スケジュール",
+                properties: {
+                  top3: {
+                    type: "array",
+                    description: "TOP3の推奨投稿時間帯",
+                    items: {
+                      type: "object",
+                      properties: {
+                        day: { type: "string", description: "曜日" },
+                        hour: { type: "number", description: "時間（0-23）" },
+                        reason: { type: "string", description: "推奨理由" },
+                      },
+                      required: ["day", "hour", "reason"],
+                      additionalProperties: false,
+                    },
+                  },
+                  avoid: {
+                    type: "array",
+                    description: "避けるべき投稿時間帯",
+                    items: {
+                      type: "object",
+                      properties: {
+                        day: { type: "string", description: "曜日" },
+                        hour: { type: "number", description: "時間（0-23）" },
+                        reason: { type: "string", description: "避ける理由" },
+                      },
+                      required: ["day", "hour", "reason"],
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["top3", "avoid"],
+                additionalProperties: false,
+              },
+            },
+            required: ["appealAxes", "hashtagSets", "shootingChecklist", "ngList", "postingSchedule"],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+
+    const content = typeof response.choices[0].message.content === 'string'
+      ? response.choices[0].message.content
+      : JSON.stringify(response.choices[0].message.content);
+    const parsed = safeJsonParse(content || "{}") as ProductionBrief;
+
+    console.log(`[Analysis] Production brief generated for keyword "${keyword}"`);
+    return parsed;
+  } catch (error) {
+    console.error("[Analysis] Error generating production brief:", error);
+    if (error instanceof LLMQuotaExhaustedError) {
+      throw error;
+    }
+    // Return a minimal empty brief on non-quota errors
+    return {
+      appealAxes: [],
+      hashtagSets: [],
+      shootingChecklist: [],
+      ngList: [],
+      postingSchedule: { top3: [], avoid: [] },
+    };
   }
 }
