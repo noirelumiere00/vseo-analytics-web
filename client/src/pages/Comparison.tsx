@@ -215,7 +215,6 @@ function SentimentBar({ positive, neutral, negative }: { positive: number; neutr
 // Main page
 // ==============================
 export default function Comparison() {
-  usePageTitle("比較レポート");
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const search = useSearch();
@@ -230,6 +229,14 @@ export default function Comparison() {
   const { data: dataB, isLoading: loadingB } = trpc.analysis.getById.useQuery(
     { jobId: idB },
     { enabled: !!user && idB > 0 }
+  );
+
+  const keywordA = dataA?.job?.keyword;
+  const keywordB = dataB?.job?.keyword;
+  usePageTitle(
+    keywordA && keywordB
+      ? `比較: ${keywordA} vs ${keywordB}`
+      : "比較レポート"
   );
 
   if (!idA || !idB) {

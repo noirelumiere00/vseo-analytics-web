@@ -28,7 +28,6 @@ import {
 } from "@/components/TrendStatisticsPanel";
 
 export default function TrendDiscoveryDetail() {
-  usePageTitle("トレンド分析結果");
   const params = useParams<{ id: string }>();
   const jobId = Number(params.id);
   const [, setLocation] = useLocation();
@@ -95,6 +94,7 @@ export default function TrendDiscoveryDetail() {
 
   const job = jobQuery.data;
   const progress = progressQuery.data;
+  usePageTitle(job?.persona ? `トレンド: ${job.persona}` : "トレンド分析結果");
 
   if (jobQuery.isLoading) {
     return (

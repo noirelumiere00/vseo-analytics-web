@@ -4,6 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { HistorySkeleton } from "@/components/PageSkeleton";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
@@ -50,6 +60,11 @@ export default function Activity() {
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [sortType, setSortType] = useState<SortType>("date-desc");
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    title: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", onConfirm: () => {} });
 
   // Sync filter from URL on mount
   useEffect(() => {
@@ -162,14 +177,17 @@ export default function Activity() {
 
   const handleDelete = (e: React.MouseEvent, item: typeof filtered[0]) => {
     e.stopPropagation();
-    const label = item.type === "seo" ? "分析ジョブ" : "トレンド発掘ジョブ";
-    if (window.confirm(`この${label}を削除しますか？関連する全てのデータが削除されます。`)) {
-      if (item.type === "seo") {
-        deleteAnalysis.mutate({ jobId: item.id });
-      } else {
-        deleteTrend.mutate({ jobId: item.id });
-      }
-    }
+    setDeleteDialog({
+      open: true,
+      title: "分析を削除しますか？",
+      onConfirm: () => {
+        if (item.type === "seo") {
+          deleteAnalysis.mutate({ jobId: item.id });
+        } else {
+          deleteTrend.mutate({ jobId: item.id });
+        }
+      },
+    });
   };
 
   const handleRetry = (e: React.MouseEvent, item: typeof filtered[0]) => {
@@ -242,10 +260,14 @@ export default function Activity() {
 
     if (seoIds.length + trendIds.length === 0) return;
 
-    if (!window.confirm(`${seoIds.length + trendIds.length}件のジョブを削除しますか？関連する全てのデータが削除されます。`)) return;
-
-    if (seoIds.length > 0) bulkDeleteAnalysis.mutate({ jobIds: seoIds });
-    if (trendIds.length > 0) bulkDeleteTrend.mutate({ jobIds: trendIds });
+    setDeleteDialog({
+      open: true,
+      title: "分析を削除しますか？",
+      onConfirm: () => {
+        if (seoIds.length > 0) bulkDeleteAnalysis.mutate({ jobIds: seoIds });
+        if (trendIds.length > 0) bulkDeleteTrend.mutate({ jobIds: trendIds });
+      },
+    });
   };
 
   const exitEditMode = () => {
@@ -534,6 +556,27 @@ export default function Activity() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog((prev) => ({ ...prev, open }))}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>分析を削除しますか？</AlertDialogTitle>
+            <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                deleteDialog.onConfirm();
+                setDeleteDialog((prev) => ({ ...prev, open: false }));
+              }}
+            >
+              削除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
