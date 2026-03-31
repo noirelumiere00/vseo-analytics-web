@@ -96,7 +96,6 @@ export const SECTIONS = [
 // ============================
 
 export default function CampaignReport() {
-  usePageTitle("施策レポート");
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const campaignId = parseInt(id || "0");
@@ -106,6 +105,7 @@ export default function CampaignReport() {
   const dailyMetricsQuery = trpc.campaign.getDailyMetrics.useQuery({ campaignId }, { enabled: campaignId > 0 });
 
   const campaign = campaignQuery.data?.campaign;
+  usePageTitle(campaign?.name ? `レポート: ${campaign.name}` : "施策レポート");
   const report = reportQuery.data;
   const dailyMetrics = dailyMetricsQuery.data || [];
 
