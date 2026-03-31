@@ -136,7 +136,7 @@ export default function CampaignDetail() {
               <>
                 <Button
                   size="sm"
-                  className="gradient-primary text-white"
+                  className="bg-primary text-primary-foreground"
                   onClick={() => setLocation(`/campaigns/${campaignId}/report`)}
                 >
                   <ExternalLink className="h-3.5 w-3.5 mr-1.5" />

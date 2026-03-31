@@ -131,7 +131,7 @@ export default function AnalysisNew() {
 
               <Button
                 type="submit"
-                className="w-full gradient-primary text-white"
+                className="w-full bg-primary text-primary-foreground"
                 disabled={createAnalysis.isPending}
               >
                 {createAnalysis.isPending ? (

@@ -256,7 +256,7 @@ export default function Activity() {
               <Compass className="h-3.5 w-3.5 mr-1.5" />
               トレンド発掘
             </Button>
-            <Button size="sm" className="gradient-primary text-white h-8 text-sm" onClick={() => setLocation("/analysis/new")}>
+            <Button size="sm" className="bg-primary text-primary-foreground h-8 text-sm" onClick={() => setLocation("/analysis/new")}>
               <Search className="h-3.5 w-3.5 mr-1.5" />
               新規分析
             </Button>
@@ -332,7 +332,7 @@ export default function Activity() {
                   : "ペルソナを入力してTikTokトレンドを発掘しましょう。"}
               </EmptyDescription>
             </EmptyHeader>
-            <Button className="gradient-primary text-white" onClick={() => setLocation(filter === "trend" ? "/trend-discovery" : "/analysis/new")}>
+            <Button className="bg-primary text-primary-foreground" onClick={() => setLocation(filter === "trend" ? "/trend-discovery" : "/analysis/new")}>
               <Search className="mr-2 h-4 w-4" />
               {filter === "trend" ? "トレンド発掘を開始" : "分析を開始"}
             </Button>

@@ -396,7 +396,7 @@ export default function Comparison() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold">
-                <span className="gradient-text">比較レポート</span>
+                <span>比較レポート</span>
               </h1>
               <p className="text-muted-foreground mt-2">2件の分析結果を並べて比較します</p>
             </div>

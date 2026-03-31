@@ -537,7 +537,7 @@ export default function AnalysisDetail() {
                       setLocation(`/compare?a=${jobId}&b=${selectedCompareId}`);
                     }
                   }}
-                  className="gradient-primary text-white"
+                  className="bg-primary text-primary-foreground"
                 >
                   <GitCompare className="h-4 w-4 mr-2" />
                   比較する
@@ -561,7 +561,7 @@ export default function AnalysisDetail() {
                         </p>
                       </div>
                       <Button
-                        className="gradient-primary text-white"
+                        className="bg-primary text-primary-foreground"
                         onClick={() => executeAnalysis.mutate({ jobId })}
                         disabled={executeAnalysis.isPending}
                       >
@@ -699,7 +699,7 @@ export default function AnalysisDetail() {
           {job.status === "completed" && (
             <div className="flex items-center gap-2 flex-wrap">
               <Button
-                className="gradient-primary text-white"
+                className="bg-primary text-primary-foreground"
                 onClick={() => executeAnalysis.mutate({ jobId })}
                 disabled={executeAnalysis.isPending}
                 size="sm"

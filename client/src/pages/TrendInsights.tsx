@@ -134,7 +134,7 @@ export default function TrendInsights() {
                 {deleteMode ? "キャンセル" : "選択削除"}
               </Button>
             )}
-            <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation("/trend-discovery")}>
+            <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setLocation("/trend-discovery")}>
               <Compass className="h-4 w-4 mr-1.5" />
               新規分析
             </Button>

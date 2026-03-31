@@ -131,7 +131,7 @@ export default function TrendDiscoveryDetail() {
           </div>
           {job.status === "completed" && (
             <div className="flex items-center gap-2 flex-wrap">
-              <Button size="sm" className="gradient-primary text-white" onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
+              <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setLocation(`/campaigns/new?trendJobId=${jobId}`)}>
                 <FileText className="h-4 w-4 mr-2" />
                 施策レポート作成
               </Button>
