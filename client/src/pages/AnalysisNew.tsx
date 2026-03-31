@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Compass, Eye, FileText, Loader2, Search, Video } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState } from "react";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
@@ -19,6 +20,7 @@ const STEPS = [
 ];
 
 export default function AnalysisNew() {
+  usePageTitle("新規SEO分析");
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
@@ -97,14 +99,19 @@ export default function AnalysisNew() {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {trendKeywords.map(kw => (
-                      <Badge
+                      <button
                         key={kw}
-                        variant="secondary"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs px-2.5 py-1"
+                        type="button"
                         onClick={() => setKeyword(kw)}
+                        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                       >
-                        {kw}
-                      </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs px-2.5 py-1"
+                        >
+                          {kw}
+                        </Badge>
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -116,14 +123,19 @@ export default function AnalysisNew() {
                   <p className="text-xs text-muted-foreground">最近の分析キーワード</p>
                   <div className="flex flex-wrap gap-1.5">
                     {topKeywords.slice(0, 6).map(kw => (
-                      <Badge
+                      <button
                         key={kw.keyword}
-                        variant="secondary"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs px-2.5 py-1"
+                        type="button"
                         onClick={() => setKeyword(kw.keyword)}
+                        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
                       >
-                        {kw.keyword}
-                      </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs px-2.5 py-1"
+                        >
+                          {kw.keyword}
+                        </Badge>
+                      </button>
                     ))}
                   </div>
                 </div>

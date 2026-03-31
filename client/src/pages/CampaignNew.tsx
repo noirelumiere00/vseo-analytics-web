@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Loader2, Users, Check, X } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
@@ -47,6 +48,7 @@ function UsernamePreview({ input }: { input: string }) {
 }
 
 export default function CampaignNew() {
+  usePageTitle("新規施策レポート");
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);

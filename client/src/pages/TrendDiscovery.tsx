@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import DashboardLayout from "@/components/DashboardLayout";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -17,6 +18,7 @@ const STEPS = [
 ];
 
 export default function TrendDiscovery() {
+  usePageTitle("トレンド発掘");
   const [, setLocation] = useLocation();
   const searchString = useSearch();
   const params = useMemo(() => new URLSearchParams(searchString), [searchString]);

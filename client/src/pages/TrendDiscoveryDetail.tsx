@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "wouter";
@@ -27,6 +28,7 @@ import {
 } from "@/components/TrendStatisticsPanel";
 
 export default function TrendDiscoveryDetail() {
+  usePageTitle("トレンド分析結果");
   const params = useParams<{ id: string }>();
   const jobId = Number(params.id);
   const [, setLocation] = useLocation();

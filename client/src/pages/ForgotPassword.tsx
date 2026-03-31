@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PublicLayout from "@/components/PublicLayout";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { useState } from "react";
 import { Loader2, ArrowLeft, Mail } from "lucide-react";
 import { Link } from "wouter";
 
 export default function ForgotPassword() {
+  usePageTitle("パスワードリセット");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);

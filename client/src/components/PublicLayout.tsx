@@ -13,7 +13,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
       <div className="hidden lg:flex flex-col justify-center px-12 relative overflow-hidden"
         style={{
           background: `
-            radial-gradient(circle at 1px 1px, oklch(0.50 0.18 25 / 0.06) 1px, transparent 0),
+            radial-gradient(circle at 1px 1px, oklch(0.45 0.18 25 / 0.06) 1px, transparent 0),
             linear-gradient(160deg, oklch(0.975 0.005 80) 0%, oklch(0.96 0.015 25 / 30%) 40%, oklch(0.975 0.005 80) 100%)
           `,
           backgroundSize: '20px 20px, 100% 100%',
@@ -29,7 +29,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
         <div className="relative space-y-8 max-w-md">
           <div className="space-y-4">
-            <img src="/favicon.png" alt="VSEO Analytics" className="h-16 w-16 object-contain logo-blend" />
+            <img src="/favicon.png" alt="VSEO Analytics" className="h-16 w-16 object-contain logo-blend" loading="lazy" />
             <h1 className="text-4xl tracking-tight" style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 800 }}>
               <span className="text-primary">V</span>SEO Analytics
             </h1>

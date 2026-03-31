@@ -1,9 +1,11 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import DashboardLayout from "@/components/DashboardLayout";
 
 export default function Admin() {
+  usePageTitle("管理画面");
   const { data: me } = trpc.auth.me.useQuery();
   const { data: users, isLoading } = trpc.admin.listUsers.useQuery(undefined, {
     enabled: !!me && me.role === "admin",

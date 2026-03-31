@@ -17,7 +17,7 @@ import { fetchInstagramPosts } from "./instagramScraper";
 import { captureDailyMetrics } from "./dailyMetrics";
 import { getVideoPhase } from "./dailyMetricsScheduler";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
-import { checkQuota, PLAN_LIMITS } from "./_core/quota";
+import { checkQuota, getMonthlyUsage, PLAN_LIMITS } from "./_core/quota";
 import { createCheckoutSession, createPortalSession } from "./_core/stripe";
 import { ENV } from "./_core/env";
 import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } from "./googleTrends";
@@ -256,12 +256,12 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
         }
 
-        // ユーザーレート制限: 1人1つまで同時分析可能
-        const processingJob = await db.getProcessingJobByUserId(ctx.user.id);
-        if (processingJob && processingJob.id !== input.jobId) {
+        // ユーザーレート制限: 1人2つまで同時分析可能
+        const processingCount = await db.countProcessingJobsByUserId(ctx.user.id);
+        if (processingCount >= 2) {
           throw new TRPCError({
             code: "TOO_MANY_REQUESTS",
-            message: `別の分析が実行中です（ジョブ #${processingJob.id}）。完了後に再度お試しください。`,
+            message: `同時に実行できる分析は2件までです。完了後に再度お試しください。`,
           });
         }
 
@@ -292,12 +292,12 @@ export const appRouter = router({
         const videos = await db.getVideosByJobId(input.jobId);
         if (videos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "動画データがありません" });
 
-        // ユーザーレート制限: 1人1つまで同時分析可能
-        const processingJob = await db.getProcessingJobByUserId(ctx.user.id);
-        if (processingJob && processingJob.id !== input.jobId) {
+        // ユーザーレート制限: 1人2つまで同時分析可能
+        const processingCount = await db.countProcessingJobsByUserId(ctx.user.id);
+        if (processingCount >= 2) {
           throw new TRPCError({
             code: "TOO_MANY_REQUESTS",
-            message: `別の分析が実行中です（ジョブ #${processingJob.id}）。完了後に再度お試しください。`,
+            message: `同時に実行できる分析は2件までです。完了後に再度お試しください。`,
           });
         }
 
@@ -1277,6 +1277,12 @@ export const appRouter = router({
       const since = new Date(now.getFullYear(), now.getMonth(), 1);
       const used = await db.countMonthlyJobs(ctx.user.id, since);
       return { plan, used, limit, isExceeded: used >= limit, sub: sub ?? null };
+    }),
+
+    // クォータ利用状況（軽量版）
+    getQuotaUsage: protectedProcedure.query(async ({ ctx }) => {
+      const { used, limit, plan } = await getMonthlyUsage(ctx.user.id);
+      return { used, limit, plan };
     }),
 
     // Stripe Checkout Session作成

@@ -1,6 +1,6 @@
 import { Streamdown } from "streamdown";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,7 +11,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,6 +52,8 @@ import { AnalysisDetailSkeleton } from "@/components/PageSkeleton";
 import { WinPatternContent, LosePatternContent } from "@/components/PatternContent";
 import { VideoList } from "@/components/VideoList";
 import { useReportStats } from "@/hooks/useReportStats";
+import { usePageTitle } from "@/hooks/usePageTitle";
+import { CopyButton } from "@/components/CopyButton";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -220,6 +227,8 @@ export default function AnalysisDetail() {
 
   // レポート統計を計算 - MUST be before any early returns
   const reportStats = useReportStats(data);
+
+  usePageTitle(data?.job?.keyword ? `SEO分析: ${data.job.keyword}` : "SEO分析");
 
   // セッション数とappearanceCountMapを取得
   const numSessions = (data?.tripleSearch as any)?.numSessions ?? data?.tripleSearch?.searches?.length ?? 3;
@@ -419,7 +428,7 @@ export default function AnalysisDetail() {
     // 実際のレポートが別フィールドに保存されている場合は調整が必要
     return (
       <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
-        <h2 className="text-2xl font-bold mb-6">📊 詳細分析レポート</h2>
+        <h2 className="text-2xl font-bold mb-6" aria-label="詳細分析レポート">📊 詳細分析レポート</h2>
         <div className="prose prose-sm max-w-none">
           <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
         </div>
@@ -467,15 +476,44 @@ export default function AnalysisDetail() {
           </div>
           <div className="flex items-center gap-2">
             {job.status === "completed" && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
-                className="border-primary/50 text-primary hover:bg-primary/10"
-              >
-                <GitCompare className="h-4 w-4 mr-1.5" />
-                比較
-              </Button>
+              <>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-primary/50 text-primary hover:bg-primary/10"
+                    >
+                      <Share2 className="h-4 w-4 mr-1.5" />
+                      共有
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="end">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/share/${jobId}`).then(() => {
+                          toast.success("共有リンクをコピーしました");
+                        }).catch(() => {
+                          toast.error("コピーに失敗しました");
+                        });
+                      }}
+                    >
+                      共有リンクをコピー
+                    </Button>
+                  </PopoverContent>
+                </Popover>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { setSelectedCompareId(null); setCompareDialogOpen(true); }}
+                  className="border-primary/50 text-primary hover:bg-primary/10"
+                >
+                  <GitCompare className="h-4 w-4 mr-1.5" />
+                  比較
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -756,9 +794,12 @@ export default function AnalysisDetail() {
                 </div>
                 <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
                   <Search className="h-5 w-5 text-blue-500 shrink-0" />
-                  <div>
-                    <p className="text-2xl font-bold">{formatNumber(reportStats.totalViews)}</p>
-                    <p className="text-xs text-muted-foreground">総再生数</p>
+                  <div className="flex items-center gap-1">
+                    <div>
+                      <p className="text-2xl font-bold">{formatNumber(reportStats.totalViews)}</p>
+                      <p className="text-xs text-muted-foreground">総再生数</p>
+                    </div>
+                    <CopyButton value={formatNumber(reportStats.totalViews)} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
                   </div>
                 </div>
                 <div className="flex items-center gap-3 border-l-4 border-emerald-500 rounded-lg p-4 bg-emerald-50 dark:bg-emerald-950/20">
@@ -770,9 +811,12 @@ export default function AnalysisDetail() {
                 </div>
                 <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
                   <Star className="h-5 w-5 text-amber-500 shrink-0" />
-                  <div>
-                    <p className="text-2xl font-bold">{avgER}%</p>
-                    <p className="text-xs text-muted-foreground">平均ER</p>
+                  <div className="flex items-center gap-1">
+                    <div>
+                      <p className="text-2xl font-bold">{avgER}%</p>
+                      <p className="text-xs text-muted-foreground">平均ER</p>
+                    </div>
+                    <CopyButton value={`${avgER}%`} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
                   </div>
                 </div>
               </div>
@@ -783,10 +827,10 @@ export default function AnalysisDetail() {
           {tripleSearch && job.status === "completed" && (
             <Card className="border-2 border-blue-300">
               <CardHeader>
-                <CardTitle className="text-2xl flex items-center gap-2">
+                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
                   <Search className="h-6 w-6 text-blue-500" />
                   重複度分析
-                </CardTitle>
+                </h2>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
@@ -953,7 +997,7 @@ export default function AnalysisDetail() {
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-2xl">📊 分析レポート</CardTitle>
+                <h2 className="text-2xl leading-none font-semibold">📊 分析レポート</h2>
               </CardHeader>
               <CardContent className="space-y-8">
                 {/* サマリー情報 */}
@@ -1114,7 +1158,7 @@ export default function AnalysisDetail() {
                 </div>
 
                 {/* 詳細分析アコーディオン */}
-                <Accordion type="multiple" className="space-y-2">
+                <Accordion type="multiple" defaultValue={["aspects", "micro-analysis"]} className="space-y-2">
 
                   {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
                   {data && data.report && (
@@ -1360,9 +1404,9 @@ export default function AnalysisDetail() {
           {videos.length > 0 && job.status === "completed" ? (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
+                <h2 className="leading-none font-semibold flex items-center gap-2">
                   分析対象動画 ({videos.length}件)
-                </CardTitle>
+                </h2>
                 <CardDescription>
                   {tripleSearch 
                     ? `${numSessions}シークレットブラウザ検索での出現回数別に分類` 

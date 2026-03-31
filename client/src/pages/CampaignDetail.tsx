@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink } from "lucide-react";
 import { useLocation, useParams } from "wouter";
@@ -42,6 +43,7 @@ const snapshotStatusIcons: Record<string, React.ReactNode> = {
 };
 
 export default function CampaignDetail() {
+  usePageTitle("施策詳細");
   const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const campaignId = parseInt(id || "0");
