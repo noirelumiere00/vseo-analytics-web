@@ -173,12 +173,13 @@ export async function analyzeVideoFromTikTok(
     });
   }
 
-  // 3. 音声文字起こし - 説明文をベースに推定
+  // 3. 音声文字起こし - Whisper APIまたは説明文ベースのフォールバック
   console.log(`[Analysis] Performing transcription for video ${tiktokVideo.id}...`);
-  const transcription = await performTranscriptionFromDesc(tiktokVideo.desc);
+  const transcription = await performTranscription(tiktokVideo.playUrl, tiktokVideo.desc);
   await db.createTranscription({
     videoId,
     fullText: transcription.fullText,
+    segments: transcription.segments,
     language: transcription.language,
   });
 
@@ -306,12 +307,43 @@ async function performOcrFromDescription(
 }
 
 /**
- * 説明文ベースの文字起こし推定
+ * 音声文字起こし（Whisper API）
+ * playUrlが利用可能でWhisper APIが設定されていれば実際の音声認識を行い、
+ * それ以外の場合は説明文ベースのフォールバックを使用
  */
-async function performTranscriptionFromDesc(
+async function performTranscription(
+  playUrl: string | undefined,
   desc: string
-): Promise<{ fullText: string; language: string }> {
-  // ハッシュタグを除去した説明文を文字起こしテキストとして使用
+): Promise<{ fullText: string; segments?: Array<{ start: number; end: number; text: string }>; language: string }> {
+  // Try real transcription if playUrl is available
+  if (playUrl) {
+    try {
+      console.log(`[Analysis] Attempting real audio transcription via Whisper API...`);
+      const result = await transcribeAudio({ audioUrl: playUrl });
+
+      // Check if it's an error response
+      if ("error" in result) {
+        console.warn(`[Analysis] Whisper transcription failed: ${result.error} (${result.code})${result.details ? ` - ${result.details}` : ""}. Falling back to description-based transcription.`);
+      } else {
+        console.log(`[Analysis] Real transcription succeeded (language: ${result.language}, duration: ${result.duration}s, segments: ${result.segments?.length ?? 0})`);
+        return {
+          fullText: result.text,
+          segments: result.segments?.map((s) => ({
+            start: s.start,
+            end: s.end,
+            text: s.text,
+          })),
+          language: result.language,
+        };
+      }
+    } catch (err) {
+      console.warn(`[Analysis] Whisper transcription threw an error: ${err instanceof Error ? err.message : String(err)}. Falling back to description-based transcription.`);
+    }
+  } else {
+    console.log(`[Analysis] No playUrl available, using description-based transcription fallback.`);
+  }
+
+  // Fallback: description-based transcription
   const cleanText = desc
     .replace(/[#＃][^\s]+/g, "")
     .replace(/\s+/g, " ")
