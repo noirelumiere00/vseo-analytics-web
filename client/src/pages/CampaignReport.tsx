@@ -85,12 +85,12 @@ export const gradeColors: Record<string, string> = {
 
 export const SECTIONS = [
   { id: "summary", label: "成績表", icon: Brain },
-  { id: "roi", label: "ROI", icon: BarChart3 },
+  { id: "target", label: "目標達成", icon: Target },
   { id: "videos", label: "動画", icon: Eye },
+  { id: "daily-trend", label: "日次推移", icon: TrendingUp },
   { id: "keyword-sov", label: "順位・SOV", icon: Search },
   { id: "competitor", label: "競合", icon: Users },
-  { id: "ripple", label: "波及", icon: Share2 },
-  { id: "next-action", label: "ネクストアクション", icon: Sparkles },
+  { id: "ripple", label: "評判環境", icon: Share2 },
 ];
 
 // ============================
@@ -113,7 +113,7 @@ export default function CampaignReport() {
 
   const [activeSection, setActiveSection] = useState("summary");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [showBriefPlaceholder, setShowBriefPlaceholder] = useState(false);
+
 
   // IntersectionObserver for active section tracking
   useEffect(() => {
@@ -511,10 +511,10 @@ export default function CampaignReport() {
           )}
         </div>
 
-        {/* Section: ROI Dashboard */}
-        <div id="roi" ref={el => { sectionRefs.current["roi"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("roi")} title="ROIダッシュボード" question="施策の投資対効果は？" />
-          <ROIDashboard videoMetrics={videoMetrics} ripple={ripple} sovReport={sovReport} />
+        {/* Section: 目標達成（全媒体再生数） */}
+        <div id="target" ref={el => { sectionRefs.current["target"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("target")} title="目標達成（全媒体再生数）" question="目標に対してどれだけ達成できた？" />
+          <TargetAchievementSection videoMetrics={videoMetrics} platformSummary={platformSummary} campaign={campaign} />
         </div>
 
         {/* Section: TikTok Videos */}
@@ -527,6 +527,12 @@ export default function CampaignReport() {
             </div>
           </div>
         )}
+
+        {/* Section: 日次推移 */}
+        <div id="daily-trend" ref={el => { sectionRefs.current["daily-trend"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("daily-trend")} title="日次推移" question="再生数・ERは日ごとにどう推移した？" />
+          <DailyTrendSection dailyMetrics={dailyMetrics} />
+        </div>
 
         {/* Section: Keyword + SOV (unified) */}
         <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
@@ -544,15 +550,10 @@ export default function CampaignReport() {
 
         {/* Section: Ripple */}
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
+          <SectionHeader number={sectionNumber("ripple")} title="評判環境（ポジネガ比率）" question="キーワード検索時のポジネガ比率はどう変化した？" />
           <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} />
         </div>
 
-        {/* Section: Next Action */}
-        <div id="next-action" ref={el => { sectionRefs.current["next-action"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("next-action")} title="ネクストアクション提案" question="次に何をすべきか？" />
-          <NextActionSection aiReport={aiReport} showBriefPlaceholder={showBriefPlaceholder} setShowBriefPlaceholder={setShowBriefPlaceholder} />
-        </div>
 
         {/* Section: Cross Platform */}
         {hasCrossPlatform && (
@@ -4138,200 +4139,158 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
 }
 
 // ============================
-// ROI Dashboard
+// Target Achievement Section (目標達成)
 // ============================
 
-function ROIDashboard({ videoMetrics, ripple, sovReport }: {
+function TargetAchievementSection({ videoMetrics, platformSummary, campaign }: {
   videoMetrics?: any[];
-  ripple?: Record<string, any>;
-  sovReport?: Record<string, any>;
+  platformSummary?: {
+    youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+  };
+  campaign?: any;
 }) {
-  const stats = useMemo(() => {
-    // 投稿数
-    const videoCount = videoMetrics?.length ?? 0;
+  const tiktokViews = videoMetrics?.reduce((sum: number, v: any) => sum + (v.views || 0), 0) ?? 0;
+  const youtubeViews = platformSummary?.youtube?.totalViews ?? 0;
+  const instagramViews = platformSummary?.instagram?.totalViews ?? 0;
+  const totalViews = tiktokViews + youtubeViews + instagramViews;
 
-    // 1本あたり平均再生数
-    const totalViews = videoMetrics?.reduce((sum: number, v: any) => sum + (v.views || 0), 0) ?? 0;
-    const avgViews = videoCount > 0 ? Math.round(totalViews / videoCount) : null;
+  const targetViews = campaign?.targetViews as number | undefined;
+  const achievementRate = targetViews && targetViews > 0 ? Math.round((totalViews / targetViews) * 100) : null;
 
-    // UGCリーチ (ripple total views)
-    let ugcReach: number | null = null;
-    if (ripple && Object.keys(ripple).length > 0) {
-      ugcReach = 0;
-      for (const [, data] of Object.entries(ripple)) {
-        for (const v of ((data as any).third_party_videos || (data as any).omaage_videos || [])) {
-          ugcReach += v.views || 0;
-        }
-      }
-    }
-
-    // SOV変化 (average SOV change across keywords)
-    let sovChange: number | null = null;
-    if (sovReport && Object.keys(sovReport).length > 0) {
-      let totalChange = 0;
-      let count = 0;
-      for (const [, kw] of Object.entries(sovReport)) {
-        const before = parseFloat((kw as any).before?.percentage || "0");
-        const after = parseFloat((kw as any).after?.percentage || "0");
-        if ((kw as any).before && (kw as any).after) {
-          totalChange += after - before;
-          count++;
-        }
-      }
-      if (count > 0) sovChange = Math.round((totalChange / count) * 10) / 10;
-    }
-
-    return { videoCount, avgViews, ugcReach, sovChange };
-  }, [videoMetrics, ripple, sovReport]);
-
-  const kpis: { label: string; value: string; icon: typeof Target; color: string; bgColor: string }[] = [
-    {
-      label: "投稿数",
-      value: stats.videoCount > 0 ? `${stats.videoCount}本` : "—",
-      icon: Play,
-      color: "text-blue-600",
-      bgColor: "bg-blue-50 dark:bg-blue-950/40",
-    },
-    {
-      label: "1本あたり平均再生数",
-      value: stats.avgViews != null ? fmt(stats.avgViews) : "—",
-      icon: Eye,
-      color: "text-violet-600",
-      bgColor: "bg-violet-50 dark:bg-violet-950/40",
-    },
-    {
-      label: "UGCリーチ",
-      value: stats.ugcReach != null ? fmt(stats.ugcReach) : "—",
-      icon: Share2,
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50 dark:bg-emerald-950/40",
-    },
-    {
-      label: "SOV変化",
-      value: stats.sovChange != null ? `${stats.sovChange > 0 ? "+" : ""}${stats.sovChange}pt` : "—",
-      icon: Target,
-      color: stats.sovChange != null && stats.sovChange > 0 ? SENTIMENT_COLORS.positive.text : stats.sovChange != null && stats.sovChange < 0 ? SENTIMENT_COLORS.negative.text : "text-slate-500",
-      bgColor: stats.sovChange != null && stats.sovChange > 0 ? `${SENTIMENT_COLORS.positive.bg} dark:bg-blue-950/40` : stats.sovChange != null && stats.sovChange < 0 ? `${SENTIMENT_COLORS.negative.bg} dark:bg-amber-950/40` : "bg-slate-50 dark:bg-slate-950/40",
-    },
-  ];
+  const platforms = [
+    { label: "TikTok", views: tiktokViews, color: "bg-slate-800 dark:bg-slate-200" },
+    { label: "YouTube", views: youtubeViews, color: "bg-red-500" },
+    { label: "Instagram", views: instagramViews, color: "bg-gradient-to-r from-purple-500 to-pink-500" },
+  ].filter(p => p.views > 0);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {kpis.map((kpi) => {
-        const Icon = kpi.icon;
-        return (
-          <Card key={kpi.label} className="relative overflow-hidden">
-            <CardContent className="py-4 px-4">
-              <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg ${kpi.bgColor} mb-2`}>
-                <Icon className={`h-4.5 w-4.5 ${kpi.color}`} />
+    <div className="space-y-3">
+      <Card className="relative overflow-hidden">
+        <CardContent className="py-6 px-6">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">
+                {targetViews ? "全媒体再生数" : "全媒体再生数実績"}
+              </p>
+              <div className="text-4xl font-black tracking-tight tabular-nums">
+                {totalViews >= 10000 ? `${(totalViews / 10000).toFixed(1)}万` : fmt(totalViews)}
+                <span className="text-base font-normal text-muted-foreground ml-1">再生</span>
               </div>
-              <div className="text-2xl font-bold tracking-tight">{kpi.value}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{kpi.label}</div>
-            </CardContent>
-          </Card>
-        );
-      })}
+            </div>
+            {targetViews && targetViews > 0 && (
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">目標</p>
+                  <p className="text-lg font-bold">{targetViews >= 10000 ? `${(targetViews / 10000).toFixed(1)}万` : fmt(targetViews)}</p>
+                </div>
+                <div className={`text-right px-3 py-1.5 rounded-lg ${achievementRate! >= 100 ? "bg-emerald-50 dark:bg-emerald-950/40" : achievementRate! >= 70 ? "bg-amber-50 dark:bg-amber-950/40" : "bg-red-50 dark:bg-red-950/40"}`}>
+                  <p className="text-xs text-muted-foreground">達成率</p>
+                  <p className={`text-xl font-black ${achievementRate! >= 100 ? "text-emerald-600" : achievementRate! >= 70 ? "text-amber-600" : "text-red-600"}`}>{achievementRate}%</p>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Platform breakdown */}
+          {platforms.length > 0 && (
+            <div className="mt-4 pt-4 border-t">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {platforms.map(p => (
+                  <div key={p.label} className="flex items-center gap-3">
+                    <div className={`w-2 h-8 rounded-full ${p.color}`} />
+                    <div>
+                      <p className="text-xs text-muted-foreground">{p.label}</p>
+                      <p className="text-sm font-bold tabular-nums">{fmt(p.views)}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 // ============================
-// Next Action Section
+// Daily Trend Section (日次推移)
 // ============================
 
-function NextActionSection({ aiReport, showBriefPlaceholder, setShowBriefPlaceholder }: {
-  aiReport?: any;
-  showBriefPlaceholder: boolean;
-  setShowBriefPlaceholder: (v: boolean) => void;
+function DailyTrendSection({ dailyMetrics }: {
+  dailyMetrics?: any[];
 }) {
-  const hasProposals = aiReport?.actionProposals && aiReport.actionProposals.length > 0;
-  const hasStrengths = aiReport?.strengths && aiReport.strengths.length > 0;
-  const hasWeaknesses = aiReport?.weaknesses && aiReport.weaknesses.length > 0;
+  const chartData = useMemo(() => {
+    if (!dailyMetrics || dailyMetrics.length === 0) return null;
+    // Build cumulative views per date
+    const sorted = [...dailyMetrics].sort((a: any, b: any) => (a.date || "").localeCompare(b.date || ""));
+    let cumViews = 0;
+    return sorted.map((d: any) => {
+      cumViews += d.views || 0;
+      return {
+        date: d.date,
+        views: d.views || 0,
+        cumulativeViews: cumViews,
+        er: d.er != null ? Math.round(d.er * 100) / 100 : null,
+      };
+    });
+  }, [dailyMetrics]);
 
-  return (
-    <div className="space-y-4">
+  if (!chartData) {
+    return (
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40">
-              <Lightbulb className="h-4 w-4 text-amber-600" />
-            </div>
-            <div>
-              <CardTitle className="text-base">ネクストアクション提案</CardTitle>
-              <CardDescription>施策結果を踏まえた次回の改善提案</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {hasProposals ? (
-            <ul className="space-y-2">
-              {aiReport.actionProposals.map((proposal: string, i: number) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
-                  <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                  <span>{proposal}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">AIレポートを生成すると、アクション提案が表示されます。</p>
-          )}
-
-          {(hasStrengths || hasWeaknesses) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-              {hasStrengths && (
-                <div className="rounded-lg border border-teal-200 bg-teal-50/50 dark:bg-teal-950/20 dark:border-teal-800 p-3">
-                  <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-400 mb-2 flex items-center gap-1.5">
-                    <Trophy className="h-3.5 w-3.5" />
-                    強み
-                  </h4>
-                  <ul className="space-y-1">
-                    {aiReport.strengths.map((s: string, i: number) => (
-                      <li key={i} className="text-xs text-teal-800 dark:text-teal-300 flex items-start gap-1.5">
-                        <span className="text-teal-500 mt-0.5">•</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {hasWeaknesses && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
-                  <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    改善点
-                  </h4>
-                  <ul className="space-y-1">
-                    {aiReport.weaknesses.map((w: string, i: number) => (
-                      <li key={i} className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
-                        <span className="text-amber-500 mt-0.5">•</span>
-                        <span>{w}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="pt-2 border-t">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => setShowBriefPlaceholder(!showBriefPlaceholder)}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              台本ブリーフを生成
-            </Button>
-            {showBriefPlaceholder && (
-              <div className="mt-3 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 p-6 text-center">
-                <Sparkles className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">台本ブリーフ生成機能は近日公開予定です</p>
-              </div>
-            )}
-          </div>
+        <CardContent className="py-10 text-center">
+          <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">日次推移データは施策完了後に利用可能になります</p>
         </CardContent>
       </Card>
-    </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold">累計再生数推移</CardTitle>
+        <CardDescription className="text-xs">施策開始からの日次累計</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={280}>
+          <AreaChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+            <defs>
+              <linearGradient id="dailyViewsGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 10 }}
+              tickFormatter={(v: string) => {
+                const d = new Date(v);
+                return `${d.getMonth() + 1}/${d.getDate()}`;
+              }}
+            />
+            <YAxis tick={{ fontSize: 10 }} tickFormatter={(v: number) => fmt(v)} />
+            <RechartsTooltip
+              contentStyle={{ fontSize: 12, borderRadius: 8 }}
+              formatter={(value: number, name: string) => [fmt(value), name === "cumulativeViews" ? "累計再生数" : "日次再生数"]}
+              labelFormatter={(label: string) => {
+                const d = new Date(label);
+                return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+              }}
+            />
+            <Area
+              type="monotone"
+              dataKey="cumulativeViews"
+              stroke="hsl(var(--primary))"
+              strokeWidth={2}
+              fill="url(#dailyViewsGrad)"
+              name="累計再生数"
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
   );
 }
