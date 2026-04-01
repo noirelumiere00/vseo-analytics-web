@@ -313,112 +313,246 @@ export default function TrendDiscoveryDetail() {
               );
             })()}
 
-            {/* 2. AIレポート */}
+            {/* ── Section 1: 空気感サマリー + 動画ウォール ── */}
             {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
               <AITrendReport
                 report={(job.crossAnalysis as any)?.report}
                 fallbackSummary={(job.crossAnalysis as any)?.summary}
+                headingLabel="空気感サマリー"
               />
             )}
-
-            {/* 3. パフォーマンス分類 (常時表示) */}
-            {(job.crossAnalysis as any)?.statistics?.performanceClassification && (
-              <PerformanceClassification
-                data={(job.crossAnalysis as any).statistics.performanceClassification}
-                total={(job.crossAnalysis as any).statistics.totalVideos}
-              />
-            )}
-
-            {(job.crossAnalysis as any)?.statistics && (() => {
-              const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
-              const trendingHashtags: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> = (job.crossAnalysis as any)?.trendingHashtags || [];
+            {/* 動画ウォール — Top 9 サムネグリッド */}
+            {((job.crossAnalysis as any)?.topVideos?.length > 0) && (() => {
+              const topVideos: Array<{ videoId: string; authorUniqueId: string; coverUrl: string; playCount: number; er: number }> =
+                (job.crossAnalysis as any).topVideos.slice(0, 9);
+              const formatCount = (n: number) => {
+                if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+                if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+                return String(n);
+              };
               return (
-                <>
-                {/* 4. トレンドハッシュタグ戦略 (常時表示) */}
-                {(trendingHashtags.length > 0 || statistics.hashtagPerformance.length > 0) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Hash className="h-4 w-4" />
-                        トレンドハッシュタグ戦略
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0 space-y-6">
-                      <TrendingHashtags data={trendingHashtags} globalMedianER={statistics.engagementStats.er.median} />
-                      {statistics.hashtagPerformance.length > 0 && (
-                        <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
-                      )}
-                      <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* 5. KOL候補リスト (常時表示) */}
-                {(((job.crossAnalysis as any)?.topVideos?.length > 0) || ((job.crossAnalysis as any)?.keyCreators?.length > 0)) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Users className="h-4 w-4" />
-                        KOL候補リスト
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <TopVideosAndCreators
-                        videos={(job.crossAnalysis as any)?.topVideos || []}
-                        creators={(job.crossAnalysis as any)?.keyCreators || []}
+                <div className="grid grid-cols-3 gap-2">
+                  {topVideos.map((v) => (
+                    <a
+                      key={v.videoId}
+                      href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="aspect-[9/16] rounded-sm overflow-hidden relative group"
+                    >
+                      <img
+                        src={v.coverUrl}
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        loading="lazy"
                       />
-                    </CardContent>
-                  </Card>
-                )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                      <div className="absolute bottom-0 left-0 right-0 p-2 flex items-end justify-between text-white text-[11px] font-medium">
+                        <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatCount(v.playCount)}</span>
+                        <span className="bg-white/20 backdrop-blur-sm rounded px-1.5 py-0.5">ER {v.er}%</span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()}
 
-                {/* 6. パフォーマンスベンチマーク (常時表示) */}
-                <Card>
+            {/* ── Section 2: フォーマット/ミーム図鑑カード ── */}
+            {((job.crossAnalysis as any)?.topVideos?.length > 0) && (
+              <Card className="rounded-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Sparkles className="h-4 w-4" />
+                    フォーマット / ミーム図鑑
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <AppealAxisRanking videos={(job.crossAnalysis as any).topVideos} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Section 3: 勢いスコアボード（鮮度×ER 4象限） ── */}
+            {(() => {
+              const trendingHashtags: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> = (job.crossAnalysis as any)?.trendingHashtags || [];
+              if (trendingHashtags.length === 0) return null;
+              return (
+                <Card className="rounded-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <TrendingUp className="h-4 w-4" />
-                      パフォーマンスベンチマーク
+                      勢いスコアボード
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <MarketOpportunityMatrix hashtags={trendingHashtags.map(h => ({ tag: h.tag, videoCount: h.videoCount, avgER: h.avgER }))} />
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* ── Section 4: 反応の質パターン ── */}
+            {((job.crossAnalysis as any)?.topVideos?.length > 0) && (() => {
+              const videos: Array<{ diggCount?: number; commentCount?: number; shareCount?: number; collectCount?: number }> =
+                (job.crossAnalysis as any).topVideos;
+              const totals = videos.reduce(
+                (acc, v) => ({
+                  likes: acc.likes + (v.diggCount ?? 0),
+                  comments: acc.comments + (v.commentCount ?? 0),
+                  shares: acc.shares + (v.shareCount ?? 0),
+                  saves: acc.saves + (v.collectCount ?? 0),
+                }),
+                { likes: 0, comments: 0, shares: 0, saves: 0 },
+              );
+              const grand = totals.likes + totals.comments + totals.shares + totals.saves;
+              if (grand === 0) return null;
+              const pct = (n: number) => +((n / grand) * 100).toFixed(1);
+              const bars = [
+                { label: "いいね", value: totals.likes, ratio: pct(totals.likes), color: "bg-rose-500", icon: <Heart className="h-3.5 w-3.5 text-rose-500" /> },
+                { label: "コメント", value: totals.comments, ratio: pct(totals.comments), color: "bg-blue-500", icon: <MessageCircle className="h-3.5 w-3.5 text-blue-500" /> },
+                { label: "シェア", value: totals.shares, ratio: pct(totals.shares), color: "bg-green-500", icon: <Share2 className="h-3.5 w-3.5 text-green-500" /> },
+                { label: "保存", value: totals.saves, ratio: pct(totals.saves), color: "bg-amber-500", icon: <Bookmark className="h-3.5 w-3.5 text-amber-500" /> },
+              ];
+              const dominant = bars.reduce((a, b) => (b.ratio > a.ratio ? b : a));
+              const typeLabel =
+                dominant.label === "保存" ? "保存型" :
+                dominant.label === "コメント" ? "議論型" :
+                dominant.label === "シェア" ? "拡散型" : "共感型";
+              const typeDesc =
+                dominant.label === "保存" ? "ユーザーは後で見返すコンテンツを好む傾向" :
+                dominant.label === "コメント" ? "ユーザーは意見交換・議論を好む傾向" :
+                dominant.label === "シェア" ? "ユーザーは他者に広めたいコンテンツを好む傾向" :
+                "ユーザーは気軽にリアクションする傾向";
+              return (
+                <Card className="rounded-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Heart className="h-4 w-4" />
+                      反応の質パターン
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-4">
+                    <div className="space-y-3">
+                      {bars.map((b) => (
+                        <div key={b.label} className="flex items-center gap-3">
+                          {b.icon}
+                          <span className="text-sm w-16 shrink-0">{b.label}</span>
+                          <div className="flex-1 h-3 rounded-sm bg-muted overflow-hidden">
+                            <div className={`h-full rounded-sm ${b.color} transition-all duration-500`} style={{ width: `${b.ratio}%` }} />
+                          </div>
+                          <span className="text-sm font-medium tabular-nums w-14 text-right">{b.ratio}%</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground border-l-2 border-primary/40 pl-3">
+                      この界隈は「{typeLabel}」— {typeDesc}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
+            {/* ── Section 5: ハッシュタグ戦略 ── */}
+            {(job.crossAnalysis as any)?.statistics && (() => {
+              const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
+              const trendingHashtags: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> = (job.crossAnalysis as any)?.trendingHashtags || [];
+              return (trendingHashtags.length > 0 || statistics.hashtagPerformance.length > 0) ? (
+                <Card className="rounded-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Hash className="h-4 w-4" />
+                      ハッシュタグ戦略
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-6">
+                    <TrendingHashtags data={trendingHashtags} globalMedianER={statistics.engagementStats.er.median} />
+                    {statistics.hashtagPerformance.length > 0 && (
+                      <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
+                    )}
+                    {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
+                      <QueryFreshnessChart data={statistics.queryFreshness} />
+                    )}
+                    <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
+                  </CardContent>
+                </Card>
+              ) : null;
+            })()}
+
+            {/* ── Section 6: KOL候補リスト ── */}
+            {(((job.crossAnalysis as any)?.topVideos?.length > 0) || ((job.crossAnalysis as any)?.keyCreators?.length > 0)) && (
+              <Card className="rounded-sm">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Users className="h-4 w-4" />
+                    KOL候補リスト
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <TopVideosAndCreators
+                    videos={(job.crossAnalysis as any)?.topVideos || []}
+                    creators={(job.crossAnalysis as any)?.keyCreators || []}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Section 7: ベンチマーク ── */}
+            {(job.crossAnalysis as any)?.statistics && (() => {
+              const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
+              return (
+                <Card className="rounded-sm">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <TrendingUp className="h-4 w-4" />
+                      ベンチマーク
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0 space-y-6">
                     <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
                     <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
-                    {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
-                      <QueryFreshnessChart data={statistics.queryFreshness} />
-                    )}
                     {statistics.adInsight && (
                       <AdInsightSection data={statistics.adInsight} />
                     )}
+                    {statistics.performanceClassification && (
+                      <PerformanceClassification
+                        data={statistics.performanceClassification}
+                        total={statistics.totalVideos}
+                      />
+                    )}
                   </CardContent>
                 </Card>
+              );
+            })()}
 
-                {/* 7. データ付録 (折りたたみ) */}
-                {(
-                  (statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0) ||
-                  statistics.durationBands.length > 0 ||
-                  statistics.postingTimeGrid ||
-                  statistics.playCountDistribution.length > 0
-                ) && (
-                  <Accordion type="multiple" className="space-y-2">
-                    <AccordionItem value="data-appendix" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        データ付録
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 space-y-6">
-                        {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
-                          <TrendSeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
-                        )}
-                        {statistics.durationBands.length > 0 && (
-                          <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
-                        )}
-                        <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
-                        {statistics.playCountDistribution.length > 0 && (
-                          <PlayCountDistribution data={statistics.playCountDistribution} />
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                )}
-                </>
+            {/* ── Section 8: データ付録 (折りたたみ) ── */}
+            {(job.crossAnalysis as any)?.statistics && (() => {
+              const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
+              const hasContent =
+                (statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0) ||
+                statistics.durationBands.length > 0 ||
+                statistics.postingTimeGrid ||
+                statistics.playCountDistribution.length > 0;
+              if (!hasContent) return null;
+              return (
+                <Accordion type="multiple" className="space-y-2">
+                  <AccordionItem value="data-appendix" className="border rounded-sm">
+                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                      データ付録
+                    </AccordionTrigger>
+                    <AccordionContent className="px-4 pb-4 space-y-6">
+                      {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
+                        <TrendSeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
+                      )}
+                      {statistics.durationBands.length > 0 && (
+                        <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
+                      )}
+                      <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
+                      {statistics.playCountDistribution.length > 0 && (
+                        <PlayCountDistribution data={statistics.playCountDistribution} />
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               );
             })()}
           </>
@@ -438,18 +572,20 @@ const REPORT_SECTION_ICONS: Record<string, React.ReactNode> = {
   Sparkles: <Sparkles className="h-4 w-4" />,
 };
 
-function AITrendReport({ report, fallbackSummary }: {
+function AITrendReport({ report, fallbackSummary, headingLabel }: {
   report?: Array<{ id: string; title: string; icon: string; content: string; bullets?: string[]; dataHighlights?: string[]; recommendation?: string }>;
   fallbackSummary?: string;
+  headingLabel?: string;
 }) {
+  const title = headingLabel ?? "AIトレンドレポート";
   // 新形式: report セクション配列がある場合
   if (report && report.length > 0) {
     return (
-      <Card>
+      <Card className="rounded-sm">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-base">
             <Sparkles className="h-4 w-4" />
-            AIトレンドレポート
+            {title}
             <span className="text-xs font-normal text-muted-foreground ml-1">{report.length}セクション</span>
           </CardTitle>
         </CardHeader>
@@ -515,11 +651,11 @@ function AITrendReport({ report, fallbackSummary }: {
   // フォールバック: 旧形式の単一 summary
   if (!fallbackSummary) return null;
   return (
-    <Card>
+    <Card className="rounded-sm">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4" />
-          AIトレンド分析
+          {title}
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">

@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2 } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -1144,7 +1144,178 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 4. 制作ブリーフ（台本テンプレート） ===== */}
+          {/* ===== 4. 参考動画キュレーション ===== */}
+          {videos.length > 0 && job.status === "completed" && (() => {
+            const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
+            // Filter: appeared in all sessions, then sort by dominance score
+            const referenceVideos = [...videos]
+              .filter((v: any) => {
+                const ri = rankInfo[v.videoId];
+                return ri && ri.appearanceCount >= numSessions;
+              })
+              .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
+              .slice(0, 5);
+            if (referenceVideos.length === 0) return null;
+            return (
+              <Card className="border-2 border-violet-300">
+                <CardHeader>
+                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                    <Film className="h-6 w-6 text-violet-500" />
+                    参考動画キュレーション
+                  </h2>
+                  <p className="text-sm text-muted-foreground">全{numSessions}セッションに出現した上位動画 — 真似すべきポイント付き</p>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {referenceVideos.map((video: any) => (
+                      <div key={video.videoId} className="border rounded-lg overflow-hidden bg-white hover:shadow-md transition-shadow">
+                        {/* Thumbnail */}
+                        <div className="relative aspect-video bg-muted">
+                          <img
+                            src={video.thumbnailUrl || "https://placehold.co/320x180/8A2BE2/white?text=No+Image"}
+                            alt={video.title || "動画サムネイル"}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                          {video.duration && (
+                            <span className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
+                              {video.duration}秒
+                            </span>
+                          )}
+                        </div>
+                        <div className="p-3 space-y-2">
+                          {/* Title */}
+                          <p className="text-sm font-medium line-clamp-2 leading-snug">
+                            {video.title || video.description?.slice(0, 60) || "（タイトルなし）"}
+                          </p>
+                          {/* Metrics row */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                              <Eye className="h-3 w-3" />{formatNumber(video.viewCount)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              ER {getEngagementRate(video).toFixed(2)}%
+                            </span>
+                            {getSentimentBadge(video.sentiment)}
+                          </div>
+                          {/* Key Hook annotation */}
+                          {video.keyHook && (
+                            <div className="p-2 rounded bg-violet-50 border border-violet-200">
+                              <p className="text-[11px] font-semibold text-violet-700 mb-0.5">真似すべきポイント</p>
+                              <p className="text-xs text-violet-900 leading-relaxed">{video.keyHook}</p>
+                            </div>
+                          )}
+                          {/* Link */}
+                          <a
+                            href={video.videoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />動画を見る
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ===== 5. 動画構成の深掘り ===== */}
+          {videos.length > 0 && job.status === "completed" && (() => {
+            const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
+            const topVideos = [...videos]
+              .filter((v: any) => {
+                const ri = rankInfo[v.videoId];
+                return ri && ri.appearanceCount >= numSessions;
+              })
+              .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
+              .slice(0, 3);
+            if (topVideos.length === 0) return null;
+            const hasAnyData = topVideos.some((v: any) =>
+              (v.ocrResults && v.ocrResults.length > 0) || v.transcription?.fullText
+            );
+            if (!hasAnyData) return null;
+            return (
+              <Card className="border-2 border-cyan-300">
+                <CardHeader>
+                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                    <Eye className="h-6 w-6 text-cyan-500" />
+                    動画構成の深掘り
+                  </h2>
+                  <p className="text-sm text-muted-foreground">上位参考動画のOCRタイムラインと音声文字起こし</p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {topVideos.map((video: any) => {
+                    const ocrEntries = (video.ocrResults || [])
+                      .slice()
+                      .sort((a: any, b: any) => (a.frameTimestamp ?? 0) - (b.frameTimestamp ?? 0));
+                    const transcriptionText = video.transcription?.fullText;
+                    const hasOcr = ocrEntries.length > 0;
+                    const hasTranscription = !!transcriptionText;
+                    return (
+                      <div key={video.videoId} className="border rounded-lg overflow-hidden">
+                        {/* Video header */}
+                        <div className="flex items-center gap-3 p-3 bg-muted/40">
+                          <img
+                            src={video.thumbnailUrl || "https://placehold.co/80x60/8A2BE2/white?text=No+Image"}
+                            alt=""
+                            className="w-16 h-12 rounded object-cover shrink-0"
+                            loading="lazy"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{video.title || video.description?.slice(0, 50) || "（タイトルなし）"}</p>
+                            <p className="text-xs text-muted-foreground">{video.duration ? `${video.duration}秒` : ""} {video.accountId ? `@${video.accountId}` : ""}</p>
+                          </div>
+                        </div>
+                        <div className="p-3 space-y-3">
+                          {/* OCR Timeline */}
+                          {hasOcr ? (
+                            <div>
+                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">OCR タイムライン</h4>
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                {ocrEntries.map((ocr: any, idx: number) => (
+                                  <div key={idx} className="flex items-start gap-2 text-xs">
+                                    <span className="shrink-0 w-12 text-right font-mono text-cyan-600 font-semibold">
+                                      {ocr.frameTimestamp != null ? `${ocr.frameTimestamp}s` : "—"}
+                                    </span>
+                                    <span className="text-foreground leading-relaxed">{ocr.extractedText || "（テキストなし）"}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">OCRデータなし</p>
+                          )}
+                          {/* Transcription */}
+                          {hasTranscription ? (
+                            <Accordion type="single" collapsible>
+                              <AccordionItem value="transcript" className="border-0">
+                                <AccordionTrigger className="py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:no-underline">
+                                  音声文字起こし
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                  <p className="text-xs leading-relaxed whitespace-pre-wrap bg-slate-50 p-3 rounded max-h-40 overflow-y-auto">
+                                    {transcriptionText}
+                                  </p>
+                                </AccordionContent>
+                              </AccordionItem>
+                            </Accordion>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">音声文字起こしデータなし</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ===== 6. 制作ブリーフ（台本テンプレート） ===== */}
           {tripleSearch && job.status === "completed" && (
             <Card className="border-2 border-amber-300">
               <CardHeader>
