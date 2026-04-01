@@ -1171,11 +1171,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                   {/* ===== 変化サマリー ===== */}
                   {hasBaseline && beforeSlots.length > 0 && (
                     <div className="flex justify-center gap-6 pt-2 text-[13px] font-semibold">
-                      <span className={pctChange > 0 ? "text-emerald-500" : pctChange < 0 ? "text-red-500" : "text-slate-400"}>
+                      <span className={pctChange > 0 ? SENTIMENT_COLORS.positive.text : pctChange < 0 ? SENTIMENT_COLORS.negative.text : "text-slate-400"}>
                         シェア {beforePct}% → {afterPct}%（{pctChange > 0 ? "+" : ""}{pctChange}pt）
                       </span>
                       <span className="text-slate-300">｜</span>
-                      <span className={negChange < 0 ? "text-red-500" : negChange > 0 ? "text-emerald-500" : "text-slate-400"}>
+                      <span className={negChange < 0 ? SENTIMENT_COLORS.negative.text : negChange > 0 ? SENTIMENT_COLORS.positive.text : "text-slate-400"}>
                         ネガティブ {beforeNeg}本 → {afterNeg}本（{negChange < 0 ? "" : negChange > 0 ? "+" : "±"}{negChange}本）
                       </span>
                     </div>
@@ -2822,7 +2822,7 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
               </p>
               {kpi.change != null && kpi.change !== 0 && (
                 <div className="mt-2">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${kpi.change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${kpi.change > 0 ? `${SENTIMENT_COLORS.positive.bg} ${SENTIMENT_COLORS.positive.text}` : `${SENTIMENT_COLORS.negative.bg} ${SENTIMENT_COLORS.negative.text}`}`}>
                     {kpi.change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                     {kpi.change > 0 ? "+" : ""}{kpi.fmtVal ? fmt(kpi.change) : kpi.change} vs 施策前
                   </span>
@@ -2870,7 +2870,7 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
                       </td>
                       <td className="py-3 px-4 text-right">
                         {change !== 0 ? (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${change > 0 ? `${SENTIMENT_COLORS.positive.bg} ${SENTIMENT_COLORS.positive.text}` : `${SENTIMENT_COLORS.negative.bg} ${SENTIMENT_COLORS.negative.text}`}`}>
                             {change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                             {change > 0 ? "+" : ""}{change}本
                           </span>
