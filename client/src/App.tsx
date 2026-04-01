@@ -17,7 +17,7 @@ import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 
 // Heavy pages - lazy import
-const AnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
+const AnalysisDetail = lazy(() => import("./pages/AnalysisDetailOriginal"));
 const ReportView = lazy(() => import("./pages/ReportView"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLogs = lazy(() => import("./pages/AdminLogs").then(m => ({ default: m.AdminLogs })));
@@ -25,17 +25,17 @@ const Comparison = lazy(() => import("./pages/Comparison"));
 const Trend = lazy(() => import("./pages/Trend"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TrendDiscovery = lazy(() => import("./pages/TrendDiscovery"));
-const TrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetail"));
+const TrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetailOriginal"));
 const CampaignList = lazy(() => import("./pages/CampaignList"));
 const CampaignNew = lazy(() => import("./pages/CampaignNew"));
 const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
-const CampaignReport = lazy(() => import("./pages/CampaignReport"));
+const CampaignReport = lazy(() => import("./pages/CampaignReportOriginal"));
 const SharedReport = lazy(() => import("./pages/SharedReport"));
 const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
 const Activity = lazy(() => import("./pages/Activity"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 
-// Beta routes — same components, separate paths for isolation
+// Beta routes — new report structures
 const BetaTrendDiscovery = lazy(() => import("./pages/TrendDiscovery"));
 const BetaTrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetail"));
 const BetaAnalysisNew = lazy(() => import("./pages/AnalysisNew"));
