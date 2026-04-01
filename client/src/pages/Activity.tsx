@@ -124,10 +124,6 @@ export default function Activity() {
     onError: (e) => toast.error(e.message),
   });
 
-  if (isLoading) {
-    return <DashboardLayout><HistorySkeleton /></DashboardLayout>;
-  }
-
   const filtered = useMemo(() => {
     let result = items?.filter(item => {
       if (filter !== "all" && item.type !== filter) return false;
@@ -158,6 +154,10 @@ export default function Activity() {
     seo: items?.filter(i => i.type === "seo").length ?? 0,
     trend: items?.filter(i => i.type === "trend").length ?? 0,
   }), [items]);
+
+  if (isLoading) {
+    return <DashboardLayout><HistorySkeleton /></DashboardLayout>;
+  }
 
   const getStatusBadge = (status: string) => {
     const cls = "text-xs px-1.5 py-0.5";
