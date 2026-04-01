@@ -1112,33 +1112,109 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 3. 勝ちパターン戦略ガイド ===== */}
-          {tripleSearch && tripleSearch.commonalityAnalysis && job.status === "completed" && (
-            <Card className="border-2 border-teal-300">
+          {/* ===== 3. パターン戦略ガイド（勝ち + 負け統合） ===== */}
+          {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
+            <Card className="border-2 border-slate-300">
               <CardHeader>
                 <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
                   <Star className="h-6 w-6 text-teal-500" />
-                  勝ちパターン戦略ガイド
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                  パターン戦略ガイド
                 </h2>
               </CardHeader>
               <CardContent>
-                {tripleSearch.commonalityAnalysisAd ? (
+                {(tripleSearch.commonalityAnalysisAd || tripleSearch.losePatternAnalysisAd) ? (
                   <Tabs defaultValue="organic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-3">
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
                       <TabsTrigger value="organic">オーガニック</TabsTrigger>
                       <TabsTrigger value="ad" className="flex items-center gap-1">
                         <Megaphone className="h-3 w-3" />Ad投稿
                       </TabsTrigger>
                     </TabsList>
-                    <TabsContent value="organic">
-                      <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                    <TabsContent value="organic" className="space-y-0">
+                      <Accordion type="multiple" defaultValue={["win", "lose"]}>
+                        {tripleSearch.commonalityAnalysis && (
+                          <AccordionItem value="win" className="border-0">
+                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
+                              <span className="flex items-center gap-2 font-semibold text-teal-800">
+                                <Star className="h-4 w-4" />勝ちパターン戦略
+                              </span>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-3 pb-4">
+                              <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                        {tripleSearch.losePatternAnalysis && (
+                          <AccordionItem value="lose" className="border-0 mt-3">
+                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
+                              <span className="flex items-center gap-2 font-semibold text-amber-800">
+                                <AlertTriangle className="h-4 w-4" />負けパターン回避
+                              </span>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-3 pb-4">
+                              <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </Accordion>
                     </TabsContent>
-                    <TabsContent value="ad">
-                      <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                    <TabsContent value="ad" className="space-y-0">
+                      <Accordion type="multiple" defaultValue={["win-ad", "lose-ad"]}>
+                        {tripleSearch.commonalityAnalysisAd && (
+                          <AccordionItem value="win-ad" className="border-0">
+                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
+                              <span className="flex items-center gap-2 font-semibold text-teal-800">
+                                <Star className="h-4 w-4" />勝ちパターン戦略
+                              </span>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-3 pb-4">
+                              <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                        {tripleSearch.losePatternAnalysisAd && (
+                          <AccordionItem value="lose-ad" className="border-0 mt-3">
+                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
+                              <span className="flex items-center gap-2 font-semibold text-amber-800">
+                                <AlertTriangle className="h-4 w-4" />負けパターン回避
+                              </span>
+                            </AccordionTrigger>
+                            <AccordionContent className="pt-3 pb-4">
+                              <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
+                            </AccordionContent>
+                          </AccordionItem>
+                        )}
+                      </Accordion>
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                  <Accordion type="multiple" defaultValue={["win", "lose"]}>
+                    {tripleSearch.commonalityAnalysis && (
+                      <AccordionItem value="win" className="border-0">
+                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
+                          <span className="flex items-center gap-2 font-semibold text-teal-800">
+                            <Star className="h-4 w-4" />勝ちパターン戦略
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-3 pb-4">
+                          <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                        </AccordionContent>
+                      </AccordionItem>
+                    )}
+                    {tripleSearch.losePatternAnalysis && (
+                      <AccordionItem value="lose" className="border-0 mt-3">
+                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
+                          <span className="flex items-center gap-2 font-semibold text-amber-800">
+                            <AlertTriangle className="h-4 w-4" />負けパターン回避
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-3 pb-4">
+                          <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
+                        </AccordionContent>
+                      </AccordionItem>
+                    )}
+                  </Accordion>
                 )}
               </CardContent>
             </Card>
@@ -1409,37 +1485,7 @@ export default function AnalysisDetail() {
             );
           })()}
 
-          {/* ===== 8. 負けパターン回避ガイド ===== */}
-          {tripleSearch && tripleSearch.losePatternAnalysis && job.status === "completed" && (
-            <Card className="border-2 border-amber-400">
-              <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
-                  <AlertTriangle className="h-6 w-6 text-amber-500" />
-                  負けパターン回避ガイド
-                </h2>
-              </CardHeader>
-              <CardContent>
-                {tripleSearch.losePatternAnalysisAd ? (
-                  <Tabs defaultValue="organic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-3">
-                      <TabsTrigger value="organic">オーガニック</TabsTrigger>
-                      <TabsTrigger value="ad" className="flex items-center gap-1">
-                        <Megaphone className="h-3 w-3" />Ad投稿
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="organic">
-                      <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
-                    </TabsContent>
-                    <TabsContent value="ad">
-                      <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
-                    </TabsContent>
-                  </Tabs>
-                ) : (
-                  <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* 負けパターンは §3 パターン戦略ガイドに統合済み */}
 
           {/* ===== 9. 投稿最適化ガイド ===== */}
           {data?.videos && data.videos.length > 0 && job.status === "completed" && (
