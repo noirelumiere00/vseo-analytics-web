@@ -1336,7 +1336,80 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 5. 負けパターン + NG集 ===== */}
+          {/* ===== 7. タイムライン付きコンテ ===== */}
+          {job.status === "completed" && (() => {
+            const brief = (data.report as any)?.productionBrief;
+            const caption = brief?.appealAxes?.[0]?.captionTemplate;
+            // Determine best duration from videos or default to 30
+            const avgDuration = videos.length > 0
+              ? Math.round(videos.reduce((s: number, v: any) => s + (v.duration || 0), 0) / videos.filter((v: any) => v.duration && v.duration > 0).length) || 30
+              : 30;
+            const totalDur = avgDuration;
+            // Proportional segments for a typical short-form video
+            const segments = [
+              { label: "フック", ratio: 0.10, color: "bg-red-400", desc: caption?.hook || "注意を引くオープニング" },
+              { label: "共感", ratio: 0.17, color: "bg-amber-400", desc: caption?.empathy || "視聴者の悩み・共感ポイント" },
+              { label: "商品紹介", ratio: 0.26, color: "bg-blue-400", desc: caption?.product || "商品・サービスの説明" },
+              { label: "ベネフィット", ratio: 0.30, color: "bg-emerald-400", desc: caption?.benefit || "得られるメリット・効果" },
+              { label: "CTA", ratio: 0.17, color: "bg-violet-400", desc: caption?.cta || "行動喚起（フォロー・購入など）" },
+            ];
+            let elapsed = 0;
+            const timeline = segments.map((seg) => {
+              const start = Math.round(elapsed);
+              const dur = Math.round(totalDur * seg.ratio);
+              elapsed += totalDur * seg.ratio;
+              const end = Math.round(elapsed);
+              return { ...seg, start, end, dur };
+            });
+
+            return (
+              <Card className="border-2 border-orange-300">
+                <CardHeader>
+                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                    <Clock className="h-6 w-6 text-orange-500" />
+                    タイムライン付きコンテ
+                  </h2>
+                  <p className="text-sm text-muted-foreground">推奨動画尺 {totalDur}秒 の秒数配分</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Visual timeline bar */}
+                  <div className="flex h-6 rounded-full overflow-hidden">
+                    {timeline.map((seg, i) => (
+                      <div
+                        key={i}
+                        className={`${seg.color} flex items-center justify-center text-[10px] text-white font-bold`}
+                        style={{ width: `${seg.ratio * 100}%` }}
+                        title={`${seg.label}: ${seg.start}-${seg.end}秒`}
+                      >
+                        {seg.dur >= 3 ? seg.label : ""}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Detailed breakdown */}
+                  <div className="space-y-2">
+                    {timeline.map((seg, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 border rounded-lg">
+                        <div className={`${seg.color} text-white text-xs font-bold px-2 py-1 rounded shrink-0 min-w-[80px] text-center`}>
+                          {seg.start}-{seg.end}秒
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold">{seg.label}</p>
+                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{seg.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!caption && (
+                    <p className="text-xs text-muted-foreground text-center py-2">
+                      制作ブリーフを生成すると、各パートに具体的な台本テンプレートが反映されます
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* ===== 8. 負けパターン回避ガイド ===== */}
           {tripleSearch && tripleSearch.losePatternAnalysis && job.status === "completed" && (
             <Card className="border-2 border-amber-400">
               <CardHeader>
@@ -1368,7 +1441,7 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 6. 投稿最適化ガイド ===== */}
+          {/* ===== 9. 投稿最適化ガイド ===== */}
           {data?.videos && data.videos.length > 0 && job.status === "completed" && (
             <Card>
               <CardHeader>
@@ -1399,7 +1472,7 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 7. データ付録 ===== */}
+          {/* ===== 10. データ付録 ===== */}
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
@@ -1615,7 +1688,7 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 8. 動画一覧 ===== */}
+          {/* ===== 11. 動画一覧 ===== */}
           {/* Videos Section - Tabbed by Appearance Count */}
           {videos.length > 0 && job.status === "completed" ? (
             <Card>
