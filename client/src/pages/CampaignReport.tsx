@@ -3369,7 +3369,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: VOLUME_COLORS[i % VOLUME_COLORS.length] }} />
                       <span className="font-medium text-slate-600">{kw.keyword}</span>
                       {change !== 0 && (
-                        <span className={`font-bold ${change > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                        <span className={`font-bold ${change > 0 ? SENTIMENT_COLORS.positive.text : SENTIMENT_COLORS.negative.text}`}>
                           {change > 0 ? "+" : ""}{change}%
                         </span>
                       )}
@@ -4210,8 +4210,8 @@ function ROIDashboard({ videoMetrics, ripple, sovReport }: {
       label: "SOV変化",
       value: stats.sovChange != null ? `${stats.sovChange > 0 ? "+" : ""}${stats.sovChange}pt` : "—",
       icon: Target,
-      color: stats.sovChange != null && stats.sovChange > 0 ? "text-green-600" : stats.sovChange != null && stats.sovChange < 0 ? "text-red-500" : "text-slate-500",
-      bgColor: stats.sovChange != null && stats.sovChange > 0 ? "bg-green-50 dark:bg-green-950/40" : stats.sovChange != null && stats.sovChange < 0 ? "bg-red-50 dark:bg-red-950/40" : "bg-slate-50 dark:bg-slate-950/40",
+      color: stats.sovChange != null && stats.sovChange > 0 ? SENTIMENT_COLORS.positive.text : stats.sovChange != null && stats.sovChange < 0 ? SENTIMENT_COLORS.negative.text : "text-slate-500",
+      bgColor: stats.sovChange != null && stats.sovChange > 0 ? `${SENTIMENT_COLORS.positive.bg} dark:bg-blue-950/40` : stats.sovChange != null && stats.sovChange < 0 ? `${SENTIMENT_COLORS.negative.bg} dark:bg-amber-950/40` : "bg-slate-50 dark:bg-slate-950/40",
     },
   ];
 
