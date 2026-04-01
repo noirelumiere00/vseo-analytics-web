@@ -27,6 +27,8 @@ import {
   PlayCountDistribution,
   type TrendStatistics,
 } from "@/components/TrendStatisticsPanel";
+import AppealAxisRanking from "@/components/AppealAxisRanking";
+import MarketOpportunityMatrix from "@/components/MarketOpportunityMatrix";
 
 export default function TrendDiscoveryDetail() {
   const params = useParams<{ id: string }>();
