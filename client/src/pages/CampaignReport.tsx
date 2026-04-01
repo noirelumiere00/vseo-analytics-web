@@ -1805,8 +1805,8 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {visibleSparks.map((s, idx) => {
             const vals = s.data.map(d => d.value);
-            const sMax = Math.max(...vals, 1);
-            const sMin = Math.min(...vals, 0);
+            const sMax = Math.max(...vals);
+            const sMin = Math.min(...vals);
             const sRange = sMax - sMin || 1;
             const W = 200, H = 40;
             const pts = vals.map((sv, si) => {
