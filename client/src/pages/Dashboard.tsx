@@ -70,6 +70,19 @@ export default function Dashboard() {
     onSuccess: () => utils.analysis.dashboard.invalidate(),
   });
 
+  const rankedDurations = useMemo(() => insights?.durationPerformance
+    ? [...insights.durationPerformance].sort((a, b) => b.avgER - a.avgER).map((d, i) => ({
+        ...d,
+        verdict: i === 0 ? "Best" as const : i < 3 ? "Good" as const : "Weak" as const,
+      }))
+    : [], [insights?.durationPerformance]);
+
+  const heatmapDays = ["月", "火", "水", "木", "金", "土", "日"];
+  const heatmapBands = ["朝", "昼", "夕", "夜"];
+  const maxHeatmapER = useMemo(() => insights?.postingHeatmap
+    ? Math.max(...heatmapBands.flatMap(b => heatmapDays.map(d => (insights.postingHeatmap as any)?.[b]?.[d]?.er ?? 0)), 0.01)
+    : 1, [insights?.postingHeatmap]);
+
   if (isLoading) {
     return <DashboardLayout><DashboardSkeleton /></DashboardLayout>;
   }
@@ -79,13 +92,6 @@ export default function Dashboard() {
     data.activeJobs.trend.length > 0 ||
     data.activeJobs.campaign.length > 0
   );
-
-  const rankedDurations = useMemo(() => insights?.durationPerformance
-    ? [...insights.durationPerformance].sort((a, b) => b.avgER - a.avgER).map((d, i) => ({
-        ...d,
-        verdict: i === 0 ? "Best" as const : i < 3 ? "Good" as const : "Weak" as const,
-      }))
-    : [], [insights?.durationPerformance]);
 
   // Format summary for duration
   const formatSummary = (() => {
@@ -98,20 +104,14 @@ export default function Dashboard() {
     return `${bestER.label}がER ${bestER.avgER}%で最高。再生数なら${bestViews.label}が${bestViews.avgViews.toLocaleString()}再生で優位。`;
   })();
 
-  // Heatmap helpers
-  const heatmapDays = ["月", "火", "水", "木", "金", "土", "日"];
-  const heatmapBands = ["朝", "昼", "夕", "夜"];
-  const getHeatmapIntensity = (er: number, maxER: number) => {
+  const getHeatmapIntensity = (er: number, max: number) => {
     if (er === 0) return 0;
-    const ratio = er / maxER;
+    const ratio = er / max;
     if (ratio > 0.8) return 4;
     if (ratio > 0.6) return 3;
     if (ratio > 0.35) return 2;
     return 1;
   };
-  const maxHeatmapER = useMemo(() => insights?.postingHeatmap
-    ? Math.max(...heatmapBands.flatMap(b => heatmapDays.map(d => (insights.postingHeatmap as any)?.[b]?.[d]?.er ?? 0)), 0.01)
-    : 1, [insights?.postingHeatmap]);
 
   // Sentiment best
   const sentimentBest = insights?.sentimentAnalysis
