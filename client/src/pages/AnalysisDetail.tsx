@@ -833,9 +833,9 @@ export default function AnalysisDetail() {
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
-            <Card className="border-2 border-blue-300">
+            <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                <h2 className="text-2xl leading-tight flex items-center gap-2">
                   <Search className="h-6 w-6 text-blue-500" />
                   重複度分析
                 </h2>
@@ -934,37 +934,9 @@ export default function AnalysisDetail() {
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold">エグゼクティブサマリー</h2>
+                <h2 className="text-2xl leading-tight">概要</h2>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* サマリー情報 */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{reportStats.totalVideos}</div>
-                    <div className="text-xs text-black mt-2">総動画数</div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{formatNumber(reportStats.totalViews)}</div>
-                    <div className="text-xs text-black mt-2">総再生数</div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
-                    <div className="text-xs text-black mt-2">いいね数</div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
-                    <div className="text-xs text-black mt-2">コメント数</div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
-                    <div className="text-xs text-black mt-2">シェア数</div>
-                  </div>
-                  <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                    <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
-                    <div className="text-xs text-black mt-2">保存数</div>
-                  </div>
-                </div>
-
                 {/* 自動インサイト */}
                 <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
                   <h3 className="text-sm font-semibold text-blue-700 mb-1 flex items-center gap-1">
@@ -1011,7 +983,7 @@ export default function AnalysisDetail() {
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold">評判環境・リスクマップ</h2>
+                <h2 className="text-2xl leading-tight">評判分析</h2>
               </CardHeader>
               <CardContent className="space-y-8">
                 {/* センチメント構成比 ― ドーナツ + 統計カード */}
@@ -1114,12 +1086,12 @@ export default function AnalysisDetail() {
 
           {/* ===== 3. パターン戦略ガイド（勝ち + 負け統合） ===== */}
           {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
-            <Card className="border-2 border-slate-300">
+            <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                <h2 className="text-2xl leading-tight flex items-center gap-2">
                   <Star className="h-6 w-6 text-teal-500" />
                   <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  パターン戦略ガイド
+                  勝ち・負けパターン
                 </h2>
               </CardHeader>
               <CardContent>
@@ -1233,11 +1205,11 @@ export default function AnalysisDetail() {
               .slice(0, 5);
             if (referenceVideos.length === 0) return null;
             return (
-              <Card className="border-2 border-violet-300">
+              <Card>
                 <CardHeader>
-                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                  <h2 className="text-2xl leading-tight flex items-center gap-2">
                     <Film className="h-6 w-6 text-violet-500" />
-                    参考動画キュレーション
+                    参考動画
                   </h2>
                   <p className="text-sm text-muted-foreground">全{numSessions}セッションに出現した上位動画 — 真似すべきポイント付き</p>
                 </CardHeader>
@@ -1315,9 +1287,9 @@ export default function AnalysisDetail() {
             );
             if (!hasAnyData) return null;
             return (
-              <Card className="border-2 border-cyan-300">
+              <Card>
                 <CardHeader>
-                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                  <h2 className="text-2xl leading-tight flex items-center gap-2">
                     <Eye className="h-6 w-6 text-cyan-500" />
                     動画構成の深掘り
                   </h2>
@@ -1393,11 +1365,11 @@ export default function AnalysisDetail() {
 
           {/* ===== 6. 制作ブリーフ（台本テンプレート） ===== */}
           {tripleSearch && job.status === "completed" && (
-            <Card className="border-2 border-amber-300">
+            <Card className="border-l-4 border-primary">
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                <h2 className="text-2xl leading-tight flex items-center gap-2">
                   <FileText className="h-6 w-6 text-amber-500" />
-                  制作ブリーフ（台本テンプレート）
+                  制作ブリーフ
                 </h2>
               </CardHeader>
               <CardContent>
@@ -1439,9 +1411,9 @@ export default function AnalysisDetail() {
             });
 
             return (
-              <Card className="border-2 border-orange-300">
+              <Card>
                 <CardHeader>
-                  <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
+                  <h2 className="text-2xl leading-tight flex items-center gap-2">
                     <Clock className="h-6 w-6 text-orange-500" />
                     タイムライン付きコンテ
                   </h2>
@@ -1491,7 +1463,7 @@ export default function AnalysisDetail() {
           {data?.videos && data.videos.length > 0 && job.status === "completed" && (
             <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold">投稿最適化ガイド</h2>
+                <h2 className="text-2xl leading-tight">投稿最適化</h2>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="heatmap" className="w-full">
@@ -1522,7 +1494,7 @@ export default function AnalysisDetail() {
           {reportStats && job.status === "completed" && (
             <Card>
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold">データ付録</h2>
+                <h2 className="text-2xl leading-tight">データ付録</h2>
               </CardHeader>
               <CardContent>
                 <Accordion type="multiple" className="space-y-2">
