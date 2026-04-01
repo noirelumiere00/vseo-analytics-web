@@ -65,7 +65,6 @@ export default function AnalysisDetail() {
   const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment" | "promotion">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
-  const [showBrief, setShowBrief] = useState(false);
 
   const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
     enabled: user !== undefined,
@@ -138,6 +137,14 @@ export default function AnalysisDetail() {
       setCancelRequested(true);
       toast.success("キャンセルリクエストを送信しました");
       refetchProgress();
+    },
+    onError: handleTrpcError,
+  });
+
+  const generateBrief = trpc.analysis.generateBrief.useMutation({
+    onSuccess: () => {
+      toast.success("ブリーフを生成しました");
+      refetch();
     },
     onError: handleTrpcError,
   });
@@ -1147,29 +1154,13 @@ export default function AnalysisDetail() {
                 </h2>
               </CardHeader>
               <CardContent>
-                {showBrief ? (
-                  <ProductionBrief
-                    brief={null}
-                    onGenerate={() => {
-                      // TODO: call tRPC mutation when endpoint is ready
-                      toast.info("ブリーフ生成エンドポイントは準備中です");
-                    }}
-                    isGenerating={false}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
-                    <p className="text-sm text-muted-foreground">
-                      勝ちパターンをベースに、AIが台本・ハッシュタグ・撮影チェックリストを自動生成します
-                    </p>
-                    <Button
-                      onClick={() => setShowBrief(true)}
-                      className="bg-amber-600 hover:bg-amber-700 text-white"
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      ブリーフを生成
-                    </Button>
-                  </div>
-                )}
+                <ProductionBrief
+                  brief={(data.report as any)?.productionBrief ?? null}
+                  onGenerate={() => {
+                    generateBrief.mutate({ jobId });
+                  }}
+                  isGenerating={generateBrief.isPending}
+                />
               </CardContent>
             </Card>
           )}
