@@ -54,6 +54,7 @@ import { VideoList } from "@/components/VideoList";
 import { useReportStats } from "@/hooks/useReportStats";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { CopyButton } from "@/components/CopyButton";
+import { ProductionBrief } from "@/components/ProductionBrief";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -63,6 +64,7 @@ export default function AnalysisDetail() {
   const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment" | "promotion">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
+  const [showBrief, setShowBrief] = useState(false);
 
   const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
     enabled: user !== undefined,

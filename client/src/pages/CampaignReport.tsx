@@ -82,13 +82,13 @@ export const gradeColors: Record<string, string> = {
 };
 
 export const SECTIONS = [
-  { id: "summary", label: "総合", icon: Brain },
-  { id: "platform", label: "全媒体", icon: Layers },
-  { id: "videos", label: "TikTok", icon: Eye },
-  { id: "keyword-sov", label: "順位・シェア", icon: Search },
+  { id: "summary", label: "成績表", icon: Brain },
+  { id: "roi", label: "ROI", icon: BarChart3 },
+  { id: "videos", label: "動画", icon: Eye },
+  { id: "keyword-sov", label: "順位・SOV", icon: Search },
   { id: "competitor", label: "競合", icon: Users },
   { id: "ripple", label: "波及", icon: Share2 },
-  { id: "cross", label: "相関", icon: Globe },
+  { id: "next-action", label: "ネクストアクション", icon: Sparkles },
 ];
 
 // ============================
@@ -111,6 +111,7 @@ export default function CampaignReport() {
 
   const [activeSection, setActiveSection] = useState("summary");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [showBriefPlaceholder, setShowBriefPlaceholder] = useState(false);
 
   // IntersectionObserver for active section tracking
   useEffect(() => {
@@ -355,10 +356,8 @@ export default function CampaignReport() {
 
   // Filter visible sections
   const visibleSections = SECTIONS.filter(s => {
-    if (s.id === "platform" && !hasAnyPlatformData) return false;
     if (s.id === "videos" && !hasVideoMetrics) return false;
     if (s.id === "competitor" && !hasCompetitors) return false;
-    if (s.id === "cross" && !hasCrossPlatform) return false;
     return true;
   });
   const sectionNumber = (id: string) => visibleSections.findIndex(s => s.id === id) + 1;
@@ -510,19 +509,11 @@ export default function CampaignReport() {
           )}
         </div>
 
-        {/* Section: Multi-Platform Summary */}
-        {/* Section: All-Platform Summary */}
-        {hasAnyPlatformData && (
-          <div id="platform" ref={el => { sectionRefs.current["platform"] = el; }} className="scroll-mt-16 section-fade-in">
-            <SectionHeader number={sectionNumber("platform")} title="全媒体横断サマリー" question="全プラットフォームの合計は？" />
-            <PlatformSummarySection
-              tiktokVideos={videoMetrics || []}
-              platformSummary={platformSummary || {}}
-              dailyMetrics={dailyMetrics}
-              hasBaseline={hasBaseline}
-            />
-          </div>
-        )}
+        {/* Section: ROI Dashboard */}
+        <div id="roi" ref={el => { sectionRefs.current["roi"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("roi")} title="ROIダッシュボード" question="施策の投資対効果は？" />
+          <ROIDashboard videoMetrics={videoMetrics} ripple={ripple} sovReport={sovReport} />
+        </div>
 
         {/* Section: TikTok Videos */}
         {hasVideoMetrics && (

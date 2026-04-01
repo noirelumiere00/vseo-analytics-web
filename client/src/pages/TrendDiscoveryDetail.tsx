@@ -263,46 +263,54 @@ export default function TrendDiscoveryDetail() {
         {/* Completed */}
         {job.status === "completed" && (
           <>
-            {/* 統計サマリーバナー */}
+            {/* 1. 市場サマリー */}
             {(() => {
               const stats = (job.crossAnalysis as any)?.statistics;
               const kwCount = (job.expandedKeywords as string[] || []).length;
               const htCount = (job.expandedHashtags as string[] || []).length;
+              const totalVideos = stats?.totalVideos ?? 0;
+              const medianER = stats?.engagementStats?.er?.median;
               return (
-                <div className="grid gap-4 md:grid-cols-4">
-                  <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
-                    <Search className="h-5 w-5 text-primary shrink-0" />
-                    <div>
-                      <p className="text-2xl font-bold">{kwCount + htCount}</p>
-                      <p className="text-xs text-muted-foreground">検索クエリ数</p>
+                <div className="space-y-3">
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
+                      <Search className="h-5 w-5 text-primary shrink-0" />
+                      <div>
+                        <p className="text-2xl font-bold">{kwCount + htCount}</p>
+                        <p className="text-xs text-muted-foreground">検索クエリ数</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                      <Play className="h-5 w-5 text-blue-500 shrink-0" />
+                      <div>
+                        <p className="text-2xl font-bold">{totalVideos || "—"}</p>
+                        <p className="text-xs text-muted-foreground">分析動画数</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
+                      <TrendingUp className="h-5 w-5 text-amber-500 shrink-0" />
+                      <div>
+                        <p className="text-2xl font-bold">{medianER != null ? `${medianER}%` : "—"}</p>
+                        <p className="text-xs text-muted-foreground">中央値ER</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 border-l-4 border-rose-500 rounded-lg p-4 bg-rose-50 dark:bg-rose-950/20">
+                      <FileText className="h-5 w-5 text-rose-500 shrink-0" />
+                      <div>
+                        <p className="text-2xl font-bold">{stats?.adInsight ? `${stats.adInsight.adRate}%` : "0%"}</p>
+                        <p className="text-xs text-muted-foreground">PR/Ad率</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
-                    <Play className="h-5 w-5 text-blue-500 shrink-0" />
-                    <div>
-                      <p className="text-2xl font-bold">{stats?.totalVideos ?? "—"}</p>
-                      <p className="text-xs text-muted-foreground">分析動画数</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
-                    <TrendingUp className="h-5 w-5 text-amber-500 shrink-0" />
-                    <div>
-                      <p className="text-2xl font-bold">{stats?.engagementStats?.er?.median != null ? `${stats.engagementStats.er.median}%` : "—"}</p>
-                      <p className="text-xs text-muted-foreground">中央値ER</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 border-l-4 border-rose-500 rounded-lg p-4 bg-rose-50 dark:bg-rose-950/20">
-                    <FileText className="h-5 w-5 text-rose-500 shrink-0" />
-                    <div>
-                      <p className="text-2xl font-bold">{stats?.adInsight ? `${stats.adInsight.adRate}%` : "0%"}</p>
-                      <p className="text-xs text-muted-foreground">PR/Ad率</p>
-                    </div>
-                  </div>
+                  {/* 自然言語サマリー */}
+                  <p className="text-sm text-muted-foreground px-1">
+                    「{job.persona}」界隈では{kwCount + htCount}件のキーワードから{totalVideos || 0}本の動画を分析し、中央値ERは{medianER != null ? `${medianER}%` : "—"}です。
+                  </p>
                 </div>
               );
             })()}
 
-            {/* AIレポート (デフォルト展開) */}
+            {/* 2. AIレポート */}
             {((job.crossAnalysis as any)?.report?.length > 0 || (job.crossAnalysis as any)?.summary) && (
               <AITrendReport
                 report={(job.crossAnalysis as any)?.report}
@@ -310,7 +318,7 @@ export default function TrendDiscoveryDetail() {
               />
             )}
 
-            {/* パフォーマンス分類 (常時表示) */}
+            {/* 3. パフォーマンス分類 (常時表示) */}
             {(job.crossAnalysis as any)?.statistics?.performanceClassification && (
               <PerformanceClassification
                 data={(job.crossAnalysis as any).statistics.performanceClassification}
@@ -318,81 +326,95 @@ export default function TrendDiscoveryDetail() {
               />
             )}
 
-            {/* 5グループのAccordion */}
             {(job.crossAnalysis as any)?.statistics && (() => {
               const statistics = (job.crossAnalysis as any).statistics as TrendStatistics;
+              const trendingHashtags: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> = (job.crossAnalysis as any)?.trendingHashtags || [];
               return (
                 <>
-                {/* 1. 需要トレンド分析 (常時表示) */}
-                {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
-                  <QueryFreshnessChart data={statistics.queryFreshness} />
-                )}
-
-                <Accordion type="multiple" className="space-y-2">
-                  {/* 2. ハッシュタグ分析 */}
-                  <AccordionItem value="hashtag-analysis" className="border rounded-xl">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      ハッシュタグ分析
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-6">
-                      <TrendingHashtags data={(job.crossAnalysis as any)?.trendingHashtags || []} />
+                {/* 4. トレンドハッシュタグ戦略 (常時表示) */}
+                {(trendingHashtags.length > 0 || statistics.hashtagPerformance.length > 0) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Hash className="h-4 w-4" />
+                        トレンドハッシュタグ戦略
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0 space-y-6">
+                      <TrendingHashtags data={trendingHashtags} globalMedianER={statistics.engagementStats.er.median} />
                       {statistics.hashtagPerformance.length > 0 && (
                         <HashtagPerformanceChart data={statistics.hashtagPerformance} globalMedianER={statistics.engagementStats.er.median} />
                       )}
                       <CoOccurringTags data={(job.crossAnalysis as any)?.coOccurringTags || []} />
-                    </AccordionContent>
-                  </AccordionItem>
+                    </CardContent>
+                  </Card>
+                )}
 
-                  {/* 3. エンゲージメント詳細 */}
-                  <AccordionItem value="engagement-detail" className="border rounded-xl">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      エンゲージメント詳細
-                    </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4 space-y-6">
-                      <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
-                      <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
-                      {statistics.durationBands.length > 0 && (
-                        <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
-                      )}
-                      <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
-                      {statistics.playCountDistribution.length > 0 && (
-                        <PlayCountDistribution data={statistics.playCountDistribution} />
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
+                {/* 5. KOL候補リスト (常時表示) */}
+                {(((job.crossAnalysis as any)?.topVideos?.length > 0) || ((job.crossAnalysis as any)?.keyCreators?.length > 0)) && (
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Users className="h-4 w-4" />
+                        KOL候補リスト
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <TopVideosAndCreators
+                        videos={(job.crossAnalysis as any)?.topVideos || []}
+                        creators={(job.crossAnalysis as any)?.keyCreators || []}
+                      />
+                    </CardContent>
+                  </Card>
+                )}
 
-                  {/* 4. PR/Ad・SEO分析 */}
-                  {(statistics.adInsight || (statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0)) && (
-                    <AccordionItem value="pr-seo" className="border rounded-xl">
+                {/* 6. パフォーマンスベンチマーク (常時表示) */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <TrendingUp className="h-4 w-4" />
+                      パフォーマンスベンチマーク
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-6">
+                    <EngagementStatsTable stats={statistics.engagementStats} extremeVideos={statistics.extremeVideos} />
+                    <FollowerErScatter data={statistics.followerErScatter} tiers={statistics.followerTierSummary} />
+                    {statistics.queryFreshness && statistics.queryFreshness.length > 0 && (
+                      <QueryFreshnessChart data={statistics.queryFreshness} />
+                    )}
+                    {statistics.adInsight && (
+                      <AdInsightSection data={statistics.adInsight} />
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* 7. データ付録 (折りたたみ) */}
+                {(
+                  (statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0) ||
+                  statistics.durationBands.length > 0 ||
+                  statistics.postingTimeGrid ||
+                  statistics.playCountDistribution.length > 0
+                ) && (
+                  <Accordion type="multiple" className="space-y-2">
+                    <AccordionItem value="data-appendix" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        PR/Ad・SEO分析
+                        データ付録
                       </AccordionTrigger>
                       <AccordionContent className="px-4 pb-4 space-y-6">
-                        {statistics.adInsight && (
-                          <AdInsightSection data={statistics.adInsight} />
-                        )}
                         {statistics.seoMetaKeywords && statistics.seoMetaKeywords.keywordRanking.length > 0 && (
                           <TrendSeoMetaKeywordsSection data={statistics.seoMetaKeywords} />
                         )}
+                        {statistics.durationBands.length > 0 && (
+                          <DurationBandsChart data={statistics.durationBands} globalMedianER={statistics.engagementStats.er.median} />
+                        )}
+                        <TrendPostingTimeHeatmap grid={statistics.postingTimeGrid} bestSlots={statistics.bestTimeSlots} />
+                        {statistics.playCountDistribution.length > 0 && (
+                          <PlayCountDistribution data={statistics.playCountDistribution} />
+                        )}
                       </AccordionContent>
                     </AccordionItem>
-                  )}
-
-                  {/* 5. トップ動画・クリエイター */}
-                  {(((job.crossAnalysis as any)?.topVideos?.length > 0) || ((job.crossAnalysis as any)?.keyCreators?.length > 0)) && (
-                    <AccordionItem value="top-videos-creators" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        トップ動画・クリエイター
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <TopVideosAndCreators
-                          videos={(job.crossAnalysis as any)?.topVideos || []}
-                          creators={(job.crossAnalysis as any)?.keyCreators || []}
-                        />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-                </Accordion>
+                  </Accordion>
+                )}
                 </>
               );
             })()}
@@ -508,39 +530,81 @@ function AITrendReport({ report, fallbackSummary }: {
 
 // ---- トレンドハッシュタグ (inline) ----
 
-function TrendingHashtags({ data }: { data: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }> }) {
+function TrendingHashtags({ data, globalMedianER }: { data: Array<{ tag: string; videoCount: number; queryCount: number; avgER: number }>; globalMedianER?: number }) {
   if (data.length === 0) return null;
+
+  // Categorize tags: high ER = above median; high volume = above median video count
+  const medianVideoCount = data.length > 0
+    ? [...data].sort((a, b) => a.videoCount - b.videoCount)[Math.floor(data.length / 2)].videoCount
+    : 0;
+  const erThreshold = globalMedianER ?? 0;
+
+  const categorize = (t: { avgER: number; videoCount: number }): "must" | "opportunity" | "other" => {
+    const highER = t.avgER > erThreshold;
+    const highVolume = t.videoCount >= medianVideoCount;
+    if (highER && highVolume) return "must";
+    if (highER && !highVolume) return "opportunity";
+    return "other";
+  };
+
+  const categoryLabel: Record<string, { label: string; color: string }> = {
+    must: { label: "必須タグ（高ER×高投稿数）", color: "text-green-700 dark:text-green-400" },
+    opportunity: { label: "狙い目タグ（高ER×低投稿数）", color: "text-amber-700 dark:text-amber-400" },
+    other: { label: "その他", color: "text-muted-foreground" },
+  };
+
+  const grouped = { must: [] as typeof data, opportunity: [] as typeof data, other: [] as typeof data };
+  for (const t of data.slice(0, 30)) {
+    grouped[categorize(t)].push(t);
+  }
+
+  const renderTable = (items: typeof data, startIndex: number) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b text-left">
+          <th className="pb-2 pr-4 font-medium text-muted-foreground">#</th>
+          <th className="pb-2 pr-4 font-medium text-muted-foreground">タグ</th>
+          <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">出現動画数</th>
+          <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">クエリ横断数</th>
+          <th className="pb-2 font-medium text-muted-foreground text-right">平均ER(%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((t, i) => (
+          <tr key={t.tag} className="border-b last:border-0">
+            <td className="py-2 pr-4 text-muted-foreground">{startIndex + i + 1}</td>
+            <td className="py-2 pr-4 font-medium">#{t.tag}</td>
+            <td className="py-2 pr-4 text-right">{t.videoCount}</td>
+            <td className="py-2 pr-4 text-right">{t.queryCount}</td>
+            <td className="py-2 text-right">{t.avgER}%</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  let runningIndex = 0;
+
   return (
-    <div>
-      <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-        <Hash className="h-4 w-4" />
-        トレンドハッシュタグ
-        <span className="text-xs font-normal text-muted-foreground">{data.length}件</span>
-      </h4>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="pb-2 pr-4 font-medium text-muted-foreground">#</th>
-              <th className="pb-2 pr-4 font-medium text-muted-foreground">タグ</th>
-              <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">出現動画数</th>
-              <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">クエリ横断数</th>
-              <th className="pb-2 font-medium text-muted-foreground text-right">平均ER(%)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.slice(0, 30).map((t, i) => (
-              <tr key={t.tag} className="border-b last:border-0">
-                <td className="py-2 pr-4 text-muted-foreground">{i + 1}</td>
-                <td className="py-2 pr-4 font-medium">#{t.tag}</td>
-                <td className="py-2 pr-4 text-right">{t.videoCount}</td>
-                <td className="py-2 pr-4 text-right">{t.queryCount}</td>
-                <td className="py-2 text-right">{t.avgER}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div className="space-y-5">
+      {(["must", "opportunity", "other"] as const).map((cat) => {
+        const items = grouped[cat];
+        if (items.length === 0) return null;
+        const { label, color } = categoryLabel[cat];
+        const idx = runningIndex;
+        runningIndex += items.length;
+        return (
+          <div key={cat}>
+            <h4 className={`text-sm font-semibold mb-2 ${color}`}>
+              {label}
+              <span className="text-xs font-normal text-muted-foreground ml-2">{items.length}件</span>
+            </h4>
+            <div className="overflow-x-auto">
+              {renderTable(items, idx)}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
