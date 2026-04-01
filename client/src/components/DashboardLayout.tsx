@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Clock, Compass, LayoutDashboard, LogOut, Megaphone, Search } from "lucide-react";
+import { Clock, Compass, FlaskConical, LayoutDashboard, LogOut, Megaphone, Search } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -40,8 +40,14 @@ const quickActions = [
   { icon: Megaphone, label: "新規施策レポート", path: "/campaigns/new" },
 ];
 
+const betaNav = [
+  { icon: FlaskConical, label: "Beta: トレンド分析", path: "/trend-discovery" },
+  { icon: FlaskConical, label: "Beta: VSEO分析", path: "/analysis/new" },
+  { icon: FlaskConical, label: "Beta: 施策レポート", path: "/campaigns" },
+];
+
 // Combine for breadcrumb usage
-const navItems = [...mainNav, ...quickActions];
+const navItems = [...mainNav, ...quickActions, ...betaNav];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 260;
@@ -238,6 +244,36 @@ function DashboardLayoutContent({
                       >
                         <item.icon className={`h-4 w-4 ${active ? "text-primary-foreground" : "text-muted-foreground"}`} />
                         <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </div>
+            {/* Divider */}
+            <div className="h-px bg-sidebar-border mx-2 my-1" />
+
+            {/* Beta Features */}
+            <div className="space-y-0.5 py-2">
+              {!isCollapsed && (
+                <p className="text-xs font-medium text-primary/60 tracking-widest px-3 mb-1.5 flex items-center gap-1" style={{ fontFamily: '"Shippori Mincho", serif' }}>
+                  <FlaskConical className="h-3 w-3" />
+                  Beta
+                </p>
+              )}
+              <SidebarMenu>
+                {betaNav.map(item => {
+                  const active = isActive(item.path);
+                  return (
+                    <SidebarMenuItem key={`beta-${item.path}`}>
+                      <SidebarMenuButton
+                        isActive={active}
+                        onClick={() => setLocation(item.path)}
+                        tooltip={item.label}
+                        className="h-9 transition-all font-normal text-sm"
+                      >
+                        <item.icon className={`h-4 w-4 ${active ? "text-primary" : "text-muted-foreground/50"}`} />
+                        <span className="text-muted-foreground/80">{item.label.replace("Beta: ", "")}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
