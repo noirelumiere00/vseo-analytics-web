@@ -34,6 +34,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { handleTrpcError } from "@/lib/error-handler";
 
 type FilterType = "all" | "seo" | "trend";
 type EditMode = "normal" | "compare" | "delete";
@@ -77,7 +78,7 @@ export default function Activity() {
       toast.success("分析ジョブを削除しました");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const retryAnalysis = trpc.analysis.retry.useMutation({
@@ -85,7 +86,7 @@ export default function Activity() {
       toast.success("再実行を開始します");
       setLocation(`/analysis/${data.jobId}`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const deleteTrend = trpc.trendDiscovery.delete.useMutation({
@@ -93,7 +94,7 @@ export default function Activity() {
       toast.success("トレンド発掘ジョブを削除しました");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const retryTrend = trpc.trendDiscovery.execute.useMutation({
@@ -101,7 +102,7 @@ export default function Activity() {
       toast.success("再実行を開始します");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const bulkDeleteAnalysis = trpc.analysis.bulkDelete.useMutation({
@@ -111,7 +112,7 @@ export default function Activity() {
       setSelectedIds(new Set());
       setEditMode("normal");
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const bulkDeleteTrend = trpc.trendDiscovery.bulkDelete.useMutation({
@@ -121,7 +122,7 @@ export default function Activity() {
       setSelectedIds(new Set());
       setEditMode("normal");
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const filtered = useMemo(() => {

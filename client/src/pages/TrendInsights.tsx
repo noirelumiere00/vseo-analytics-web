@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { handleTrpcError } from "@/lib/error-handler";
 import { ja } from "date-fns/locale";
 import { useState } from "react";
 import {
@@ -29,9 +30,7 @@ export default function TrendInsights() {
       toast.success("分析ジョブを削除しました");
       utils.trendDiscovery.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const retryMutation = trpc.trendDiscovery.execute.useMutation({
@@ -39,9 +38,7 @@ export default function TrendInsights() {
       toast.success("再実行を開始します");
       setLocation(`/trend-discovery/${variables.jobId}`);
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const [deleteMode, setDeleteMode] = useState(false);

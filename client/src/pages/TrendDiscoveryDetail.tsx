@@ -12,6 +12,7 @@ import { AlertTriangle, ArrowLeft, Bookmark, CheckCircle, ChevronDown, Download,
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { handleTrpcError } from "@/lib/error-handler";
 import remarkGfm from "remark-gfm";
 import {
   PerformanceClassification,
@@ -50,7 +51,7 @@ export default function TrendDiscoveryDetail() {
   );
 
   const executeMutation = trpc.trendDiscovery.execute.useMutation({
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const recomputeMutation = trpc.trendDiscovery.recomputeStatistics.useMutation({
@@ -58,7 +59,7 @@ export default function TrendDiscoveryDetail() {
       toast.success("統計を再計算しました");
       jobQuery.refetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const csvQuery = trpc.trendDiscovery.exportCsv.useQuery(

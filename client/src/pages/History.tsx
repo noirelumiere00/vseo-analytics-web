@@ -13,6 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
+import { handleTrpcError } from "@/lib/error-handler";
 
 export default function History() {
   const { user, loading: authLoading } = useAuth();
@@ -42,9 +43,7 @@ export default function History() {
       toast.success("分析ジョブを削除しました");
       utils.analysis.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const retryJob = trpc.analysis.retry.useMutation({
@@ -52,9 +51,7 @@ export default function History() {
       toast.success("再実行を開始します");
       setLocation(`/analysis/${data.jobId}`);
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const [deleteMode, setDeleteMode] = useState(false);
@@ -67,9 +64,7 @@ export default function History() {
       setDeleteSelectedIds([]);
       utils.analysis.list.invalidate();
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   if (authLoading || isLoading) {

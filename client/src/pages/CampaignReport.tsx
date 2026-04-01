@@ -6,12 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music, Target, Lightbulb, Zap } from "lucide-react";
+import { SENTIMENT_COLORS, getSentimentColorClass } from "@/lib/sentiment-colors";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { handleTrpcError } from "@/lib/error-handler";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, ReferenceArea, Cell, AreaChart, Area, ComposedChart } from "recharts";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -36,7 +38,7 @@ function ChangeIndicator({ value, suffix = "", inverse = false }: { value: numbe
   const isPositive = inverse ? value < 0 : value > 0;
   const isNegative = inverse ? value > 0 : value < 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 font-medium ${isPositive ? "text-green-600" : isNegative ? "text-red-500" : "text-muted-foreground"}`}>
+    <span className={`inline-flex items-center gap-0.5 font-medium ${isPositive ? SENTIMENT_COLORS.positive.text : isNegative ? SENTIMENT_COLORS.negative.text : "text-muted-foreground"}`}>
       {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : isNegative ? <TrendingDown className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
       {value > 0 ? "+" : ""}{value}{suffix}
     </span>
@@ -68,9 +70,9 @@ function analyzeSentiment(text: string | undefined): "positive" | "neutral" | "n
 }
 
 const SENTIMENT_CONFIG = {
-  positive: { label: "ポジティブ", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", dotColor: "bg-emerald-500", Icon: TrendingUp },
-  neutral:  { label: "ナチュラル", color: "text-slate-500", bg: "bg-slate-50 border-slate-200", dotColor: "bg-slate-400", Icon: Minus },
-  negative: { label: "ネガティブ", color: "text-red-500", bg: "bg-red-50 border-red-200", dotColor: "bg-red-500", Icon: TrendingDown },
+  positive: { label: "ポジティブ", color: SENTIMENT_COLORS.positive.text, bg: `${SENTIMENT_COLORS.positive.bg} ${SENTIMENT_COLORS.positive.border}`, dotColor: SENTIMENT_COLORS.positive.fill.replace("fill-", "bg-"), Icon: TrendingUp },
+  neutral:  { label: "ナチュラル", color: SENTIMENT_COLORS.neutral.text, bg: `${SENTIMENT_COLORS.neutral.bg} ${SENTIMENT_COLORS.neutral.border}`, dotColor: SENTIMENT_COLORS.neutral.fill.replace("fill-", "bg-"), Icon: Minus },
+  negative: { label: "ネガティブ", color: SENTIMENT_COLORS.negative.text, bg: `${SENTIMENT_COLORS.negative.bg} ${SENTIMENT_COLORS.negative.border}`, dotColor: SENTIMENT_COLORS.negative.fill.replace("fill-", "bg-"), Icon: TrendingDown },
 } as const;
 
 export const gradeColors: Record<string, string> = {
@@ -1124,11 +1126,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                     <div className="flex justify-center items-center gap-1.5 py-3 flex-wrap">
                       {/* 施策動画 */}
                       <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
-                        ownChange > 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50"
+                        ownChange > 0 ? `${SENTIMENT_COLORS.positive.bg} border ${SENTIMENT_COLORS.positive.border}` : "bg-slate-50"
                       }`}>
-                        <span className="w-2 h-2 rounded-sm bg-emerald-500 shrink-0" />
+                        <span className={`w-2 h-2 rounded-sm ${SENTIMENT_COLORS.positive.fill.replace("fill-", "bg-")} shrink-0`} />
                         <span>施策動画</span>
-                        <span className={`font-bold ${ownChange > 0 ? "text-emerald-500" : ownChange < 0 ? "text-red-500" : "text-slate-400"}`}>
+                        <span className={`font-bold ${ownChange > 0 ? SENTIMENT_COLORS.positive.text : ownChange < 0 ? SENTIMENT_COLORS.negative.text : "text-slate-400"}`}>
                           {beforeOwnCount}→{afterOwnCount}本{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
                         </span>
                       </div>
@@ -1140,11 +1142,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         const isNegReduced = key === "negative" && change < 0;
                         return (
                           <div key={key} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
-                            isNegReduced ? "bg-red-50 border border-red-200" : "bg-slate-50"
+                            isNegReduced ? `${SENTIMENT_COLORS.negative.bg} border ${SENTIMENT_COLORS.negative.border}` : "bg-slate-50"
                           }`}>
                             <span className={`w-2 h-2 rounded-sm ${barCls} shrink-0`} />
                             <span>{label}</span>
-                            <span className={`font-bold ${change > 0 ? "text-emerald-500" : change < 0 ? "text-red-500" : "text-slate-400"}`}>
+                            <span className={`font-bold ${change > 0 ? SENTIMENT_COLORS.positive.text : change < 0 ? SENTIMENT_COLORS.negative.text : "text-slate-400"}`}>
                               {bCount}→{aCount}本{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
                             </span>
                           </div>
@@ -1338,7 +1340,7 @@ function TrackingToggle({ campaignId }: { campaignId: number }) {
   const statusQuery = trpc.campaign.getTrackingStatus.useQuery({ campaignId }, { enabled: campaignId > 0 });
   const toggleMut = trpc.campaign.toggleDailyTracking.useMutation({
     onSuccess: () => { statusQuery.refetch(); },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
   const status = statusQuery.data;
   if (!status) return null;
@@ -2003,7 +2005,7 @@ const GENRE_CONFIG: Record<string, { label: string; cls: string; barCls: string 
   recommend: { label: "レコメンド", cls: "bg-orange-500 text-white", barCls: "bg-orange-500" },
   howto: { label: "How-to", cls: "bg-sky-400 text-white", barCls: "bg-sky-400" },
   entertainment: { label: "エンタメ", cls: "bg-pink-500 text-white", barCls: "bg-pink-500" },
-  negative: { label: "ネガティブ", cls: "bg-red-500 text-white", barCls: "bg-red-500" },
+  negative: { label: "ネガティブ", cls: "bg-amber-500 text-white", barCls: "bg-amber-500" },
   other: { label: "その他", cls: "bg-slate-400 text-white", barCls: "bg-slate-400" },
 };
 
@@ -2951,9 +2953,9 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
                   {/* Breakdown bars */}
                   <div className="flex-1 space-y-3">
                     {([
-                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: "bg-emerald-500", textColor: "text-emerald-600", iconColor: "text-emerald-500" },
-                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: "bg-slate-400", textColor: "text-slate-500", iconColor: "text-slate-400" },
-                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: "bg-red-500", textColor: "text-red-500", iconColor: "text-red-400" },
+                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: SENTIMENT_COLORS.positive.fill.replace("fill-", "bg-"), textColor: SENTIMENT_COLORS.positive.text, iconColor: SENTIMENT_COLORS.positive.text },
+                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: SENTIMENT_COLORS.neutral.fill.replace("fill-", "bg-"), textColor: SENTIMENT_COLORS.neutral.text, iconColor: SENTIMENT_COLORS.neutral.text },
+                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: SENTIMENT_COLORS.negative.fill.replace("fill-", "bg-"), textColor: SENTIMENT_COLORS.negative.text, iconColor: SENTIMENT_COLORS.negative.text },
                     ]).map((row) => {
                       const count = sentCounts[row.key];
                       const pct = total > 0 ? Math.round((count / total) * 100) : 0;

@@ -10,6 +10,7 @@ import { ArrowLeft, Loader2, Users, Check, X } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
+import { handleTrpcError } from "@/lib/error-handler";
 
 function extractTikTokUsername(input: string): string | null {
   const trimmed = input.trim();
@@ -117,9 +118,7 @@ export default function CampaignNew() {
       toast.success("キャンペーンを作成しました");
       setLocation(`/campaigns/${data.id}`);
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const handleSubmit = () => {

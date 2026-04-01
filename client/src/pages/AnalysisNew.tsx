@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "@shared/const";
 import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
+import { handleTrpcError } from "@/lib/error-handler";
 import DashboardLayout from "@/components/DashboardLayout";
 
 const STEPS = [
@@ -42,9 +43,7 @@ export default function AnalysisNew() {
       toast.success("分析ジョブを作成しました");
       setLocation(`/analysis/${data.jobId}`);
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
