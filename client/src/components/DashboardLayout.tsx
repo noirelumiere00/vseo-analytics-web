@@ -41,9 +41,9 @@ const quickActions = [
 ];
 
 const betaNav = [
-  { icon: FlaskConical, label: "Beta: トレンド分析", path: "/trend-discovery" },
-  { icon: FlaskConical, label: "Beta: VSEO分析", path: "/analysis/new" },
-  { icon: FlaskConical, label: "Beta: 施策レポート", path: "/campaigns" },
+  { icon: FlaskConical, label: "Beta: トレンド分析", path: "/beta/trend-discovery" },
+  { icon: FlaskConical, label: "Beta: VSEO分析", path: "/beta/analysis/new" },
+  { icon: FlaskConical, label: "Beta: 施策レポート", path: "/beta/campaigns" },
 ];
 
 // Combine for breadcrumb usage
@@ -161,11 +161,13 @@ function DashboardLayoutContent({
 
   const isActive = (path: string) => {
     if (path === "/dashboard") return location === path;
-    if (path === "/activity") return location === path || (location.startsWith("/analysis/") && location !== "/analysis/new") || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?") || location.startsWith("/trend-insights");
+    if (path === "/activity") return location === path || (location.startsWith("/analysis/") && !location.startsWith("/analysis/new") && !location.startsWith("/beta")) || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?") || location.startsWith("/trend-insights");
     if (path === "/campaigns/new") return location === path;
-    if (path === "/campaigns") return location.startsWith("/campaigns") && location !== "/campaigns/new";
+    if (path === "/campaigns") return location.startsWith("/campaigns") && !location.startsWith("/campaigns/new") && !location.startsWith("/beta");
     if (path === "/analysis/new") return location === path;
-    if (path === "/trend-discovery") return location.startsWith("/trend-discovery");
+    if (path === "/trend-discovery") return location.startsWith("/trend-discovery") && !location.startsWith("/beta");
+    // Beta routes
+    if (path.startsWith("/beta/")) return location.startsWith(path);
     return location === path;
   };
 

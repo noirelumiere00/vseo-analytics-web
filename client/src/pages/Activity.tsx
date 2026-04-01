@@ -42,7 +42,7 @@ type SortType = "date-desc" | "date-asc" | "videos-desc";
 
 export default function Activity() {
   usePageTitle("アクティビティ");
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchString = useSearch();
   const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const utils = trpc.useUtils();
@@ -200,12 +200,15 @@ export default function Activity() {
     }
   };
 
+  const isBeta = location.startsWith("/beta");
+  const pathPrefix = isBeta ? "/beta" : "";
+
   const handleClick = (item: typeof filtered[0]) => {
     if (editMode === "normal") {
       if (item.type === "seo") {
-        setLocation(`/analysis/${item.id}`);
+        setLocation(`${pathPrefix}/analysis/${item.id}`);
       } else {
-        setLocation(`/trend-discovery/${item.id}`);
+        setLocation(`${pathPrefix}/trend-discovery/${item.id}`);
       }
       return;
     }
@@ -469,6 +472,11 @@ export default function Activity() {
                         >
                           {item.type === "seo" ? "SEO" : "トレンド"}
                         </Badge>
+                        {location.startsWith("/beta") && (
+                          <Badge variant="secondary" className="shrink-0 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            Beta
+                          </Badge>
+                        )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
