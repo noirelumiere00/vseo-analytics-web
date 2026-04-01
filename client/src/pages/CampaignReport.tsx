@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music, Target, Lightbulb, Zap } from "lucide-react";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -544,6 +544,12 @@ export default function CampaignReport() {
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
           <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} />
+        </div>
+
+        {/* Section: Next Action */}
+        <div id="next-action" ref={el => { sectionRefs.current["next-action"] = el; }} className="scroll-mt-16 section-fade-in">
+          <SectionHeader number={sectionNumber("next-action")} title="ネクストアクション提案" question="次に何をすべきか？" />
+          <NextActionSection aiReport={aiReport} showBriefPlaceholder={showBriefPlaceholder} setShowBriefPlaceholder={setShowBriefPlaceholder} />
         </div>
 
         {/* Section: Cross Platform */}
@@ -4129,3 +4135,201 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
   );
 }
 
+// ============================
+// ROI Dashboard
+// ============================
+
+function ROIDashboard({ videoMetrics, ripple, sovReport }: {
+  videoMetrics?: any[];
+  ripple?: Record<string, any>;
+  sovReport?: Record<string, any>;
+}) {
+  const stats = useMemo(() => {
+    // 投稿数
+    const videoCount = videoMetrics?.length ?? 0;
+
+    // 1本あたり平均再生数
+    const totalViews = videoMetrics?.reduce((sum: number, v: any) => sum + (v.views || 0), 0) ?? 0;
+    const avgViews = videoCount > 0 ? Math.round(totalViews / videoCount) : null;
+
+    // UGCリーチ (ripple total views)
+    let ugcReach: number | null = null;
+    if (ripple && Object.keys(ripple).length > 0) {
+      ugcReach = 0;
+      for (const [, data] of Object.entries(ripple)) {
+        for (const v of ((data as any).third_party_videos || (data as any).omaage_videos || [])) {
+          ugcReach += v.views || 0;
+        }
+      }
+    }
+
+    // SOV変化 (average SOV change across keywords)
+    let sovChange: number | null = null;
+    if (sovReport && Object.keys(sovReport).length > 0) {
+      let totalChange = 0;
+      let count = 0;
+      for (const [, kw] of Object.entries(sovReport)) {
+        const before = parseFloat((kw as any).before?.percentage || "0");
+        const after = parseFloat((kw as any).after?.percentage || "0");
+        if ((kw as any).before && (kw as any).after) {
+          totalChange += after - before;
+          count++;
+        }
+      }
+      if (count > 0) sovChange = Math.round((totalChange / count) * 10) / 10;
+    }
+
+    return { videoCount, avgViews, ugcReach, sovChange };
+  }, [videoMetrics, ripple, sovReport]);
+
+  const kpis: { label: string; value: string; icon: typeof Target; color: string; bgColor: string }[] = [
+    {
+      label: "投稿数",
+      value: stats.videoCount > 0 ? `${stats.videoCount}本` : "—",
+      icon: Play,
+      color: "text-blue-600",
+      bgColor: "bg-blue-50 dark:bg-blue-950/40",
+    },
+    {
+      label: "1本あたり平均再生数",
+      value: stats.avgViews != null ? fmt(stats.avgViews) : "—",
+      icon: Eye,
+      color: "text-violet-600",
+      bgColor: "bg-violet-50 dark:bg-violet-950/40",
+    },
+    {
+      label: "UGCリーチ",
+      value: stats.ugcReach != null ? fmt(stats.ugcReach) : "—",
+      icon: Share2,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50 dark:bg-emerald-950/40",
+    },
+    {
+      label: "SOV変化",
+      value: stats.sovChange != null ? `${stats.sovChange > 0 ? "+" : ""}${stats.sovChange}pt` : "—",
+      icon: Target,
+      color: stats.sovChange != null && stats.sovChange > 0 ? "text-green-600" : stats.sovChange != null && stats.sovChange < 0 ? "text-red-500" : "text-slate-500",
+      bgColor: stats.sovChange != null && stats.sovChange > 0 ? "bg-green-50 dark:bg-green-950/40" : stats.sovChange != null && stats.sovChange < 0 ? "bg-red-50 dark:bg-red-950/40" : "bg-slate-50 dark:bg-slate-950/40",
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {kpis.map((kpi) => {
+        const Icon = kpi.icon;
+        return (
+          <Card key={kpi.label} className="relative overflow-hidden">
+            <CardContent className="py-4 px-4">
+              <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg ${kpi.bgColor} mb-2`}>
+                <Icon className={`h-4.5 w-4.5 ${kpi.color}`} />
+              </div>
+              <div className="text-2xl font-bold tracking-tight">{kpi.value}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">{kpi.label}</div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================
+// Next Action Section
+// ============================
+
+function NextActionSection({ aiReport, showBriefPlaceholder, setShowBriefPlaceholder }: {
+  aiReport?: any;
+  showBriefPlaceholder: boolean;
+  setShowBriefPlaceholder: (v: boolean) => void;
+}) {
+  const hasProposals = aiReport?.actionProposals && aiReport.actionProposals.length > 0;
+  const hasStrengths = aiReport?.strengths && aiReport.strengths.length > 0;
+  const hasWeaknesses = aiReport?.weaknesses && aiReport.weaknesses.length > 0;
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40">
+              <Lightbulb className="h-4 w-4 text-amber-600" />
+            </div>
+            <div>
+              <CardTitle className="text-base">ネクストアクション提案</CardTitle>
+              <CardDescription>施策結果を踏まえた次回の改善提案</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {hasProposals ? (
+            <ul className="space-y-2">
+              {aiReport.actionProposals.map((proposal: string, i: number) => (
+                <li key={i} className="flex items-start gap-2 text-sm">
+                  <Zap className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                  <span>{proposal}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">AIレポートを生成すると、アクション提案が表示されます。</p>
+          )}
+
+          {(hasStrengths || hasWeaknesses) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+              {hasStrengths && (
+                <div className="rounded-lg border border-teal-200 bg-teal-50/50 dark:bg-teal-950/20 dark:border-teal-800 p-3">
+                  <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-400 mb-2 flex items-center gap-1.5">
+                    <Trophy className="h-3.5 w-3.5" />
+                    強み
+                  </h4>
+                  <ul className="space-y-1">
+                    {aiReport.strengths.map((s: string, i: number) => (
+                      <li key={i} className="text-xs text-teal-800 dark:text-teal-300 flex items-start gap-1.5">
+                        <span className="text-teal-500 mt-0.5">•</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {hasWeaknesses && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800 p-3">
+                  <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    改善点
+                  </h4>
+                  <ul className="space-y-1">
+                    {aiReport.weaknesses.map((w: string, i: number) => (
+                      <li key={i} className="text-xs text-amber-800 dark:text-amber-300 flex items-start gap-1.5">
+                        <span className="text-amber-500 mt-0.5">•</span>
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="pt-2 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowBriefPlaceholder(!showBriefPlaceholder)}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              台本ブリーフを生成
+            </Button>
+            {showBriefPlaceholder && (
+              <div className="mt-3 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 p-6 text-center">
+                <Sparkles className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">台本ブリーフ生成機能は近日公開予定です</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
