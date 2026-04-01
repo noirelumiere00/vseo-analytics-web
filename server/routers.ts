@@ -22,6 +22,7 @@ import { createCheckoutSession, createPortalSession } from "./_core/stripe";
 import { ENV } from "./_core/env";
 import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } from "./googleTrends";
 import { fetchKeywordVolume, type KeywordVolumeData } from "./googleAds";
+import { generateProductionBrief } from "./videoAnalysis";
 
 // Google Trends取得＋キャッシュ保存ヘルパー
 async function fetchAndCacheTrends(jobId: number, keyword: string) {
@@ -314,6 +315,125 @@ export const appRouter = router({
         }
 
         return { success: true, message: "LLM再分析をキューに追加しました" };
+      }),
+
+    // 制作ブリーフ生成
+    generateBrief: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await db.getAnalysisJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        if (job.status !== "completed") throw new TRPCError({ code: "BAD_REQUEST", message: "分析が完了していません" });
+
+        const report = await db.getAnalysisReportByJobId(input.jobId);
+        const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
+        const videosData = await db.getVideosByJobId(input.jobId);
+
+        // Extract win/lose patterns from tripleSearch
+        const winPattern = tripleSearch?.commonalityAnalysis ?? null;
+        const losePattern = tripleSearch?.losePatternAnalysis ?? null;
+
+        // Extract top hashtags from hashtagStrategy or video data
+        const topHashtags: string[] = [];
+        const hs = report?.hashtagStrategy as any;
+        if (hs?.topCombinations?.length) {
+          // Flatten top tag combinations into unique tags
+          const tagSet = new Set<string>();
+          for (const combo of hs.topCombinations.slice(0, 5)) {
+            for (const tag of (combo.tags || [])) {
+              tagSet.add(tag);
+            }
+          }
+          topHashtags.push(...tagSet);
+        }
+        if (topHashtags.length === 0) {
+          // Fallback: collect from video hashtags
+          const tagCount = new Map<string, number>();
+          for (const v of videosData) {
+            for (const tag of (v.hashtags ?? [])) {
+              tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
+            }
+          }
+          const sorted = Array.from(tagCount.entries()).sort((a, b) => b[1] - a[1]);
+          topHashtags.push(...sorted.slice(0, 15).map(([t]) => t));
+        }
+
+        // Compute best duration bucket
+        const durationBuckets: Record<string, { views: number; engagement: number; count: number }> = {};
+        for (const v of videosData) {
+          const dur = v.duration ?? 0;
+          let bucket: string;
+          if (dur <= 15) bucket = "0-15s";
+          else if (dur <= 30) bucket = "16-30s";
+          else if (dur <= 60) bucket = "31-60s";
+          else bucket = "60s+";
+          if (!durationBuckets[bucket]) durationBuckets[bucket] = { views: 0, engagement: 0, count: 0 };
+          durationBuckets[bucket].views += Number(v.viewCount ?? 0);
+          durationBuckets[bucket].engagement += Number(v.likeCount ?? 0) + Number(v.commentCount ?? 0) + Number(v.shareCount ?? 0);
+          durationBuckets[bucket].count++;
+        }
+        let bestDuration: { range: string; avgER: number } | null = null;
+        let bestER = 0;
+        for (const [label, d] of Object.entries(durationBuckets)) {
+          if (d.count > 0 && d.views > 0) {
+            const er = Math.round((d.engagement / d.views) * 10000) / 100;
+            if (er > bestER) {
+              bestER = er;
+              bestDuration = { range: label, avgER: er };
+            }
+          }
+        }
+
+        // Compute best posting times from video data
+        const dayNames = ["日", "月", "火", "水", "木", "金", "土"];
+        const slotStats = new Map<string, { views: number; count: number }>();
+        for (const v of videosData) {
+          if (!v.postedAt) continue;
+          const dt = new Date(v.postedAt);
+          const day = dayNames[dt.getDay()];
+          const hour = dt.getHours();
+          const key = `${day}_${hour}`;
+          const s = slotStats.get(key) ?? { views: 0, count: 0 };
+          s.views += Number(v.viewCount ?? 0);
+          s.count++;
+          slotStats.set(key, s);
+        }
+        const bestPostingTimes = Array.from(slotStats.entries())
+          .filter(([, s]) => s.count >= 2)
+          .map(([key, s]) => {
+            const [day, hourStr] = key.split("_");
+            return { day, hour: parseInt(hourStr), avgViews: Math.round(s.views / s.count) };
+          })
+          .sort((a, b) => b.avgViews - a.avgViews)
+          .slice(0, 5);
+
+        // Emotion words from report
+        const emotionWords = (report?.emotionWords ?? []).map(w => ({
+          word: w.word,
+          count: w.count,
+          valence: w.valence,
+          arousal: w.arousal,
+        }));
+
+        const keyword = job.keyword ?? "（キーワードなし）";
+
+        const brief = await generateProductionBrief(
+          keyword,
+          winPattern,
+          losePattern,
+          topHashtags,
+          bestDuration,
+          bestPostingTimes,
+          emotionWords,
+        );
+
+        // Save to analysisReports.productionBrief
+        await db.updateAnalysisReport(input.jobId, {
+          productionBrief: brief,
+        } as any);
+
+        return brief;
       }),
 
     // 分析の進捗状況を取得（DBベース）
