@@ -13,6 +13,7 @@ import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
 import { detectPlatform, platformLabel } from "@shared/videoUrl";
+import { handleTrpcError } from "@/lib/error-handler";
 
 function extractTikTokUsername(input: string): string | null {
   const trimmed = input.trim();
@@ -64,7 +65,7 @@ export default function CampaignDetail() {
       toast.success("スナップショット取得を開始しました");
       detailQuery.refetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const generateReportMutation = trpc.campaign.generateReport.useMutation({
@@ -72,7 +73,7 @@ export default function CampaignDetail() {
       toast.success("レポートを生成しました");
       detailQuery.refetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const scrapeVideosMutation = trpc.campaign.scrapeVideoUrls.useMutation({
@@ -80,7 +81,7 @@ export default function CampaignDetail() {
       toast.success(`${data.videoCount}件の動画データを取得しました${data.newHashtags.length > 0 ? `（${data.newHashtags.length}件の新規ハッシュタグを追加）` : ""}`);
       detailQuery.refetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const applyCompetitorsMutation = trpc.campaign.applyDetectedCompetitors.useMutation({
@@ -88,7 +89,7 @@ export default function CampaignDetail() {
       toast.success(`${data.added}件の競合を追加しました`);
       detailQuery.refetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const campaign = detailQuery.data?.campaign;
@@ -491,7 +492,7 @@ function PostCampaignRegistration({
     onSuccess: () => {
       onRefetch();
     },
-    onError: (error) => toast.error(error.message),
+    onError: handleTrpcError,
   });
 
   const handleAddVideos = () => {

@@ -38,6 +38,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { handleTrpcError } from "@/lib/error-handler";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection, SeoMetaKeywordsSection } from '@/components/ReportSection';
@@ -138,9 +139,7 @@ export default function AnalysisDetail() {
       toast.success("キャンセルリクエストを送信しました");
       refetchProgress();
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
