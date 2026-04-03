@@ -12,8 +12,12 @@
  */
 
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import * as fs from "fs";
 import * as path from "path";
+
+// Stealth プラグインを有効化
+const stealthPlugin = StealthPlugin();
 
 // ========================================
 // Types
@@ -101,6 +105,22 @@ function findChromePath(): string {
 }
 
 // ========================================
+// Retry Helper
+// ========================================
+
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, delay = 2000): Promise<T> {
+  for (let i = 0; i <= retries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (i === retries) throw e;
+      console.log(`[Instagram] Retry ${i + 1}/${retries}...`);
+      await new Promise(r => setTimeout(r, delay * (i + 1)));
+    }
+  }
+  throw new Error("unreachable");
+}
+
+// ========================================
 // Main Scraper
 // ========================================
 
@@ -147,7 +167,7 @@ export async function searchInstagramHashtag(
 
     const page = await browser.newPage();
     await page.setUserAgent(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     );
     await page.setViewport({ width: 1280, height: 900 });
 
@@ -159,7 +179,7 @@ export async function searchInstagramHashtag(
       path: "/",
       httpOnly: true,
       secure: true,
-      sameSite: "None" as const,
+      sameSite: "Lax" as const,
     });
 
     // Instagram内部APIレスポンスをキャプチャ
@@ -177,9 +197,12 @@ export async function searchInstagramHashtag(
       }
     });
 
+    // まずinstagram.comにアクセスしてcsrftokenを取得
+    await withRetry(() => page.goto("https://www.instagram.com/", { waitUntil: "networkidle2", timeout: 30000 }));
+
     // ハッシュタグページにアクセス
     const hashtagUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(cleanTag)}/`;
-    await page.goto(hashtagUrl, { waitUntil: "networkidle2", timeout: 30000 });
+    await withRetry(() => page.goto(hashtagUrl, { waitUntil: "networkidle2", timeout: 30000 }));
 
     // ログインチェック
     if (page.url().includes("/accounts/login")) {
@@ -193,7 +216,13 @@ export async function searchInstagramHashtag(
     }
 
     // API応答を待つ
-    await new Promise(r => setTimeout(r, 3000));
+    try {
+      await page.waitForResponse(
+        res => res.url().includes("/api/v1/tags/") && res.status() === 200,
+        { timeout: 8000 }
+      );
+      await new Promise(r => setTimeout(r, 500)); // small buffer
+    } catch { /* timeout = API not captured, will use DOM fallback */ }
 
     const ownSet = new Set(ownAccountIds.map(id => id.toLowerCase().replace(/^@/, "")));
     let posts: InstagramPost[] = [];
@@ -292,7 +321,7 @@ function parseMediaItem(item: any, position: number, ownSet: Set<string>): Insta
       caption = item.edge_media_to_caption.edges[0].node.text;
     }
 
-    const hashtagMatches = caption.match(/#[\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]+/g) || [];
+    const hashtagMatches = caption.match(/#[\p{L}\p{N}_]+/gu) || [];
 
     let type: InstagramPost["type"] = "image";
     if (item.media_type === 2 || item.is_video) type = "video";
@@ -372,7 +401,13 @@ async function scrapeDom(page: Page, maxPosts: number, ownSet: Set<string>): Pro
     try {
       const detail = await page.evaluate(async (code: string) => {
         try {
-          const res = await fetch(`https://www.instagram.com/api/v1/media/${code}/info/`, { credentials: "include" });
+          const res = await fetch(`https://www.instagram.com/api/v1/media/${code}/info/`, {
+            credentials: "include",
+            headers: {
+              "X-CSRFToken": document.cookie.match(/csrftoken=([^;]+)/)?.[1] || "",
+              "X-Instagram-AJAX": "1",
+            }
+          });
           if (!res.ok) return null;
           return await res.json();
         } catch { return null; }
@@ -392,7 +427,7 @@ async function scrapeDom(page: Page, maxPosts: number, ownSet: Set<string>): Pro
         if (item.product_type === "clips") post.type = "reel";
         else if (item.media_type === 2) post.type = "video";
         else if (item.media_type === 8) post.type = "carousel";
-        const tags = post.caption.match(/#[\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]+/g) || [];
+        const tags = post.caption.match(/#[\p{L}\p{N}_]+/gu) || [];
         post.hashtags = tags.map(t => t.replace(/^#/, ""));
       }
 
@@ -419,7 +454,15 @@ export async function searchInstagramHashtagBatch(
     try {
       results.push(await searchInstagramHashtag(hashtags[i], maxPostsPerTag, ownAccountIds));
     } catch (e) {
-      console.error(`[Instagram] #${hashtags[i]} failed:`, e);
+      const msg = e instanceof Error ? e.message : "unknown error";
+      if (msg.includes("sessionid") || msg.includes("ログイン")) {
+        console.error("[Instagram] Session expired, aborting batch");
+        for (let j = i; j < hashtags.length; j++) {
+          results.push({ hashtag: hashtags[j].replace(/^#/, ""), topPosts: [], totalFetched: 0, fetchedAt: new Date().toISOString(), totalPostCount: null });
+        }
+        break;
+      }
+      console.error(`[Instagram] #${hashtags[i]} failed:`, msg);
       results.push({
         hashtag: hashtags[i].replace(/^#/, ""),
         topPosts: [],
