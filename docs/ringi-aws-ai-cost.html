@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AWS・AI開発費用の承認について</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: #f8f8f6;
+    color: #1a1a1a;
+    line-height: 1.8;
+    padding: 40px 20px;
+  }
+
+  .page {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 48px 56px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .header {
+    border-bottom: 2px solid #1a1a1a;
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .header .meta {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #666;
+    display: flex;
+    gap: 24px;
+  }
+
+  .section {
+    margin-bottom: 36px;
+  }
+
+  .section h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    padding-left: 12px;
+    border-left: 3px solid #c44b2f;
+  }
+
+  .section h3 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 20px 0 10px;
+    color: #444;
+  }
+
+  .section p, .section li {
+    font-size: 14px;
+    color: #333;
+  }
+
+  .section ul {
+    padding-left: 20px;
+    margin: 8px 0;
+  }
+
+  .section li {
+    margin-bottom: 6px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  th {
+    background: #f5f5f3;
+    font-weight: 500;
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+  }
+
+  .total-row {
+    font-weight: 700;
+    border-top: 2px solid #1a1a1a;
+    border-bottom: 2px solid #1a1a1a;
+  }
+
+  .total-row td {
+    padding: 12px 14px;
+  }
+
+  .highlight-box {
+    background: #fef7f5;
+    border: 1px solid #f0d0c8;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin: 20px 0;
+  }
+
+  .highlight-box .label {
+    font-size: 12px;
+    color: #c44b2f;
+    font-weight: 700;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .highlight-box .value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .highlight-box .sub {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+  }
+
+  .agenda {
+    background: #f5f5f3;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin-bottom: 32px;
+  }
+
+  .agenda h2 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    padding-left: 0;
+    border-left: none;
+    color: #666;
+  }
+
+  .agenda ol {
+    padding-left: 20px;
+    font-size: 14px;
+  }
+
+  .agenda li {
+    margin-bottom: 4px;
+  }
+
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+
+  .comparison .card {
+    padding: 20px;
+    border-radius: 4px;
+    border: 1px solid #e5e5e5;
+  }
+
+  .comparison .card.before {
+    background: #f9f9f9;
+  }
+
+  .comparison .card.after {
+    background: #f0faf7;
+    border-color: #a8d8c8;
+  }
+
+  .comparison .card .label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .comparison .card .metric {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .comparison .card .desc {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+  }
+
+  .footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e5e5;
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+  }
+
+  @media print {
+    body { background: white; padding: 0; }
+    .page { box-shadow: none; padding: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>ショート動画事業の効率化ツール 開発費用の承認について</h1>
+    <div class="meta">
+      <span>作成日: 2026年4月</span>
+      <span>種別: 稟議</span>
+    </div>
+  </div>
+
+  <div class="agenda">
+    <h2>アジェンダ</h2>
+    <ol>
+      <li>背景：ショート動画事業における課題</li>
+      <li>ツールの概要と現在の活用状況</li>
+      <li>導入効果（業務効率化）</li>
+      <li>費用と費用対効果</li>
+      <li>今後の展開</li>
+    </ol>
+  </div>
+
+  <!-- 1. 背景 -->
+  <div class="section">
+    <h2>1. 背景：ショート動画事業における課題</h2>
+    <ul>
+      <li><strong>リサーチ工数の肥大化</strong>: トレンド調査・競合分析・勝ちパターンの抽出を毎案件手作業で行っており、1案件あたり3時間以上を消費</li>
+      <li><strong>属人化</strong>: 「何が回るか」の判断がプランナー個人の経験と勘に依存。再現性がない</li>
+      <li><strong>施策効果の定量化が困難</strong>: クライアントへの報告時に、Before/Afterの数値比較を手動で集計</li>
+    </ul>
+    <p style="margin-top:12px;">これらの課題を解決するため、ショート動画のデータ分析ツールを個人規模で開発してきました。現在は実務で使えるレベルまで整備が進んでおり、チーム全体への展開で大幅な効率化が見込めます。</p>
+  </div>
+
+  <!-- 2. 費用 -->
+  <div class="section">
+    <h2>4. 費用と費用対効果</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>項目</th>
+          <th>用途</th>
+          <th class="amount">月額</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>VSEO分析ツール開発・運用費</td>
+          <td>サーバー・AI分析エンジン・開発環境</td>
+          <td class="amount">$350</td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="2">合計</td>
+          <td class="amount">$350/月（約5万円）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>※年間コスト: 約60万円</p>
+
+    <h3>費用対効果</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>項目</th>
+          <th class="amount">金額/月</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>ツール開発・運用コスト</td>
+          <td class="amount">約5万円</td>
+        </tr>
+        <tr>
+          <td>工数削減効果（月10案件想定）</td>
+          <td class="amount">約15〜20万円相当</td>
+        </tr>
+        <tr class="total-row">
+          <td>差し引き効果</td>
+          <td class="amount">+10〜15万円/月</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>ツール費用の<strong>3〜4倍の工数削減効果</strong>が見込まれます。さらに提案品質の向上による受注率改善は上記に含まれておらず、実質的なROIはこれを上回ると考えます。</p>
+  </div>
+
+  <!-- 2. ツール概要 -->
+  <div class="section">
+    <h2>2. ツールの概要と現在の活用状況</h2>
+
+    <p>TikTokを中心としたショート動画のSEO分析・トレンド調査・施策効果測定を行うツール。個人規模で開発を進めてきたものを、営業・プランナー・制作チームが日常業務で使えるレベルまで整備し、既存のショート動画事業の効率化に直結させる。</p>
+
+    <h3>主要機能（3本柱）</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>機能</th>
+          <th>用途</th>
+          <th>使用者</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>トレンド分析</strong></td>
+          <td>市場調査・提案の素案作成</td>
+          <td>プランナー（営業兼）</td>
+        </tr>
+        <tr>
+          <td><strong>VSEO分析</strong></td>
+          <td>勝ちパターン分析・制作ブリーフ自動生成</td>
+          <td>制作チーム / 運用者</td>
+        </tr>
+        <tr>
+          <td><strong>施策レポート</strong></td>
+          <td>Before/After効果測定・クライアント報告</td>
+          <td>プランナー（営業兼）</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>技術構成</h3>
+    <ul>
+      <li>300+動画を3つの独立ブラウザで自動収集・分析</li>
+      <li>AIが勝ちパターン/負けパターンを自動解析</li>
+      <li>台本テンプレート・撮影チェックリスト・NG集を自動生成</li>
+      <li>検索順位・SOV（Share of Voice）のBefore/After比較</li>
+    </ul>
+  </div>
+
+  <!-- 3. 導入効果 -->
+  <div class="section">
+    <h2>3. 導入効果（業務効率化）</h2>
+
+    <h3>制作チームの工数削減</h3>
+
+    <div class="comparison">
+      <div class="card before">
+        <div class="label">Before（手作業）</div>
+        <div class="metric">約3.5時間/案件</div>
+        <div class="desc">リサーチ → 企画 → 台本 → チェックリスト → ハッシュタグ選定 → 投稿時間決定</div>
+      </div>
+      <div class="card after">
+        <div class="label">After（ツール導入後）</div>
+        <div class="metric">約40分/案件</div>
+        <div class="desc">ブリーフ確認 → 台本微調整 → コピペ → カレンダー登録</div>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      <div class="label">工数削減効果</div>
+      <div class="value">1案件あたり約3時間の削減（80%減）</div>
+      <div class="sub">月10案件で30時間 = 人件費換算で月15〜20万円相当の効率化</div>
+    </div>
+
+    <h3>営業・提案への貢献</h3>
+    <ul>
+      <li><strong>提案スピード向上</strong>: トレンド分析→提案素案までの時間を大幅短縮</li>
+      <li><strong>データドリブンな提案</strong>: 「感覚」ではなく定量データに基づく企画提案が可能</li>
+      <li><strong>施策の説得力向上</strong>: Before/Afterの数値比較でクライアントへの報告品質が向上</li>
+      <li><strong>競合動向の可視化</strong>: 競合の投稿数・KOL起用状況を定量的に提示し継続受注に貢献</li>
+    </ul>
+  </div>
+
+  <!-- 4. 今後の展開 -->
+  <div class="section">
+    <h2>5. 今後の展開</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>フェーズ</th>
+          <th>内容</th>
+          <th>時期</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>現在</td>
+          <td>社内ツールとして運用中（Beta版テスト含む）</td>
+          <td>〜現在</td>
+        </tr>
+        <tr>
+          <td>Phase 1</td>
+          <td>Beta版レポートの本番化・社内全チームへ展開</td>
+          <td>2026年Q2</td>
+        </tr>
+        <tr>
+          <td>Phase 2</td>
+          <td>クライアント向けレポート共有機能の強化</td>
+          <td>2026年Q3</td>
+        </tr>
+        <tr>
+          <td>Phase 3</td>
+          <td>外部SaaS化の検討（新規事業としての可能性）</td>
+          <td>2026年Q4〜</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 承認事項は費用セクション(4)に統合 -->
+
+  <div class="footer">
+    VSEO Analytics — ショート動画時代のデータドリブンPR
+  </div>
+
+</div>
+</body>
+</html>
