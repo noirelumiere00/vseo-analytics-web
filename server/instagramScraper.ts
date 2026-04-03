@@ -11,13 +11,14 @@
  *   4. 環境変数に設定: INSTAGRAM_SESSION_ID=xxxxx
  */
 
-import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import puppeteerExtra from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { type Browser, type Page } from "puppeteer-core";
 import * as fs from "fs";
 import * as path from "path";
 
 // Stealth プラグインを有効化
-const stealthPlugin = StealthPlugin();
+puppeteerExtra.use(StealthPlugin());
 
 // ========================================
 // Types
@@ -152,7 +153,7 @@ export async function searchInstagramHashtag(
   let browser: Browser | null = null;
 
   try {
-    browser = await puppeteer.launch({
+    browser = await puppeteerExtra.launch({
       executablePath: findChromePath(),
       headless: true,
       args: [
