@@ -657,28 +657,63 @@ export async function getCampaignReportByCampaignId(campaignId: number) {
   return result[0] ?? undefined;
 }
 
+// 不正なサロゲートペア（壊れた絵文字等）を除去してMySQL JSON保存エラーを防止
+function sanitizeJsonValue<T>(value: T): T {
+  if (value == null) return value;
+  // JSON.stringify → 文字列レベルで孤立サロゲートを除去 → JSON.parse
+  const s = JSON.stringify(value, (_key, val) => {
+    if (typeof val === "string") {
+      return val.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, "")
+               .replace(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+    }
+    return val;
+  });
+  return JSON.parse(s);
+}
+
 export async function upsertCampaignReport(data: InsertCampaignReport) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.insert(campaignReports).values(data).onDuplicateKeyUpdate({
+  const clean = {
+    ...data,
+    summary: sanitizeJsonValue(data.summary),
+    positionReport: sanitizeJsonValue(data.positionReport),
+    competitorReport: sanitizeJsonValue(data.competitorReport),
+    sovReport: sanitizeJsonValue(data.sovReport),
+    competitorFrequencyReport: sanitizeJsonValue(data.competitorFrequencyReport),
+    rippleReport: sanitizeJsonValue(data.rippleReport),
+    notes: sanitizeJsonValue(data.notes),
+    videoMetricsReport: sanitizeJsonValue(data.videoMetricsReport),
+    hashtagSovReport: sanitizeJsonValue(data.hashtagSovReport),
+    crossPlatformData: sanitizeJsonValue(data.crossPlatformData),
+    videoScores: sanitizeJsonValue(data.videoScores),
+    aiOverallReport: sanitizeJsonValue(data.aiOverallReport),
+    bigKeywordReport: sanitizeJsonValue(data.bigKeywordReport),
+    platformSummary: sanitizeJsonValue(data.platformSummary),
+    keywordSentimentReport: sanitizeJsonValue(data.keywordSentimentReport),
+    instagramHashtagReport: sanitizeJsonValue(data.instagramHashtagReport),
+  };
+  await db.insert(campaignReports).values(clean).onDuplicateKeyUpdate({
     set: {
-      baselineDate: data.baselineDate,
-      measurementDate: data.measurementDate,
-      summary: data.summary,
-      positionReport: data.positionReport,
-      competitorReport: data.competitorReport,
-      sovReport: data.sovReport,
-      competitorFrequencyReport: data.competitorFrequencyReport,
-      rippleReport: data.rippleReport,
-      screenshots: data.screenshots,
-      notes: data.notes,
-      videoMetricsReport: data.videoMetricsReport,
-      hashtagSovReport: data.hashtagSovReport,
-      crossPlatformData: data.crossPlatformData,
-      videoScores: data.videoScores,
-      aiOverallReport: data.aiOverallReport,
-      bigKeywordReport: data.bigKeywordReport,
-      platformSummary: data.platformSummary,
+      baselineDate: clean.baselineDate,
+      measurementDate: clean.measurementDate,
+      summary: clean.summary,
+      positionReport: clean.positionReport,
+      competitorReport: clean.competitorReport,
+      sovReport: clean.sovReport,
+      competitorFrequencyReport: clean.competitorFrequencyReport,
+      rippleReport: clean.rippleReport,
+      screenshots: clean.screenshots,
+      notes: clean.notes,
+      videoMetricsReport: clean.videoMetricsReport,
+      hashtagSovReport: clean.hashtagSovReport,
+      crossPlatformData: clean.crossPlatformData,
+      videoScores: clean.videoScores,
+      aiOverallReport: clean.aiOverallReport,
+      bigKeywordReport: clean.bigKeywordReport,
+      platformSummary: clean.platformSummary,
+      keywordSentimentReport: clean.keywordSentimentReport,
+      instagramHashtagReport: clean.instagramHashtagReport,
     },
   });
 }

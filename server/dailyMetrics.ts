@@ -10,6 +10,7 @@ import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
 import { fetchInstagramPosts } from "./instagramScraper";
+import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
 import { sql } from "drizzle-orm";
 
 /**
@@ -54,6 +55,21 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   if (tiktokUrls.length > 0) {
     try {
       const scraped = await scrapeTikTokVideosByUrls(tiktokUrls);
+
+      // Apify フォールバック: プライマリで取得できなかったURLのみ
+      const missingTikTok = tiktokUrls.filter((u) => !scraped.has(u));
+      if (missingTikTok.length > 0) {
+        console.log(`[DailyMetrics] TikTok: ${missingTikTok.length}/${tiktokUrls.length} missing, trying Apify fallback...`);
+        try {
+          const recovered = await fallbackTikTokViaApify(missingTikTok);
+          for (const [url, v] of recovered) {
+            scraped.set(url, v);
+          }
+        } catch (fbErr) {
+          console.error("[DailyMetrics] TikTok Apify fallback failed:", fbErr);
+        }
+      }
+
       for (const [url, v] of scraped) {
         rows.push({
           campaignId: campaign.id, videoUrl: url, platform: "tiktok", dateKey,
@@ -71,6 +87,20 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   if (youtubeIds.length > 0) {
     try {
       const videos = await fetchYouTubeVideos(youtubeIds);
+
+      // Apify フォールバック: プライマリで取得できなかったIDのみ
+      const fetchedIds = new Set(videos.map((v) => v.videoId));
+      const missingYouTube = youtubeIds.filter((id) => !fetchedIds.has(id));
+      if (missingYouTube.length > 0) {
+        console.log(`[DailyMetrics] YouTube: ${missingYouTube.length}/${youtubeIds.length} missing, trying Apify fallback...`);
+        try {
+          const recovered = await fallbackYouTubeViaApify(missingYouTube, youtubeUrlMap);
+          videos.push(...recovered);
+        } catch (fbErr) {
+          console.error("[DailyMetrics] YouTube Apify fallback failed:", fbErr);
+        }
+      }
+
       for (const v of videos) {
         const originalUrl = youtubeUrlMap.get(v.videoId) || v.videoUrl;
         rows.push({
@@ -100,19 +130,38 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
     }
   }
 
+  // キャプチャサマリー — 期待値と実績を比較してログ出力
+  const ttCaptured = rows.filter(r => r.platform === "tiktok").length;
+  const ytCaptured = rows.filter(r => r.platform === "youtube").length;
+  const igCaptured = rows.filter(r => r.platform === "instagram").length;
+
+  const summary = [
+    tiktokUrls.length > 0 ? `TT:${ttCaptured}/${tiktokUrls.length}` : null,
+    youtubeIds.length > 0 ? `YT:${ytCaptured}/${youtubeIds.length}` : null,
+    instagramUrls.length > 0 ? `IG:${igCaptured}/${instagramUrls.length}` : null,
+  ].filter(Boolean).join(" ");
+
+  const totalExpected = tiktokUrls.length + youtubeIds.length + instagramUrls.length;
+  if (rows.length < totalExpected) {
+    console.warn(`[DailyMetrics] Campaign ${campaign.id} INCOMPLETE: ${rows.length}/${totalExpected} (${summary})`);
+  } else {
+    console.log(`[DailyMetrics] Campaign ${campaign.id} OK: ${rows.length}/${totalExpected} (${summary})`);
+  }
+
   // Upsert all rows
   const db = await getDb();
   if (!db) return { captured: 0 };
 
   for (const row of rows) {
+    // GREATEST を使い、スクレイパー失敗で0が返った場合に既存の正しい値を保護
     await db.insert(campaignDailyMetrics).values(row)
       .onDuplicateKeyUpdate({
         set: {
-          viewCount: sql`VALUES(viewCount)`,
-          likeCount: sql`VALUES(likeCount)`,
-          commentCount: sql`VALUES(commentCount)`,
-          shareCount: sql`VALUES(shareCount)`,
-          saveCount: sql`VALUES(saveCount)`,
+          viewCount: sql`GREATEST(viewCount, VALUES(viewCount))`,
+          likeCount: sql`GREATEST(likeCount, VALUES(likeCount))`,
+          commentCount: sql`GREATEST(commentCount, VALUES(commentCount))`,
+          shareCount: sql`GREATEST(shareCount, VALUES(shareCount))`,
+          saveCount: sql`GREATEST(saveCount, VALUES(saveCount))`,
         },
       });
   }

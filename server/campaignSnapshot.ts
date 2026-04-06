@@ -97,15 +97,17 @@ async function batchSearch(
   concurrency: number,
   sleepMs: number,
   onProgress?: (completed: number, total: number) => void,
-): Promise<Map<string, TikTokVideo[]>> {
-  const result = new Map<string, TikTokVideo[]>();
+  count: number = 30,
+): Promise<Map<string, TikTokVideo[]> & { _failedQueries?: string[] }> {
+  const result = new Map<string, TikTokVideo[]>() as Map<string, TikTokVideo[]> & { _failedQueries?: string[] };
+  const failedQueries = new Set<string>();
   const batches = chunk(queries, concurrency);
 
   let completed = 0;
   for (const batch of batches) {
     const settled = await Promise.allSettled(
       batch.map(async (q) => {
-        const r = await searchTikTokVideos(q, 30);
+        const r = await searchTikTokVideos(q, count);
         return { query: q, videos: r.videos };
       }),
     );
@@ -117,6 +119,7 @@ async function batchSearch(
         const failedQuery = batch[settled.indexOf(s)];
         console.error(`Search failed for "${failedQuery}":`, s.reason);
         result.set(failedQuery, []);
+        failedQueries.add(failedQuery);
       }
       completed++;
     }
@@ -142,13 +145,14 @@ async function batchSearch(
     for (const batch of retryBatches) {
       const settled = await Promise.allSettled(
         batch.map(async (q) => {
-          const r = await searchTikTokVideos(q, 30);
+          const r = await searchTikTokVideos(q, count);
           return { query: q, videos: r.videos };
         }),
       );
       for (const s of settled) {
         if (s.status === "fulfilled" && s.value.videos.length > 0) {
           result.set(s.value.query, s.value.videos);
+          failedQueries.delete(s.value.query); // リトライ成功 → 失敗リストから除外
           console.log(`[batchSearch] Retry success: "${s.value.query}" got ${s.value.videos.length} results`);
         }
       }
@@ -156,6 +160,12 @@ async function batchSearch(
         await sleep(sleepMs + Math.random() * 1000);
       }
     }
+  }
+
+  // APIエラーで失敗したクエリをメタデータとして付与
+  if (failedQueries.size > 0) {
+    result._failedQueries = [...failedQueries];
+    console.warn(`[batchSearch] ${failedQueries.size} queries failed after retries: ${[...failedQueries].join(", ")}`);
   }
 
   return result;
@@ -209,8 +219,15 @@ export async function captureSnapshot(
     report("search", `KW検索中 (${keywords.length}件)...`, 5);
 
     const kwResults = await batchSearch(keywords, 3, 2000, (done, total) =>
-      report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30))
+      report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30)),
+      60,
     );
+
+    // 失敗したクエリ情報をスナップショットに記録
+    const failedSearchQueries = (kwResults as any)._failedQueries as string[] | undefined;
+    if (failedSearchQueries && failedSearchQueries.length > 0) {
+      console.warn(`[captureSnapshot] ${failedSearchQueries.length} keywords had search failures: ${failedSearchQueries.join(", ")}`);
+    }
 
     for (let i = 0; i < keywords.length; i++) {
       const kw = keywords[i];
@@ -490,6 +507,7 @@ export async function captureSnapshot(
     ownVideoMetrics,
     detectedCompetitors,
     bigKeywordResults: Object.keys(bigKeywordResults).length > 0 ? bigKeywordResults : undefined,
+    failedSearchQueries: failedSearchQueries && failedSearchQueries.length > 0 ? failedSearchQueries : undefined,
     capturedAt: new Date(),
   };
 }

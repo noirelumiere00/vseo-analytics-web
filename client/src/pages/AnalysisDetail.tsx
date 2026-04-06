@@ -44,7 +44,6 @@ import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection, SeoMetaKeywordsSection } from '@/components/ReportSection';
 import { isPromotionVideo } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
-import SearchCorrelationChart from "@/components/SearchCorrelationChart";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
 import HashtagStrategy from "@/components/HashtagStrategy";

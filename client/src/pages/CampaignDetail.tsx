@@ -6,9 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
-import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink } from "lucide-react";
+import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink, Target } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -105,6 +106,59 @@ export default function CampaignDetail() {
   const status = campaign ? statusConfig[campaign.status] || statusConfig.draft : statusConfig.draft;
   const isBaselineCompleted = latestBaseline?.status === "completed";
 
+  // 既存の総再生数（目標再生数のデフォルト値に使用）
+  const currentTotalViews = ((campaign as any)?.ownVideoData as any[] | undefined)
+    ?.reduce((sum: number, v: any) => sum + (v.viewCount || 0), 0) ?? 0;
+
+  // 目標再生数インライン編集
+  const [targetViewsField, setTargetViewsField] = useState("");
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const updateCampaignMutation = trpc.campaign.update.useMutation({
+    onSuccess: () => {
+      toast.success("目標再生数を保存しました");
+      detailQuery.refetch();
+      setIsEditingTarget(false);
+    },
+    onError: handleTrpcError,
+  });
+
+  const startEditTarget = () => {
+    setTargetViewsField(campaign?.targetViews ? String(campaign.targetViews) : currentTotalViews > 0 ? String(currentTotalViews) : "");
+    setIsEditingTarget(true);
+  };
+
+  const saveTargetViews = () => {
+    const raw = targetViewsField.trim().replace(/,/g, "");
+    const parsed = raw ? parseInt(raw, 10) : null;
+    if (raw && (!parsed || parsed <= 0 || isNaN(parsed))) {
+      toast.error("目標再生数は正の整数で入力してください");
+      return;
+    }
+    updateCampaignMutation.mutate({ id: campaignId, targetViews: parsed });
+  };
+
+  // レポート生成ダイアログ
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [targetViewsInput, setTargetViewsInput] = useState("");
+
+  const openReportDialog = () => {
+    setTargetViewsInput(campaign?.targetViews ? String(campaign.targetViews) : currentTotalViews > 0 ? String(currentTotalViews) : "");
+    setReportDialogOpen(true);
+  };
+
+  const handleGenerateReport = () => {
+    const parsed = targetViewsInput.trim() ? parseInt(targetViewsInput.replace(/,/g, ""), 10) : undefined;
+    if (targetViewsInput.trim() && (!parsed || parsed <= 0 || isNaN(parsed))) {
+      toast.error("目標再生数は正の整数で入力してください");
+      return;
+    }
+    generateReportMutation.mutate({
+      campaignId,
+      ...(parsed ? { targetViews: parsed } : {}),
+    });
+    setReportDialogOpen(false);
+  };
+
   if (!campaign && !detailQuery.isLoading) {
     return (
       <DashboardLayout>
@@ -148,7 +202,7 @@ export default function CampaignDetail() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => generateReportMutation.mutate({ campaignId })}
+                  onClick={openReportDialog}
                   disabled={generateReportMutation.isPending}
                 >
                   {generateReportMutation.isPending ? (
@@ -161,7 +215,7 @@ export default function CampaignDetail() {
             ) : latestMeasurement?.status === "completed" ? (
               <Button
                 size="sm"
-                onClick={() => generateReportMutation.mutate({ campaignId })}
+                onClick={openReportDialog}
                 disabled={generateReportMutation.isPending}
               >
                 {generateReportMutation.isPending ? (
@@ -421,6 +475,49 @@ export default function CampaignDetail() {
           applyMutation={applyCompetitorsMutation}
         />
 
+        {/* 目標再生数 */}
+        <Card>
+          <CardContent className="py-4 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0 bg-orange-100 dark:bg-orange-950/40 text-orange-600">
+              <Target className="h-4 w-4" />
+            </div>
+            {isEditingTarget ? (
+              <div className="flex-1 flex items-center gap-2">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="例: 100000"
+                  value={targetViewsField}
+                  onChange={e => setTargetViewsField(e.target.value)}
+                  className="h-8 w-40 text-sm"
+                  autoFocus
+                  onKeyDown={e => { if (e.key === "Enter") saveTargetViews(); if (e.key === "Escape") setIsEditingTarget(false); }}
+                />
+                <Button size="sm" variant="ghost" onClick={saveTargetViews} disabled={updateCampaignMutation.isPending}>
+                  {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setIsEditingTarget(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">目標再生数</p>
+                  <p className="text-xs text-muted-foreground">
+                    {campaign?.targetViews
+                      ? `${Number(campaign.targetViews).toLocaleString()} 再生`
+                      : "未設定"}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={startEditTarget}>
+                  {campaign?.targetViews ? "変更" : "設定"}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Report */}
         <Card className={report ? "border-green-200 bg-green-50/30" : ""}>
           <CardContent className="py-4 flex items-center gap-3">
@@ -445,7 +542,7 @@ export default function CampaignDetail() {
                 </Button>
                 <Button
                   size="sm" variant="ghost"
-                  onClick={() => generateReportMutation.mutate({ campaignId })}
+                  onClick={openReportDialog}
                   disabled={generateReportMutation.isPending}
                 >
                   {generateReportMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -454,7 +551,7 @@ export default function CampaignDetail() {
             ) : latestMeasurement?.status === "completed" ? (
               <Button
                 size="sm"
-                onClick={() => generateReportMutation.mutate({ campaignId })}
+                onClick={openReportDialog}
                 disabled={generateReportMutation.isPending}
               >
                 {generateReportMutation.isPending ? (
@@ -467,6 +564,46 @@ export default function CampaignDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* レポート生成ダイアログ */}
+      <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5" />
+              レポート生成
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="targetViews">目標再生数（任意）</Label>
+              <Input
+                id="targetViews"
+                type="text"
+                inputMode="numeric"
+                placeholder="例: 100000"
+                value={targetViewsInput}
+                onChange={e => setTargetViewsInput(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                設定するとレポートに目標達成率と目標ラインが表示されます
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReportDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleGenerateReport} disabled={generateReportMutation.isPending}>
+              {generateReportMutation.isPending ? (
+                <><Loader2 className="mr-1.5 h-4 w-4 animate-spin" />生成中...</>
+              ) : (
+                <><FileText className="h-4 w-4 mr-1.5" />レポート生成</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -1,497 +1,559 @@
 /**
- * Instagram Hashtag Ranking Scraper
- *
- * Captures top posts for a given hashtag in their exact display order,
- * using a logged-in session cookie to access Instagram's internal API.
- *
- * Architecture:
- *   1. Intercept Instagram's internal /api/v1/tags/ response (primary)
- *   2. Fall back to DOM link extraction + per-post API detail fetch
- *   3. Both paths produce the same InstagramPost[] output
- *
- * Setup:
- *   INSTAGRAM_SESSION_ID=<value from browser DevTools → Cookies → sessionid>
+ * Instagram スクレイパー（Apify経由 + Puppeteerハッシュタグ検索）
+ * apify~instagram-scraper を使用して投稿データを取得
+ * searchInstagramHashtag: explore/tags ページをPuppeteerでスクレイプし検索順位を取得
  */
 
-import puppeteerExtra from "puppeteer-extra";
-import StealthPlugin from "puppeteer-extra-plugin-stealth";
-import { type Browser, type Page } from "puppeteer-core";
-import * as fs from "fs";
-import * as path from "path";
+import { ENV } from "./_core/env";
+import puppeteer from "puppeteer-core";
+import { findChromiumPath, buildChromiumArgs } from "./tiktokScraper";
 
-puppeteerExtra.use(StealthPlugin());
-
-// ─── Types ───────────────────────────────────────────────────────────
-
-export interface InstagramPost {
-  position: number;
-  postId: string;
-  shortcode: string;
-  postUrl: string;
-  username: string;
+export interface InstagramPostData {
+  videoId: string;
+  videoUrl: string;
+  coverUrl: string;
   caption: string;
+  viewCount: number;
+  /** 3秒以上視聴数（videoViewCount）— 有効再生数 */
+  threeSecViewCount: number;
+  likeCount: number;
+  commentCount: number;
+  publishedAt: string;
+  ownerUsername: string;
+  musicInfo?: { title: string; artistName: string } | null;
+}
+
+/**
+ * Apify Instagram Scraper で投稿データを一括取得
+ */
+/** Apify実行のステータスを待機してポーリング */
+async function waitForApifyRun(runId: string, token: string, maxWaitMs: number = 300_000): Promise<string> {
+  const start = Date.now();
+  const POLL_INTERVAL = 10_000;
+  while (Date.now() - start < maxWaitMs) {
+    const res = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`);
+    const data = (await res.json()) as any;
+    const status = data?.data?.status;
+    if (status === "SUCCEEDED" || status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
+      return status;
+    }
+    await new Promise(r => setTimeout(r, POLL_INTERVAL));
+  }
+  return "POLL_TIMEOUT";
+}
+
+/** Apifyレスポンスアイテムを InstagramPostData に変換 */
+function parseInstagramItem(item: any): InstagramPostData {
+  const shortcode = item.shortCode || item.id || "";
+  const postUrl = item.url || (shortcode ? `https://www.instagram.com/p/${shortcode}` : "");
+  const rawMusic = item.musicInfo || item.music;
+  const musicInfo = rawMusic
+    ? { title: rawMusic.title || rawMusic.music_title || "", artistName: rawMusic.artistName || rawMusic.music_author || rawMusic.artist_name || "" }
+    : null;
+
+  return {
+    videoId: shortcode,
+    videoUrl: postUrl,
+    coverUrl: item.displayUrl || item.thumbnailUrl || "",
+    caption: item.caption || "",
+    viewCount: item.videoPlayCount || item.videoViewCount || 0,
+    threeSecViewCount: item.videoViewCount || 0,
+    likeCount: (item.likesCount != null && item.likesCount >= 0) ? item.likesCount : 0,
+    commentCount: item.commentsCount || 0,
+    publishedAt: item.timestamp || "",
+    ownerUsername: item.ownerUsername || "",
+    musicInfo: musicInfo && (musicInfo.title || musicInfo.artistName) ? musicInfo : null,
+  };
+}
+
+export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPostData[]> {
+  const token = ENV.apifyApiToken;
+  if (!token) {
+    console.warn("[Instagram] APIFY_API_TOKEN not set, skipping");
+    return [];
+  }
+  if (urls.length === 0) return [];
+
+  const results: InstagramPostData[] = [];
+
+  try {
+    // apify~instagram-scraper (directUrls対応)
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-scraper/runs?token=${token}&waitForFinish=180`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          directUrls: urls,
+          resultsType: "posts",
+          resultsLimit: urls.length,
+        }),
+        signal: AbortSignal.timeout(200_000),
+      },
+    );
+
+    const runData = await res.json() as any;
+    const runId = runData?.data?.id;
+    const datasetId = runData?.data?.defaultDatasetId;
+    if (!datasetId) {
+      console.error("[Instagram] Apify run failed:", runData?.data?.status, JSON.stringify(runData?.error || {}).slice(0, 200));
+      return results;
+    }
+
+    // 実行ステータスを確認 — RUNNING中なら完了までポーリング待機
+    const runStatus = runData?.data?.status;
+    if (runStatus && runStatus !== "SUCCEEDED") {
+      if (runStatus === "RUNNING" && runId) {
+        console.log(`[Instagram] Apify run still RUNNING, polling for completion...`);
+        const finalStatus = await waitForApifyRun(runId, token, 120_000);
+        if (finalStatus !== "SUCCEEDED") {
+          console.warn(`[Instagram] Apify run finished with status: ${finalStatus} (may have partial results)`);
+        }
+      } else {
+        console.warn(`[Instagram] Apify run status: ${runStatus}`);
+      }
+    }
+
+    // データセットから結果取得
+    const itemsRes = await fetch(
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=200`,
+    );
+    const items = await itemsRes.json() as any[];
+
+    for (const item of items) {
+      results.push(parseInstagramItem(item));
+    }
+
+    // 未取得URLを検出してログ出力
+    const fetchedUrls = new Set(results.map(r => r.videoUrl));
+    const missingUrls = urls.filter(u => !fetchedUrls.has(u) && !results.some(r => u.includes(r.videoId)));
+    if (missingUrls.length > 0) {
+      console.warn(`[Instagram] ${missingUrls.length}/${urls.length} posts not returned by Apify (input URLs missing from results)`);
+    }
+
+    console.log(`[Instagram] Apify scraped ${results.length}/${urls.length} posts`);
+  } catch (e) {
+    console.error("[Instagram] Apify scrape failed:", e);
+  }
+
+  return results;
+}
+
+// ============================
+// Instagram ハッシュタグ検索順位スクレイパー
+// ============================
+
+export interface InstagramHashtagPost {
+  position: number;
+  shortcode: string;
+  username: string;
+  type: "reel" | "image" | "video" | "carousel";
   likeCount: number;
   commentCount: number;
   viewCount: number;
-  thumbnailUrl: string;
-  type: "image" | "video" | "carousel" | "reel";
-  postedAt: string;
-  duration: number;
-  hashtags: string[];
+  caption: string;
+  coverUrl: string;
+  postUrl: string;
   isOwn: boolean;
 }
 
 export interface InstagramHashtagResult {
   hashtag: string;
-  topPosts: InstagramPost[];
   totalFetched: number;
-  fetchedAt: string;
-  totalPostCount: number | null;
-  method: "api" | "dom";
+  method: "puppeteer" | "apify";
+  topPosts: InstagramHashtagPost[];
+  ownRanks: number[];
 }
 
-// ─── Constants ───────────────────────────────────────────────────────
+/**
+ * Instagram explore/tags/{hashtag} ページをPuppeteerでスクレイプし、
+ * 検索上位の投稿データとランキング位置を取得する。
+ *
+ * sessionid Cookieが必要（INSTAGRAM_SESSION_ID env var）。
+ * sessionidが未設定の場合は Apify フォールバックを試行。
+ */
+export async function searchInstagramHashtag(
+  hashtag: string,
+  maxResults: number = 30,
+  ownAccountNames: string[] = [],
+): Promise<InstagramHashtagResult> {
+  const ownNamesLower = new Set(ownAccountNames.map(n => n.toLowerCase().replace(/^@/, "")));
+  const tag = hashtag.replace(/^#/, "").trim();
 
-const SESSION_ERROR_PATTERNS = ["sessionid", "ログイン", "login required", "checkpoint_required"];
-const HASHTAG_REGEX = /#[\p{L}\p{N}_]+/gu;
-const INTER_REQUEST_DELAY = { min: 400, max: 900 };
-const INTER_TAG_DELAY = { min: 3000, max: 5000 };
-const API_WAIT_TIMEOUT = 8000;
-const NAV_TIMEOUT = 30000;
-const MAX_RETRIES = 2;
-const DETAIL_FETCH_LIMIT = 30;
-
-// ─── Chrome Discovery (shared with TikTok scraper) ──────────────────
-
-function findChromePath(): string {
-  try {
-    const p = require("puppeteer");
-    const bp = p.executablePath?.();
-    if (bp && fs.existsSync(bp)) return bp;
-  } catch {}
-
-  const cache = path.join(process.cwd(), ".cache", "puppeteer", "chrome");
-  if (fs.existsSync(cache)) {
+  // Puppeteer方式を試行
+  const sessionId = process.env.INSTAGRAM_SESSION_ID;
+  if (sessionId) {
     try {
-      for (const v of fs.readdirSync(cache).filter(d => d.startsWith("linux-")).sort().reverse()) {
-        const cp = path.join(cache, v, "chrome-linux64", "chrome");
-        if (fs.existsSync(cp)) return cp;
+      const result = await scrapeHashtagWithPuppeteer(tag, maxResults, ownNamesLower);
+      if (result.topPosts.length > 0) {
+        console.log(`[Instagram Hashtag] Puppeteer: #${tag} → ${result.topPosts.length} posts`);
+        return result;
       }
-    } catch {}
-  }
-
-  for (const c of [
-    "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome",
-    "/opt/google/chrome/chrome", "/usr/bin/chromium",
-    "/usr/bin/chromium-browser", "/snap/bin/chromium",
-  ]) {
-    if (fs.existsSync(c)) return c;
-  }
-
-  throw new Error("[IG] Chrome not found");
-}
-
-// ─── Utilities ───────────────────────────────────────────────────────
-
-function randomDelay(range: { min: number; max: number }): Promise<void> {
-  return new Promise(r => setTimeout(r, range.min + Math.random() * (range.max - range.min)));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      return await fn();
+      console.warn(`[Instagram Hashtag] Puppeteer returned 0 posts for #${tag}, trying Apify fallback`);
     } catch (e) {
-      if (attempt === MAX_RETRIES) throw e;
-      const wait = 2000 * (attempt + 1);
-      console.warn(`[IG] ${label} failed (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${wait}ms`);
-      await new Promise(r => setTimeout(r, wait));
+      console.error(`[Instagram Hashtag] Puppeteer failed for #${tag}:`, e);
     }
+  } else {
+    console.log(`[Instagram Hashtag] INSTAGRAM_SESSION_ID not set, using Apify`);
   }
-  throw new Error("unreachable");
+
+  // Apify フォールバック
+  return scrapeHashtagWithApify(tag, maxResults, ownNamesLower);
 }
 
-function isSessionError(msg: string): boolean {
-  const lower = msg.toLowerCase();
-  return SESSION_ERROR_PATTERNS.some(p => lower.includes(p));
-}
-
-function extractHashtags(text: string): string[] {
-  return (text.match(HASHTAG_REGEX) || []).map(t => t.slice(1));
-}
-
-function safeErrorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "unknown error";
-}
-
-function validateSessionId(id: string): void {
-  const trimmed = id.trim();
-  if (!trimmed || trimmed === "undefined" || trimmed === "null" || trimmed.length < 10) {
-    throw new Error("[IG] INSTAGRAM_SESSION_ID is invalid (empty, too short, or literal 'undefined')");
-  }
-}
-
-// ─── Browser Session ─────────────────────────────────────────────────
-
-async function createSession(sessionId: string): Promise<{ browser: Browser; page: Page }> {
-  const browser = await puppeteerExtra.launch({
-    executablePath: findChromePath(),
+/**
+ * Puppeteerで https://www.instagram.com/explore/tags/{tag}/ をスクレイプ
+ */
+async function scrapeHashtagWithPuppeteer(
+  tag: string,
+  maxResults: number,
+  ownNamesLower: Set<string>,
+): Promise<InstagramHashtagResult> {
+  const sessionId = process.env.INSTAGRAM_SESSION_ID!;
+  const chromiumPath = findChromiumPath();
+  const browser = await puppeteer.launch({
+    executablePath: chromiumPath,
     headless: true,
-    args: [
-      "--no-sandbox", "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage", "--disable-gpu",
-      "--disable-blink-features=AutomationControlled",
-      "--window-size=1280,900", "--lang=ja-JP",
-    ],
+    args: buildChromiumArgs(),
   });
 
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1280, height: 900 });
-
-  // Set session cookie before any navigation
-  await page.setCookie({
-    name: "sessionid",
-    value: sessionId,
-    domain: ".instagram.com",
-    path: "/",
-    httpOnly: true,
-    secure: true,
-    sameSite: "Lax" as const,
-  });
-
-  // Warm up: navigate to instagram.com to acquire csrftoken and other cookies
-  await withRetry(
-    () => page.goto("https://www.instagram.com/", { waitUntil: "networkidle2", timeout: NAV_TIMEOUT }),
-    "warmup navigation",
-  );
-
-  // Verify session is valid
-  if (page.url().includes("/accounts/login") || page.url().includes("challenge")) {
-    await browser.close();
-    throw new Error("[IG] sessionidが無効/期限切れです。ブラウザから再取得してください。");
-  }
-
-  return { browser, page };
-}
-
-// ─── API Response Extraction ─────────────────────────────────────────
-
-function extractMediaFromApi(data: unknown): any[] {
-  const items: any[] = [];
-  const d = data as any;
-  if (!d) return items;
-
-  // Instagram returns different structures depending on endpoint version.
-  // We try all known patterns and merge results.
-  const sectionSources = [
-    d?.data?.top?.sections,
-    d?.data?.recent?.sections,
-    d?.sections,
-  ];
-
-  for (const sections of sectionSources) {
-    if (!Array.isArray(sections)) continue;
-    for (const sec of sections) {
-      for (const m of sec?.layout_content?.medias || []) {
-        if (m?.media) items.push(m.media);
-      }
-    }
-    if (items.length > 0) return items; // Use first matching pattern
-  }
-
-  // GraphQL response pattern
-  if (d?.top_posts?.edges) {
-    return d.top_posts.edges.map((e: any) => e.node).filter(Boolean);
-  }
-
-  // Direct array patterns
-  if (Array.isArray(d?.ranked)) return d.ranked;
-  if (Array.isArray(d?.items)) return d.items;
-
-  return items;
-}
-
-function parseMediaItem(item: any, ownSet: Set<string>): Omit<InstagramPost, "position"> | null {
   try {
-    const username = item.user?.username || item.owner?.username || "";
-    const shortcode = item.code || item.shortcode || "";
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    );
 
-    let caption = item.caption?.text
-      || item.edge_media_to_caption?.edges?.[0]?.node?.text
-      || "";
+    // sessionid Cookieを設定
+    await page.setCookie({
+      name: "sessionid",
+      value: sessionId,
+      domain: ".instagram.com",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+    });
 
-    let type: InstagramPost["type"] = "image";
-    if (item.product_type === "clips" || item.product_type === "reels") type = "reel";
-    else if (item.media_type === 2 || item.is_video) type = "video";
-    else if (item.media_type === 8 || item.edge_sidecar_to_children) type = "carousel";
+    // GraphQL / REST APIレスポンスをインターセプト
+    const capturedData: any[] = [];
+    page.on("response", async (response) => {
+      const url = response.url();
+      // Instagram GraphQL + REST API endpoints
+      if (
+        url.includes("/graphql/query") ||
+        url.includes("/api/graphql") ||
+        url.includes("/api/v1/tags/") ||
+        url.includes("/fbsearch/") ||
+        url.includes("/api/v1/explore/")
+      ) {
+        try {
+          const text = await response.text();
+          if (!text || text.startsWith("<")) return;
+          const json = JSON.parse(text);
+          // キャプチャ対象: ハッシュタグ関連データを含むレスポンス
+          capturedData.push(json);
+        } catch { /* non-JSON response */ }
+      }
+    });
 
-    const timestamp = item.taken_at || item.taken_at_timestamp || 0;
+    // explore/tags ページに遷移
+    const url = `https://www.instagram.com/explore/tags/${encodeURIComponent(tag)}/`;
+    console.log(`[Instagram Hashtag] Navigating to ${url}`);
+
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 1. まずGraphQLインターセプトデータからパース
+    let posts = parseGraphQLData(capturedData, ownNamesLower);
+
+    // 2. フォールバック: ページHTMLから __NEXT_DATA__ / additionalData をパース
+    if (posts.length === 0) {
+      const pageData = await page.evaluate(() => {
+        // __NEXT_DATA__
+        const nextDataEl = document.querySelector('script#__NEXT_DATA__');
+        if (nextDataEl?.textContent) {
+          try { return JSON.parse(nextDataEl.textContent); } catch {}
+        }
+        // window.__additionalDataLoaded
+        const scripts = Array.from(document.querySelectorAll("script"));
+        for (const s of scripts) {
+          const text = s.textContent || "";
+          if (text.includes("edge_hashtag_to_media") || text.includes("edge_hashtag_to_top_posts")) {
+            const match = text.match(/\{[^]*edge_hashtag_to_(?:media|top_posts)[^]*\}/);
+            if (match) {
+              try { return JSON.parse(match[0]); } catch {}
+            }
+          }
+        }
+        return null;
+      });
+
+      if (pageData) {
+        capturedData.push(pageData);
+        posts = parseGraphQLData(capturedData, ownNamesLower);
+      }
+    }
+
+    // 3. フォールバック: DOMから直接パース
+    if (posts.length === 0) {
+      posts = await parseDOMPosts(page, ownNamesLower);
+    }
+
+    // スクロールで追加データ取得（maxResults未達の場合）
+    if (posts.length < maxResults && posts.length > 0) {
+      for (let scroll = 0; scroll < 3 && posts.length < maxResults; scroll++) {
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await new Promise(r => setTimeout(r, 2000));
+        const newPosts = parseGraphQLData(capturedData, ownNamesLower);
+        if (newPosts.length > posts.length) {
+          posts = newPosts;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Reelのみフィルター + position再番号付け
+    const reelsOnly = posts
+      .filter(p => p.type === "reel")
+      .slice(0, maxResults)
+      .map((p, i) => ({ ...p, position: i + 1 }));
+    const ownRanks = reelsOnly.filter(p => p.isOwn).map(p => p.position);
 
     return {
-      postId: String(item.pk || item.id || shortcode),
-      shortcode,
-      postUrl: shortcode ? `https://www.instagram.com/p/${shortcode}/` : "",
-      username,
-      caption: caption.slice(0, 500),
-      likeCount: item.like_count ?? item.edge_liked_by?.count ?? 0,
-      commentCount: item.comment_count ?? item.edge_media_to_comment?.count ?? 0,
-      viewCount: item.play_count ?? item.video_view_count ?? 0,
-      thumbnailUrl: item.image_versions2?.candidates?.[0]?.url || item.thumbnail_src || item.display_url || "",
-      type,
-      postedAt: timestamp ? new Date(timestamp * 1000).toISOString() : "",
-      duration: Math.round(item.video_duration || 0),
-      hashtags: extractHashtags(caption),
-      isOwn: ownSet.has(username.toLowerCase()),
+      hashtag: tag,
+      totalFetched: reelsOnly.length,
+      method: "puppeteer",
+      topPosts: reelsOnly,
+      ownRanks,
     };
-  } catch {
-    return null;
+  } finally {
+    await browser.close();
   }
 }
 
-// ─── DOM Scraping (fallback) ─────────────────────────────────────────
+/** GraphQL/RESTキャプチャデータからポスト一覧を抽出 */
+function parseGraphQLData(
+  capturedData: any[],
+  ownNamesLower: Set<string>,
+): InstagramHashtagPost[] {
+  const posts: InstagramHashtagPost[] = [];
+  const seen = new Set<string>();
 
-async function extractPostLinksFromDom(page: Page, maxPosts: number): Promise<Array<{ href: string; imgSrc: string }>> {
-  return page.evaluate((max: number) => {
-    const seen = new Set<string>();
-    const results: Array<{ href: string; imgSrc: string }> = [];
-    for (const link of document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]')) {
-      const href = (link as HTMLAnchorElement).href;
-      if (seen.has(href)) continue;
-      seen.add(href);
-      results.push({ href, imgSrc: link.querySelector("img")?.src || "" });
-      if (results.length >= max) break;
-    }
-    return results;
-  }, maxPosts);
-}
+  /** メディアオブジェクトを統一フォーマットでpushする共通ヘルパー */
+  function pushMedia(media: any) {
+    const code = media.code || media.shortcode || String(media.pk || media.id || "");
+    if (!code || seen.has(code)) return;
+    seen.add(code);
 
-async function fetchPostDetail(page: Page, shortcode: string): Promise<any | null> {
-  return page.evaluate(async (code: string) => {
-    try {
-      const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || "";
-      const res = await fetch(`https://www.instagram.com/api/v1/media/${code}/info/`, {
-        credentials: "include",
-        headers: {
-          "X-CSRFToken": csrfToken,
-          "X-Instagram-AJAX": "1",
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      return res.ok ? await res.json() : null;
-    } catch {
-      return null;
-    }
-  }, shortcode);
-}
+    const username = media.user?.username || media.owner?.username || "";
+    const mediaType = media.media_type ?? (media.is_video ? 2 : 1);
+    posts.push({
+      position: posts.length + 1,
+      shortcode: code,
+      username,
+      type: mediaType === 2 ? "reel" : mediaType === 8 ? "carousel" : "image",
+      likeCount: media.like_count || media.edge_liked_by?.count || 0,
+      commentCount: media.comment_count || media.edge_media_to_comment?.count || 0,
+      viewCount: media.play_count || media.view_count || media.video_view_count || 0,
+      caption: media.caption?.text || media.edge_media_to_caption?.edges?.[0]?.node?.text || "",
+      coverUrl: media.image_versions2?.candidates?.[0]?.url || media.thumbnail_src || media.display_url || "",
+      postUrl: `https://www.instagram.com/p/${code}/`,
+      isOwn: ownNamesLower.has(username.toLowerCase()),
+    });
+  }
 
-async function enrichPostsFromDom(
-  page: Page,
-  links: Array<{ href: string; imgSrc: string }>,
-  ownSet: Set<string>,
-): Promise<InstagramPost[]> {
-  const posts: InstagramPost[] = links.map(({ href, imgSrc }, i) => {
-    const match = href.match(/\/(p|reel)\/([^/]+)/);
-    return {
-      position: i + 1,
-      postId: "",
-      shortcode: match?.[2] || "",
-      postUrl: href,
-      username: "",
-      caption: "",
-      likeCount: 0,
-      commentCount: 0,
-      viewCount: 0,
-      thumbnailUrl: imgSrc,
-      type: (match?.[1] === "reel" ? "reel" : "image") as InstagramPost["type"],
-      postedAt: "",
-      duration: 0,
-      hashtags: [],
-      isOwn: false,
-    };
-  });
+  for (const data of capturedData) {
+    // 再帰的に全データ構造を走査してメディアを抽出
+    extractMediasRecursive(data, pushMedia);
 
-  const limit = Math.min(posts.length, DETAIL_FETCH_LIMIT);
-  console.log(`[IG] Enriching ${limit} posts with API details...`);
-
-  for (let i = 0; i < limit; i++) {
-    const post = posts[i];
-    if (!post.shortcode) continue;
-
-    try {
-      const detail = await fetchPostDetail(page, post.shortcode);
-      const item = detail?.items?.[0];
-      if (item) {
-        const parsed = parseMediaItem(item, ownSet);
-        if (parsed) Object.assign(post, parsed);
+    // GraphQL v1 API形式 (ranked_items / recent_items)
+    const sections = data?.sections || data?.data?.sections;
+    if (sections && Array.isArray(sections)) {
+      for (const section of sections) {
+        const medias = section?.layout_content?.medias || [];
+        for (const m of medias) {
+          if (m?.media) pushMedia(m.media);
+        }
       }
-    } catch {}
+    }
 
-    if (i < limit - 1) await randomDelay(INTER_REQUEST_DELAY);
+    // GraphQL classic形式 (edge_hashtag_to_top_posts / edge_hashtag_to_media)
+    const hashtag = data?.data?.hashtag || data?.graphql?.hashtag || data?.hashtag;
+    if (hashtag) {
+      const edges = [
+        ...(hashtag.edge_hashtag_to_top_posts?.edges || []),
+        ...(hashtag.edge_hashtag_to_media?.edges || []),
+      ];
+      for (const edge of edges) {
+        if (edge?.node) pushMedia(edge.node);
+      }
+    }
+
+    // fbsearch/web/top_serp 形式（新explore/search/keyword）
+    const informUnits = data?.media_grid?.sections ||
+      data?.data?.xdt_api__v1__fbsearch__web__top_serp_?.media_grid?.sections;
+    if (informUnits && Array.isArray(informUnits)) {
+      for (const section of informUnits) {
+        const medias = section?.layout_content?.medias || [];
+        for (const m of medias) {
+          if (m?.media) pushMedia(m.media);
+        }
+      }
+    }
   }
 
   return posts;
 }
 
-// ─── Total Post Count Extraction ─────────────────────────────────────
-
-async function extractTotalPostCount(page: Page): Promise<number | null> {
-  try {
-    const text = await page.evaluate(() => {
-      for (const el of document.querySelectorAll("span, header *")) {
-        const m = (el.textContent || "").match(/([\d,]+)\s*件/);
-        if (m) return m[1].replace(/,/g, "");
-      }
-      return null;
-    });
-    return text ? parseInt(text, 10) : null;
-  } catch {
-    return null;
+/** 深いネストされたJSON構造からmediaオブジェクトを再帰的に探す */
+function extractMediasRecursive(obj: any, pushMedia: (m: any) => void, depth = 0) {
+  if (!obj || typeof obj !== "object" || depth > 8) return;
+  // mediaオブジェクト判定: code + (media_type or is_video) が存在
+  if (obj.code && (obj.media_type != null || obj.is_video != null) && (obj.user || obj.owner)) {
+    pushMedia(obj);
+    return;
+  }
+  // nodeオブジェクト（GraphQL edge形式）
+  if (obj.shortcode && (obj.is_video != null || obj.__typename)) {
+    pushMedia(obj);
+    return;
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) extractMediasRecursive(item, pushMedia, depth + 1);
+  } else {
+    for (const key of Object.keys(obj)) {
+      if (key === "user" || key === "owner" || key === "caption") continue; // 循環参照回避
+      extractMediasRecursive(obj[key], pushMedia, depth + 1);
+    }
   }
 }
 
-// ─── Public API ──────────────────────────────────────────────────────
-
-export async function searchInstagramHashtag(
-  hashtag: string,
-  maxPosts: number = 30,
-  ownAccountIds: string[] = [],
-): Promise<InstagramHashtagResult> {
-  const sessionId = process.env.INSTAGRAM_SESSION_ID ?? "";
-  validateSessionId(sessionId);
-
-  const cleanTag = hashtag.replace(/^#/, "").trim();
-  if (!cleanTag) throw new Error("[IG] Empty hashtag");
-
-  console.log(`[IG] #${cleanTag} (max ${maxPosts})`);
-
-  let browser: Browser | null = null;
+/** DOM直接パース（フォールバック） */
+async function parseDOMPosts(
+  page: any,
+  ownNamesLower: Set<string>,
+): Promise<InstagramHashtagPost[]> {
+  const posts: InstagramHashtagPost[] = [];
 
   try {
-    const session = await createSession(sessionId);
-    browser = session.browser;
-    const page = session.page;
-
-    // Set up API response interception
-    let capturedApiData: unknown = null;
-    const targetUrlFragment = `/api/v1/tags/${encodeURIComponent(cleanTag).toLowerCase()}`;
-
-    page.on("response", async (res) => {
-      const url = res.url().toLowerCase();
-      if (!url.includes("/api/v1/tags/") && !url.includes("tag_name=")) return;
-      try {
-        const json = await res.json();
-        if (json?.data || json?.top || json?.sections) {
-          capturedApiData = json;
-        }
-      } catch {}
+    const links = await page.evaluate(() => {
+      const anchors = Array.from(document.querySelectorAll('a[href*="/p/"], a[href*="/reel/"]'));
+      return anchors.map((a: any, i: number) => {
+        const href = a.getAttribute("href") || "";
+        const match = href.match(/\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+        const img = a.querySelector("img");
+        return {
+          shortcode: match ? match[1] : "",
+          href,
+          coverUrl: img?.src || "",
+          position: i + 1,
+        };
+      }).filter((x: any) => x.shortcode);
     });
 
-    // Navigate to hashtag page
-    const hashtagUrl = `https://www.instagram.com/explore/tags/${encodeURIComponent(cleanTag)}/`;
-    await withRetry(() => page.goto(hashtagUrl, { waitUntil: "networkidle2", timeout: NAV_TIMEOUT }), "hashtag page");
-
-    // Validate page loaded correctly
-    if (page.url().includes("/accounts/login") || page.url().includes("challenge")) {
-      throw new Error("[IG] sessionidが無効/期限切れです。再取得してください。");
+    for (const link of links) {
+      posts.push({
+        position: link.position,
+        shortcode: link.shortcode,
+        username: "",
+        type: link.href.includes("/reel/") ? "reel" : "image",
+        likeCount: 0,
+        commentCount: 0,
+        viewCount: 0,
+        caption: "",
+        coverUrl: link.coverUrl,
+        postUrl: `https://www.instagram.com${link.href}`,
+        isOwn: false,
+      });
     }
+  } catch (e) {
+    console.error("[Instagram Hashtag] DOM parse failed:", e);
+  }
 
-    const html = await page.content();
-    if (html.includes("Sorry, this page") || html.includes("ページが見つかりません")) {
-      throw new Error(`[IG] #${cleanTag} not found`);
-    }
+  return posts;
+}
 
-    // Wait for API response
-    try {
-      await page.waitForResponse(
-        r => r.url().includes("/api/v1/tags/") && r.status() === 200,
-        { timeout: API_WAIT_TIMEOUT },
-      );
-      await new Promise(r => setTimeout(r, 300));
-    } catch {}
+/**
+ * Apifyフォールバック: apify/instagram-hashtag-scraper を使用
+ */
+async function scrapeHashtagWithApify(
+  tag: string,
+  maxResults: number,
+  ownNamesLower: Set<string>,
+): Promise<InstagramHashtagResult> {
+  const token = ENV.apifyApiToken;
+  if (!token) {
+    console.warn("[Instagram Hashtag] No APIFY_API_TOKEN, returning empty");
+    return { hashtag: tag, totalFetched: 0, method: "apify", topPosts: [], ownRanks: [] };
+  }
 
-    // Parse results
-    const ownSet = new Set(ownAccountIds.map(id => id.toLowerCase().replace(/^@/, "")));
-    let posts: InstagramPost[];
-    let method: "api" | "dom";
-
-    const mediaItems = extractMediaFromApi(capturedApiData);
-
-    if (mediaItems.length > 0) {
-      method = "api";
-      posts = mediaItems
-        .map(item => parseMediaItem(item, ownSet))
-        .filter((p): p is Omit<InstagramPost, "position"> => p !== null)
-        .slice(0, maxPosts)
-        .map((p, i) => ({ ...p, position: i + 1 }));
-    } else {
-      method = "dom";
-      console.log("[IG] API not captured, falling back to DOM");
-      const links = await extractPostLinksFromDom(page, maxPosts);
-      posts = await enrichPostsFromDom(page, links, ownSet);
-      posts = posts.slice(0, maxPosts);
-      posts.forEach((p, i) => { p.position = i + 1; });
-    }
-
-    const totalPostCount = await extractTotalPostCount(page);
-
-    // Log own account positions
-    const ownPosts = posts.filter(p => p.isOwn);
-    console.log(
-      ownPosts.length > 0
-        ? `[IG] Own: ${ownPosts.map(p => `@${p.username}→${p.position}位`).join(", ")}`
-        : `[IG] Own accounts not in top ${posts.length}`,
+  try {
+    const res = await fetch(
+      `https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/runs?token=${token}&waitForFinish=120`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hashtags: [tag],
+          resultsLimit: maxResults,
+          resultsType: "reels",
+        }),
+        signal: AbortSignal.timeout(150_000),
+      },
     );
 
-    return {
-      hashtag: cleanTag,
-      topPosts: posts,
-      totalFetched: posts.length,
-      fetchedAt: new Date().toISOString(),
-      totalPostCount,
-      method,
-    };
-
-  } finally {
-    if (browser) await browser.close();
-  }
-}
-
-export async function searchInstagramHashtagBatch(
-  hashtags: string[],
-  ownAccountIds: string[] = [],
-  maxPostsPerTag: number = 30,
-): Promise<InstagramHashtagResult[]> {
-  const results: InstagramHashtagResult[] = [];
-  const emptyResult = (tag: string): InstagramHashtagResult => ({
-    hashtag: tag.replace(/^#/, ""),
-    topPosts: [],
-    totalFetched: 0,
-    fetchedAt: new Date().toISOString(),
-    totalPostCount: null,
-    method: "dom",
-  });
-
-  for (let i = 0; i < hashtags.length; i++) {
-    const tag = hashtags[i];
-    console.log(`[IG] Batch ${i + 1}/${hashtags.length}: #${tag}`);
-
-    try {
-      results.push(await searchInstagramHashtag(tag, maxPostsPerTag, ownAccountIds));
-    } catch (e) {
-      const msg = safeErrorMessage(e);
-
-      if (isSessionError(msg)) {
-        console.error("[IG] Session expired — aborting remaining hashtags");
-        for (let j = i; j < hashtags.length; j++) results.push(emptyResult(hashtags[j]));
-        break;
-      }
-
-      console.error(`[IG] #${tag} failed: ${msg}`);
-      results.push(emptyResult(tag));
+    const runData = await res.json() as any;
+    const datasetId = runData?.data?.defaultDatasetId;
+    const runId = runData?.data?.id;
+    if (!datasetId) {
+      console.error("[Instagram Hashtag] Apify run failed:", runData?.data?.status);
+      return { hashtag: tag, totalFetched: 0, method: "apify", topPosts: [], ownRanks: [] };
     }
 
-    if (i < hashtags.length - 1) await randomDelay(INTER_TAG_DELAY);
-  }
+    // ステータス待機
+    const runStatus = runData?.data?.status;
+    if (runStatus === "RUNNING" && runId) {
+      const finalStatus = await waitForApifyRun(runId, token, 120_000);
+      if (finalStatus !== "SUCCEEDED") {
+        console.warn(`[Instagram Hashtag] Apify run finished: ${finalStatus}`);
+      }
+    }
 
-  return results;
+    const itemsRes = await fetch(
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=${maxResults}`,
+    );
+    const items = await itemsRes.json() as any[];
+
+    const posts: InstagramHashtagPost[] = items.map((item: any, i: number) => {
+      const username = item.ownerUsername || item.owner?.username || "";
+      return {
+        position: i + 1,
+        shortcode: item.shortCode || item.id || "",
+        username,
+        type: item.type === "Video" || item.isVideo ? "reel" : item.type === "Sidecar" ? "carousel" : "image",
+        likeCount: Math.max(0, item.likesCount || 0),
+        commentCount: item.commentsCount || 0,
+        viewCount: item.videoPlayCount || item.videoViewCount || 0,
+        caption: item.caption || "",
+        coverUrl: item.displayUrl || item.thumbnailUrl || "",
+        postUrl: item.url || `https://www.instagram.com/p/${item.shortCode || ""}/`,
+        isOwn: ownNamesLower.has(username.toLowerCase()),
+      };
+    });
+
+    const ownRanks = posts.filter(p => p.isOwn).map(p => p.position);
+    console.log(`[Instagram Hashtag] Apify: #${tag} → ${posts.length} posts`);
+
+    return {
+      hashtag: tag,
+      totalFetched: posts.length,
+      method: "apify",
+      topPosts: posts,
+      ownRanks,
+    };
+  } catch (e) {
+    console.error(`[Instagram Hashtag] Apify failed for #${tag}:`, e);
+    return { hashtag: tag, totalFetched: 0, method: "apify", topPosts: [], ownRanks: [] };
+  }
 }

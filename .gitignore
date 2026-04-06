@@ -104,6 +104,10 @@ jspm_packages/
 tmp/
 temp/
 
+# Persistent logs & secrets
+data/logs/
+data/.google-ads-refresh-token
+
 # Database
 *.db
 *.sqlite
@@ -125,3 +129,5 @@ mock-*
 fix-*.mjs
 *.save
 .envsudo
+.aidesigner/*
+!.aidesigner/.gitkeep

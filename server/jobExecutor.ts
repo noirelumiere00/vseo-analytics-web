@@ -669,12 +669,14 @@ export async function executeCampaignSnapshot(
     }
     await db.updateCampaign(snapshot.campaignId, updateData);
 
-    // 両方のスナップショットが揃ったらレポート自動生成
+    // measurementスナップショットが完了したらレポート自動生成（baselineは任意）
     const updatedCampaign = await db.getCampaignById(snapshot.campaignId);
-    if (updatedCampaign?.baselineSnapshotId && updatedCampaign?.measurementSnapshotId) {
-      const baselineSnapshot = await db.getCampaignSnapshotById(updatedCampaign.baselineSnapshotId);
+    if (updatedCampaign?.measurementSnapshotId) {
+      const baselineSnapshot = updatedCampaign.baselineSnapshotId
+        ? await db.getCampaignSnapshotById(updatedCampaign.baselineSnapshotId)
+        : null;
       const measurementSnapshot = await db.getCampaignSnapshotById(updatedCampaign.measurementSnapshotId);
-      if (baselineSnapshot?.status === "completed" && measurementSnapshot?.status === "completed") {
+      if (measurementSnapshot?.status === "completed" && (!baselineSnapshot || baselineSnapshot.status === "completed")) {
         const reportData = await generateCampaignReport(updatedCampaign, baselineSnapshot, measurementSnapshot);
         await db.upsertCampaignReport(reportData);
         await db.updateCampaign(snapshot.campaignId, { status: "report_ready" });

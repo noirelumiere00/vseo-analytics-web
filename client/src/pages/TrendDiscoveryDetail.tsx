@@ -321,17 +321,21 @@ export default function TrendDiscoveryDetail() {
                 headingLabel="空気感サマリー"
               />
             )}
-            {/* 動画ウォール — Top 9 サムネグリッド */}
+            {/* 動画ウォール — 複数クエリ横断 Top 10 */}
             {((job.crossAnalysis as any)?.topVideos?.length > 0) && (() => {
-              const topVideos: Array<{ videoId: string; authorUniqueId: string; coverUrl: string; playCount: number; er: number }> =
-                (job.crossAnalysis as any).topVideos.slice(0, 9);
+              const allVideos: Array<{ videoId: string; authorUniqueId: string; coverUrl: string; playCount: number; er: number; createTime: number; queryCount?: number }> =
+                (job.crossAnalysis as any).topVideos;
+              // queryCount（複数クエリに出現）降順 → 同数なら再生数降順
+              const topVideos = [...allVideos]
+                .sort((a, b) => (b.queryCount ?? 1) - (a.queryCount ?? 1) || b.playCount - a.playCount)
+                .slice(0, 10);
               const formatCount = (n: number) => {
                 if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
                 if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
                 return String(n);
               };
               return (
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-5 gap-1.5">
                   {topVideos.map((v) => (
                     <a
                       key={v.videoId}
@@ -346,10 +350,20 @@ export default function TrendDiscoveryDetail() {
                         className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                         loading="lazy"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                      <div className="absolute bottom-0 left-0 right-0 p-2 flex items-end justify-between text-white text-[11px] font-medium">
-                        <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatCount(v.playCount)}</span>
-                        <span className="bg-white/20 backdrop-blur-sm rounded px-1.5 py-0.5">ER {v.er}%</span>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/0 to-black/40" />
+                      <div className="absolute top-0 left-0 right-0 p-1 flex justify-between text-white text-[9px] font-medium">
+                        <span className="bg-black/40 backdrop-blur-sm rounded px-1 py-0.5">
+                          {new Date(v.createTime * 1000).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}
+                        </span>
+                        {(v.queryCount ?? 1) >= 2 && (
+                          <span className="bg-amber-500/80 backdrop-blur-sm rounded px-1 py-0.5 text-white">
+                            <Search className="h-2 w-2 inline mr-0.5" />{v.queryCount}
+                          </span>
+                        )}
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 p-1 flex items-end justify-between text-white text-[9px] font-medium">
+                        <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{formatCount(v.playCount)}</span>
+                        <span className="bg-white/20 backdrop-blur-sm rounded px-1 py-0.5">ER {v.er}%</span>
                       </div>
                     </a>
                   ))}
@@ -357,13 +371,13 @@ export default function TrendDiscoveryDetail() {
               );
             })()}
 
-            {/* ── Section 2: フォーマット/ミーム図鑑カード ── */}
+            {/* ── Section 2: フォーマット分類カード ── */}
             {((job.crossAnalysis as any)?.topVideos?.length > 0) && (
               <Card className="rounded-sm">
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Sparkles className="h-4 w-4" />
-                    フォーマット / ミーム図鑑
+                    フォーマット分類
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">

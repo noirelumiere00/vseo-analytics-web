@@ -480,6 +480,9 @@ export const campaigns = mysqlTable("campaigns", {
   // 定期観測
   trackingEnabled: boolean("trackingEnabled").default(true),
 
+  // 目標再生数
+  targetViews: bigint("targetViews", { mode: "number" }),
+
   status: mysqlEnum("status", ["draft", "baseline_captured", "measurement_captured", "report_ready"]).default("draft").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
@@ -846,6 +849,32 @@ export const campaignReports = mysqlTable("campaign_reports", {
       }>;
     };
   }>(),
+
+  // KW検索センチメント分析
+  keywordSentimentReport: json("keywordSentimentReport").$type<Record<string, {
+    total: number; positive: number; neutral: number; negative: number;
+  }>>(),
+
+  // Instagram ハッシュタグ検索順位
+  instagramHashtagReport: json("instagramHashtagReport").$type<Array<{
+    hashtag: string;
+    totalFetched: number;
+    method: "puppeteer" | "apify";
+    topPosts: Array<{
+      position: number;
+      shortcode: string;
+      username: string;
+      type: "reel" | "image" | "video" | "carousel";
+      likeCount: number;
+      commentCount: number;
+      viewCount: number;
+      caption: string;
+      coverUrl: string;
+      postUrl: string;
+      isOwn: boolean;
+    }>;
+    ownRanks: number[];
+  }>>(),
 
   // 共有リンク
   shareToken: varchar("shareToken", { length: 64 }).unique(),

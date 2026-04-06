@@ -23,6 +23,7 @@ import { ENV } from "./_core/env";
 import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } from "./googleTrends";
 import { fetchKeywordVolume, type KeywordVolumeData } from "./googleAds";
 import { generateProductionBrief } from "./videoAnalysis";
+import { localizeCovers } from "./coverStorage";
 
 // Google Trends取得＋キャッシュ保存ヘルパー
 async function fetchAndCacheTrends(jobId: number, keyword: string) {
@@ -1580,6 +1581,7 @@ export const appRouter = router({
         })).optional(),
         brandKeywords: z.array(z.string()).optional(),
         bigKeywords: z.array(z.string()).optional(),
+        targetViews: z.number().int().positive().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const campaign = await db.getCampaignById(input.id);
@@ -1662,22 +1664,26 @@ export const appRouter = router({
           }
         }
 
-        const ownVideoData: any[] = [];
+        // 既存データを保持用Mapに読み込む（スクレイプ失敗時のデータ消失を防止）
+        const existingData = new Map<string, any>();
+        for (const v of ((campaign as any).ownVideoData || []) as any[]) {
+          if (v.videoUrl) existingData.set(v.videoUrl, v);
+        }
 
-        // TikTok
+        // TikTok — 成功分のみ上書き
         if (tiktokUrls.length > 0) {
           const scraped = await scrapeTikTokVideosByUrls(tiktokUrls);
-          for (const v of scraped.values()) {
-            ownVideoData.push({ ...v, platform: "tiktok" });
+          for (const [url, v] of scraped) {
+            existingData.set(url, { ...v, platform: "tiktok" });
           }
         }
 
-        // YouTube
+        // YouTube — 成功分のみ上書き
         if (youtubeIds.length > 0) {
           const ytVideos = await fetchYouTubeVideos(youtubeIds);
           for (const v of ytVideos) {
             const originalUrl = youtubeUrlMap.get(v.videoId) || v.videoUrl;
-            ownVideoData.push({
+            existingData.set(originalUrl, {
               platform: "youtube",
               videoId: v.videoId,
               videoUrl: originalUrl,
@@ -1702,11 +1708,11 @@ export const appRouter = router({
           }
         }
 
-        // Instagram
+        // Instagram — 成功分のみ上書き
         if (instagramUrls.length > 0) {
           const igPosts = await fetchInstagramPosts(instagramUrls);
           for (const p of igPosts) {
-            ownVideoData.push({
+            existingData.set(p.videoUrl, {
               platform: "instagram",
               videoId: p.videoId,
               videoUrl: p.videoUrl,
@@ -1721,6 +1727,7 @@ export const appRouter = router({
               authorAvatarUrl: "",
               followerCount: 0,
               viewCount: p.viewCount,
+              threeSecViewCount: p.threeSecViewCount || 0,
               likeCount: p.likeCount,
               commentCount: p.commentCount,
               shareCount: 0,
@@ -1731,6 +1738,17 @@ export const appRouter = router({
             });
           }
         }
+
+        // ownVideoUrlsから削除されたURLをクリーンアップ
+        const urlSet = new Set(urls);
+        for (const key of existingData.keys()) {
+          if (!urlSet.has(key)) existingData.delete(key);
+        }
+
+        const ownVideoData = [...existingData.values()];
+
+        // サムネイルをローカル保存（CDN URL期限切れ対策）
+        await localizeCovers(ownVideoData);
 
         // 自動でハッシュタグを抽出してcampaignHashtagsにマージ（TikTokのみ）
         const existingHashtags = new Set((campaign.campaignHashtags || []).map(t => t.toLowerCase().replace(/^#/, "")));
@@ -1751,6 +1769,25 @@ export const appRouter = router({
           ownVideoData,
           campaignHashtags: mergedHashtags,
         });
+
+        // ownVideoData更新後、レポートを自動再生成
+        if (campaign.measurementSnapshotId) {
+          try {
+            const updated = await db.getCampaignById(input.campaignId);
+            if (updated) {
+              const bs = updated.baselineSnapshotId
+                ? await db.getCampaignSnapshotById(updated.baselineSnapshotId)
+                : null;
+              const ms = await db.getCampaignSnapshotById(updated.measurementSnapshotId);
+              if (ms?.status === "completed") {
+                const reportData = await generateCampaignReport(updated, bs, ms);
+                await db.upsertCampaignReport(reportData);
+              }
+            }
+          } catch (e) {
+            console.error(`[scrapeVideoUrls] Auto-report regen failed:`, e);
+          }
+        }
 
         return { videoCount: ownVideoData.length, newHashtags };
       }),
@@ -1854,7 +1891,10 @@ export const appRouter = router({
 
     // レポート手動生成
     generateReport: protectedProcedure
-      .input(z.object({ campaignId: z.number() }))
+      .input(z.object({
+        campaignId: z.number(),
+        targetViews: z.number().int().positive().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const campaign = await db.getCampaignById(input.campaignId);
         if (!campaign || campaign.userId !== ctx.user.id) {
@@ -1862,6 +1902,10 @@ export const appRouter = router({
         }
         if (!campaign.measurementSnapshotId) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "効果測定のスナップショットが必要です" });
+        }
+        // 目標再生数を保存
+        if (input.targetViews !== undefined) {
+          await db.updateCampaign(input.campaignId, { targetViews: input.targetViews });
         }
         const baselineSnapshot = campaign.baselineSnapshotId
           ? await db.getCampaignSnapshotById(campaign.baselineSnapshotId)

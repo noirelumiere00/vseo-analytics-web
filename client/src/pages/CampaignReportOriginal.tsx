@@ -5,12 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { trpc } from "@/lib/trpc";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music } from "lucide-react";
+import { ArrowLeft, Download, RefreshCw, TrendingUp, TrendingDown, Minus, Crown, Star, Brain, Search, Eye, BarChart3, Users, Hash, Share2, Globe, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Heart, MessageCircle, Bookmark, ExternalLink, CalendarDays, Pencil, Check, Loader2, Layers, Sparkles, Trophy, AlertTriangle, Play, ArrowUpDown, FileDown, Filter, Link2, Copy, CheckCheck, Music, Target } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { Fragment, useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, ReferenceArea, Cell, AreaChart, Area, ComposedChart } from "recharts";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -18,6 +18,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { analyzeSentiment } from "@shared/sentiment";
 
 // ============================
 // Utilities
@@ -35,7 +36,7 @@ function ChangeIndicator({ value, suffix = "", inverse = false }: { value: numbe
   const isPositive = inverse ? value < 0 : value > 0;
   const isNegative = inverse ? value > 0 : value < 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 font-medium ${isPositive ? "text-green-600" : isNegative ? "text-red-500" : "text-muted-foreground"}`}>
+    <span className={`inline-flex items-center gap-0.5 font-medium ${isPositive ? "text-emerald-600" : isNegative ? "text-[#D71921]" : "text-muted-foreground"}`}>
       {isPositive ? <TrendingUp className="h-3.5 w-3.5" /> : isNegative ? <TrendingDown className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
       {value > 0 ? "+" : ""}{value}{suffix}
     </span>
@@ -45,45 +46,32 @@ function ChangeIndicator({ value, suffix = "", inverse = false }: { value: numbe
 function BeforeAfter({ before, after, suffix = "" }: { before: string | number; after: string | number; suffix?: string }) {
   return (
     <span>
-      <span className="text-slate-400">{before}{suffix}</span>
-      <span className="text-muted-foreground mx-1">&rarr;</span>
-      <span className="text-blue-600 font-semibold">{after}{suffix}</span>
+      <span className="text-[#9ca3af]">{before}{suffix}</span>
+      <span className="text-[#404040] mx-1">&rarr;</span>
+      <span className="text-[#0a0a0a] font-semibold">{after}{suffix}</span>
     </span>
   );
 }
 
-// Sentiment analysis from caption text
-const POS_WORDS = /最高|美味し|おいし|すごい|すごく|良い|いい感じ|おすすめ|オススメ|楽し|好き|可愛|かわいい|カワイイ|嬉し|素敵|綺麗|きれい|最強|神$|神す|ヤバい|やばい|やばす|感動|面白|おもしろ|幸せ|大好き|ハマ|リピ|推し|優勝|天才|完璧|完成度|満足|虜|沼|飯テロ|至福|贅沢|絶品|旨|うま|ウマ|映え|バズ|お気に入り|抜群|極上|最上|一番|ベスト|感謝|ありがと|👍|🔥|❤|💕|😍|🥰|✨|💯|👏|😋|🤤/i;
-const NEG_WORDS = /最悪|まずい|マズい|ダメ|だめ|微妙|残念|嫌い|きらい|ひどい|酷い|悪い|がっかり|ガッカリ|不味|後悔|失敗|期待はずれ|いまいち|イマイチ|つまらな|詐欺|ぼったくり|高すぎ|不満|苦手|やめた|無理|クソ|ゴミ|💩|😤|😡|👎/i;
-
-function analyzeSentiment(text: string | undefined): "positive" | "neutral" | "negative" {
-  if (!text) return "neutral";
-  const hasPos = POS_WORDS.test(text);
-  const hasNeg = NEG_WORDS.test(text);
-  if (hasPos && !hasNeg) return "positive";
-  if (hasNeg && !hasPos) return "negative";
-  if (hasPos && hasNeg) return "neutral"; // mixed → neutral
-  return "neutral";
-}
-
 const SENTIMENT_CONFIG = {
   positive: { label: "ポジティブ", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200", dotColor: "bg-emerald-500", Icon: TrendingUp },
-  neutral:  { label: "ナチュラル", color: "text-slate-500", bg: "bg-slate-50 border-slate-200", dotColor: "bg-slate-400", Icon: Minus },
-  negative: { label: "ネガティブ", color: "text-red-500", bg: "bg-red-50 border-red-200", dotColor: "bg-red-500", Icon: TrendingDown },
+  neutral:  { label: "ナチュラル", color: "text-[#6b7280]", bg: "bg-white/80 border-black/6", dotColor: "bg-[#a3a3a3]", Icon: Minus },
+  negative: { label: "ネガティブ", color: "text-[#D71921]", bg: "bg-red-50 border-[#D71921]/30", dotColor: "bg-[#D71921]", Icon: TrendingDown },
 } as const;
 
 export const gradeColors: Record<string, string> = {
-  S: "bg-yellow-500 text-white",
-  A: "bg-green-500 text-white",
-  B: "bg-blue-500 text-white",
-  C: "bg-gray-500 text-white",
-  D: "bg-red-500 text-white",
+  S: "bg-[#D71921] text-white",
+  A: "bg-[#0a0a0a] text-white",
+  B: "bg-[#737373] text-white",
+  C: "bg-[#a3a3a3] text-[#fafafa]",
+  D: "bg-[#d4d4d4] text-[#525252]",
 };
 
 export const SECTIONS = [
   { id: "summary", label: "総合", icon: Brain },
+  { id: "target", label: "目標達成", icon: Target },
   { id: "platform", label: "全媒体", icon: Layers },
-  { id: "videos", label: "TikTok", icon: Eye },
+  { id: "videos", label: "施策動画", icon: Play },
   { id: "keyword-sov", label: "順位・シェア", icon: Search },
   { id: "competitor", label: "競合", icon: Users },
   { id: "ripple", label: "波及", icon: Share2 },
@@ -108,7 +96,17 @@ export default function CampaignReport() {
   const dailyMetrics = dailyMetricsQuery.data || [];
 
   const [activeSection, setActiveSection] = useState("summary");
+  const [platformTab, setPlatformTab] = useState<"tiktok" | "instagram">("tiktok");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Auto-select platform tab when only one platform has data
+  const _vmLen = (report as any)?.videoMetricsReport?.length || 0;
+  const _ighLen = ((report as any)?.instagramHashtagReport || []).filter((r: any) => r.topPosts?.length > 0).length;
+  useEffect(() => {
+    if (_vmLen === 0 && _ighLen > 0) setPlatformTab("instagram");
+    else if (_vmLen > 0 && _ighLen === 0) setPlatformTab("tiktok");
+  }, [_vmLen, _ighLen]);
+
 
   // IntersectionObserver for active section tracking
   useEffect(() => {
@@ -330,6 +328,7 @@ export default function CampaignReport() {
   const positions = report.positionReport || [];
   const compReport = report.competitorReport || {};
   const sovReport = report.sovReport || {};
+  const overviewUniqueAll = (sovReport as any)?._overviewUniqueAll as { after: { own: number; total: number }; before: { own: number; total: number } } | undefined;
   const freqReport = report.competitorFrequencyReport || [];
   const crossPlatform = (report as any).crossPlatformData as any | undefined;
   const videoScores = (report as any).videoScores as any[] | undefined;
@@ -338,8 +337,16 @@ export default function CampaignReport() {
 
   const platformSummary = (report as any).platformSummary as {
     youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
-    instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalThreeSecViews?: number; totalLikes: number; avgER: number; avgRetention3s?: number; videos: any[] };
   } | undefined;
+
+  const keywordSentimentReport = (report as any).keywordSentimentReport as Record<string, { total: number; positive: number; neutral: number; negative: number }> | undefined;
+
+  const instagramHashtagReport = (report as any).instagramHashtagReport as Array<{
+    hashtag: string; totalFetched: number; method: string;
+    topPosts: Array<{ position: number; shortcode: string; username: string; type: string; likeCount: number; commentCount: number; viewCount: number; caption: string; coverUrl: string; postUrl: string; isOwn: boolean }>;
+    ownRanks: number[];
+  }> | undefined;
 
   const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
@@ -350,11 +357,15 @@ export default function CampaignReport() {
   const hasInstagram = platformSummary?.instagram && platformSummary.instagram.videos.length > 0;
   const hasMultiPlatform = hasYoutube || hasInstagram;
   const hasAnyPlatformData = hasVideoMetrics || hasYoutube || hasInstagram;
+  const hasInstagramHashtag = instagramHashtagReport && instagramHashtagReport.length > 0 && instagramHashtagReport.some(r => r.topPosts.length > 0);
+
+  const hasTargetViews = campaign?.targetViews != null && campaign.targetViews > 0;
 
   // Filter visible sections
   const visibleSections = SECTIONS.filter(s => {
+    if (s.id === "target" && !hasTargetViews) return false;
     if (s.id === "platform" && !hasAnyPlatformData) return false;
-    if (s.id === "videos" && !hasVideoMetrics) return false;
+    if (s.id === "videos" && !hasVideoMetrics && !hasInstagramHashtag) return false;
     if (s.id === "competitor" && !hasCompetitors) return false;
     if (s.id === "cross" && !hasCrossPlatform) return false;
     return true;
@@ -363,31 +374,21 @@ export default function CampaignReport() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-full">
+      <div className="nothing-report bg-[#fafafa] flex flex-col h-full">
         {/* Fixed Header + Nav */}
-        <div className="shrink-0 bg-background z-20 border-b">
+        <div className="shrink-0 bg-white/80 backdrop-blur-xl z-20 border-b border-black/6">
           <div className="max-w-[1600px] mx-auto px-2 md:px-3">
             {/* Header */}
             <div className="flex items-center justify-between py-2">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-[#6b7280] hover:text-[#0a0a0a] hover:bg-black/4" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
                 <div>
-                  <h1 className="text-lg font-bold tracking-tight leading-tight">{campaign?.name || "施策効果レポート"}</h1>
-                  <p className="text-xs text-muted-foreground">
+                  <h1 className="text-lg font-bold tracking-[0.08em] leading-tight text-[#0a0a0a]" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{campaign?.name || "施策効果レポート"}</h1>
+                  <p className="text-xs text-[#6b7280] font-mono">
                     {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
                   </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                    <CalendarDays className="h-3.5 w-3.5" />
-                    <span>施策期間:</span>
-                    <input type="date" value={campaignStart} onChange={e => setCampaignStart(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
-                    <span>〜</span>
-                    <input type="date" value={campaignEnd} onChange={e => setCampaignEnd(e.target.value)} className="border rounded px-1.5 py-0.5 text-xs bg-background" />
-                    {(campaignStart !== defaultStart || campaignEnd !== defaultEnd) && (
-                      <button onClick={() => { setCampaignStart(defaultStart); setCampaignEnd(defaultEnd); }} className="text-xs text-primary hover:underline">リセット</button>
-                    )}
-                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -460,17 +461,15 @@ export default function CampaignReport() {
 
             {/* Navigation */}
             <nav className="py-1 overflow-x-auto">
-              <div className="flex gap-1 min-w-max">
+              <div className="flex gap-0 min-w-max segment-control">
                 {visibleSections.map((sec) => {
                   const Icon = sec.icon;
                   return (
                     <button
                       key={sec.id}
                       onClick={() => scrollTo(sec.id)}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors whitespace-nowrap ${
-                        activeSection === sec.id
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-muted"
+                      className={`flex items-center gap-1 segment-item ${
+                        activeSection === sec.id ? "active" : ""
                       }`}
                     >
                       <Icon className="h-3.5 w-3.5" />
@@ -493,20 +492,28 @@ export default function CampaignReport() {
           {aiReport && (
             <Card className="mb-4 relative overflow-hidden">
               <div className="absolute top-3 right-3">
-                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-background/80 backdrop-blur-sm border-violet-300 text-violet-600">
+                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-white/60 backdrop-blur-sm border-black/6 text-[#6b7280]">
                   <Sparkles className="h-3 w-3" />
                   AI Generated
                 </Badge>
               </div>
               <CardContent className="py-5 flex items-start gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ring-4 ring-offset-2 ring-offset-background ${gradeColors[aiReport.grade] || gradeColors.C} ${aiReport.grade === "S" ? "ring-yellow-300" : aiReport.grade === "A" ? "ring-green-300" : aiReport.grade === "B" ? "ring-blue-300" : "ring-gray-200"}`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ring-4 ring-offset-2 ring-offset-white ${gradeColors[aiReport.grade] || gradeColors.C} ${aiReport.grade === "S" ? "ring-[#D71921]" : aiReport.grade === "A" ? "ring-black/20" : aiReport.grade === "B" ? "ring-black/12" : "ring-black/8"}`} style={{ fontFamily: '"Space Mono", monospace' }}>
                   {aiReport.grade}
                 </div>
-                <p className="text-sm leading-relaxed pt-2 pr-20">{aiReport.summary}</p>
+                <p className="text-sm leading-relaxed pt-2 pr-20 text-[#525252]">{aiReport.summary}</p>
               </CardContent>
             </Card>
           )}
         </div>
+
+        {/* Section: 目標達成（全媒体再生数） — only shown when targetViews is set */}
+        {hasTargetViews && (
+          <div id="target" ref={el => { sectionRefs.current["target"] = el; }} className="scroll-mt-16 section-fade-in">
+            <SectionHeader number={sectionNumber("target")} title="目標達成（全媒体再生数）" question="目標に対してどれだけ達成できた？" />
+            <TargetAchievementSection videoMetrics={videoMetrics} platformSummary={platformSummary} campaign={campaign} dailyMetrics={dailyMetrics} />
+          </div>
+        )}
 
         {/* Section: Multi-Platform Summary */}
         {/* Section: All-Platform Summary */}
@@ -518,25 +525,61 @@ export default function CampaignReport() {
               platformSummary={platformSummary || {}}
               dailyMetrics={dailyMetrics}
               hasBaseline={hasBaseline}
+              campaign={campaign}
             />
           </div>
         )}
 
-        {/* Section: TikTok Videos */}
-        {hasVideoMetrics && (
+        {/* Section: 施策動画 (Platform-tabbed: TikTok / Instagram) */}
+        {(hasVideoMetrics || hasInstagramHashtag) && (
           <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
-            <SectionHeader number={sectionNumber("videos")} title="TikTok 施策動画パフォーマンス" question="TikTok動画の状況は？" />
-            <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
-            <div className="mt-5">
-              <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+            <div className="flex items-end justify-between">
+              <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question={platformTab === "tiktok" ? "TikTok動画の状況は？" : "Instagram Reelの状況は？"} />
+              {hasVideoMetrics && hasInstagramHashtag && (
+                <PlatformTabSwitcher value={platformTab} onChange={setPlatformTab} />
+              )}
             </div>
+
+            {/* TikTok tab */}
+            {(platformTab === "tiktok" && hasVideoMetrics) && (
+              <>
+                <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
+                <div className="mt-5">
+                  <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+                </div>
+              </>
+            )}
+
+            {/* Instagram tab */}
+            {(platformTab === "instagram" && hasInstagramHashtag) && (
+              <InstagramVideoSection
+                instagramHashtagReport={instagramHashtagReport!}
+                platformSummary={platformSummary}
+                dailyMetrics={dailyMetrics}
+              />
+            )}
+
           </div>
         )}
 
-        {/* Section: Keyword + SOV (unified) */}
+        {/* Section: Keyword + SOV (platform-linked) */}
         <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
-          <SectionHeader number={sectionNumber("keyword-sov")} title="検索順位・上位シェア率" question="検索上位にどの動画が露出した？" />
-          <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} />
+          <div className="flex items-end justify-between">
+            <SectionHeader number={sectionNumber("keyword-sov")} title={platformTab === "tiktok" ? "検索順位・上位シェア率" : "ハッシュタグ検索順位"} question={platformTab === "tiktok" ? "検索上位にどの動画が露出した？" : "IG検索でどの位置に表示された？"} />
+            {hasVideoMetrics && hasInstagramHashtag && (
+              <PlatformTabSwitcher value={platformTab} onChange={setPlatformTab} />
+            )}
+          </div>
+
+          {/* TikTok SOV */}
+          {platformTab === "tiktok" && (
+            <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} overviewUniqueAll={overviewUniqueAll} />
+          )}
+
+          {/* Instagram Hashtag Rankings */}
+          {platformTab === "instagram" && hasInstagramHashtag && (
+            <InstagramHashtagRankingSection instagramHashtagReport={instagramHashtagReport!} />
+          )}
         </div>
 
         {/* Section: Competitor */}
@@ -550,7 +593,7 @@ export default function CampaignReport() {
         {/* Section: Ripple */}
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
-          <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} />
+          <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} keywordSentimentReport={keywordSentimentReport} />
         </div>
 
         {/* Section: Cross Platform */}
@@ -588,11 +631,1227 @@ export default function CampaignReport() {
 export function SectionHeader({ number, title, question }: { number: number; title: string; question: string }) {
   return (
     <div className="mb-4">
-      <div className="flex items-center gap-2">
-        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold">{number}</span>
-        <h2 className="text-lg font-bold">{title}</h2>
+      <div className="flex items-center gap-3">
+        <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">{String(number).padStart(2, "0")}</span>
+        <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{title}</h2>
       </div>
-      <p className="text-sm text-muted-foreground ml-9">{question}</p>
+      <p className="text-xs text-[#6b7280] ml-9 mt-0.5">{question}</p>
+    </div>
+  );
+}
+
+// ============================
+// Platform Tab Switcher
+// ============================
+
+export function PlatformTabSwitcher({ value, onChange }: { value: "tiktok" | "instagram"; onChange: (v: "tiktok" | "instagram") => void }) {
+  return (
+    <div className="flex items-center gap-0 rounded-lg border border-black/8 bg-white p-0.5 shrink-0 mb-4">
+      <button
+        onClick={() => onChange("tiktok")}
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+          value === "tiktok"
+            ? "bg-[#0a0a0a] text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Music className="h-3 w-3" />
+        TikTok
+      </button>
+      <button
+        onClick={() => onChange("instagram")}
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+          value === "instagram"
+            ? "bg-gradient-to-r from-[#E1306C] to-[#F77737] text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Hash className="h-3 w-3" />
+        Instagram
+      </button>
+    </div>
+  );
+}
+
+// ============================
+// ============================
+// Instagram Video Section (TikTokのVideoSectionと同じフォーマット)
+// ============================
+
+function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyMetrics }: {
+  instagramHashtagReport: IGHashtagReport;
+  platformSummary?: { instagram?: { totalVideos: number; totalViews: number; totalLikes: number; totalComments?: number; avgER: number; avgRetention3s?: number; videos: any[] } };
+  dailyMetrics: any[];
+}) {
+  const igData = platformSummary?.instagram;
+  const igVideos = igData?.videos || [];
+
+  // Collect all own posts for hashtag summary (deduplicate by shortcode)
+  const allOwnPosts = useMemo(() => {
+    const seen = new Set<string>();
+    const posts: Array<IGHashtagReport[0]["topPosts"][0] & { hashtag: string }> = [];
+    for (const r of instagramHashtagReport) {
+      for (const p of r.topPosts) {
+        if (!p.isOwn) continue;
+        const key = p.shortcode || p.postUrl;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        posts.push({ ...p, hashtag: r.hashtag });
+      }
+    }
+    return posts;
+  }, [instagramHashtagReport]);
+
+  // Aggregate IG metrics
+  const { totalViews, totalLikes, totalComments, totalThreeSecViews, avgRetention3s, avgEr } = useMemo(() => {
+    let views = 0, likes = 0, comments = 0, threeSecViews = 0;
+    for (const v of igVideos) {
+      views += v.viewCount || 0;
+      likes += v.likeCount || 0;
+      comments += v.commentCount || 0;
+      threeSecViews += (v as any).threeSecViewCount || 0;
+    }
+    if (igVideos.length === 0 && allOwnPosts.length > 0) {
+      for (const p of allOwnPosts) {
+        views += p.viewCount || 0;
+        likes += p.likeCount || 0;
+        comments += p.commentCount || 0;
+      }
+    }
+    const er = views > 0 ? Number(((likes + comments) / views * 100).toFixed(2)) : 0;
+    const ret3s = igData?.avgRetention3s ?? (views > 0 ? Number((threeSecViews / views * 100).toFixed(1)) : 0);
+    const t3sv = igData?.totalThreeSecViews ?? threeSecViews;
+    return { totalViews: views, totalLikes: likes, totalComments: comments, totalThreeSecViews: t3sv, avgRetention3s: ret3s, avgEr: er };
+  }, [igVideos, allOwnPosts, igData]);
+
+  const videoCount = igData?.totalVideos || allOwnPosts.length;
+
+  // Hashtag ranking summary for KPI cards
+  const hashtagSummary = useMemo(() => {
+    let rankedCount = 0;
+    let totalRank = 0;
+    for (const r of instagramHashtagReport) {
+      if (r.ownRanks && r.ownRanks.length > 0) {
+        for (const rank of r.ownRanks) {
+          rankedCount++;
+          totalRank += rank;
+        }
+      }
+    }
+    const avgRank = rankedCount > 0 ? Number((totalRank / rankedCount).toFixed(1)) : null;
+    const topTagCount = instagramHashtagReport.filter(r => r.ownRanks && r.ownRanks.some(rk => rk <= 10)).length;
+    return { rankedCount, avgRank, topTagCount };
+  }, [instagramHashtagReport]);
+
+  // ホバー展開管理（タッチデバイスはタップトグル）
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTouchRef = useRef(false);
+
+  useEffect(() => {
+    isTouchRef.current = window.matchMedia("(hover: none)").matches;
+  }, []);
+
+  const handleMouseEnter = useCallback((url: string) => {
+    if (isTouchRef.current) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setExpandedCard(url), 150);
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    if (isTouchRef.current) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setExpandedCard(null), 100);
+  }, []);
+  const handleTap = useCallback((url: string) => {
+    if (!isTouchRef.current) return;
+    setExpandedCard(prev => prev === url ? null : url);
+  }, []);
+
+  // IG sparkline data from dailyMetrics
+  const [sparkMetric, setSparkMetric] = useState<"views" | "likes" | "comments">("views");
+  const IG_SPARK_KEY: Record<string, string> = { views: "viewCount", likes: "likeCount", comments: "commentCount" };
+
+  // Extract shortcode from IG URL for dedup (/p/XXX, /reel/XXX → XXX)
+  const igShortcode = (url: string) => {
+    const m = url.match(/instagram\.com\/(?:p|reel|reels)\/([^/?]+)/);
+    return m ? m[1] : url;
+  };
+
+  const sparks = useMemo(() => {
+    const igMetrics = dailyMetrics.filter((m: any) => m.platform === "instagram");
+    if (igMetrics.length === 0) return [];
+
+    // Group by shortcode (not raw URL) to merge /p/ and /reel/ variants
+    const byShortcode = new Map<string, { url: string; entries: Map<string, { viewCount: number; likeCount: number; commentCount: number }> }>();
+    for (const dm of igMetrics) {
+      const url = dm.videoUrl || "";
+      if (!url) continue;
+      const sc = igShortcode(url);
+      if (!byShortcode.has(sc)) byShortcode.set(sc, { url, entries: new Map() });
+      const group = byShortcode.get(sc)!;
+      const dateKey = dm.dateKey;
+      const existing = group.entries.get(dateKey);
+      if (existing) {
+        // Same shortcode + same date: keep max values
+        existing.viewCount = Math.max(existing.viewCount, Number(dm.viewCount) || 0);
+        existing.likeCount = Math.max(existing.likeCount, Number(dm.likeCount) || 0);
+        existing.commentCount = Math.max(existing.commentCount, Number(dm.commentCount) || 0);
+      } else {
+        group.entries.set(dateKey, {
+          viewCount: Number(dm.viewCount) || 0,
+          likeCount: Number(dm.likeCount) || 0,
+          commentCount: Number(dm.commentCount) || 0,
+        });
+      }
+    }
+
+    const metricKey = IG_SPARK_KEY[sparkMetric];
+    const result: Array<{
+      videoUrl: string; username: string; caption: string; fullCaption: string; coverUrl: string; postUrl: string;
+      latestVal: number; er: number; data: Array<{ dateKey: string; value: number }>; deltas: Array<{ dateKey: string; value: number }>;
+      allMetrics: { viewCount: number; likeCount: number; commentCount: number };
+      recentDeltas: Array<{ dateKey: string; views: number; likes: number; comments: number; er: number }>;
+      dailyIncrement: { views: number; likes: number; comments: number } | null;
+      trendLabel: string;
+    }> = [];
+
+    // Post info lookup by shortcode
+    const postsByShortcode = new Map<string, { username: string; caption: string; coverUrl: string; postUrl: string }>();
+    for (const p of allOwnPosts) {
+      const sc = igShortcode(p.postUrl);
+      if (!postsByShortcode.has(sc)) {
+        postsByShortcode.set(sc, { username: p.username, caption: p.caption || "", coverUrl: p.coverUrl || "", postUrl: p.postUrl });
+      }
+    }
+    for (const v of igVideos) {
+      const url = v.videoUrl || "";
+      if (!url) continue;
+      const sc = igShortcode(url);
+      if (!postsByShortcode.has(sc)) {
+        postsByShortcode.set(sc, { username: v.ownerUsername || "", caption: v.caption || "", coverUrl: v.coverUrl || "", postUrl: url });
+      }
+    }
+
+    for (const [sc, group] of byShortcode.entries()) {
+      const sorted = [...group.entries.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([dateKey, d]) => ({ dateKey, ...d }));
+      const vals = sorted.map(d => Number((d as any)[metricKey]) || 0);
+      if (vals.length < 2) continue;
+
+      const last = sorted[sorted.length - 1];
+      const postInfo = postsByShortcode.get(sc);
+
+      const deltas: Array<{ dateKey: string; value: number }> = [];
+      for (let i = 1; i < sorted.length; i++) {
+        deltas.push({ dateKey: sorted[i].dateKey, value: Math.max(0, vals[i] - vals[i - 1]) });
+      }
+
+      const er = last.viewCount > 0 ? Number(((last.likeCount + last.commentCount) / last.viewCount * 100).toFixed(2)) : 0;
+
+      // 日次増分（直近2日比較）
+      let dailyIncrement: { views: number; likes: number; comments: number } | null = null;
+      if (sorted.length >= 2) {
+        const prev = sorted[sorted.length - 2];
+        dailyIncrement = {
+          views: last.viewCount - prev.viewCount,
+          likes: last.likeCount - prev.likeCount,
+          comments: last.commentCount - prev.commentCount,
+        };
+      }
+
+      // トレンド乖離
+      let trendLabel: "急成長" | "安定" | "停滞" | "バイラル" = "安定";
+      if (vals.length >= 3) {
+        const lastVal = vals[vals.length - 1];
+        if (lastVal > 0) {
+          const normalized = vals.map((v, i) => ({
+            actual: v / lastVal,
+            expected: i / (vals.length - 1),
+          }));
+          const mse = normalized.reduce((sum, d) => sum + Math.pow(d.actual - d.expected, 2), 0) / normalized.length;
+          const rmse = Math.sqrt(mse);
+          const recentGrowth = vals.length >= 3
+            ? (vals[vals.length - 1] - vals[vals.length - 2]) / Math.max(vals[vals.length - 2] - vals[vals.length - 3], 1)
+            : 1;
+          if (rmse > 0.35 && recentGrowth > 2) trendLabel = "バイラル";
+          else if (rmse > 0.2 && recentGrowth > 1.2) trendLabel = "急成長";
+          else if (rmse < 0.15 && dailyIncrement && dailyIncrement.views < 10) trendLabel = "停滞";
+          else trendLabel = "安定";
+        }
+      }
+
+      // 直近3日の全メトリクス日次増分
+      const recentDeltas: Array<{ dateKey: string; views: number; likes: number; comments: number; er: number }> = [];
+      for (let i = Math.max(1, sorted.length - 3); i < sorted.length; i++) {
+        const cur = sorted[i];
+        const prev = sorted[i - 1];
+        const dv = cur.viewCount - prev.viewCount;
+        const dl = cur.likeCount - prev.likeCount;
+        const dc = cur.commentCount - prev.commentCount;
+        const dEr = dv > 0 ? Number(((dl + dc) / dv * 100).toFixed(2)) : 0;
+        recentDeltas.push({ dateKey: cur.dateKey, views: Math.max(0, dv), likes: Math.max(0, dl), comments: Math.max(0, dc), er: dEr });
+      }
+
+      result.push({
+        videoUrl: group.url,
+        username: postInfo ? `@${postInfo.username}` : "",
+        caption: (postInfo?.caption || "").slice(0, 18),
+        fullCaption: postInfo?.caption || "",
+        coverUrl: postInfo?.coverUrl || "",
+        postUrl: postInfo?.postUrl || group.url,
+        latestVal: vals[vals.length - 1],
+        er,
+        data: sorted.map(d => ({ dateKey: d.dateKey, value: Number((d as any)[metricKey]) || 0 })),
+        deltas,
+        allMetrics: { viewCount: last.viewCount, likeCount: last.likeCount, commentCount: last.commentCount },
+        recentDeltas,
+        dailyIncrement,
+        trendLabel,
+      });
+    }
+
+    return result.sort((a, b) => b.latestVal - a.latestVal);
+  }, [dailyMetrics, sparkMetric, allOwnPosts, igVideos]);
+
+  const IG_SORT_OPTIONS = [
+    { key: "views", label: "再生数" },
+    { key: "likes", label: "いいね" },
+    { key: "comments", label: "コメント" },
+    { key: "er", label: "ER" },
+  ];
+  const [sortBy, setSortBy] = useState("views");
+
+  const sortedSparks = useMemo(() => {
+    return [...sparks].sort((a, b) => {
+      if (sortBy === "er") return b.er - a.er;
+      if (sortBy === "likes") return b.allMetrics.likeCount - a.allMetrics.likeCount;
+      if (sortBy === "comments") return b.allMetrics.commentCount - a.allMetrics.commentCount;
+      return b.allMetrics.viewCount - a.allMetrics.viewCount;
+    });
+  }, [sparks, sortBy]);
+
+  const IG_SPARK_LABELS: Record<string, string> = { views: "再生数", likes: "いいね", comments: "コメント" };
+
+  const SPARK_PAGE = 8;
+  const [sparkDisplayCount, setSparkDisplayCount] = useState(SPARK_PAGE);
+  const visibleSparks = sortedSparks.slice(0, sparkDisplayCount);
+  const sparkRemaining = sortedSparks.length - sparkDisplayCount;
+  const topVal = sortBy === "er" ? Math.max(...sortedSparks.map(s => s.er), 1) : Math.max(...sortedSparks.map(s => s.latestVal), 1);
+
+  return (
+    <div className="space-y-4">
+      {/* ── KPI Summary Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card><CardContent className="py-3 px-4 space-y-1">
+          <p className="text-xs text-[#6b7280]">平均検索順位</p>
+          <p className="text-xl font-bold text-[#0a0a0a] font-mono">
+            {hashtagSummary.avgRank != null ? `${hashtagSummary.rankedCount}タグ ${hashtagSummary.avgRank}位` : "圏外"}
+          </p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 space-y-1">
+          <p className="text-xs text-[#6b7280]">平均ER</p>
+          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{avgEr}%</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 space-y-1">
+          <p className="text-xs text-[#6b7280]">上位表示率</p>
+          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{hashtagSummary.topTagCount}タグ</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 space-y-1">
+          <p className="text-xs text-[#6b7280]">第三者投稿</p>
+          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{allOwnPosts.length}本</p>
+        </CardContent></Card>
+      </div>
+
+      {/* ── Video Aggregate Cards ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">総投稿数</p>
+          <p className="text-xl font-bold">{videoCount}</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">総再生数</p>
+          <p className="text-xl font-bold">{fmt(totalViews)}</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">総いいね数</p>
+          <p className="text-xl font-bold">{fmt(totalLikes)}</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">総コメント数</p>
+          <p className="text-xl font-bold">{fmt(totalComments)}</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">3秒再生数</p>
+          <p className="text-xl font-bold">{totalThreeSecViews > 0 ? fmt(totalThreeSecViews) : "—"}</p>
+        </CardContent></Card>
+        <Card><CardContent className="py-3 px-4 text-center">
+          <p className="text-xs text-muted-foreground">平均視聴維持率</p>
+          <p className="text-xl font-bold">{avgRetention3s > 0 ? `${avgRetention3s}%` : "—"}</p>
+        </CardContent></Card>
+      </div>
+
+      {/* ── 投稿パフォーマンス推移 (mini cards + mini sparklines) ── */}
+      {sortedSparks.length > 0 && (
+        <Card>
+          <CardContent className="py-4 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <p className="text-sm font-semibold">投稿パフォーマンス推移</p>
+                <p className="text-[11px] text-muted-foreground">日次増分バー ＋ ホバーで累積推移・詳細</p>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {IG_SORT_OPTIONS.map(opt => (
+                  <button key={opt.key} onClick={() => {
+                    setSortBy(opt.key);
+                    const sparkMap: Record<string, "views" | "likes" | "comments"> = { views: "views", likes: "likes", comments: "comments", er: "views" };
+                    setSparkMetric(sparkMap[opt.key] || "views");
+                  }}
+                    className={`px-2 py-1 rounded text-[11px] transition-colors ${sortBy === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {visibleSparks.map((s, idx) => {
+                const displayVal = sortBy === "er" ? s.er : s.latestVal;
+                const intensity = topVal > 0 ? Math.min(displayVal / topVal, 1) : 0.5;
+                const sc = intensity > 0.5 ? "#E1306C" : intensity > 0.2 ? "#C13584" : "#a5b4fc";
+                const metricKeyMap: Record<string, keyof typeof s.recentDeltas[0]> = { views: "views", likes: "likes", comments: "comments", er: "er" };
+                const deltaKey = metricKeyMap[sortBy] || "views";
+                const recent3 = s.recentDeltas.slice(-3);
+
+                const isExpanded = expandedCard === s.videoUrl;
+                return (
+                  <div key={s.videoUrl || idx}
+                    className="post-card"
+                    onMouseEnter={() => handleMouseEnter(s.videoUrl)}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={() => handleTap(s.videoUrl)}
+                  >
+                    {/* 上部: サムネ + ユーザー名 + 累積値 */}
+                    <div className="flex items-start gap-2.5 p-3 pb-1.5">
+                      {s.coverUrl ? (
+                        <img src={s.coverUrl} alt="" className="w-10 h-14 rounded-md object-cover flex-shrink-0" loading="lazy" />
+                      ) : (
+                        <div className="w-10 h-14 rounded-md flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-[#E1306C] to-[#F77737]">
+                          <Play className="h-3 w-3 text-white/80" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        {s.username && <p className="text-[10px] font-bold text-slate-600 truncate">{s.username}</p>}
+                        <p className="text-[10px] text-slate-400 truncate leading-snug">{s.caption || "投稿"}</p>
+                        <p className="text-lg font-extrabold tabular-nums text-slate-800 leading-tight mt-0.5">
+                          {sortBy === "er" ? `${s.er}%` : fmt(s.latestVal)}
+                        </p>
+                        <p className="text-[9px] text-slate-400 font-medium">
+                          {sortBy === "er" ? "ER" : IG_SPARK_LABELS[sparkMetric]} (累計)
+                        </p>
+                      </div>
+                    </div>
+                    {/* 直近3日の日次増分テーブル */}
+                    {recent3.length > 0 && (
+                      <div className="px-3 pb-2 post-card-mini-spark">
+                        <div className="space-y-0.5">
+                          {recent3.map((d, di) => {
+                            const val = Number(d[deltaKey]) || 0;
+                            const maxInRecent = Math.max(...recent3.map(r => Number(r[deltaKey]) || 0), 1);
+                            const barPct = Math.min((val / maxInRecent) * 100, 100);
+                            return (
+                              <div key={di} className="flex items-center gap-1.5 text-[9px]">
+                                <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
+                                <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
+                                  <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
+                                </div>
+                                <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
+                                  {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {/* コンパクトメトリクス */}
+                    <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
+                      <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
+                      <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(s.allMetrics.likeCount)}</span>
+                      <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" />{fmt(s.allMetrics.commentCount)}</span>
+                      <span className="ml-auto font-mono text-[8px]">ER {s.er}%</span>
+                    </div>
+
+                    {/* ===== 展開パネル（ホバー） ===== */}
+                    <div className={`post-card-expand ${isExpanded ? "is-expanded" : ""}`}>
+                      <div className="post-card-expand-inner">
+                        <div className="mx-3 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+                        <div className="px-3 pt-2.5 pb-3 space-y-2 bg-gradient-to-b from-muted/20 to-transparent">
+                          {s.fullCaption.length > 18 && (() => {
+                            const cleaned = s.fullCaption.replace(/#[\w\u3000-\u9FFF\uF900-\uFAFF]+/g, "").trim();
+                            return cleaned ? <p className="spark-detail-item text-[10px] text-slate-500 leading-relaxed line-clamp-3">{cleaned}</p> : null;
+                          })()}
+                          <div className="spark-detail-item grid grid-cols-3 gap-0.5">
+                            {([
+                              { key: "viewCount", label: "再生", Icon: Eye, inc: s.dailyIncrement?.views },
+                              { key: "likeCount", label: "いいね", Icon: Heart, inc: s.dailyIncrement?.likes },
+                              { key: "commentCount", label: "コメ", Icon: MessageCircle, inc: s.dailyIncrement?.comments },
+                            ] as const).map(m => (
+                              <div key={m.key} className="text-center py-1 rounded-sm">
+                                <m.Icon className="h-2.5 w-2.5 mx-auto mb-0.5 text-slate-400" />
+                                <p className="text-[10px] font-bold tabular-nums text-foreground">{fmt(s.allMetrics[m.key as keyof typeof s.allMetrics])}</p>
+                                <p className="text-[7px] text-muted-foreground tracking-wider">{m.label}</p>
+                                {m.inc != null && m.inc !== 0 && (
+                                  <p className={`text-[8px] font-semibold tabular-nums mt-0.5 ${m.inc > 0 ? "text-emerald-600" : "text-[#D71921]"}`}>
+                                    {m.inc > 0 ? "+" : ""}{fmt(m.inc)}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="spark-detail-item flex items-center justify-between pt-1">
+                            <span className="text-[8px] text-muted-foreground font-semibold tabular-nums">ER {s.er}%</span>
+                            <a href={s.postUrl} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 text-[8px] text-primary hover:text-primary/80 font-bold transition-colors"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <ExternalLink className="h-2.5 w-2.5" />投稿を見る
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {sparkRemaining > 0 && (
+              <button onClick={() => setSparkDisplayCount(prev => prev + SPARK_PAGE)} className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors border border-dashed border-muted rounded-lg">
+                さらに {Math.min(sparkRemaining, SPARK_PAGE)} 件表示
+              </button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ============================
+// Instagram Reel Section (施策動画 IG tab)
+// ============================
+
+type IGHashtagReport = Array<{
+  hashtag: string; totalFetched: number; method: string;
+  topPosts: Array<{ position: number; shortcode: string; username: string; type: string; likeCount: number; commentCount: number; viewCount: number; caption: string; coverUrl: string; postUrl: string; isOwn: boolean }>;
+  ownRanks: number[];
+}>;
+
+export function InstagramReelSection({ instagramHashtagReport }: { instagramHashtagReport: IGHashtagReport }) {
+  // Collect all own posts across hashtags for a hero summary
+  const allOwnPosts = instagramHashtagReport.flatMap(r =>
+    r.topPosts.filter(p => p.isOwn).map(p => ({ ...p, hashtag: r.hashtag }))
+  );
+  const allPosts = instagramHashtagReport.flatMap(r => r.topPosts);
+  const avgViews = allPosts.length > 0
+    ? Math.round(allPosts.reduce((s, p) => s + p.viewCount, 0) / allPosts.length)
+    : 0;
+
+  return (
+    <div className="space-y-4">
+      {/* Own posts hero */}
+      {allOwnPosts.length > 0 && (
+        <Card className="border-[#E1306C]/15 bg-gradient-to-r from-[#E1306C]/[0.03] to-[#F77737]/[0.02]">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Star className="h-4 w-4 text-[#E1306C]" />
+              <span className="text-xs font-bold text-[#E1306C]">自社 Reel パフォーマンス</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {allOwnPosts.map(post => (
+                <div key={post.shortcode} className="p-3 rounded-lg bg-white/80 border border-[#E1306C]/10">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className="text-[10px] text-muted-foreground">#{post.hashtag}</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-black tabular-nums" style={{ fontFamily: '"Space Mono", monospace', color: '#E1306C' }}>
+                      {fmt(post.viewCount)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">再生</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <Heart className="h-2.5 w-2.5" />{fmt(post.likeCount)}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <MessageCircle className="h-2.5 w-2.5" />{fmt(post.commentCount)}
+                    </span>
+                  </div>
+                  {avgViews > 0 && post.viewCount > 0 && (
+                    <div className="mt-2 pt-2 border-t border-black/[0.04]">
+                      <span className={`text-[10px] font-bold ${post.viewCount >= avgViews ? "text-emerald-600" : "text-[#D71921]"}`}>
+                        {post.viewCount >= avgViews ? "+" : ""}{Math.round(((post.viewCount - avgViews) / avgViews) * 100)}% vs 平均
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Per-hashtag reel list */}
+      {instagramHashtagReport.filter(r => r.topPosts.length > 0).map(result => {
+        const maxViews = Math.max(...result.topPosts.map(p => p.viewCount), 1);
+        return (
+          <Card key={result.hashtag}>
+            <CardHeader className="py-3 px-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-[#E1306C] to-[#F77737] text-white">
+                  <Hash className="h-3 w-3" />
+                </div>
+                <CardTitle className="text-sm font-semibold">{result.hashtag}</CardTitle>
+                <Badge variant="outline" className="text-[10px] h-5">{result.totalFetched}件中 上位{result.topPosts.length}件</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-3 pt-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="text-[10px]">
+                      <TableHead className="w-10 text-center">#</TableHead>
+                      <TableHead>アカウント</TableHead>
+                      <TableHead className="w-[140px]">再生数</TableHead>
+                      <TableHead className="w-16 text-right">いいね</TableHead>
+                      <TableHead className="w-16 text-right">コメント</TableHead>
+                      <TableHead className="w-8" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {result.topPosts.slice(0, 20).map(post => {
+                      const viewRatio = maxViews > 0 ? (post.viewCount / maxViews) * 100 : 0;
+                      return (
+                        <TableRow key={post.shortcode} className={post.isOwn ? "bg-[#E1306C]/[0.04]" : ""}>
+                          <TableCell className="text-center">
+                            {post.position <= 3 ? (
+                              <span className={`inline-flex items-center justify-center h-5 w-5 rounded-md text-[10px] font-black ${
+                                post.position === 1 ? "bg-gradient-to-b from-amber-300 to-amber-500 text-white"
+                                : post.position === 2 ? "bg-gradient-to-b from-gray-300 to-gray-400 text-white"
+                                : "bg-gradient-to-b from-orange-300 to-orange-500 text-white"
+                              }`} style={{ fontFamily: '"Space Mono", monospace' }}>
+                                {post.position}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground tabular-nums" style={{ fontFamily: '"Space Mono", monospace' }}>{post.position}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5">
+                              {post.isOwn && <Star className="h-3 w-3 text-[#E1306C] shrink-0" />}
+                              <span className={`text-xs ${post.isOwn ? "font-bold text-[#E1306C]" : ""}`}>
+                                {post.username ? `@${post.username}` : "—"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs tabular-nums w-12 text-right shrink-0" style={{ fontFamily: '"Space Mono", monospace' }}>
+                                {post.viewCount > 0 ? fmt(post.viewCount) : "—"}
+                              </span>
+                              {post.viewCount > 0 && (
+                                <div className="flex-1 h-1.5 bg-black/[0.04] rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${post.isOwn ? "bg-gradient-to-r from-[#E1306C] to-[#F77737]" : "bg-black/[0.12]"}`}
+                                    style={{ width: `${viewRatio}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">{fmt(post.likeCount)}</TableCell>
+                          <TableCell className="text-right text-xs tabular-nums">{fmt(post.commentCount)}</TableCell>
+                          <TableCell>
+                            <a href={post.postUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-[#E1306C] transition-colors">
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ============================
+// Instagram Hashtag Ranking Section (順位・シェア IG tab)
+// ============================
+
+export function InstagramHashtagRankingSection({ instagramHashtagReport }: { instagramHashtagReport: IGHashtagReport }) {
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const toggleExpand = (tag: string) => setExpandedTags(prev => {
+    const n = new Set(prev);
+    if (n.has(tag)) n.delete(tag); else n.add(tag);
+    return n;
+  });
+
+  const validReports = instagramHashtagReport.filter(r => r.topPosts.length > 0);
+  const isOverview = activeTag === null;
+
+  // --- Aggregate stats ---
+  const agg = useMemo(() => {
+    let totalOwn = 0, totalPosts = 0, bestRank = 999;
+    for (const r of validReports) {
+      const own = r.topPosts.filter(p => p.isOwn);
+      totalOwn += own.length;
+      totalPosts += r.topPosts.length;
+      for (const p of own) { if (p.position < bestRank) bestRank = p.position; }
+    }
+    return {
+      totalOwn, totalPosts, bestRank: bestRank < 999 ? bestRank : null,
+      sovPct: totalPosts > 0 ? Math.round((totalOwn / totalPosts) * 1000) / 10 : 0,
+      tagCount: validReports.length,
+    };
+  }, [validReports]);
+
+  const activeReport = isOverview ? null : validReports.find(r => r.hashtag === activeTag) ?? null;
+
+  // Per-tag stats
+  const tagStats = useMemo(() => {
+    return validReports.map(r => {
+      const own = r.topPosts.filter(p => p.isOwn);
+      const bestPos = own.length > 0 ? Math.min(...own.map(p => p.position)) : null;
+      const sovPct = r.topPosts.length > 0 ? Math.round((own.length / r.topPosts.length) * 1000) / 10 : 0;
+      const totalViews = r.topPosts.reduce((s, p) => s + p.viewCount, 0);
+      const ownViews = own.reduce((s, p) => s + p.viewCount, 0);
+      return { hashtag: r.hashtag, ownCount: own.length, totalCount: r.topPosts.length, bestPos, sovPct, totalViews, ownViews };
+    });
+  }, [validReports]);
+
+  // Hero data — per-tag or aggregate (with views & ER)
+  const hero = useMemo(() => {
+    if (isOverview) {
+      let totalViews = 0, totalLikes = 0, totalComments = 0, ownViews = 0;
+      for (const r of validReports) {
+        for (const p of r.topPosts) {
+          totalViews += p.viewCount;
+          totalLikes += p.likeCount;
+          totalComments += p.commentCount;
+          if (p.isOwn) ownViews += p.viewCount;
+        }
+      }
+      const avgEr = totalViews > 0 ? Number(((totalLikes + totalComments) / totalViews * 100).toFixed(1)) : 0;
+      return { ...agg, totalViews, ownViews, avgEr };
+    }
+    const ts = tagStats.find(t => t.hashtag === activeTag);
+    if (!ts) return { ...agg, totalViews: 0, ownViews: 0, avgEr: 0 };
+    const r = validReports.find(r => r.hashtag === activeTag);
+    let totalLikes = 0, totalComments = 0;
+    if (r) { for (const p of r.topPosts) { totalLikes += p.likeCount; totalComments += p.commentCount; } }
+    const avgEr = ts.totalViews > 0 ? Number(((totalLikes + totalComments) / ts.totalViews * 100).toFixed(1)) : 0;
+    return { totalOwn: ts.ownCount, totalPosts: ts.totalCount, bestRank: ts.bestPos, sovPct: ts.sovPct, tagCount: 1, totalViews: ts.totalViews, ownViews: ts.ownViews, avgEr };
+  }, [isOverview, agg, tagStats, activeTag, validReports]);
+
+  // IG brand colors
+  const IG = { pink: "#E1306C", orange: "#F77737", purple: "#833AB4", yellow: "#FCAF45" };
+
+  return (
+    <div className="space-y-5">
+
+      {/* ======== Hero Card — Instagram gradient aesthetic ======== */}
+      <Card className="overflow-hidden border-0 shadow-lg">
+        <CardContent className="p-0">
+          {/* Gradient header strip */}
+          <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` }} />
+          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-0">
+            {/* Left: SOV ring */}
+            <div className="flex flex-col items-center justify-center py-6 px-4 md:border-r border-slate-100">
+              {(() => {
+                const circumference = 2 * Math.PI * 46;
+                const fillLen = (hero.sovPct / 100) * circumference;
+                return (
+                  <>
+                    <svg viewBox="0 0 120 120" className="w-32 h-32">
+                      <defs>
+                        <linearGradient id="ig-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor={IG.yellow} />
+                          <stop offset="33%" stopColor={IG.orange} />
+                          <stop offset="66%" stopColor={IG.pink} />
+                          <stop offset="100%" stopColor={IG.purple} />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="60" cy="60" r="46" fill="none" stroke="#f1f1f1" strokeWidth="10" />
+                      <circle cx="60" cy="60" r="46" fill="none" stroke="url(#ig-ring-grad)" strokeWidth="10"
+                        strokeDasharray={`${fillLen} ${circumference - fillLen}`} strokeLinecap="round"
+                        transform="rotate(-90 60 60)" className="transition-all duration-700" />
+                      <text x="60" y="54" textAnchor="middle" dominantBaseline="central"
+                        className="text-[28px] font-black" fill="#171717">{hero.sovPct}<tspan className="text-[13px] font-medium" fill="#a3a3a3">%</tspan></text>
+                      <text x="60" y="76" textAnchor="middle" dominantBaseline="central"
+                        className="text-[9px] font-medium" fill="#a3a3a3">SOV ({hero.totalOwn}/{hero.totalPosts})</text>
+                    </svg>
+                    <p className="text-[11px] text-[#a3a3a3] mt-1">{isOverview ? `${agg.tagCount}ハッシュタグ横断` : `#${activeTag}`}</p>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Right: Stat grid — 2×3 */}
+            <div className="grid grid-cols-3 grid-rows-2 gap-px bg-slate-100">
+              {[
+                { label: "自社投稿", val: `${hero.totalOwn}`, sub: `/${hero.totalPosts}件` },
+                { label: "最高順位", val: hero.bestRank != null ? `${hero.bestRank}` : "—", sub: hero.bestRank != null ? "位" : "" },
+                { label: isOverview ? "タグ数" : "SOV率", val: isOverview ? `${agg.tagCount}` : `${hero.sovPct}`, sub: isOverview ? "タグ" : "%" },
+                { label: "総再生数", val: fmt(hero.totalViews), sub: "" },
+                { label: "自社再生数", val: fmt(hero.ownViews), sub: "" },
+                { label: "平均ER", val: `${hero.avgEr}`, sub: "%" },
+              ].map((s, i) => (
+                <div key={i} className="bg-white flex flex-col items-center justify-center py-4 px-3">
+                  <p className="text-[10px] text-[#b0b0b0] uppercase tracking-wider mb-1 font-medium">{s.label}</p>
+                  <p className="text-xl font-black text-[#171717] leading-none tabular-nums">
+                    {s.val}<span className="text-xs font-normal text-[#b0b0b0] ml-0.5">{s.sub}</span>
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ======== Tag Selector Pills ======== */}
+      {validReports.length > 0 && (
+        <div className="overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            <button
+              onClick={() => setActiveTag(null)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap ${
+                isOverview
+                  ? "text-white shadow-lg"
+                  : "bg-slate-100 text-[#a3a3a3] hover:bg-slate-200"
+              }`}
+              style={isOverview ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` } : undefined}
+            >
+              全体
+              <span className={`text-[11px] font-bold tabular-nums ${isOverview ? "text-white/70" : "text-[#a3a3a3]"}`}>
+                {agg.totalOwn}/{agg.totalPosts}
+              </span>
+            </button>
+            {tagStats.map(ts => {
+              const isActive = ts.hashtag === activeTag;
+              return (
+                <button
+                  key={ts.hashtag}
+                  onClick={() => setActiveTag(ts.hashtag)}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap ${
+                    isActive
+                      ? "text-white shadow-lg"
+                      : "bg-slate-100 text-[#737373] hover:bg-slate-200"
+                  }`}
+                  style={isActive ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` } : undefined}
+                >
+                  #{ts.hashtag}
+                  <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-white/70" : "text-[#a3a3a3]"}`}>
+                    {ts.ownCount}/{ts.totalCount}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ======== SOV Slot Visualization ======== */}
+      {(() => {
+        if (isOverview) {
+          // Overview: Instagram Explore-style grid per hashtag
+          return (
+            <Card className="overflow-hidden">
+              <CardContent className="p-0">
+                <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#a3a3a3] font-semibold">ハッシュタグ別 上位表示マップ</span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
+                    </span>
+                  </div>
+                </div>
+                <div className="p-5 space-y-6">
+                  {validReports.map(r => {
+                    const top = r.topPosts.slice(0, 9); // 3×3 grid like IG Explore
+                    const ownCount = r.topPosts.filter(p => p.isOwn).length;
+                    const ts = tagStats.find(t => t.hashtag === r.hashtag);
+                    return (
+                      <div key={r.hashtag}>
+                        {/* Tag header with mini stats */}
+                        <button className="w-full flex items-center justify-between mb-2.5 group/hdr" onClick={() => setActiveTag(r.hashtag)}>
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${IG.yellow}40, ${IG.pink}40, ${IG.purple}40)` }}>
+                              <Hash className="h-3.5 w-3.5" style={{ color: IG.pink }} />
+                            </div>
+                            <div className="text-left">
+                              <span className="text-sm font-bold text-[#171717] group-hover/hdr:text-[#E1306C] transition-colors">#{r.hashtag}</span>
+                              <div className="flex items-center gap-2 text-[10px] text-[#a3a3a3]">
+                                <span>自社 {ownCount}件</span>
+                                <span>·</span>
+                                <span>SOV {ts?.sovPct || 0}%</span>
+                                {ts?.bestPos && <><span>·</span><span>最高{ts.bestPos}位</span></>}
+                              </div>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-[#d4d4d4] group-hover/hdr:text-[#E1306C] transition-colors" />
+                        </button>
+                        {/* 3×3 Explore-style grid */}
+                        <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
+                          {top.map((post, i) => (
+                            <div key={i} className="relative aspect-square group/cell overflow-hidden cursor-pointer" onClick={() => setActiveTag(r.hashtag)}>
+                              {post.coverUrl ? (
+                                <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover/cell:scale-110" loading="lazy" />
+                              ) : (
+                                <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-gradient-to-br from-[#E1306C]/8 to-[#833AB4]/8" : "bg-slate-50"}`}>
+                                  <span className="text-xs text-[#d4d4d4] tabular-nums">#{post.position}</span>
+                                </div>
+                              )}
+                              {/* Hover overlay */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cell:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4">
+                                <span className="flex items-center gap-1 text-white text-xs font-bold"><Heart className="h-3.5 w-3.5 fill-white" />{fmt(post.likeCount)}</span>
+                                <span className="flex items-center gap-1 text-white text-xs font-bold"><MessageCircle className="h-3.5 w-3.5 fill-white" />{fmt(post.commentCount)}</span>
+                              </div>
+                              {/* Own indicator — gradient ring effect */}
+                              {post.isOwn && (
+                                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-black text-white"
+                                  style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                                  {post.position}位 · 自社
+                                </div>
+                              )}
+                              {!post.isOwn && (
+                                <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/40 flex items-center justify-center text-[9px] font-bold text-white">
+                                  {post.position}
+                                </div>
+                              )}
+                              {/* Multi-post indicator */}
+                              {post.type === "carousel" && (
+                                <Layers className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />
+                              )}
+                              {(post.type === "reel" || post.type === "video") && (
+                                <Play className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-white fill-white drop-shadow" />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
+
+        // Individual hashtag view: IG Stories-ring style slot grid + engagement bars
+        if (!activeReport) return null;
+        const top = activeReport.topPosts.slice(0, 30);
+        const ownPosts = top.filter(p => p.isOwn);
+        const maxViews = Math.max(...top.map(p => p.viewCount), 1);
+        const maxEr = Math.max(...top.map(p => p.viewCount > 0 ? (p.likeCount + p.commentCount) / p.viewCount * 100 : 0), 1);
+
+        return (
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              {/* Header with gradient accent */}
+              <div className="relative px-5 py-3 border-b border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#a3a3a3] font-semibold">#{activeTag} 上位表示マップ</span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                      <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
+                    </span>
+                  </div>
+                  {ownPosts.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <Trophy className="h-3 w-3" style={{ color: IG.pink }} />
+                      <span className="text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>
+                        {ownPosts.map(p => `${p.position}位`).join("・")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Stories-ring style: Top 10 as horizontal scroll like IG Stories */}
+              <div className="px-5 py-5">
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  {top.slice(0, 10).map((post, i) => {
+                    const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
+                    return (
+                      <a key={i} href={post.postUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex flex-col items-center flex-shrink-0 w-[72px] group/slot">
+                        {/* Story ring — gradient for own, gray for others */}
+                        <div className={`w-[68px] h-[68px] rounded-full p-[3px] mb-1 ${!post.isOwn ? "bg-slate-200" : ""}`}
+                          style={post.isOwn ? { background: `linear-gradient(135deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` } : undefined}>
+                          <div className="w-full h-full rounded-full border-2 border-white overflow-hidden">
+                            {post.coverUrl ? (
+                              <img src={post.coverUrl} alt="" className="w-full h-full object-cover group-hover/slot:scale-110 transition-transform duration-300" loading="lazy" />
+                            ) : (
+                              <div className="w-full h-full bg-slate-50 flex items-center justify-center">
+                                <span className="text-[11px] text-[#b0b0b0]">{post.position}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {/* Rank + username */}
+                        <span className={`text-[10px] font-black tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-[#171717]"}`}>{post.position}位</span>
+                        <span className={`text-[9px] truncate max-w-full ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>@{post.username}</span>
+                        <span className="text-[8px] text-[#b0b0b0] tabular-nums mt-0.5">{fmt(post.viewCount)}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Engagement Rate comparison — horizontal bars like IG Insights */}
+              <div className="px-5 pb-5">
+                <p className="text-[10px] uppercase tracking-wider text-[#a3a3a3] font-semibold mb-3">エンゲージメント率 比較</p>
+                <div className="space-y-1.5">
+                  {top.slice(0, 15).map((post, i) => {
+                    const er = post.viewCount > 0 ? (post.likeCount + post.commentCount) / post.viewCount * 100 : 0;
+                    const barPct = maxEr > 0 ? (er / maxEr) * 100 : 0;
+                    return (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className={`text-[10px] font-bold tabular-nums w-6 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>{post.position}</span>
+                        <span className={`text-[10px] w-16 truncate flex-shrink-0 ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#525252]"}`}>@{post.username}</span>
+                        <div className="flex-1 h-4 bg-slate-50 rounded-sm overflow-hidden">
+                          <div className="h-full rounded-sm transition-all duration-500" style={{
+                            width: `${barPct}%`,
+                            background: post.isOwn ? `linear-gradient(90deg, ${IG.orange}, ${IG.pink})` : "#e5e5e5"
+                          }} />
+                        </div>
+                        <span className={`text-[10px] font-bold tabular-nums w-12 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-[#525252]"}`}>{er.toFixed(1)}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Remaining posts 11-30 — IG feed style list */}
+              {top.length > 10 && (
+                <div className="border-t border-slate-100 px-5 py-4">
+                  <p className="text-[10px] text-[#a3a3a3] uppercase tracking-wider font-medium mb-2">全{top.length}投稿一覧</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {top.slice(10).map(post => {
+                      const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
+                      return (
+                        <a key={post.shortcode} href={post.postUrl} target="_blank" rel="noopener noreferrer"
+                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
+                            post.isOwn ? "bg-[#E1306C]/[0.04] hover:bg-[#E1306C]/[0.08]" : "hover:bg-slate-50"
+                          }`}>
+                          {post.coverUrl ? (
+                            <img src={post.coverUrl} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" loading="lazy" />
+                          ) : (
+                            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                              <span className="text-[9px] text-[#b0b0b0]">{post.position}</span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-bold tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>#{post.position}</span>
+                              <span className={`text-[11px] truncate ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#525252]"}`}>@{post.username}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#a3a3a3] tabular-nums">
+                              <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(post.viewCount)}</span>
+                              <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(post.likeCount)}</span>
+                              <span className="text-[#525252] font-semibold">ER {er}%</span>
+                            </div>
+                          </div>
+                          {post.isOwn && (
+                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />
+                          )}
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom summary strip */}
+              <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+                <div className="flex flex-col items-center py-3">
+                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">SOV占有率</span>
+                  <span className="text-lg font-black text-[#171717] tabular-nums">{ownPosts.length}<span className="text-xs font-normal text-[#b0b0b0]">/{top.length}</span></span>
+                </div>
+                <div className="flex flex-col items-center py-3">
+                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">総再生数</span>
+                  <span className="text-lg font-black text-[#171717] tabular-nums">{fmt(top.reduce((s, p) => s + p.viewCount, 0))}</span>
+                </div>
+                <div className="flex flex-col items-center py-3">
+                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">平均ER</span>
+                  <span className="text-lg font-black text-[#171717] tabular-nums">{(() => {
+                    const tv = top.reduce((s, p) => s + p.viewCount, 0);
+                    const tl = top.reduce((s, p) => s + p.likeCount, 0);
+                    const tc = top.reduce((s, p) => s + p.commentCount, 0);
+                    return tv > 0 ? ((tl + tc) / tv * 100).toFixed(1) : "0.0";
+                  })()}<span className="text-xs font-normal text-[#b0b0b0]">%</span></span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* ======== Summary Table with Accordion ======== */}
+      {validReports.length > 0 && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="py-2.5 px-4 text-left text-[11px] font-semibold text-[#737373]">ハッシュタグ</th>
+                  <th className="py-2.5 px-3 text-left text-[11px] font-semibold text-[#737373] w-36">SOV占有率</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">自社投稿</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">最高順位</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">総再生数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tagStats.map(ts => {
+                  const r = validReports.find(r => r.hashtag === ts.hashtag)!;
+                  const ownPosts = r.topPosts.filter(p => p.isOwn);
+                  const isExp = expandedTags.has(ts.hashtag);
+                  return (
+                    <Fragment key={ts.hashtag}>
+                      <tr
+                        className={`border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer ${ts.hashtag === activeTag ? "bg-[#E1306C]/[0.02]" : ""}`}
+                        onClick={() => { setActiveTag(ts.hashtag); toggleExpand(ts.hashtag); }}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <ChevronRight className={`h-3.5 w-3.5 text-[#b0b0b0] transition-transform duration-200 ${isExp ? "rotate-90" : ""}`} />
+                            <span className="font-semibold text-sm text-[#171717]">#{ts.hashtag}</span>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200 text-[#a3a3a3]">{ts.totalCount}件</Badge>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{
+                                width: `${ts.sovPct}%`,
+                                background: `linear-gradient(90deg, ${IG.orange}, ${IG.pink})`
+                              }} />
+                            </div>
+                            <span className="text-xs font-bold text-[#171717] tabular-nums w-12 text-right">{ts.sovPct}%</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="text-sm font-bold text-[#171717] tabular-nums">{ts.ownCount}<span className="text-[10px] font-normal text-[#a3a3a3]">/{ts.totalCount}</span></span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          {ts.bestPos != null ? (
+                            <span className={`text-sm font-bold tabular-nums ${ts.bestPos <= 3 ? "text-[#E1306C]" : ts.bestPos <= 10 ? "text-[#171717]" : "text-[#a3a3a3]"}`}>{ts.bestPos}位</span>
+                          ) : (
+                            <span className="text-xs text-[#d4d4d4]">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="text-sm font-medium text-[#525252] tabular-nums">{fmt(ts.totalViews)}</span>
+                        </td>
+                      </tr>
+                      {/* Accordion: IG-native own posts detail */}
+                      {isExp && (
+                        <tr>
+                          <td colSpan={5} className="p-0">
+                            <div className="border-b border-slate-100" style={{ background: `linear-gradient(180deg, #fafafa 0%, white 100%)` }}>
+                              {ownPosts.length > 0 ? (
+                                <div className="px-5 py-4 space-y-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, transparent, ${IG.pink}20, transparent)` }} />
+                                    <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: IG.pink }}>自社投稿 {ownPosts.length}件</span>
+                                    <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, transparent, ${IG.pink}20, transparent)` }} />
+                                  </div>
+                                  {ownPosts.sort((a, b) => a.position - b.position).map(post => {
+                                    const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
+                                    return (
+                                      <a key={post.shortcode} href={post.postUrl} target="_blank" rel="noopener noreferrer"
+                                        className="block rounded-2xl bg-white border border-slate-100 hover:border-[#E1306C]/20 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                        {/* IG Feed-style header */}
+                                        <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                                          {/* Story ring avatar */}
+                                          <div className="w-9 h-9 rounded-full p-[2px] flex-shrink-0" style={{ background: `linear-gradient(135deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` }}>
+                                            <div className="w-full h-full rounded-full border-[1.5px] border-white overflow-hidden">
+                                              {post.coverUrl ? (
+                                                <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                              ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-[#E1306C]/20 to-[#833AB4]/20 flex items-center justify-center">
+                                                  <span className="text-[8px] font-bold text-[#E1306C]">{post.position}</span>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-[13px] font-semibold text-[#171717]">@{post.username}</span>
+                                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>{post.position}位</span>
+                                            </div>
+                                            <span className="text-[10px] text-[#a3a3a3]">{post.type === "reel" ? "Reel" : post.type === "carousel" ? "Carousel" : "Post"}</span>
+                                          </div>
+                                          <ExternalLink className="h-3.5 w-3.5 text-[#d4d4d4] flex-shrink-0" />
+                                        </div>
+                                        {/* Caption + metrics */}
+                                        <div className="px-3.5 pb-3">
+                                          {post.caption && (
+                                            <p className="text-[11px] text-[#525252] line-clamp-2 mb-2 leading-relaxed">{post.caption}</p>
+                                          )}
+                                          {/* IG-style action row */}
+                                          <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1.5 text-[12px]">
+                                              <Heart className="h-4 w-4 text-[#E1306C]" />
+                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.likeCount)}</span>
+                                            </span>
+                                            <span className="flex items-center gap-1.5 text-[12px]">
+                                              <MessageCircle className="h-4 w-4 text-[#525252]" />
+                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.commentCount)}</span>
+                                            </span>
+                                            <span className="flex items-center gap-1.5 text-[12px]">
+                                              <Eye className="h-4 w-4 text-[#525252]" />
+                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.viewCount)}</span>
+                                            </span>
+                                            <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>ER {er}%</span>
+                                          </div>
+                                        </div>
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="px-5 py-8 text-center">
+                                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
+                                    <Search className="h-5 w-5 text-[#d4d4d4]" />
+                                  </div>
+                                  <p className="text-sm text-[#a3a3a3]">上位{r.topPosts.length}件に自社投稿なし</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -651,27 +1910,27 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
         {cards.map((card) => (
           <Card key={card.title}>
             <CardContent className="py-3 px-4 space-y-1 text-center">
-              <p className="text-xs text-muted-foreground">{card.title}</p>
+              <p className="text-xs text-[#6b7280]">{card.title}</p>
               {card.before != null ? (
                 <>
-                  <p className="text-base font-bold">
-                    <span className="text-slate-400">{card.before}</span>
-                    <span className="text-muted-foreground mx-1">&rarr;</span>
-                    <span className="text-blue-600">{card.after}</span>
+                  <p className="text-base font-bold font-mono">
+                    <span className="text-[#9ca3af]">{card.before}</span>
+                    <span className="text-[#404040] mx-1">&rarr;</span>
+                    <span className="text-[#0a0a0a]">{card.after}</span>
                   </p>
                   {card.change && <div className="text-sm">{card.change}</div>}
                 </>
               ) : (
-                <p className="text-xl font-bold text-blue-600">{card.value}</p>
+                <p className="text-xl font-bold text-[#0a0a0a] font-mono">{card.value}</p>
               )}
             </CardContent>
           </Card>
         ))}
         <Card>
           <CardContent className="py-3 px-4 space-y-1 text-center">
-            <p className="text-xs text-muted-foreground">第三者投稿</p>
-            <p className="text-xl font-bold text-blue-600">{tpStats.count}本</p>
-            {tpStats.views > 0 && <p className="text-xs text-muted-foreground">{fmt(tpStats.views)} 再生</p>}
+            <p className="text-xs text-[#6b7280]">第三者投稿</p>
+            <p className="text-xl font-bold text-[#0a0a0a] font-mono">{tpStats.count}本</p>
+            {tpStats.views > 0 && <p className="text-xs text-[#9ca3af]">{fmt(tpStats.views)} 再生</p>}
           </CardContent>
         </Card>
       </div>
@@ -690,8 +1949,8 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
       {absCards.map((card) => (
         <Card key={card.title}>
           <CardContent className="py-3 px-4 space-y-1">
-            <p className="text-xs text-muted-foreground">{card.title}</p>
-            <p className="text-xl font-bold text-blue-600">{card.value}</p>
+            <p className="text-xs text-[#6b7280]">{card.title}</p>
+            <p className="text-xl font-bold text-[#0a0a0a] font-mono">{card.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -720,7 +1979,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
         href={slot.video_url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`flex items-center gap-3 rounded-lg border-l-4 bg-white p-3 hover:shadow-md transition-all ${
+        className={`flex items-center gap-3 rounded-lg border-l-4 bg-[#f5f5f5] p-3 hover:border-black/12 transition-all ${
           configKey === "official" ? "border-l-blue-500" : configKey === "satellite" ? "border-l-teal-500" : "border-l-purple-500"
         }`}
       >
@@ -734,13 +1993,13 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
-            <span className="text-sm font-semibold text-slate-800 truncate">@{slot.creator_username}</span>
+            <span className="text-sm font-semibold text-[#0a0a0a] truncate">@{slot.creator_username}</span>
           </div>
-          <p className="text-xs text-slate-400 truncate mt-0.5">{slot.description?.slice(0, 40)}</p>
+          <p className="text-xs text-[#9ca3af] truncate mt-0.5">{slot.description?.slice(0, 40)}</p>
           <div className="flex items-center gap-2 mt-1">
             <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
-            <span className="text-xs font-bold text-slate-600">#{slot.rank}</span>
-            <span className="text-[10px] text-slate-400 flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
+            <span className="text-xs font-bold text-[#9ca3af]">#{slot.rank}</span>
+            <span className="text-[10px] text-[#9ca3af] flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
           </div>
         </div>
       </a>
@@ -750,11 +2009,11 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-md ${
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-black/6 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/12 ${
               editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/card:opacity-100 group-hover/card:scale-100 group-hover/card:pointer-events-auto"
             }`}
           >
-            <Pencil className="h-3 w-3 text-slate-400" />
+            <Pencil className="h-3 w-3 text-[#9ca3af]" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="left" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -778,7 +2037,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
 // Unified Keyword + SOV Section
 // ============================
 
-export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate, readOnly }: {
+export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate, readOnly, overviewUniqueAll }: {
   positions: any[];
   bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }> }>;
   sovReport: Record<string, any>;
@@ -787,8 +2046,15 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   campaignId: number;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
   readOnly?: boolean;
+  overviewUniqueAll?: { after: { own: number; total: number }; before: { own: number; total: number } };
 }) {
   const [activeKw, setActiveKw] = useState<string | null>(null);
+  const [expandedKws, setExpandedKws] = useState<Set<string>>(new Set());
+  const toggleExpanded = (kw: string) => setExpandedKws(prev => {
+    const next = new Set(prev);
+    if (next.has(kw)) next.delete(kw); else next.add(kw);
+    return next;
+  });
 
   // --- SOV aggregate data ---
   const sovEntries = Object.entries(sovReport);
@@ -796,32 +2062,46 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
     .map(([kw, data]) => {
       const afterSlots = (data.after_slots || []) as SlotData[];
       const beforeSlots = (data.before_slots || []) as SlotData[];
-      // Use slot-based counts (Top10) for consistency
+      // Top10スロットベース（上位シェア率用）
       const slotTotal = afterSlots.length;
       const slotOwn = afterSlots.filter(s => s.owner === "own").length;
+      // 全取得動画ベース（自社動画カウント用 — 50件中のown数）
+      const allOwn = (data.after as any)?.own_count ?? slotOwn;
+      const allTotal = (data.after as any)?.total_count ?? slotTotal;
       return {
         keyword: kw,
         own: slotOwn,
         total: slotTotal,
         pct: slotTotal > 0 ? Math.round((slotOwn / slotTotal) * 100 * 10) / 10 : 0,
+        allOwn,
+        allTotal,
         afterSlots,
         beforeSlots,
         before: data.before || {},
         after: data.after || {},
         beforeOwn: beforeSlots.filter(s => s.owner === "own").length,
+        beforeAllOwn: (data.before as any)?.own_count ?? beforeSlots.filter(s => s.owner === "own").length,
         isBigKeyword: !!data._isBigKeyword,
       };
     })
     .filter(d => d.total > 0);
 
   const allAfterSlots = chartData.flatMap(d => d.afterSlots);
-  const totalOwn = chartData.reduce((s, d) => s + d.own, 0);
-  const totalScanned = chartData.reduce((s, d) => s + d.total, 0);
+  // 全体モード: video_idで重複排除してユニーク動画数を算出
+  const uniqueAfterSlots = (() => {
+    const seen = new Map<string, SlotData>();
+    for (const s of allAfterSlots) {
+      if (!seen.has(s.video_id)) seen.set(s.video_id, s);
+    }
+    return [...seen.values()];
+  })();
+  const totalOwn = uniqueAfterSlots.filter(s => s.owner === "own").length;
+  const totalScanned = uniqueAfterSlots.length;
   const avgPct = totalScanned > 0 ? Math.round((totalOwn / totalScanned) * 100 * 10) / 10 : 0;
 
-  const officialCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
-  const satelliteCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
-  const campaignCount = allAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
+  const officialCount = uniqueAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
+  const satelliteCount = uniqueAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
+  const campaignCount = uniqueAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
 
   // --- Position data integration ---
   const positionMap = useMemo(() => {
@@ -843,6 +2123,15 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
     return map;
   }, [positions, bigKeywordReport]);
 
+  // positionReport: 自社動画の全順位データ（Top10外も含む）
+  const positionVideosMap = useMemo(() => {
+    const map = new Map<string, Array<{ video_id: string; username: string; description: string; search_rank: number; view_count: number; cover_url: string }>>();
+    for (const p of positions) {
+      map.set(p.keyword, p.videos || []);
+    }
+    return map;
+  }, [positions]);
+
   // --- Unified KW list: from sovEntries + positions ---
   const kwList = useMemo(() => {
     const seen = new Set<string>();
@@ -859,9 +2148,9 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
     return list;
   }, [chartData, positionMap]);
 
-  // Set default active KW
-  const effectiveActiveKw = activeKw || (kwList.length > 0 ? kwList[0].keyword : null);
-  const activeKwData = kwList.find(k => k.keyword === effectiveActiveKw);
+  // null = overview mode (全体). No auto-fallback to first KW.
+  const isOverviewMode = activeKw === null;
+  const activeKwData = isOverviewMode ? null : kwList.find(k => k.keyword === activeKw) ?? null;
 
   // Best rank across all KWs
   const bestRankOverall = useMemo(() => {
@@ -890,67 +2179,135 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   return (
     <div className="space-y-5">
       {/* ======== HeroCard ======== */}
-      {chartData.length > 0 && (
-        <Card className="overflow-hidden">
+      {chartData.length > 0 && (() => {
+        // Per-KW hero values when individual KW selected
+        const heroKwSov = activeKwData?.sovData;
+        const heroPct = isOverviewMode ? avgPct : (heroKwSov ? Math.round((heroKwSov.own / heroKwSov.total) * 100 * 10) / 10 : 0);
+        const heroOwn = isOverviewMode ? totalOwn : (heroKwSov?.own || 0);
+        const heroTotal = isOverviewMode ? totalScanned : (heroKwSov?.total || 0);
+        // 全取得動画ベース（自社動画数） — overviewはユニーク（重複除外）
+        const heroAllOwn = isOverviewMode ? (overviewUniqueAll?.after.own ?? chartData.reduce((s, d) => s + d.allOwn, 0)) : (heroKwSov?.allOwn || 0);
+        const heroAllTotal = isOverviewMode ? (overviewUniqueAll?.after.total ?? chartData.reduce((s, d) => s + d.allTotal, 0)) : (heroKwSov?.allTotal || 0);
+
+        // Best rank for hero
+        const heroBestRank = isOverviewMode ? bestRankOverall : (activeKwData?.posData?.afterRank ?? null);
+
+        // Account breakdown — per-KW or overall（全体は重複排除済み）
+        const heroAfterSlots = isOverviewMode ? uniqueAfterSlots : (heroKwSov?.afterSlots || []);
+        const heroOfficialCount = heroAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "official").length;
+        const heroSatelliteCount = heroAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "satellite").length;
+        const heroCampaignCount = heroAfterSlots.filter(s => s.owner === "own" && s.owner_detail === "campaign").length;
+        const heroOwnTotal = heroAfterSlots.filter(s => s.owner === "own").length;
+
+        // Stat boxes — different labels for overview vs individual
+        const heroStats = isOverviewMode ? [
+          { label: "キーワード数", value: `${kwList.length}`, sub: "KW" },
+          { label: "自社動画", value: `${heroAllOwn}`, sub: `/${heroAllTotal}` },
+          { label: "最高順位", value: bestRankOverall != null ? `${bestRankOverall}` : "—", sub: bestRankOverall != null ? "位" : "" },
+          { label: "施策比", value: hasBaseline ? (() => {
+            let added = 0;
+            for (const d of chartData) {
+              const beforeIds = new Set(d.beforeSlots.filter(s => s.owner === "own").map(s => s.video_id));
+              added += d.afterSlots.filter(s => s.owner === "own" && !beforeIds.has(s.video_id)).length;
+            }
+            return `+${added}`;
+          })() : "—", sub: hasBaseline ? "本" : "" },
+        ] : [
+          { label: "上位シェア率", value: `${heroOwn}`, sub: `/${heroTotal}` },
+          { label: "自社動画", value: `${heroAllOwn}`, sub: `/${heroAllTotal}` },
+          { label: "最高順位", value: heroBestRank != null ? `${heroBestRank}` : "—", sub: heroBestRank != null ? "位" : "" },
+          { label: "順位変動", value: (() => {
+            const rc = activeKwData?.posData?.rankChange;
+            if (rc == null) return "—";
+            return rc > 0 ? `+${rc}` : `${rc}`;
+          })(), sub: activeKwData?.posData?.rankChange != null ? "位" : "" },
+        ];
+
+        return (
+        <Card key={activeKw ?? "__overview__"} className="overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardContent className="p-0">
             <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-0 md:divide-x divide-slate-100">
-              {/* Donut */}
+              {/* Donut — アカウント種別ごとにセグメント分け */}
               <div className="flex flex-col items-center justify-center py-6 px-4">
-                <svg viewBox="0 0 120 120" className="w-28 h-28">
-                  <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                  <circle
-                    cx="60" cy="60" r="50" fill="none"
-                    stroke="#3b82f6" strokeWidth="12"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(avgPct / 100) * 314} 314`}
-                    transform="rotate(-90 60 60)"
-                    className="animate-donut-fill"
-                  />
-                  <text x="60" y="54" textAnchor="middle" className="text-[28px] font-extrabold fill-blue-600">{avgPct}</text>
-                  <text x="60" y="72" textAnchor="middle" className="text-[11px] fill-slate-400">%シェア</text>
-                </svg>
-                <p className="text-xs text-slate-400 mt-1.5">{totalOwn}/{totalScanned}本が自社</p>
+                {(() => {
+                  const circumference = 2 * Math.PI * 50; // ≈314
+                  const totalPct = heroPct; // 全体シェア率
+                  // 各アカウント種別のセグメント（ドーナツ上の比率はheroTotalに対する割合）
+                  const segments = [
+                    { count: heroOfficialCount, color: "#2563eb", label: "公式" },
+                    { count: heroSatelliteCount, color: "#0d9488", label: "サテライト" },
+                    { count: heroCampaignCount, color: "#D71921", label: "施策" },
+                  ];
+                  let offset = 0;
+                  return (
+                    <>
+                      <svg viewBox="0 0 120 120" className="w-28 h-28">
+                        {/* 背景リング */}
+                        <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e5e5" strokeWidth="12" />
+                        {/* アカウント種別セグメント */}
+                        {segments.map(seg => {
+                          if (seg.count === 0 || heroTotal === 0) return null;
+                          const segPct = (seg.count / heroTotal) * 100;
+                          const dashLen = (segPct / 100) * circumference;
+                          const dashGap = circumference - dashLen;
+                          const rotation = -90 + (offset / 100) * 360;
+                          offset += segPct;
+                          return (
+                            <circle
+                              key={seg.label}
+                              cx="60" cy="60" r="50" fill="none"
+                              stroke={seg.color} strokeWidth="12"
+                              strokeDasharray={`${dashLen} ${dashGap}`}
+                              transform={`rotate(${rotation} 60 60)`}
+                              className="animate-donut-fill"
+                            />
+                          );
+                        })}
+                        {/* 中央テキスト — 垂直中央配置 */}
+                        <text x="60" y="55" textAnchor="middle" dominantBaseline="central" className="text-[26px] font-extrabold" fill="#0a0a0a">{heroPct}<tspan className="text-[14px] font-medium" fill="#9ca3af">%</tspan></text>
+                        <text x="60" y="77" textAnchor="middle" dominantBaseline="central" className="text-[10px] font-medium" fill="#9ca3af">上位シェア ({heroOwn}/{heroTotal})</text>
+                      </svg>
+                      <p className="text-xs text-[#9ca3af] mt-1.5">全{heroAllTotal}本中 {heroAllOwn}本が自社</p>
+                      {/* ミニ内訳 */}
+                      <div className="flex items-center gap-2 mt-1">
+                        {segments.filter(s => s.count > 0).map(seg => (
+                          <span key={seg.label} className="inline-flex items-center gap-1 text-[9px] text-[#6b7280]">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: seg.color }} />
+                            {seg.count}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
 
               {/* 4 stat boxes */}
-              <div className="grid grid-cols-2 gap-px bg-slate-100">
-                {[
-                  { label: "キーワード数", value: `${kwList.length}`, sub: "KW" },
-                  { label: "Top10 自社動画", value: `${totalOwn}`, sub: "本" },
-                  { label: "最高順位", value: bestRankOverall != null ? `${bestRankOverall}` : "—", sub: bestRankOverall != null ? "位" : "" },
-                  { label: "施策比", value: hasBaseline ? (() => {
-                    // 施策で新たにTop10入りした自社動画数（afterにいてbeforeにいない）
-                    let added = 0;
-                    for (const d of chartData) {
-                      const beforeIds = new Set(d.beforeSlots.filter(s => s.owner === "own").map(s => s.video_id));
-                      added += d.afterSlots.filter(s => s.owner === "own" && !beforeIds.has(s.video_id)).length;
-                    }
-                    return `+${added}`;
-                  })() : "—", sub: hasBaseline ? "本" : "" },
-                ].map((stat, i) => (
-                  <div key={i} className="bg-white flex flex-col items-center justify-center py-4 px-3">
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">{stat.label}</p>
-                    <p className="text-2xl font-extrabold text-slate-800 leading-none">{stat.value}<span className="text-sm font-normal text-slate-400 ml-0.5">{stat.sub}</span></p>
+              <div className="grid grid-cols-2 gap-px bg-[#f5f5f5]">
+                {heroStats.map((stat, i) => (
+                  <div key={i} className="bg-[#f5f5f5] flex flex-col items-center justify-center py-4 px-3">
+                    <p className="text-[10px] text-[#9ca3af] uppercase tracking-wider mb-1">{stat.label}</p>
+                    <p className="text-2xl font-extrabold text-[#0a0a0a] leading-none">{stat.value}<span className="text-sm font-normal text-[#9ca3af] ml-0.5">{stat.sub}</span></p>
                   </div>
                 ))}
               </div>
 
               {/* Account breakdown */}
               <div className="flex flex-col justify-center py-5 px-5 gap-3">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">アカウント内訳</p>
+                <p className="text-[10px] text-[#9ca3af] uppercase tracking-wider font-medium">アカウント内訳</p>
                 {[
-                  { label: "公式", count: officialCount, color: "bg-blue-500", textColor: "text-blue-700" },
-                  { label: "サテライト", count: satelliteCount, color: "bg-teal-500", textColor: "text-teal-700" },
-                  { label: "施策", count: campaignCount, color: "bg-purple-500", textColor: "text-purple-700" },
+                  { label: "公式", count: heroOfficialCount, color: "bg-blue-600", textColor: "text-blue-700" },
+                  { label: "サテライト", count: heroSatelliteCount, color: "bg-teal-600", textColor: "text-teal-700" },
+                  { label: "施策", count: heroCampaignCount, color: "bg-[#D71921]", textColor: "text-[#D71921]" },
                 ].map(cat => {
-                  const pct = totalOwn > 0 ? (cat.count / totalOwn) * 100 : 0;
+                  const pct = heroOwnTotal > 0 ? (cat.count / heroOwnTotal) * 100 : 0;
                   return (
                     <div key={cat.label} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className={`font-medium ${cat.textColor}`}>{cat.label}</span>
-                        <span className="text-slate-500 tabular-nums">{cat.count}本</span>
+                        <span className="text-[#6b7280] tabular-nums">{cat.count}本</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-1.5 rounded-full bg-[#f5f5f5] overflow-hidden">
                         <div className={`h-full rounded-full ${cat.color} transition-all`} style={{ width: `${pct}%`, minWidth: cat.count > 0 ? '4px' : 0 }} />
                       </div>
                     </div>
@@ -960,14 +2317,29 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
             </div>
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       {/* ======== KwTabBar ======== */}
       {kwList.length > 0 && (
         <div className="overflow-x-auto">
           <div className="flex gap-2 min-w-max">
-            {kwList.map(kw => {
-              const isActive = kw.keyword === effectiveActiveKw;
+            {/* 全体 (overview) button */}
+            <button
+              onClick={() => setActiveKw(null)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                isOverviewMode
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "bg-[#f5f5f5] text-[#9ca3af] hover:bg-[#e5e5e5]"
+              }`}
+            >
+              全体
+              <span className={`text-[11px] font-bold tabular-nums ${isOverviewMode ? "text-blue-200" : "text-[#9ca3af]"}`}>
+                {totalOwn}/{totalScanned}
+              </span>
+            </button>
+            {kwList.filter(kw => (kw.sovData?.total || 0) > 0).map(kw => {
+              const isActive = kw.keyword === activeKw;
               const ownCount = kw.sovData?.own || 0;
               const totalCount = kw.sovData?.total || 0;
               return (
@@ -977,12 +2349,12 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
                       ? "bg-blue-600 text-white shadow-md"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      : "bg-[#f5f5f5] text-[#9ca3af] hover:bg-[#e5e5e5]"
                   }`}
                 >
                   {kw.keyword}
                   {totalCount > 0 && (
-                    <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-blue-200" : "text-slate-400"}`}>
+                    <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-blue-200" : "text-[#9ca3af]"}`}>
                       {ownCount}/{totalCount}
                     </span>
                   )}
@@ -993,284 +2365,403 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
         </div>
       )}
 
-      {/* ======== KwTabContent ======== */}
-      {activeKwData && (
-        <div className="space-y-5">
-          {/* OwnVideoCards */}
-          {activeKwData.sovData && (() => {
-            const ownSlots = activeKwData.sovData.afterSlots.filter(s => s.owner === "own");
-            if (ownSlots.length === 0) return null;
-            return (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {ownSlots.map(slot => (
-                  <OwnVideoCard key={slot.video_id} slot={slot} keyword={activeKwData.keyword} onSlotUpdate={onSlotUpdate} readOnly={readOnly} />
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* OccupationMap (前後比較 — ジャンル可視化) */}
-          {activeKwData.sovData && (() => {
-            const sovData = activeKwData.sovData;
-            const afterSlots = sovData.afterSlots;
-            const beforeSlots = sovData.beforeSlots;
-            const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
-            const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
-            const ownChange = afterOwnCount - beforeOwnCount;
-            const paddedBefore = padSlots(beforeSlots);
-            const paddedAfter = padSlots(afterSlots);
-            const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / afterSlots.length) * 100 * 10) / 10 : 0;
-            const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
-            const pctChange = Number((afterPct - beforePct).toFixed(1));
-
-            // Genre counting
-            const countGenres = (slots: SlotData[]) => {
-              const counts: Record<string, number> = {};
-              for (const g of Object.keys(GENRE_CONFIG)) counts[g] = 0;
-              for (const s of slots) {
-                const g = GENRE_CONFIG[s.genre] ? s.genre : "other";
-                counts[g] = (counts[g] || 0) + 1;
-              }
-              return counts;
-            };
-            const beforeGenres = countGenres(beforeSlots);
-            const afterGenres = countGenres(afterSlots);
-            const beforeNeg = beforeGenres.negative || 0;
-            const afterNeg = afterGenres.negative || 0;
-            const negChange = afterNeg - beforeNeg;
-
-            // Rank change map for after-row badges
-            const beforeVideoRankMap = new Map<string, number>();
-            for (const s of beforeSlots) beforeVideoRankMap.set(s.video_id, s.rank);
-            const getRankChange = (slot: SlotData): { label: string; color: string } | null => {
-              if (slot.owner !== "own" || !hasBaseline || beforeSlots.length === 0) return null;
-              const prevRank = beforeVideoRankMap.get(slot.video_id);
-              if (prevRank != null) {
-                const diff = prevRank - slot.rank;
-                if (diff > 0) return { label: `前#${prevRank} ↑${diff}`, color: "bg-black/55" };
-                if (diff < 0) return { label: `前#${prevRank} ↓${Math.abs(diff)}`, color: "bg-black/55" };
-                return { label: `前#${prevRank} →0`, color: "bg-black/55" };
-              }
-              return { label: "NEW", color: "bg-emerald-500" };
-            };
-
-            const renderSlotInRow = (slot: SlotData | null, i: number, isBefore: boolean) => {
-              if (!slot) return (
-                <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
-                  <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{i + 1}</span>
-                  <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-slate-200/40 flex items-center justify-center`}>
-                    <span className="text-[9px] text-slate-200">{i + 1}</span>
-                  </div>
-                </div>
-              );
-              const rc = !isBefore ? getRankChange(slot) : null;
-              return (
-                <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
-                  <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
-                  <SovSlotCell
-                    slot={slot} maxViewCount={maxViewCount} keyword={activeKwData.keyword}
-                    phase={isBefore ? "before" : "after"} isBefore={isBefore}
-                    onSlotUpdate={onSlotUpdate} readOnly={readOnly}
-                    rankChangeLabel={rc?.label} rankChangeBadgeColor={rc?.color}
-                  />
-                  {slot.owner === "own" && (
-                    <span className="mt-0.5 text-[9px] font-semibold text-foreground text-center max-w-[80px] truncate">
-                      @{slot.creator_username}
-                    </span>
-                  )}
-                </div>
-              );
-            };
-
-            return afterSlots.length > 0 ? (
+      {/* ======== KwTabContent — unified phone + slot card ======== */}
+      {(activeKwData || isOverviewMode) && (() => {
+        if (isOverviewMode) {
+          // Overview mode: flat grid of After phone cards (no 3D carousel)
+          const hasAnyCarouselData = chartData.some(d => d.afterSlots.length > 0 || d.beforeSlots.length > 0);
+          if (!hasAnyCarouselData) return null;
+          return (
+            <div className="space-y-5">
               <Card>
-                <CardContent className="px-4 py-5 space-y-3">
+                <CardContent className="p-0">
                   {/* Legend */}
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px] text-slate-500 font-medium">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[9px] text-slate-400 font-semibold tracking-wider uppercase">アカウント</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-600" />公式</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-teal-600" />サテライト</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-purple-600" />施策</span>
-                      <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-slate-200 border border-slate-300" />競合</span>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-[9px] text-slate-400 font-semibold tracking-wider uppercase">ジャンル</span>
-                      {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
-                        <span key={key} className="flex items-center gap-1">
-                          <span className={`w-4 h-1.5 rounded-sm ${barCls}`} />
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ===== 施策前 ===== */}
-                  {hasBaseline && beforeSlots.length > 0 && (
-                    <>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-500">施策前</span>
-                        <span className="text-[11px] text-slate-400">
-                          自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%) ｜ ネガティブ {beforeNeg}本
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
-                        {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
-                      </div>
-                    </>
-                  )}
-
-                  {/* ===== ジャンル変動サマリー ===== */}
-                  {hasBaseline && beforeSlots.length > 0 && (
-                    <div className="flex justify-center items-center gap-1.5 py-3 flex-wrap">
-                      {/* 施策動画 */}
-                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
-                        ownChange > 0 ? "bg-emerald-50 border border-emerald-200" : "bg-slate-50"
-                      }`}>
-                        <span className="w-2 h-2 rounded-sm bg-emerald-500 shrink-0" />
-                        <span>施策動画</span>
-                        <span className={`font-bold ${ownChange > 0 ? "text-emerald-500" : ownChange < 0 ? "text-red-500" : "text-slate-400"}`}>
-                          {beforeOwnCount}→{afterOwnCount}本{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
-                        </span>
-                      </div>
-                      {/* Genre items */}
-                      {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => {
-                        const bCount = beforeGenres[key] || 0;
-                        const aCount = afterGenres[key] || 0;
-                        const change = aCount - bCount;
-                        const isNegReduced = key === "negative" && change < 0;
-                        return (
-                          <div key={key} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold ${
-                            isNegReduced ? "bg-red-50 border border-red-200" : "bg-slate-50"
-                          }`}>
-                            <span className={`w-2 h-2 rounded-sm ${barCls} shrink-0`} />
-                            <span>{label}</span>
-                            <span className={`font-bold ${change > 0 ? "text-emerald-500" : change < 0 ? "text-red-500" : "text-slate-400"}`}>
-                              {bCount}→{aCount}本{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* ===== 施策後 ===== */}
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-600">
-                      {hasBaseline && beforeSlots.length > 0 ? "施策後" : "現在"}
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      自社 {afterOwnCount}/{afterSlots.length} ({afterPct}%) ｜ ネガティブ {afterNeg}本
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
-                    {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
-                  </div>
-
-                  {/* ===== 変化サマリー ===== */}
-                  {hasBaseline && beforeSlots.length > 0 && (
-                    <div className="flex justify-center gap-6 pt-2 text-[13px] font-semibold">
-                      <span className={pctChange > 0 ? "text-emerald-500" : pctChange < 0 ? "text-red-500" : "text-slate-400"}>
-                        シェア {beforePct}% → {afterPct}%（{pctChange > 0 ? "+" : ""}{pctChange}pt）
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-[#6b7280]">
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">アカウント</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-blue-600" />公式</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-teal-600" />サテライト</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-[#D71921]" />施策</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-slate-500" />競合</span>
+                    <span className="w-px h-3 bg-black/8 mx-1" />
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ジャンル</span>
+                    {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
+                      <span key={key} className="flex items-center gap-1">
+                        <span className={`w-3 h-1 rounded-full ${barCls}`} />
+                        {label}
                       </span>
-                      <span className="text-slate-300">｜</span>
-                      <span className={negChange < 0 ? "text-red-500" : negChange > 0 ? "text-emerald-500" : "text-slate-400"}>
-                        ネガティブ {beforeNeg}本 → {afterNeg}本（{negChange < 0 ? "" : negChange > 0 ? "+" : "±"}{negChange}本）
-                      </span>
+                    ))}
+                    <span className="w-px h-3 bg-black/8 mx-1" />
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ラベル</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
+                  </div>
+                  {/* Horizontal row of After phone cards */}
+                  <div className="px-4 py-5">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="text-[11px] uppercase tracking-[0.2em] text-[#a3a3a3] font-medium">検索結果の変化</span>
                     </div>
-                  )}
-
-                  {/* Stats cards */}
-                  {(() => {
-                    const afterRank = activeKwData.posData?.afterRank;
-                    const rankChange = activeKwData.posData?.rankChange;
-                    return (
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
-                          <span className="text-[10px] text-slate-400 font-medium">シェア率</span>
-                          <span className="text-xl font-bold text-blue-600">{afterPct}<span className="text-sm font-normal">%</span></span>
-                          {hasBaseline && beforeSlots.length > 0 && (
-                            <ChangeIndicator value={pctChange} suffix="pt" />
-                          )}
+                    {(() => {
+                      const visibleKws = chartData.filter(d => d.afterSlots.length > 0);
+                      const PW = 220, PH = 476; // phone chassis actual height
+                      const labelH = 30; // "Current" + subtitle text
+                      const totalH = PH + labelH;
+                      const sc = visibleKws.length <= 2 ? 1.15 : visibleKws.length <= 4 ? 0.95 : 0.75;
+                      return (
+                        <div className="flex justify-center gap-3 overflow-x-auto pb-2">
+                          {visibleKws.map(d => {
+                            const aPct = d.total > 0 ? Math.round((d.own / d.total) * 100) : 0;
+                            return (
+                              <button key={d.keyword} onClick={() => setActiveKw(d.keyword)}
+                                className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer group/phone">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide bg-[#171717] text-white">
+                                  <Search className="w-[9px] h-[9px] opacity-60" />
+                                  {d.keyword}
+                                </span>
+                                <div style={{ width: PW * sc, height: totalH * sc, overflow: "hidden" }}>
+                                  <div className="transition-transform duration-300 group-hover/phone:scale-[1.04] origin-top-left"
+                                    style={{ transform: `scale(${sc})`, transformOrigin: "top left", width: PW }}>
+                                    <div className="space-y-0.5 text-center mb-1.5">
+                                      <span className="text-[14px] font-mono text-[#171717] font-bold tracking-wider block">Current</span>
+                                      <span className="text-[13px] text-blue-600 font-semibold block">{d.own}/{d.total}枠</span>
+                                    </div>
+                                    <TikTokSearchMock slots={padSlots(d.afterSlots)} keyword={d.keyword} />
+                                  </div>
+                                </div>
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-md">
+                                  <span className={`text-[11px] font-bold ${aPct >= 30 ? "text-emerald-600" : "text-[#737373]"}`}>{d.own}/{d.total}</span>
+                                  <span className="text-[10px] text-[#b0b0b0]">上位シェア</span>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
-                          <span className="text-[10px] text-slate-400 font-medium">自社動画数</span>
-                          <span className="text-xl font-bold text-slate-700">{afterOwnCount}<span className="text-sm font-normal text-slate-400"> /{afterSlots.length}</span></span>
-                          {hasBaseline && beforeSlots.length > 0 && (
-                            <ChangeIndicator value={ownChange} suffix="本" />
-                          )}
-                        </div>
-                        <div className="flex flex-col items-center gap-1 rounded-lg bg-slate-50/80 py-2.5 px-2">
-                          <span className="text-[10px] text-slate-400 font-medium">最高順位</span>
-                          {afterRank != null ? (
-                            <>
-                              <span className="text-xl font-bold text-slate-700">{afterRank}<span className="text-sm font-normal">位</span></span>
-                              {hasBaseline && rankChange != null && (
-                                <ChangeIndicator value={rankChange} suffix="位" />
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-xl font-bold text-slate-300">—</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
+                  </div>
                 </CardContent>
               </Card>
-            ) : null;
-          })()}
-        </div>
-      )}
+            </div>
+          );
+        }
 
-      {/* ======== KwSummaryTable (常時表示) ======== */}
+        const hasSovData = !!activeKwData!.sovData && activeKwData!.sovData.afterSlots.length > 0;
+        const activeChartEntry = chartData.find(d => d.keyword === activeKw);
+        const hasCarouselData = !!activeChartEntry && (activeChartEntry.afterSlots.length > 0 || activeChartEntry.beforeSlots.length > 0);
+        const showCard = hasSovData || hasCarouselData;
+
+        // SOV calculations (safe even when no sovData)
+        // activeKwData is guaranteed non-null here (overview returned early above)
+        const sovData = activeKwData!.sovData;
+        const afterSlots = sovData?.afterSlots || [];
+        const beforeSlots = sovData?.beforeSlots || [];
+        const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
+        const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
+        const ownChange = afterOwnCount - beforeOwnCount;
+        const paddedBefore = padSlots(beforeSlots);
+        const paddedAfter = padSlots(afterSlots);
+        const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / afterSlots.length) * 100 * 10) / 10 : 0;
+        const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
+        const pctChange = Number((afterPct - beforePct).toFixed(1));
+
+        const countGenres = (slots: SlotData[]) => {
+          const counts: Record<string, number> = {};
+          for (const g of Object.keys(GENRE_CONFIG)) counts[g] = 0;
+          for (const s of slots) {
+            const g = GENRE_CONFIG[s.genre] ? s.genre : "other";
+            counts[g] = (counts[g] || 0) + 1;
+          }
+          return counts;
+        };
+        const beforeGenres = countGenres(beforeSlots);
+        const afterGenres = countGenres(afterSlots);
+        const beforeNeg = beforeGenres.negative || 0;
+        const afterNeg = afterGenres.negative || 0;
+        const negChange = afterNeg - beforeNeg;
+
+        const beforeVideoRankMap = new Map<string, number>();
+        for (const s of beforeSlots) beforeVideoRankMap.set(s.video_id, s.rank);
+        const getRankChange = (slot: SlotData): { label: string; color: string } | null => {
+          if (slot.owner !== "own" || !hasBaseline || beforeSlots.length === 0) return null;
+          const prevRank = beforeVideoRankMap.get(slot.video_id);
+          if (prevRank != null) {
+            const diff = prevRank - slot.rank;
+            if (diff > 0) return { label: `前#${prevRank} ↑${diff}`, color: "bg-black/55" };
+            if (diff < 0) return { label: `前#${prevRank} ↓${Math.abs(diff)}`, color: "bg-black/55" };
+            return { label: `前#${prevRank} →0`, color: "bg-black/55" };
+          }
+          return { label: "NEW", color: "bg-white" };
+        };
+
+        const renderSlotInRow = (slot: SlotData | null, i: number, isBefore: boolean) => {
+          if (!slot) return (
+            <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
+              <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{i + 1}</span>
+              <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-black/6/40 flex items-center justify-center`}>
+                <span className="text-[9px] text-slate-200">{i + 1}</span>
+              </div>
+            </div>
+          );
+          const rc = !isBefore ? getRankChange(slot) : null;
+          return (
+            <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
+              <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
+              <SovSlotCell
+                slot={slot} maxViewCount={maxViewCount} keyword={activeKwData!.keyword}
+                phase={isBefore ? "before" : "after"} isBefore={isBefore}
+                onSlotUpdate={onSlotUpdate} readOnly={readOnly}
+                rankChangeLabel={rc?.label} rankChangeBadgeColor={rc?.color}
+              />
+              {slot.owner === "own" && (
+                <span className="mt-0.5 text-[9px] font-semibold text-foreground text-center max-w-[80px] truncate">
+                  @{slot.creator_username}
+                </span>
+              )}
+            </div>
+          );
+        };
+
+        return (
+          <div className="space-y-5">
+            {/* Animated collapse wrapper — grid-rows trick for smooth height */}
+            <div
+              className="grid transition-all"
+              style={{
+                gridTemplateRows: showCard ? "1fr" : "0fr",
+                opacity: showCard ? 1 : 0,
+                transform: showCard ? "translateY(0) scale(1)" : "translateY(-16px) scale(0.97)",
+                transitionProperty: "grid-template-rows, opacity, transform",
+                transitionDuration: showCard ? "700ms, 600ms, 600ms" : "500ms, 400ms, 400ms",
+                transitionTimingFunction: "var(--md-ease-emphasized-decel)",
+                transitionDelay: showCard ? "0ms, 60ms, 60ms" : "0ms",
+              }}
+            >
+              <div className="overflow-hidden">
+              <Card>
+                <CardContent className="p-0">
+                  {/* Legend — compact pill bar */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-[#6b7280]">
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">アカウント</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-blue-600" />公式</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-teal-600" />サテライト</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-[#D71921]" />施策</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-slate-500" />競合</span>
+                    <span className="w-px h-3 bg-black/8 mx-1" />
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ジャンル</span>
+                    {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
+                      <span key={key} className="flex items-center gap-1">
+                        <span className={`w-3 h-1 rounded-full ${barCls}`} />
+                        {label}
+                      </span>
+                    ))}
+                    <span className="w-px h-3 bg-black/8 mx-1" />
+                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ラベル</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
+                  </div>
+
+                  {/* Phone carousel — embedded, left-aligned */}
+                  {hasCarouselData && (
+                    <div className="border-b border-black/4">
+                      <TikTokMockStage
+                        kwEntries={chartData.map(d => ({
+                          keyword: d.keyword,
+                          paddedBefore: padSlots(d.beforeSlots),
+                          paddedAfter: padSlots(d.afterSlots),
+                          showBefore: hasBaseline && d.beforeSlots.length > 0,
+                          bOwnCount: d.beforeOwn,
+                          aOwnCount: d.own,
+                          bTotal: d.beforeSlots.length,
+                          aTotal: d.total,
+                          bPct: d.beforeSlots.length > 0 ? Math.round((d.beforeOwn / d.beforeSlots.length) * 100) : 0,
+                          aPct: d.total > 0 ? Math.round((d.own / d.total) * 100) : 0,
+                        }))}
+                        activeKw={activeKw}
+                        onActiveKwChange={setActiveKw}
+                      />
+                    </div>
+                  )}
+
+                  {/* Slot rows — only when sovData exists */}
+                  {hasSovData && (
+                    <div className="px-5 py-4 space-y-4">
+                      {/* ===== 施策前 ===== */}
+                      {hasBaseline && beforeSlots.length > 0 && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-[#6b7280] tracking-wide uppercase">Before</span>
+                            <span className="text-[11px] text-[#9ca3af] tabular-nums">
+                              自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%)  ·  ネガティブ {beforeNeg}本
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
+                            {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
+                      {hasBaseline && beforeSlots.length > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-x-auto py-2 -mx-1 px-1">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f5f5f5] text-[#525252] whitespace-nowrap">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a] shrink-0" />
+                            施策動画
+                            <span className={`font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}`}>
+                              {beforeOwnCount}→{afterOwnCount}{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
+                            </span>
+                          </div>
+                          {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => {
+                            const bCount = beforeGenres[key] || 0;
+                            const aCount = afterGenres[key] || 0;
+                            const change = aCount - bCount;
+                            return (
+                              <div key={key} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap ${
+                                key === "negative" && change !== 0 ? "bg-red-50 text-[#D71921]" : "bg-[#f5f5f5] text-[#525252]"
+                              }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${barCls} shrink-0`} />
+                                {label}
+                                <span className={`font-bold tabular-nums ${change > 0 ? "text-emerald-600" : change < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}`}>
+                                  {bCount}→{aCount}{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* ===== 施策後 / 現在 ===== */}
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">
+                            {hasBaseline && beforeSlots.length > 0 ? "After" : "Current"}
+                          </span>
+                          <span className="text-[11px] text-[#9ca3af] tabular-nums">
+                            自社 {afterOwnCount}/{afterSlots.length} ({afterPct}%)  ·  ネガティブ {afterNeg}本
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
+                          {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ===== Bottom summary strip ===== */}
+                  {hasSovData && (
+                    <div className="border-t border-black/4">
+                      {/* Change summary */}
+                      {hasBaseline && beforeSlots.length > 0 && (
+                        <div className="flex justify-center gap-6 px-5 py-2.5 text-[12px] font-semibold border-b border-black/4">
+                          <span className={pctChange > 0 ? "text-emerald-600" : pctChange < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}>
+                            上位シェア {beforeOwnCount}/{beforeSlots.length} → {afterOwnCount}/{afterSlots.length}（{ownChange > 0 ? "+" : ""}{ownChange}本）
+                          </span>
+                          <span className="text-black/10">|</span>
+                          <span className={negChange < 0 ? "text-[#D71921]" : negChange > 0 ? "text-emerald-600" : "text-[#9ca3af]"}>
+                            ネガティブ {beforeNeg} → {afterNeg}本（{negChange < 0 ? "" : negChange > 0 ? "+" : "±"}{negChange}）
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Stats row — flush bottom */}
+                      {(() => {
+                        const afterRank = activeKwData!.posData?.afterRank;
+                        const rankChange = activeKwData!.posData?.rankChange;
+                        return (
+                          <div className="grid grid-cols-3 divide-x divide-black/4">
+                            <div className="flex flex-col items-center gap-0.5 py-3">
+                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">上位シェア率</span>
+                              <span className="text-xl font-black text-[#0a0a0a] tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-[#9ca3af] ml-0.5">/{afterSlots.length}</span></span>
+                              {hasBaseline && beforeSlots.length > 0 && <ChangeIndicator value={ownChange} suffix="本" />}
+                            </div>
+                            <div className="flex flex-col items-center gap-0.5 py-3">
+                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">自社動画</span>
+                              <span className="text-xl font-black text-[#171717] tabular-nums">{sovData?.allOwn || 0}<span className="text-xs font-normal text-[#9ca3af] ml-0.5">/{sovData?.allTotal || 0}</span></span>
+                              {hasBaseline && beforeSlots.length > 0 && <ChangeIndicator value={(sovData?.allOwn || 0) - (sovData?.beforeAllOwn || 0)} suffix="本" />}
+                            </div>
+                            <div className="flex flex-col items-center gap-0.5 py-3">
+                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">最高順位</span>
+                              {afterRank != null ? (
+                                <>
+                                  <span className="text-xl font-black text-[#171717] tabular-nums">{afterRank}<span className="text-xs font-normal ml-0.5">位</span></span>
+                                  {hasBaseline && rankChange != null && <ChangeIndicator value={rankChange} suffix="位" />}
+                                </>
+                              ) : (
+                                <span className="text-xl font-black text-slate-300">—</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              </div>
+            </div>
+
+            {/* OwnVideoCards removed */}
+          </div>
+        );
+      })()}
+
+      {/* ======== KwSummaryTable (アコーディオン付き) ======== */}
       {kwList.length > 0 && (
         <Card>
           <CardContent className="p-0">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="py-2.5 px-4 text-left text-xs font-semibold text-slate-500">キーワード</th>
-                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-slate-500 w-40">シェア率</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">自社動画</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">最高順位</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-slate-500 whitespace-nowrap">順位変動</th>
+                <tr className="bg-white/80 border-b border-black/6">
+                  <th className="py-2.5 px-4 text-left text-xs font-semibold text-[#6b7280]">キーワード</th>
+                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#6b7280] w-40">上位シェア率</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">自社動画</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">最高順位</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">順位変動</th>
                 </tr>
               </thead>
               <tbody>
-                {kwList.map(kw => {
-                  const pct = kw.sovData?.pct || 0;
+                {kwList.filter(kw => (kw.sovData?.total || 0) > 0 || kw.posData?.afterRank != null).map(kw => {
                   const own = kw.sovData?.own || 0;
+                  const slotTotal = kw.sovData?.total || 0;
+                  const allOwn = kw.sovData?.allOwn || 0;
+                  const allTotal = kw.sovData?.allTotal || 0;
                   const afterRank = kw.posData?.afterRank;
                   const rankChange = kw.posData?.rankChange;
+                  const isExpanded = expandedKws.has(kw.keyword);
+
+                  // アコーディオン用: afterSlots(top10) + positionReport自社動画(10位以降)
+                  const afterSlots = kw.sovData?.afterSlots || [];
+                  const posVideos = positionVideosMap.get(kw.keyword) || [];
+                  const slotsVideoIds = new Set(afterSlots.map(s => s.video_id));
+                  const extraOwnVideos = posVideos.filter(v => !slotsVideoIds.has(v.video_id));
+
                   return (
+                    <Fragment key={kw.keyword}>
                     <tr
-                      key={kw.keyword}
-                      className={`border-b border-slate-50 hover:bg-blue-50/40 transition-colors cursor-pointer ${kw.keyword === effectiveActiveKw ? "bg-blue-50/60" : ""}`}
-                      onClick={() => setActiveKw(kw.keyword)}
+                      className={`border-b border-black/4 hover:bg-white/80/40 transition-colors cursor-pointer ${kw.keyword === activeKw ? "bg-white/80/60" : ""}`}
+                      onClick={() => { setActiveKw(kw.keyword); toggleExpanded(kw.keyword); }}
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm text-slate-800">{kw.keyword}</span>
-                          {kw.isBigKeyword && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-amber-700 border-amber-300 bg-amber-50">ビッグKW</Badge>}
+                          <ChevronRight className={`h-3.5 w-3.5 text-[#9ca3af] transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                          <span className="font-medium text-sm text-[#171717]">{kw.keyword}</span>
+                          {kw.isBigKeyword && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-[#9ca3af] border-black/8 bg-white/80">ビッグKW</Badge>}
                         </div>
                       </td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${pct}%` }} />
+                          <div className="flex-1 h-1.5 rounded-full bg-[#f5f5f5] overflow-hidden">
+                            <div className="h-full rounded-full bg-[#0a0a0a] transition-all" style={{ width: `${slotTotal > 0 ? (own / slotTotal) * 100 : 0}%` }} />
                           </div>
-                          <span className="text-xs font-bold text-blue-600 tabular-nums w-10 text-right">{pct}%</span>
+                          <span className="text-xs font-bold text-[#0a0a0a] tabular-nums w-10 text-right">{own}<span className="text-[10px] font-normal text-[#9ca3af]">/{slotTotal}</span></span>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className="text-sm font-bold text-slate-700">{own}<span className="text-xs font-normal text-slate-400">/{kw.sovData?.total || 0}</span></span>
+                        <span className="text-sm font-bold text-[#171717]">{allOwn}<span className="text-xs font-normal text-[#9ca3af]">/{allTotal}</span></span>
                       </td>
                       <td className="py-3 px-3 text-center">
                         {afterRank != null ? (
-                          <span className={`text-sm font-bold ${afterRank <= 3 ? "text-green-600" : afterRank <= 10 ? "text-blue-600" : "text-slate-600"}`}>{afterRank}位</span>
+                          <span className={`text-sm font-bold ${afterRank <= 3 ? "text-[#D71921]" : afterRank <= 10 ? "text-[#171717]" : "text-[#9ca3af]"}`}>{afterRank}位</span>
                         ) : (
-                          <span className="text-xs text-slate-300">圏外</span>
+                          <span className="text-xs text-slate-300">—</span>
                         )}
                       </td>
                       <td className="py-3 px-3 text-center">
@@ -1281,6 +2772,49 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         )}
                       </td>
                     </tr>
+                    {/* アコーディオン展開部分 — 施策動画のみ表示 */}
+                    {isExpanded && (() => {
+                      // Top10内の自社動画
+                      const ownSlots = afterSlots.filter(s => s.owner === "own");
+                      // 全自社動画（Top10 + positionReport 10位以降）を統合してrank順
+                      const allOwnVideos = [
+                        ...ownSlots.map(s => ({ video_id: s.video_id, rank: s.rank, cover_url: s.cover_url || "", description: s.description, username: s.creator_username, view_count: s.view_count, detail: s.owner_detail })),
+                        ...extraOwnVideos.map(v => ({ video_id: v.video_id, rank: v.search_rank, cover_url: v.cover_url || "", description: v.description, username: v.username, view_count: v.view_count, detail: undefined as string | undefined })),
+                      ].sort((a, b) => a.rank - b.rank);
+                      return (
+                      <tr>
+                        <td colSpan={5} className="p-0">
+                          <div className="bg-[#fafafa] border-b border-black/6">
+                            {allOwnVideos.length > 0 ? (
+                              <div className="divide-y divide-black/4">
+                                {allOwnVideos.map(v => (
+                                  <div key={v.video_id} className="flex items-center gap-3 px-6 py-2.5">
+                                    <span className="w-6 text-center text-xs font-bold tabular-nums shrink-0 text-[#D71921]">{v.rank}位</span>
+                                    {v.cover_url ? (
+                                      <img src={v.cover_url} alt="" className="w-10 h-10 rounded object-cover shrink-0 bg-[#f0f0f0]" />
+                                    ) : (
+                                      <div className="w-10 h-10 rounded bg-[#e5e5e5] shrink-0" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs text-[#171717] truncate leading-snug">{v.description || "—"}</p>
+                                      <p className="text-[10px] text-[#9ca3af]">@{v.username}</p>
+                                    </div>
+                                    <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 shrink-0 border-[#D71921]/20 text-[#D71921] bg-[#D71921]/5">
+                                      {v.detail === "official" ? "公式" : v.detail === "satellite" ? "サテライト" : "施策"}
+                                    </Badge>
+                                    <span className="text-[10px] text-[#9ca3af] tabular-nums shrink-0">{v.view_count >= 10000 ? `${(v.view_count / 10000).toFixed(1)}万` : v.view_count.toLocaleString()}再生</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-[#9ca3af] text-center py-4">このキーワードに施策動画なし</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                    })()}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -1298,23 +2832,23 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
 
 function getScoreGradeColor(score: number | undefined): string {
   if (score == null) return "bg-muted text-muted-foreground";
-  if (score >= 90) return "bg-yellow-100 text-yellow-800 border-yellow-300"; // S
+  if (score >= 90) return "bg-[#f5f5f5] text-[#D71921] border-[#D71921]/30"; // S
   if (score >= 75) return "bg-green-100 text-green-800 border-green-300";   // A
-  if (score >= 60) return "bg-blue-100 text-blue-800 border-blue-300";      // B
-  if (score >= 40) return "bg-orange-100 text-orange-800 border-orange-300"; // C
-  return "bg-red-100 text-red-800 border-red-300";                          // D
+  if (score >= 60) return "bg-[#f5f5f5] text-[#525252] border-black/8";      // B
+  if (score >= 40) return "bg-white/80 text-[#9ca3af] border-black/8"; // C
+  return "bg-red-50 text-[#D71921] border-[#D71921]/30";                          // D
 }
 
 function SlantedXTick({ x, y, payload, urlMap }: any) {
   const lines = (payload.value || "").split("\n");
   const url = urlMap?.[payload.value];
   const accountEl = url
-    ? <a href={url} target="_blank" rel="noopener noreferrer"><text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#2563eb" style={{ cursor: "pointer" }}>{lines[0]}</text></a>
-    : <text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#64748b">{lines[0]}</text>;
+    ? <a href={url} target="_blank" rel="noopener noreferrer"><text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#0a0a0a" style={{ cursor: "pointer" }}>{lines[0]}</text></a>
+    : <text x={0} y={0} dy={10} textAnchor="end" fontSize={10} fill="#525252">{lines[0]}</text>;
   return (
     <g transform={`translate(${x},${y}) rotate(-35)`}>
       {accountEl}
-      {lines[1] && <text x={0} y={0} dy={22} textAnchor="end" fontSize={9} fill="#94a3b8">{lines[1]}</text>}
+      {lines[1] && <text x={0} y={0} dy={22} textAnchor="end" fontSize={9} fill="#6b7280">{lines[1]}</text>}
     </g>
   );
 }
@@ -1322,7 +2856,7 @@ function SlantedXTick({ x, y, payload, urlMap }: any) {
 function VideoChartTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border rounded-lg shadow-lg p-2 text-xs">
+    <div className="bg-[#f5f5f5] border rounded-lg shadow-none p-2 text-xs">
       <p className="font-medium mb-1 whitespace-pre-line">{label}</p>
       {payload.map((entry: any, i: number) => (
         <div key={i} className="flex items-center gap-1.5">
@@ -1447,7 +2981,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
       {/* サマリー */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card><CardContent className="py-3 px-4 text-center">
-          <p className="text-xs text-muted-foreground">動画数</p>
+          <p className="text-xs text-muted-foreground">総投稿数</p>
           <p className="text-xl font-bold">{videos.length}</p>
         </CardContent></Card>
         <Card><CardContent className="py-3 px-4 text-center">
@@ -1477,7 +3011,6 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
         <TikTokPerformanceChart dailyMetrics={dailyMetrics!} videos={videos} />
       )}
       {hasBaseline && videos.length > 0 && !hasDailyData && (() => {
-        // フォールバック: postedAt集約の累積チャート
         const dayMap = new Map<string, { views: number; likes: number; comments: number; saves: number; shares: number }>();
         for (const v of videos) {
           if (!v.postedAt) continue;
@@ -1501,7 +3034,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
         return lineData.length > 0 ? (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">累積パフォーマンス推移</CardTitle>
+              <CardTitle className="text-base">パフォーマンス推移</CardTitle>
               <CardDescription className="text-xs">日別累積値（投稿日順）</CardDescription>
             </CardHeader>
             <CardContent>
@@ -1513,11 +3046,11 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
                   <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
                   <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
                   <Legend />
-                  <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />
-                  <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                  <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#0a0a0a" strokeWidth={2} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#D71921" strokeWidth={2} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#6366f1" strokeWidth={2} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#f59e0b" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1535,84 +3068,130 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
 }
 
 // ============================
-// TikTok パフォーマンス推移（累積 / 日次増分 切替）
+// 全媒体パフォーマンス推移（累積 / 日次増分 切替）
 // ============================
 
 function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[]; videos: any[] }) {
   const [chartMode, setChartMode] = useState<"cumulative" | "daily">("cumulative");
 
   const { cumulativeData, dailyData, hasShares, hasSaves } = useMemo(() => {
-    // 日付×動画URL別にスナップショットを整理
-    const dayMap = new Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>();
+    // 動画URL別 → 日付別のスナップショットを整理
+    const byVideo = new Map<string, Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>>();
     for (const dm of dailyMetrics) {
-      if (dm.platform && dm.platform !== "tiktok") continue;
       const dateKey = dm.date?.split("T")[0] || dm.dateKey;
-      if (!dateKey) continue;
-      const entry = dayMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      const url = dm.videoUrl || "";
+      if (!dateKey || !url) continue;
+      if (!byVideo.has(url)) byVideo.set(url, new Map());
+      const videoMap = byVideo.get(url)!;
+      const entry = videoMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
       entry.views += dm.viewCount || 0;
       entry.likes += dm.likeCount || 0;
       entry.comments += dm.commentCount || 0;
       entry.shares += dm.shareCount || 0;
       entry.saves += dm.saveCount || 0;
-      dayMap.set(dateKey, entry);
+      videoMap.set(dateKey, entry);
     }
 
-    const sortedDays = [...dayMap.entries()].sort(([a], [b]) => a.localeCompare(b));
+    // 全日付を収集してソート
+    const allDates = new Set<string>();
+    for (const videoMap of byVideo.values()) {
+      for (const d of videoMap.keys()) allDates.add(d);
+    }
+    const sortedDates = [...allDates].sort();
+    if (sortedDates.length < 2) return { cumulativeData: [], dailyData: [], hasShares: false, hasSaves: false };
 
-    // 累積データ（スナップショット値そのまま）
-    const cumData = sortedDays.map(([dateKey, d]) => ({
-      name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
+    // Forward-fill: 各動画の欠損日を前日値で埋める（累積値が下がるのを防止）
+    for (const videoMap of byVideo.values()) {
+      let lastKnown: { views: number; likes: number; comments: number; shares: number; saves: number } | null = null;
+      for (const dateKey of sortedDates) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          lastKnown = snap;
+        } else if (lastKnown) {
+          videoMap.set(dateKey, { ...lastKnown });
+        }
+      }
+    }
+
+    // 各動画ごとに日次増分を算出し、日付ごとに全動画分を合計
+    const dailyIncrements = sortedDates.slice(1).map((dateKey, i) => {
+      const prevDate = sortedDates[i];
+      let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+      for (const videoMap of byVideo.values()) {
+        const cur = videoMap.get(dateKey);
+        const prev = videoMap.get(prevDate);
+        if (cur && prev) {
+          views += Math.max(0, cur.views - prev.views);
+          likes += Math.max(0, cur.likes - prev.likes);
+          comments += Math.max(0, cur.comments - prev.comments);
+          shares += Math.max(0, cur.shares - prev.shares);
+          saves += Math.max(0, cur.saves - prev.saves);
+        }
+      }
+      return { dateKey, views, likes, comments, shares, saves };
+    });
+
+    // 日次増分データ（旧「純増」→ 新「日次」）
+    const dData = dailyIncrements.map(d => ({
+      name: `${new Date(d.dateKey).getMonth() + 1}/${new Date(d.dateKey).getDate()}`,
       再生数: d.views, いいね: d.likes, コメント: d.comments, シェア: d.shares, 保存: d.saves,
     }));
 
-    // 日次増分データ（前日との差分）
-    const dData = sortedDays.map(([dateKey, d], i) => {
-      const prev = i > 0 ? sortedDays[i - 1][1] : { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+    // 累積データ：各日付の全動画合計スナップショット値（実際の累積再生数）
+    const cumData = sortedDates.map(dateKey => {
+      let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+      for (const videoMap of byVideo.values()) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          views += snap.views;
+          likes += snap.likes;
+          comments += snap.comments;
+          shares += snap.shares;
+          saves += snap.saves;
+        }
+      }
       return {
         name: `${new Date(dateKey).getMonth() + 1}/${new Date(dateKey).getDate()}`,
-        再生数: Math.max(0, d.views - prev.views),
-        いいね: Math.max(0, d.likes - prev.likes),
-        コメント: Math.max(0, d.comments - prev.comments),
-        シェア: Math.max(0, d.shares - prev.shares),
-        保存: Math.max(0, d.saves - prev.saves),
+        再生数: views, いいね: likes, コメント: comments, シェア: shares, 保存: saves,
       };
     });
 
-    const _hasShares = cumData.some(d => d.シェア > 0);
-    const _hasSaves = cumData.some(d => d.保存 > 0);
+    const last = cumData[cumData.length - 1];
+    const _hasShares = last ? last.シェア > 0 : false;
+    const _hasSaves = last ? last.保存 > 0 : false;
 
     return { cumulativeData: cumData, dailyData: dData, hasShares: _hasShares, hasSaves: _hasSaves };
   }, [dailyMetrics]);
 
   const lineData = chartMode === "cumulative" ? cumulativeData : dailyData;
-  if (lineData.length === 0) return null;
+  if (lineData.length < 2) return null;
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-base">パフォーマンス推移（実測値）</CardTitle>
+            <CardTitle className="text-base">パフォーマンス推移</CardTitle>
             <CardDescription className="text-xs mt-0.5">
-              {chartMode === "cumulative" ? "各動画の累積メトリクス合計の推移" : "日毎のメトリクス増分（前日比）"}
+              {chartMode === "cumulative" ? "全動画合計の累積再生数推移" : "日毎のメトリクス増分（前日比）"}
             </CardDescription>
           </div>
-          <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+          <div className="flex rounded-lg border border-black/6 overflow-hidden">
             <button
               className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 chartMode === "cumulative"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white hover:bg-slate-50 text-slate-500"
+                  ? "bg-[#0a0a0a] text-white"
+                  : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
               }`}
               onClick={() => setChartMode("cumulative")}
             >
-              累計
+              累積
             </button>
             <button
-              className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-slate-200 ${
+              className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-black/6 ${
                 chartMode === "daily"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white hover:bg-slate-50 text-slate-500"
+                  ? "bg-[#0a0a0a] text-white"
+                  : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
               }`}
               onClick={() => setChartMode("daily")}
             >
@@ -1631,26 +3210,26 @@ function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[];
               <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
               <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
               <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#3b82f6" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
-              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
+              <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#0a0a0a" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#D71921" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#6366f1" strokeWidth={2} dot={false} />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#f59e0b" strokeWidth={2} dot={false} />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
             </LineChart>
           ) : (
-            <ComposedChart data={lineData}>
+            <LineChart data={lineData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} />
               <YAxis yAxisId="left" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
               <YAxis yAxisId="right" orientation="right" tickFormatter={(v: number) => fmt(v)} tick={{ fontSize: 11 }} />
-              <RechartsTooltip formatter={(v: number) => v.toLocaleString()} />
+              <RechartsTooltip formatter={(v: number) => `+${v.toLocaleString()}`} />
               <Legend />
-              <Bar yAxisId="left" dataKey="再生数" fill="#3b82f6" fillOpacity={0.7} radius={[2, 2, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#ef4444" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
-              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#10b981" strokeWidth={2} dot={false} />}
-            </ComposedChart>
+              <Line yAxisId="left" type="monotone" dataKey="再生数" stroke="#0a0a0a" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="いいね" stroke="#D71921" strokeWidth={2} dot={false} />
+              <Line yAxisId="right" type="monotone" dataKey="コメント" stroke="#6366f1" strokeWidth={2} dot={false} />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="シェア" stroke="#f59e0b" strokeWidth={2} dot={false} />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="保存" stroke="#8b5cf6" strokeWidth={2} dot={false} />}
+            </LineChart>
           )}
         </ResponsiveContainer>
       </CardContent>
@@ -1683,8 +3262,33 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
   const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
   const metricKey = SPARK_KEY[sparkMetric];
 
+  // ホバー展開管理（タッチデバイスはタップトグル）
+  const [expandedCard, setExpandedCard] = useState<string | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTouchRef = useRef(false);
+
+  useEffect(() => {
+    isTouchRef.current = window.matchMedia("(hover: none)").matches;
+  }, []);
+
+  const handleMouseEnter = useCallback((url: string) => {
+    if (isTouchRef.current) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setExpandedCard(url), 150);
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    if (isTouchRef.current) return;
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setExpandedCard(null), 100);
+  }, []);
+  const handleTap = useCallback((url: string) => {
+    if (!isTouchRef.current) return;
+    setExpandedCard(prev => prev === url ? null : url);
+  }, []);
+
   const sparks = useMemo(() => {
-    // Group daily metrics by videoUrl
+    // Group daily metrics by videoUrl — all metrics
+    const byVideoAll = new Map<string, Array<{ dateKey: string; viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>>();
     const byVideo = new Map<string, Array<{ dateKey: string; value: number }>>();
     // 最新メトリクス（ER計算用）
     const latestDm = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number; dateKey: string }>();
@@ -1697,6 +3301,15 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         byVideo.get(url)!.push({
           dateKey: dm.dateKey,
           value: Number(dm[SPARK_KEY[sparkMetric]]) || 0,
+        });
+        if (!byVideoAll.has(url)) byVideoAll.set(url, []);
+        byVideoAll.get(url)!.push({
+          dateKey: dm.dateKey,
+          viewCount: Number(dm.viewCount) || 0,
+          likeCount: Number(dm.likeCount) || 0,
+          commentCount: Number(dm.commentCount) || 0,
+          shareCount: Number(dm.shareCount) || 0,
+          saveCount: Number(dm.saveCount) || 0,
         });
         const prev = latestDm.get(url);
         if (!prev || dm.dateKey > prev.dateKey) {
@@ -1721,23 +3334,17 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         const bVal = Number(v.before?.[metricKey]) || 0;
         const aVal = Number(v.after?.[metricKey]) || 0;
         if (v.before && v.after) {
-          // レポートA: before→after の2点
           sorted = [{ dateKey: "before", value: bVal }, { dateKey: "after", value: aVal }];
         } else if (!hasBaseline && aVal > 0 && v.postedAt) {
-          // レポートB: 投稿日からの経過日数で均等割り → 1日あたり上昇値の推移
           const postedDate = new Date(v.postedAt);
           const now = new Date();
           const elapsedDays = Math.max(1, Math.floor((now.getTime() - postedDate.getTime()) / (1000 * 60 * 60 * 24)));
-          const dailyAvg = aVal / elapsedDays;
-          const points = Math.min(elapsedDays + 1, 30); // 最大30点でグラフ描画
-          const step = elapsedDays / (points - 1);
-          sorted = Array.from({ length: points }, (_, i) => {
-            const day = Math.round(step * i);
-            return {
-              dateKey: `${day}日`,
-              value: day === 0 ? 0 : Math.round(dailyAvg * day),
-            };
-          });
+          const points = Math.min(elapsedDays + 1, 30);
+          // インデックスベースで等間隔に累積値を生成（Math.round(step*i) の丸めバグ回避）
+          sorted = Array.from({ length: points }, (_, i) => ({
+            dateKey: `${i}`,
+            value: Math.round(aVal * (i / (points - 1))),
+          }));
         } else if (aVal > 0) {
           sorted = [{ dateKey: "start", value: 0 }, { dateKey: "now", value: aVal }];
         }
@@ -1753,17 +3360,89 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
       const lk = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
       const cm = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
       const sh = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
+      const sv = Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
       const er = vw > 0 ? Number(((lk + cm + sh) / vw * 100).toFixed(2)) : 0;
+
+      // 日次増分（直近2日比較）
+      const allSorted = [...(byVideoAll.get(url) || [])].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+      let dailyIncrement: { views: number; likes: number; comments: number; shares: number; saves: number } | null = null;
+      if (allSorted.length >= 2) {
+        const last = allSorted[allSorted.length - 1];
+        const prev = allSorted[allSorted.length - 2];
+        dailyIncrement = {
+          views: last.viewCount - prev.viewCount,
+          likes: last.likeCount - prev.likeCount,
+          comments: last.commentCount - prev.commentCount,
+          shares: last.shareCount - prev.shareCount,
+          saves: last.saveCount - prev.saveCount,
+        };
+      }
+
+      // トレンド乖離 — 線形成長からのRMSEベースで分類
+      let trendLabel: "急成長" | "安定" | "停滞" | "バイラル" = "安定";
+      if (sorted.length >= 3) {
+        const lastVal = sorted[sorted.length - 1].value;
+        if (lastVal > 0) {
+          const normalized = sorted.map((d, i) => ({
+            actual: d.value / lastVal,
+            expected: i / (sorted.length - 1),
+          }));
+          const mse = normalized.reduce((sum, d) => sum + Math.pow(d.actual - d.expected, 2), 0) / normalized.length;
+          const rmse = Math.sqrt(mse);
+          // 最近の加速度
+          const recentGrowth = sorted.length >= 3
+            ? (sorted[sorted.length - 1].value - sorted[sorted.length - 2].value) /
+              Math.max(sorted[sorted.length - 2].value - sorted[sorted.length - 3].value, 1)
+            : 1;
+          if (rmse > 0.35 && recentGrowth > 2) trendLabel = "バイラル";
+          else if (rmse > 0.2 && recentGrowth > 1.2) trendLabel = "急成長";
+          else if (rmse < 0.15 && dailyIncrement && dailyIncrement.views < 10) trendLabel = "停滞";
+          else trendLabel = "安定";
+        }
+      }
+
+      // 日次増分の時系列（ミニバーチャート用）
+      const deltas: Array<{ dateKey: string; value: number }> = [];
+      for (let i = 1; i < sorted.length; i++) {
+        deltas.push({
+          dateKey: sorted[i].dateKey,
+          value: Math.max(0, sorted[i].value - sorted[i - 1].value),
+        });
+      }
+
+      // 直近3日の全メトリ��ス日次増分
+      const recentDeltas: Array<{ dateKey: string; views: number; likes: number; comments: number; shares: number; saves: number; er: number }> = [];
+      for (let i = Math.max(1, allSorted.length - 3); i < allSorted.length; i++) {
+        const cur = allSorted[i];
+        const prev = allSorted[i - 1];
+        const dv = cur.viewCount - prev.viewCount;
+        const dl = cur.likeCount - prev.likeCount;
+        const dc = cur.commentCount - prev.commentCount;
+        const ds = cur.shareCount - prev.shareCount;
+        const dsv = cur.saveCount - prev.saveCount;
+        const dEr = dv > 0 ? Number(((dl + dc + ds) / dv * 100).toFixed(2)) : 0;
+        recentDeltas.push({ dateKey: cur.dateKey, views: Math.max(0, dv), likes: Math.max(0, dl), comments: Math.max(0, dc), shares: Math.max(0, ds), saves: Math.max(0, dsv), er: dEr });
+      }
 
       return {
         videoUrl: url,
         caption: (v.description || "").slice(0, 18),
+        fullCaption: v.description || "",
         username: username ? `@${username}` : "",
         coverUrl: v.coverUrl || "",
         latestVal,
         data: sorted,
+        deltas,
         er,
         postedAt: v.postedAt || "",
+        recentDeltas,
+        // 展開用追加データ
+        hashtags: (v.hashtags || []) as string[],
+        duration: (v.duration || 0) as number,
+        music: v.music as { id: string; title: string; authorName: string; original: boolean } | null | undefined,
+        allMetrics: { viewCount: vw, likeCount: lk, commentCount: cm, shareCount: sh, saveCount: sv },
+        dailyIncrement,
+        trendLabel,
       };
     }).filter(s => s.data.length >= 2);
   }, [videos, dailyMetrics, sparkMetric, metricKey, hasDailyData]);
@@ -1779,13 +3458,33 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
   const visibleSparks = sparks.slice(0, sparkDisplayCount);
   const sparkRemaining = sparks.length - sparkDisplayCount;
 
+  const TREND_CONFIG: Record<string, { cls: string; dot: string }> = {
+    "バイラル": { cls: "text-[#D71921] bg-[#D71921]/8", dot: "bg-[#D71921]" },
+    "急成長": { cls: "text-emerald-700 bg-emerald-50", dot: "bg-emerald-500" },
+    "安定": { cls: "text-slate-600 bg-slate-100", dot: "bg-slate-400" },
+    "停滞": { cls: "text-amber-700 bg-amber-50", dot: "bg-amber-500" },
+  };
+
+  const formatDuration = (sec: number) => {
+    if (!sec) return null;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
+
+  const formatDate = (iso: string) => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+
   return (<>
     <Card>
       <CardContent className="py-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold">投稿パフォーマンス推移</p>
-            <p className="text-[11px] text-muted-foreground">{hasDailyData ? "各投稿の時系列パフォーマンス" : "各投稿の施策前後パフォーマンス"}</p>
+            <p className="text-[11px] text-muted-foreground">{hasDailyData ? "日次増分バー ＋ ホバーで累積推移・詳細" : "各投稿の施策前後パフォーマンス"}</p>
           </div>
           <div className="flex gap-1 flex-wrap">
             {sortOptions.map(opt => (
@@ -1802,63 +3501,128 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {visibleSparks.map((s, idx) => {
-            const vals = s.data.map(d => d.value);
-            const sMax = Math.max(...vals, 1);
-            const sMin = Math.min(...vals, 0);
-            const sRange = sMax - sMin || 1;
-            const W = 200, H = 40;
-            const pts = vals.map((sv, si) => {
-              const x = vals.length > 1 ? (si / (vals.length - 1)) * W : W / 2;
-              const y = H - ((sv - sMin) / sRange) * (H - 4) - 2;
-              return `${x},${y}`;
-            });
-            const poly = pts.join(" ");
-            const polyFill = `0,${H} ${poly} ${W},${H}`;
             const displayVal = sortBy === "er" ? s.er : s.latestVal;
             const intensity = topVal > 0 ? Math.min(displayVal / topVal, 1) : 0.5;
-            const sc = intensity > 0.5 ? "#6366f1" : intensity > 0.2 ? "#818cf8" : "#a5b4fc";
-            const gId = `spk-${idx}`;
+            const sc = intensity > 0.5 ? "#D71921" : intensity > 0.2 ? "#e85d68" : "#a5b4fc";
+            const isExpanded = expandedCard === s.videoUrl;
+            const ttMetricKeyMap: Record<string, string> = { views: "views", likes: "likes", comments: "comments", shares: "shares", saves: "saves", er: "er", date: "views" };
+            const deltaKey = ttMetricKeyMap[sortBy] || "views";
+            const recent3 = s.recentDeltas.slice(-3);
+
             return (
-              <a key={s.videoUrl || idx} href={s.videoUrl} target="_blank" rel="noopener noreferrer"
-                className="block rounded-lg border bg-background hover:border-slate-300 hover:shadow-md transition-all overflow-hidden group">
-                {/* 上部: サムネ + ユーザー名 + キャプション + 大きな数値 */}
-                <div className="flex items-start gap-2.5 p-3 pb-2">
+              <div key={s.videoUrl || idx}
+                className="post-card"
+                onMouseEnter={() => handleMouseEnter(s.videoUrl)}
+                onMouseLeave={handleMouseLeave}
+                onClick={() => handleTap(s.videoUrl)}
+              >
+                {/* 上部: サムネ + ユーザー名 + 累積値 */}
+                <div className="flex items-start gap-2.5 p-3 pb-1.5">
                   {s.coverUrl ? (
-                    <img src={s.coverUrl} alt="" className="w-11 h-[62px] rounded-md object-cover flex-shrink-0" loading="lazy" />
+                    <img src={s.coverUrl} alt="" className="w-10 h-14 rounded-md object-cover flex-shrink-0" loading="lazy" />
                   ) : (
-                    <div className="w-11 h-[62px] rounded-md bg-gradient-to-br from-indigo-400 to-purple-500 flex-shrink-0 flex items-center justify-center">
+                    <div className="w-10 h-14 rounded-md flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-[#D71921] to-[#0a0a0a]">
                       <Play className="h-3 w-3 text-white/80" />
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
                     {s.username && <p className="text-[10px] font-bold text-slate-600 truncate">{s.username}</p>}
                     <p className="text-[10px] text-slate-400 truncate leading-snug">{s.caption || "動画"}</p>
-                    <p className="text-2xl font-extrabold tabular-nums text-slate-800 leading-tight mt-0.5">
+                    <p className="text-lg font-extrabold tabular-nums text-slate-800 leading-tight mt-0.5">
                       {sortBy === "er" ? `${s.er}%` : sortBy === "date" ? (s.postedAt ? s.postedAt.split("T")[0] : "-") : fmt(s.latestVal)}
                     </p>
                     <p className="text-[9px] text-slate-400 font-medium">
-                      {sortBy === "er" ? "ER" : sortBy === "date" ? "投稿日" : SPARK_LABELS[sparkMetric]}
+                      {sortBy === "er" ? "ER" : sortBy === "date" ? "投稿日" : SPARK_LABELS[sparkMetric]} (累計)
                     </p>
                   </div>
                 </div>
-                {/* 下部: スパークライン */}
-                {vals.length >= 2 && (
-                  <div className="px-3 pb-2">
-                    <div className="h-[40px]">
-                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
-                        <defs>
-                          <linearGradient id={gId} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={sc} stopOpacity={0.25} />
-                            <stop offset="100%" stopColor={sc} stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <polygon fill={`url(#${gId})`} points={polyFill} />
-                        <polyline fill="none" stroke={sc} strokeWidth="2" points={poly} />
-                      </svg>
+                {/* 直近3日の日次増分テーブル */}
+                {recent3.length > 0 && (
+                  <div className="px-3 pb-2 post-card-mini-spark">
+                    <div className="space-y-0.5">
+                      {recent3.map((d, di) => {
+                        const val = Number((d as any)[deltaKey]) || 0;
+                        const maxInRecent = Math.max(...recent3.map(r => Number((r as any)[deltaKey]) || 0), 1);
+                        const barPct = Math.min((val / maxInRecent) * 100, 100);
+                        return (
+                          <div key={di} className="flex items-center gap-1.5 text-[9px]">
+                            <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
+                            <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
+                              <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
+                            </div>
+                            <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
+                              {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
-              </a>
+                {/* コンパクトメトリクス */}
+                <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
+                  <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
+                  <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(s.allMetrics.likeCount)}</span>
+                  <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" />{fmt(s.allMetrics.shareCount)}</span>
+                  <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" />{fmt(s.allMetrics.saveCount)}</span>
+                  <span className="ml-auto font-mono text-[8px]">ER {s.er}%</span>
+                </div>
+
+                {/* ===== 展開パネル ===== */}
+                <div className={`post-card-expand ${isExpanded ? "is-expanded" : ""}`}>
+                  <div className="post-card-expand-inner">
+                    <div className="mx-3 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+                    <div className="px-3 pt-2.5 pb-3 space-y-2 bg-gradient-to-b from-muted/20 to-transparent">
+                      {s.fullCaption.length > 18 && (() => {
+                        const cleaned = s.fullCaption.replace(/#[\w\u3000-\u9FFF\uF900-\uFAFF]+/g, "").trim();
+                        return cleaned ? <p className="spark-detail-item text-[10px] text-slate-500 leading-relaxed line-clamp-3">{cleaned}</p> : null;
+                      })()}
+                      {s.hashtags.length > 0 && (
+                        <div className="spark-detail-item flex flex-wrap gap-1">
+                          {s.hashtags.slice(0, 5).map(tag => (
+                            <span key={tag} className="inline-flex items-center text-[8px] font-semibold px-1.5 py-0.5 rounded-sm bg-primary/6 text-primary/80 border border-primary/10">
+                              #{tag.replace(/^#/, "")}
+                            </span>
+                          ))}
+                          {s.hashtags.length > 5 && <span className="text-[8px] text-muted-foreground self-center">+{s.hashtags.length - 5}</span>}
+                        </div>
+                      )}
+                      <div className="spark-detail-item grid grid-cols-5 gap-0.5">
+                        {([
+                          { key: "viewCount", label: "再生", Icon: Eye, inc: s.dailyIncrement?.views },
+                          { key: "likeCount", label: "いいね", Icon: Heart, inc: s.dailyIncrement?.likes },
+                          { key: "commentCount", label: "コメ", Icon: MessageCircle, inc: s.dailyIncrement?.comments },
+                          { key: "shareCount", label: "シェア", Icon: Share2, inc: s.dailyIncrement?.shares },
+                          { key: "saveCount", label: "保存", Icon: Bookmark, inc: s.dailyIncrement?.saves },
+                        ] as const).map(m => (
+                          <div key={m.key} className="text-center py-1 rounded-sm">
+                            <m.Icon className="h-2.5 w-2.5 mx-auto mb-0.5 text-slate-400" />
+                            <p className="text-[10px] font-bold tabular-nums text-foreground">{fmt(s.allMetrics[m.key as keyof typeof s.allMetrics])}</p>
+                            <p className="text-[7px] text-muted-foreground tracking-wider">{m.label}</p>
+                            {m.inc != null && m.inc !== 0 && (
+                              <p className={`text-[8px] font-semibold tabular-nums mt-0.5 ${m.inc > 0 ? "text-emerald-600" : "text-[#D71921]"}`}>
+                                {m.inc > 0 ? "+" : ""}{fmt(m.inc)}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="spark-detail-item flex items-center justify-between pt-1">
+                        <span className={`inline-flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 rounded-sm ${TREND_CONFIG[s.trendLabel]?.cls || ""}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${TREND_CONFIG[s.trendLabel]?.dot || ""}`} />
+                          {s.trendLabel}
+                        </span>
+                        <a href={s.videoUrl} target="_blank" rel="noopener noreferrer"
+                          className="inline-flex items-center gap-0.5 text-[8px] text-primary hover:text-primary/80 font-bold transition-colors"
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-2.5 w-2.5" />動画を見る
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1873,118 +3637,10 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
       </CardContent>
     </Card>
 
-    {/* 下段: 動画詳細カード (スパークラインなし) */}
-    <PostDetailCardGrid videos={videos} dailyMetrics={dailyMetrics} />
   </>
   );
 }
 
-const DETAIL_PAGE = 8;
-
-function PostDetailCardGrid({ videos, dailyMetrics }: { videos: any[]; dailyMetrics?: any[] }) {
-  const [showAll, setShowAll] = useState(false);
-  const displayed = showAll ? videos : videos.slice(0, DETAIL_PAGE);
-  const remaining = videos.length - DETAIL_PAGE;
-
-  // dailyMetricsから各動画の最新値を取得
-  const latestByUrl = useMemo(() => {
-    const map = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>();
-    if (!dailyMetrics) return map;
-    for (const dm of dailyMetrics) {
-      const url = dm.videoUrl;
-      if (!url) continue;
-      const existing = map.get(url);
-      const dateKey = dm.dateKey || "";
-      if (!existing || dateKey > (existing as any)._dk) {
-        map.set(url, {
-          viewCount: dm.viewCount || 0,
-          likeCount: dm.likeCount || 0,
-          commentCount: dm.commentCount || 0,
-          shareCount: dm.shareCount || 0,
-          saveCount: dm.saveCount || 0,
-          _dk: dateKey,
-        } as any);
-      }
-    }
-    return map;
-  }, [dailyMetrics]);
-
-  return (
-    <Card>
-      <CardContent className="p-0">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-800">動画詳細</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">施策動画の詳細情報</p>
-        </div>
-        <div className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {displayed.map((v: any, i: number) => {
-              const url = v.videoUrl || "";
-              const username = url.match(/@([^/]+)/)?.[1] || "";
-              const tags = (v.hashtags || []).slice(0, 4);
-              // 最新のdailyMetricsがあればそちらを優先、なければスナップショット値
-              const dm = latestByUrl.get(url);
-              const views = Math.max(dm?.viewCount || 0, v.after?.viewCount || 0);
-              const likes = Math.max(dm?.likeCount || 0, v.after?.likeCount || 0);
-              const comments = Math.max(dm?.commentCount || 0, v.after?.commentCount || 0);
-              const shares = Math.max(dm?.shareCount || 0, v.after?.shareCount || 0);
-              const saves = Math.max(dm?.saveCount || 0, v.after?.saveCount || 0);
-
-              return (
-                <a key={url || i} href={url} target="_blank" rel="noopener noreferrer"
-                  className="flex gap-3 rounded-xl bg-slate-50/80 border border-slate-100 p-3.5 hover:border-slate-300 hover:shadow-md transition-all">
-                  {/* Thumbnail */}
-                  {v.coverUrl ? (
-                    <img src={v.coverUrl} alt="" className="w-[56px] h-[100px] rounded-lg object-cover flex-shrink-0" loading="lazy" />
-                  ) : (
-                    <div className="w-[56px] h-[100px] rounded-lg bg-gradient-to-br from-indigo-400 to-purple-500 flex-shrink-0 flex items-center justify-center">
-                      <Play className="h-4 w-4 text-white/80" />
-                    </div>
-                  )}
-                  {/* Meta */}
-                  <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
-                    <div>
-                      {username && <p className="text-xs font-bold text-slate-800 truncate">@{username}</p>}
-                      <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug mt-0.5">{(v.description || "").slice(0, 80)}</p>
-                    </div>
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {tags.map((tag: string, ti: number) => (
-                          <span key={ti} className="text-[9px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-px">
-                            #{tag.replace(/^#/, "")}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-[10px] text-slate-400 flex-wrap">
-                      <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(views)}</strong></span>
-                      <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(likes)}</strong></span>
-                      <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(comments)}</strong></span>
-                      <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(shares)}</strong></span>
-                      {saves > 0 && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(saves)}</strong></span>}
-                      {views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-slate-700">{(((likes || 0) + (comments || 0)) / views * 100).toFixed(2)}%</strong></span>}
-                    </div>
-                    {v.postedAt && <p className="text-[10px] text-slate-400">{new Date(v.postedAt).toLocaleDateString("ja-JP")}</p>}
-                  </div>
-                </a>
-              );
-            })}
-          </div>
-          {remaining > 0 && (
-            <div className="text-center mt-4 pt-3 border-t border-slate-100">
-              <button
-                onClick={(e) => { e.preventDefault(); setShowAll(!showAll); }}
-                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 px-4 py-1.5 rounded-full transition-colors"
-              >
-                {showAll ? "閉じる" : `もっと見る（残り ${remaining} 件）`}
-              </button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ============================
 // VideoThumbnail
@@ -2001,24 +3657,24 @@ function VideoThumbnail({ url, className }: { url?: string; className?: string }
 // ============================
 
 const GENRE_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {
-  recommend: { label: "レコメンド", cls: "bg-orange-500 text-white", barCls: "bg-orange-500" },
-  howto: { label: "How-to", cls: "bg-sky-400 text-white", barCls: "bg-sky-400" },
-  entertainment: { label: "エンタメ", cls: "bg-pink-500 text-white", barCls: "bg-pink-500" },
-  negative: { label: "ネガティブ", cls: "bg-red-500 text-white", barCls: "bg-red-500" },
-  other: { label: "その他", cls: "bg-slate-400 text-white", barCls: "bg-slate-400" },
+  recommend: { label: "レコメンド", cls: "bg-blue-50 text-blue-700 border border-blue-200", barCls: "bg-blue-600" },
+  howto: { label: "How-to", cls: "bg-amber-50 text-amber-700 border border-amber-200", barCls: "bg-amber-500" },
+  entertainment: { label: "エンタメ", cls: "bg-purple-50 text-purple-700 border border-purple-200", barCls: "bg-purple-500" },
+  negative: { label: "ネガティブ", cls: "bg-red-50 text-[#D71921] border border-[#D71921]/20", barCls: "bg-[#D71921]" },
+  other: { label: "その他", cls: "bg-[#f5f5f5] text-[#6b7280] border border-black/6", barCls: "bg-[#9ca3af]" },
 };
 
 const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
-  official: { text: "公式", cls: "bg-blue-100 text-blue-700 border-blue-300" },
-  satellite: { text: "サテライト", cls: "bg-teal-100 text-teal-700 border-teal-300" },
-  campaign: { text: "施策", cls: "bg-purple-100 text-purple-700 border-purple-300" },
-  competitor: { text: "競合", cls: "bg-orange-100 text-orange-700 border-orange-300" },
+  official: { text: "公式", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  satellite: { text: "サテライト", cls: "bg-teal-50 text-teal-700 border-teal-200" },
+  campaign: { text: "施策", cls: "bg-red-50 text-[#D71921] border-red-200" },
+  competitor: { text: "競合", cls: "bg-slate-100 text-slate-600 border-slate-300" },
 };
 
 const TIKTOK_LABEL_CONFIG: Record<string, { text: string; dot: string }> = {
-  promotion: { text: "プロモーション", dot: "bg-amber-400" },
-  paid_partnership: { text: "有償パートナーシップ", dot: "bg-pink-400" },
-  aigc: { text: "AI生成メディアを含む", dot: "bg-violet-400" },
+  promotion: { text: "プロモーション", dot: "bg-amber-500" },
+  paid_partnership: { text: "有償パートナーシップ", dot: "bg-purple-500" },
+  aigc: { text: "AI生成メディアを含む", dot: "bg-teal-500" },
 };
 
 interface SlotData {
@@ -2043,19 +3699,14 @@ interface SlotData {
 // SOV slot visual config — color accent per ownership type
 const SOV_SLOT_CONFIG = {
   official: {
-    // Top cap label
     capBg: "bg-blue-600",
     capText: "text-white",
     capLabel: "公式",
-    // Left accent bar
-    accentBar: "bg-blue-500",
-    // Rank badge
-    rankBg: "bg-blue-600",
-    rankText: "text-white",
-    // Card wrapper
-    wrapperBorder: "border-blue-400",
-    wrapperShadow: "shadow-[0_4px_16px_rgba(59,130,246,0.35)]",
-    // Empty thumbnail fallback
+    accentBar: "bg-blue-600",
+    rankBg: "bg-blue-50",
+    rankText: "text-blue-700",
+    wrapperBorder: "border-blue-200",
+    wrapperShadow: "shadow-none",
     emptyBg: "bg-blue-50",
     emptyText: "text-blue-300",
   },
@@ -2063,49 +3714,49 @@ const SOV_SLOT_CONFIG = {
     capBg: "bg-teal-600",
     capText: "text-white",
     capLabel: "サテライト",
-    accentBar: "bg-teal-500",
-    rankBg: "bg-teal-600",
-    rankText: "text-white",
-    wrapperBorder: "border-teal-400",
-    wrapperShadow: "shadow-[0_4px_16px_rgba(20,184,166,0.35)]",
+    accentBar: "bg-teal-600",
+    rankBg: "bg-teal-50",
+    rankText: "text-teal-700",
+    wrapperBorder: "border-teal-200",
+    wrapperShadow: "shadow-none",
     emptyBg: "bg-teal-50",
     emptyText: "text-teal-300",
   },
   campaign: {
-    capBg: "bg-purple-600",
+    capBg: "bg-[#D71921]",
     capText: "text-white",
     capLabel: "施策",
-    accentBar: "bg-purple-500",
-    rankBg: "bg-purple-600",
-    rankText: "text-white",
-    wrapperBorder: "border-purple-400",
-    wrapperShadow: "shadow-[0_4px_16px_rgba(147,51,234,0.35)]",
-    emptyBg: "bg-purple-50",
-    emptyText: "text-purple-300",
+    accentBar: "bg-[#D71921]",
+    rankBg: "bg-red-50",
+    rankText: "text-[#D71921]",
+    wrapperBorder: "border-[#D71921]/40",
+    wrapperShadow: "shadow-none",
+    emptyBg: "bg-red-50",
+    emptyText: "text-[#D71921]/50",
   },
   competitor: {
-    capBg: "bg-orange-500",
+    capBg: "bg-slate-500",
     capText: "text-white",
     capLabel: "競合",
-    accentBar: "bg-orange-400",
-    rankBg: "bg-black/50",
-    rankText: "text-white",
-    wrapperBorder: "border-orange-300",
-    wrapperShadow: "shadow-sm",
-    emptyBg: "bg-orange-50",
-    emptyText: "text-orange-300",
+    accentBar: "bg-slate-500",
+    rankBg: "bg-slate-100",
+    rankText: "text-slate-600",
+    wrapperBorder: "border-slate-300",
+    wrapperShadow: "shadow-none",
+    emptyBg: "bg-slate-50",
+    emptyText: "text-slate-400",
   },
   other: {
     capBg: "",
     capText: "",
     capLabel: "",
     accentBar: "",
-    rankBg: "bg-black/40",
-    rankText: "text-white",
-    wrapperBorder: "border-slate-200",
+    rankBg: "bg-[#f5f5f5]",
+    rankText: "text-[#6b7280]",
+    wrapperBorder: "border-black/6",
     wrapperShadow: "shadow-none",
-    emptyBg: "bg-slate-100",
-    emptyText: "text-slate-300",
+    emptyBg: "bg-[#f5f5f5]",
+    emptyText: "text-[#9ca3af]",
   },
 };
 
@@ -2123,11 +3774,11 @@ function ownerKeyToChanges(key: OwnerKey): { owner: "own" | "competitor" | "othe
 }
 
 const OWNER_KEY_OPTIONS: { key: OwnerKey; label: string; color: string; activeBg: string }[] = [
-  { key: "official", label: "公式", color: "text-blue-700", activeBg: "bg-blue-100 border-blue-400 ring-1 ring-blue-300" },
-  { key: "satellite", label: "サテライト", color: "text-teal-700", activeBg: "bg-teal-100 border-teal-400 ring-1 ring-teal-300" },
-  { key: "campaign", label: "施策", color: "text-purple-700", activeBg: "bg-purple-100 border-purple-400 ring-1 ring-purple-300" },
-  { key: "competitor", label: "競合", color: "text-orange-700", activeBg: "bg-orange-100 border-orange-400 ring-1 ring-orange-300" },
-  { key: "other", label: "その他", color: "text-slate-600", activeBg: "bg-slate-100 border-slate-400 ring-1 ring-slate-300" },
+  { key: "official", label: "公式", color: "text-blue-700", activeBg: "bg-blue-50 border-blue-300 ring-1 ring-blue-200" },
+  { key: "satellite", label: "サテライト", color: "text-teal-700", activeBg: "bg-teal-50 border-teal-300 ring-1 ring-teal-200" },
+  { key: "campaign", label: "施策", color: "text-[#D71921]", activeBg: "bg-red-50 border-red-300 ring-1 ring-red-200" },
+  { key: "competitor", label: "競合", color: "text-slate-600", activeBg: "bg-slate-100 border-slate-400 ring-1 ring-slate-300" },
+  { key: "other", label: "その他", color: "text-[#6b7280]", activeBg: "bg-[#f5f5f5] border-slate-400 ring-1 ring-slate-300" },
 ];
 
 const GENRE_OPTIONS: { key: string; label: string }[] = [
@@ -2163,14 +3814,14 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
   return (
     <div className="space-y-3 w-56">
       {/* Header */}
-      <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
-        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">スロット編集</span>
+      <div className="flex items-center gap-2 pb-1 border-b border-black/4">
+        <span className="text-[10px] font-semibold text-[#9ca3af] uppercase tracking-wider">スロット編集</span>
         <span className="text-[10px] text-slate-300">@{slot.creator_username}</span>
       </div>
 
       {/* Owner classification */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-slate-500">分類</Label>
+        <Label className="text-[11px] font-semibold text-[#6b7280]">分類</Label>
         <div className="flex flex-wrap gap-1">
           {OWNER_KEY_OPTIONS.map(opt => (
             <button
@@ -2180,7 +3831,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
               className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                 ownerKey === opt.key
                   ? `${opt.activeBg} ${opt.color}`
-                  : "border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600"
+                  : "border-black/6 text-[#9ca3af] hover:border-black/8 hover:text-[#9ca3af]"
               }`}
             >
               {opt.label}
@@ -2199,7 +3850,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
 
       {/* Genre */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-slate-500">ジャンル</Label>
+        <Label className="text-[11px] font-semibold text-[#6b7280]">ジャンル</Label>
         <div className="flex flex-wrap gap-1">
           {GENRE_OPTIONS.map(opt => {
             const gi = GENRE_CONFIG[opt.key] || GENRE_CONFIG.other;
@@ -2211,7 +3862,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
                 className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                   genre === opt.key
                     ? `${gi.cls} border-transparent`
-                    : "border-slate-200 text-slate-400 hover:border-slate-300"
+                    : "border-black/6 text-[#9ca3af] hover:border-black/8"
                 }`}
               >
                 {opt.label}
@@ -2223,7 +3874,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
 
       {/* TikTok labels */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-slate-500">ラベル</Label>
+        <Label className="text-[11px] font-semibold text-[#6b7280]">ラベル</Label>
         <div className="space-y-1">
           {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, cfg]) => (
             <label key={key} className="flex items-center gap-2 cursor-pointer group/lbl">
@@ -2232,7 +3883,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
                 onCheckedChange={() => toggleLabel(key)}
                 className="h-3.5 w-3.5"
               />
-              <span className="flex items-center gap-1 text-[11px] text-slate-600 group-hover/lbl:text-slate-800">
+              <span className="flex items-center gap-1 text-[11px] text-[#9ca3af] group-hover/lbl:text-[#171717]">
                 <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
                 {cfg.text}
               </span>
@@ -2242,7 +3893,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+      <div className="flex items-center gap-2 pt-1 border-t border-black/4">
         <Button
           size="sm"
           onClick={handleSave}
@@ -2255,11 +3906,518 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
           size="sm"
           variant="ghost"
           onClick={onCancel}
-          className="h-7 text-xs px-2 text-slate-400"
+          className="h-7 text-xs px-2 text-[#9ca3af]"
         >
           キャンセル
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ============================
+// TikTok Mock Stage — 3D Carousel with unified legend
+// ============================
+interface TikTokMockKwEntry {
+  keyword: string;
+  paddedBefore: (SlotData | null)[];
+  paddedAfter: (SlotData | null)[];
+  showBefore: boolean;
+  bOwnCount: number; aOwnCount: number;
+  bTotal: number; aTotal: number;
+  bPct: number; aPct: number;
+}
+
+interface TikTokMockStageProps {
+  kwEntries: TikTokMockKwEntry[];
+  activeKw?: string | null;
+  onActiveKwChange?: (kw: string) => void;
+  centered?: boolean;
+}
+
+function getCardTransform(offset: number, total: number) {
+  const abs = Math.abs(offset);
+  const sign = offset >= 0 ? 1 : -1;
+  // Active card stays at scale 1.0 (native resolution, no blur).
+  // Non-active cards scale DOWN — shrinking doesn't cause visible blur.
+  // Phone pair width at scale 1.3 ≈ 600px (286*2 + bridge). Half = 300px.
+  if (total === 2) {
+    if (abs === 0) return { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 };
+    return { tx: sign * 520, scale: 0.62, rotateY: sign * -13, z: 8, opacity: 0.55 };
+  }
+  if (abs === 0) return { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 };
+  if (abs === 1) return { tx: sign * 540, scale: 0.55, rotateY: sign * -16, z: 8, opacity: 0.70 };
+  if (abs === 2) return { tx: sign * 840, scale: 0.40, rotateY: sign * -26, z: 6, opacity: 0.30 };
+  return { tx: sign * 1000, scale: 0.28, rotateY: sign * -33, z: 2, opacity: 0 };
+}
+
+function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: TikTokMockStageProps) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState(false);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setRevealed(true); obs.disconnect(); } },
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const count = kwEntries.length;
+  const activeIndex = activeKw
+    ? Math.max(0, kwEntries.findIndex(e => e.keyword === activeKw))
+    : 0; // overview mode → first item centered
+
+  const navigate = useCallback((dir: 1 | -1) => {
+    const next = (activeIndex + dir + count) % count;
+    onActiveKwChange?.(kwEntries[next].keyword);
+  }, [activeIndex, count, kwEntries, onActiveKwChange]);
+
+  // Keyboard nav
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") navigate(-1);
+      else if (e.key === "ArrowRight") navigate(1);
+    };
+    const el = stageRef.current;
+    el?.addEventListener("keydown", handler);
+    return () => el?.removeEventListener("keydown", handler);
+  }, [navigate]);
+
+  const PHONE_SCALE = 1.3; // スマホ表示を1.3倍に拡大
+  const PHONE_H = Math.round(476 * PHONE_SCALE);
+  const PHONE_W = Math.round(220 * PHONE_SCALE);
+  const isSingle = count <= 1;
+
+  return (
+    <div
+      ref={stageRef}
+      tabIndex={0}
+      className="relative bg-transparent px-3 sm:px-6 py-5 sm:py-8 outline-none"
+    >
+      {/* Section title */}
+      <div className="flex items-center gap-2 mb-5">
+        <span className="text-[11px] uppercase tracking-[0.2em] text-[#a3a3a3] font-medium">検索結果の変化</span>
+      </div>
+
+      {/* 3D Carousel Viewport */}
+      <div
+        className="relative mx-auto overflow-hidden"
+        style={{
+          perspective: "1400px",
+          height: PHONE_H + 130, // phone at scale + kw label + metrics pill + padding
+        }}
+      >
+        {kwEntries.map((entry, kwIdx) => {
+          const { keyword, paddedBefore, paddedAfter, showBefore, bOwnCount, aOwnCount, bTotal, aTotal, bPct, aPct } = entry;
+          const pctDelta = aPct - bPct;
+          const ownDelta = aOwnCount - bOwnCount;
+          const offset = kwIdx - activeIndex;
+          const t = isSingle
+            ? { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 }
+            : getCardTransform(offset, count);
+          const isActive = offset === 0;
+
+          return (
+            <div
+              key={keyword}
+              className="absolute left-1/2 top-0 flex flex-col items-center gap-2"
+              style={{
+                // Active card: no 3D transforms → native raster resolution, no blur
+                transform: isActive
+                  ? `translateX(calc(-50% + ${t.tx}px))`
+                  : `translateX(calc(-50% + ${t.tx}px)) translateZ(${t.z}px) scale(${t.scale}) rotateY(${t.rotateY}deg)`,
+                transformStyle: isActive ? "flat" : "preserve-3d",
+                opacity: revealed ? t.opacity : 0,
+                zIndex: 10 - Math.abs(offset),
+                transition: "transform 800ms var(--md-ease-emphasized-decel), opacity 600ms var(--md-ease-standard)",
+                pointerEvents: t.opacity === 0 ? "none" : "auto",
+                cursor: isActive ? "default" : "pointer",
+              }}
+              onClick={() => { if (!isActive) onActiveKwChange?.(keyword); }}
+            >
+              {/* KW label */}
+              <div className="text-center">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide bg-[#171717] text-white">
+                  <Search className="w-[10px] h-[10px] opacity-60" />
+                  {keyword}
+                </span>
+              </div>
+
+              {/* Before / After pair */}
+              <div className="flex items-center gap-0">
+                {/* Before phone */}
+                {showBefore && (
+                  <div className="text-center flex flex-col items-center gap-1.5">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-mono text-[#b0b0b0] tracking-wider block">Before</span>
+                      <span className="text-[9px] text-[#c0c0c0] block">{bOwnCount}/{bTotal}枠</span>
+                    </div>
+                    <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
+                      <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
+                        <TikTokSearchMock slots={paddedBefore} keyword={keyword} isBefore />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mini bridge */}
+                {showBefore && (
+                  <div className="flex flex-col items-center gap-0 mx-2">
+                    <div className="w-[5px] h-[5px] rounded-full border-[1.5px] border-[#c0c0c0]" />
+                    <div className="w-[1.5px] h-[28px]" style={{ background: "linear-gradient(to bottom, #c0c0c0, #3b82f6)" }} />
+                    <div className="w-[5px] h-[5px] rounded-full bg-blue-600" />
+                  </div>
+                )}
+
+                {/* After phone */}
+                <div className="text-center flex flex-col items-center gap-1.5">
+                  <div className="space-y-0.5">
+                    <span className="text-[14px] font-mono text-[#171717] font-bold tracking-wider block">
+                      {showBefore ? "After" : "Current"}
+                    </span>
+                    <span className="text-[13px] text-blue-600 font-semibold block">{aOwnCount}/{aTotal}枠</span>
+                  </div>
+                  <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
+                    <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
+                      <TikTokSearchMock slots={paddedAfter} keyword={keyword} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Per-KW metrics pill */}
+              {showBefore && (
+                <div className="flex items-center gap-2.5 flex-wrap justify-center mt-1">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-sm">
+                    <span className="text-[10px] text-[#b0b0b0]">{bPct}%</span>
+                    <span className="text-[10px] text-[#d4d4d4]">&rarr;</span>
+                    <span className={`text-[10px] font-bold ${pctDelta > 0 ? "text-emerald-600" : pctDelta < 0 ? "text-[#D71921]" : "text-[#737373]"}`}>
+                      {aPct}%
+                    </span>
+                    {pctDelta !== 0 && (
+                      <span className={`text-[9px] ${pctDelta > 0 ? "text-emerald-500" : "text-[#D71921]"}`}>
+                        {pctDelta > 0 ? "+" : ""}{pctDelta}pt
+                      </span>
+                    )}
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-sm">
+                    <span className="text-[10px] text-[#b0b0b0]">{bOwnCount}本</span>
+                    <span className="text-[10px] text-[#d4d4d4]">&rarr;</span>
+                    <span className={`text-[10px] font-bold ${ownDelta > 0 ? "text-emerald-600" : ownDelta < 0 ? "text-[#D71921]" : "text-[#737373]"}`}>
+                      {aOwnCount}本
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Navigation arrows */}
+      {!isSingle && (
+        <>
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+          >
+            <ChevronLeft className="w-4 h-4 text-[#525252]" />
+          </button>
+          <button
+            onClick={() => navigate(1)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+          >
+            <ChevronRight className="w-4 h-4 text-[#525252]" />
+          </button>
+        </>
+      )}
+
+      {/* Dot pill indicators with KW names */}
+      {!isSingle && (
+        <div className="flex items-center gap-1.5 mt-3">
+          {kwEntries.map((entry, i) => {
+            const isActive = i === activeIndex;
+            return (
+              <button
+                key={entry.keyword}
+                onClick={() => onActiveKwChange?.(entry.keyword)}
+                className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-all duration-500 ${
+                  isActive
+                    ? "bg-[#171717] text-white shadow-sm"
+                    : "bg-[#e5e5e5] text-[#9ca3af] hover:bg-[#d4d4d4] hover:text-[#737373]"
+                }`}
+              >
+                {entry.keyword}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================
+// TikTok Search Mock (iPhone 15 Pro frame)
+// ============================
+
+/** Japanese-locale view count (万/億) */
+function fmtJa(n: number | null | undefined): string {
+  if (n == null) return "-";
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}億`;
+  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}万`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | null)[]; keyword: string; isBefore?: boolean }) {
+  return (
+    <div
+      className={`relative transition-all duration-500 ${isBefore ? "scale-[0.94]" : "hover:scale-[1.02]"}`}
+      style={isBefore ? { filter: "saturate(0.3) grayscale(0.15) blur(0.3px)" } : undefined}
+    >
+      {/* iPhone 15 Pro chassis */}
+      <div
+        className="relative"
+        style={{
+          width: 220, height: 476,
+          filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 12px 24px rgba(0,0,0,0.12)) drop-shadow(0 24px 48px rgba(0,0,0,0.08))",
+        }}
+      >
+        {/* Side buttons */}
+        <div className="absolute -left-[3px] top-[74px] w-[3px] h-[15px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -left-[3px] top-[103px] w-[3px] h-[19px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -left-[3px] top-[127px] w-[3px] h-[19px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -right-[3px] top-[112px] w-[3px] h-[23px] rounded-r-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+
+        {/* Titanium frame */}
+        <div
+          className="relative w-full h-full rounded-[28px] p-[2.5px]"
+          style={{
+            background: "linear-gradient(170deg, #48484a 0%, #3a3a3c 15%, #2c2c2e 40%, #1c1c1e 60%, #2c2c2e 80%, #3a3a3c 100%)",
+            boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.03), inset 1px 0 0 0 rgba(255,255,255,0.04), inset -1px 0 0 0 rgba(255,255,255,0.04)",
+          }}
+        >
+          {/* Inner bezel */}
+          <div className="relative w-full h-full rounded-[26px] border-[1px] border-[#050505] bg-black overflow-hidden">
+            {/* Dynamic Island */}
+            <div className="absolute top-[6px] left-1/2 -translate-x-1/2 z-20">
+              <div
+                className="w-[62px] h-[18px] bg-black rounded-full"
+                style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.06), 0 0 3px rgba(0,0,0,0.4)" }}
+              >
+                <div className="absolute right-[13px] top-1/2 -translate-y-1/2 w-[5px] h-[5px] rounded-full bg-[#0a0a14]" style={{ boxShadow: "inset 0 0 1px rgba(255,255,255,0.1)" }} />
+              </div>
+            </div>
+
+            {/* Glass reflection */}
+            <div className="absolute inset-0 rounded-[24px] z-30 pointer-events-none" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 30%, transparent 50%)" }} />
+
+            {/* Screen */}
+            <div className="w-full h-full rounded-[24px] overflow-hidden bg-black flex flex-col" style={{ fontFamily: "-apple-system, 'Hiragino Sans', sans-serif" }}>
+
+              {/* ── Status Bar — flanking Dynamic Island ── */}
+              <div className="relative flex items-center justify-between px-[16px] h-[24px] shrink-0">
+                <span className="text-[8px] font-semibold text-white tabular-nums tracking-tight" style={{ marginTop: 10 }}>9:41</span>
+                <div className="flex items-center gap-[2.5px]" style={{ marginTop: 10 }}>
+                  <svg width="12" height="7" viewBox="0 0 12 7" fill="none">
+                    <rect x="0" y="5" width="2" height="2" rx="0.4" fill="white"/>
+                    <rect x="2.8" y="3.5" width="2" height="3.5" rx="0.4" fill="white"/>
+                    <rect x="5.6" y="1.8" width="2" height="5.2" rx="0.4" fill="white"/>
+                    <rect x="8.4" y="0" width="2" height="7" rx="0.4" fill="white"/>
+                  </svg>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M5 7.5a0.7 0.7 0 1 0 0-1.4 0.7 0.7 0 0 0 0 1.4Z" fill="white"/>
+                    <path d="M3.2 5.6a2.5 2.5 0 0 1 3.6 0" stroke="white" strokeWidth="1.1" strokeLinecap="round"/>
+                    <path d="M1.5 3.8a4.9 4.9 0 0 1 7 0" stroke="white" strokeWidth="1.1" strokeLinecap="round"/>
+                  </svg>
+                  <svg width="16" height="8" viewBox="0 0 16 8" fill="none">
+                    <rect x="0.5" y="0.5" width="12" height="7" rx="2.2" stroke="white" strokeWidth="0.8" opacity="0.4"/>
+                    <rect x="1.5" y="1.5" width="10" height="5" rx="1.2" fill="white"/>
+                    <path d="M13.5 2.8v2.4a1 1 0 0 0 0-2.4Z" fill="white" opacity="0.4"/>
+                  </svg>
+                </div>
+              </div>
+
+              {/* ── Search Header ── */}
+              <div className="flex items-center gap-[4px] px-[6px] pb-[3px] shrink-0">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
+                  <path d="M7 1.5L3 5L7 8.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <div className="flex-1 flex items-center gap-[4px] bg-[#262626] rounded-full px-[7px] py-[4px]">
+                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="shrink-0">
+                    <circle cx="4" cy="4" r="2.8" stroke="#777" strokeWidth="0.9"/>
+                    <path d="M6 6L8 8" stroke="#777" strokeWidth="0.9" strokeLinecap="round"/>
+                  </svg>
+                  <span className="text-[8px] text-white truncate leading-none flex-1">{keyword}</span>
+                  <div className="w-[10px] h-[10px] rounded-full bg-[#555] flex items-center justify-center shrink-0">
+                    <svg width="6" height="6" viewBox="0 0 6 6" fill="none">
+                      <path d="M1.2 1.2L4.8 4.8M4.8 1.2L1.2 4.8" stroke="white" strokeWidth="0.8" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                </div>
+                <span className="text-[8px] text-white font-medium shrink-0 pr-[1px]">検索</span>
+              </div>
+
+              {/* ── Tabs ── */}
+              <div className="flex items-end shrink-0 border-b border-[#1a1a1a] py-[3px]">
+                {["トップ", "動画", "ユーザー", "サウンド", "LIVE"].map((tab) => {
+                  const isActive = tab === "動画";
+                  return (
+                    <div key={tab} className="flex-1 flex flex-col items-center gap-[2px]" style={{ minWidth: 0 }}>
+                      <span className={`text-[7.5px] whitespace-nowrap ${isActive ? "text-white font-bold" : "text-[#808080] font-medium"}`}>
+                        {tab}
+                      </span>
+                      {isActive && <div className="w-[14px] h-[2px] bg-white rounded-full" />}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Filter chips ── */}
+              <div className="flex items-center gap-[3px] px-[4px] py-[3px] shrink-0">
+                {["関連度順", "いいね数順", "最新順"].map((chip, ci) => (
+                  <div key={chip} className={`px-[7px] py-[2.5px] rounded-full text-[5.5px] ${ci === 0 ? "bg-white text-black font-semibold" : "bg-[#262626] text-[#d0d0d0]"}`}>
+                    {chip}
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Video Grid ── */}
+              <div className="flex-1 overflow-hidden relative bg-[#080808]">
+                <div className="grid grid-cols-3 gap-[1.5px]">
+                  {slots.slice(0, 9).map((slot, i) => {
+                    if (!slot) return <div key={i} className="aspect-[9/14] bg-[#0a0a0a]" />;
+                    const isOwn = slot.owner === "own";
+                    const isCompetitor = slot.owner === "competitor";
+                    const accentColor = isOwn
+                      ? slot.owner_detail === "official" ? "#3b82f6"
+                        : slot.owner_detail === "satellite" ? "#14b8a6"
+                        : "#D71921"
+                      : isCompetitor ? "#64748b" : "";
+                    const isHighlighted = isOwn || isCompetitor;
+                    // rgba overlay per account type
+                    const overlayRgba = isOwn
+                      ? slot.owner_detail === "official" ? "rgba(37,99,235,0.55)"
+                        : slot.owner_detail === "satellite" ? "rgba(13,148,136,0.55)"
+                        : "rgba(220,20,30,0.55)"
+                      : "";
+                    // Genre dot color
+                    const genreColorMap: Record<string, string> = {
+                      recommend: "#3b82f6", howto: "#f59e0b", entertainment: "#a855f7", negative: "#D71921", other: "#9ca3af",
+                    };
+                    const genreDotColor = genreColorMap[slot.genre] || genreColorMap.other;
+                    return (
+                      <div
+                        key={i}
+                        className="relative aspect-[9/14] overflow-visible"
+                        style={isHighlighted ? {
+                          zIndex: 2,
+                          boxShadow: `0 0 0 1.5px ${accentColor}, 0 0 6px 1px ${accentColor}66`,
+                        } : undefined}
+                      >
+                        {/* Thumbnail */}
+                        <div className="w-full h-full overflow-hidden">
+                          {slot.cover_url ? (
+                            <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-[#222] to-[#0a0a0a]" />
+                          )}
+                        </div>
+
+                        {/* Own-video color overlay — per account type */}
+                        {isOwn && (
+                          <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: overlayRgba }} />
+                        )}
+
+                        {/* Bottom gradient */}
+                        <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+
+                        {/* View count */}
+                        <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[1px]">
+                          <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9" strokeLinejoin="round">
+                            <path d="M1.2 0.8 L4.2 2.5 L1.2 4.2 Z" />
+                          </svg>
+                          <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+                            {fmtJa(slot.view_count)}
+                          </span>
+                        </div>
+
+                        {/* Rank badge — top3 only */}
+                        {slot.rank <= 3 && (
+                          <div className="absolute top-[1.5px] left-[1.5px] min-w-[9px] h-[9px] rounded-[1.5px] flex items-center justify-center px-[1.5px] bg-[#fe2c55]/90">
+                            <span className="text-[5.5px] text-white font-bold leading-none">{slot.rank}</span>
+                          </div>
+                        )}
+
+                        {/* Genre dot — bottom-right */}
+                        <div
+                          className="absolute bottom-[2px] right-[2px] w-[5px] h-[5px] rounded-full z-[5] border border-black/30"
+                          style={{ backgroundColor: genreDotColor }}
+                        />
+
+                        {/* Highlight accent bar — own or competitor */}
+                        {isHighlighted && (
+                          <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4]" style={{ backgroundColor: accentColor }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Scroll fade */}
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+              </div>
+
+              {/* ── Bottom Nav ── */}
+              <div className="flex items-center justify-around px-1 pt-[4px] pb-[2px] bg-black shrink-0">
+                <div className="flex flex-col items-center gap-[1px]">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z" fill="white" opacity="0.6"/></svg>
+                  <span className="text-[4.5px] text-[#8a8a8a]">ホーム</span>
+                </div>
+                <div className="flex flex-col items-center gap-[1px]">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="4" r="2.2" stroke="white" strokeWidth="0.8" opacity="0.6"/><path d="M1 10.5c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="white" strokeWidth="0.8" opacity="0.6"/></svg>
+                  <span className="text-[4.5px] text-[#8a8a8a]">友達</span>
+                </div>
+                {/* Create button */}
+                <div className="flex flex-col items-center">
+                  <div className="relative w-[24px] h-[14px]">
+                    <div className="absolute left-[1px] top-[1px] w-[20px] h-[12px] rounded-[3px] bg-[#25f4ee]" />
+                    <div className="absolute right-[1px] top-[1px] w-[20px] h-[12px] rounded-[3px] bg-[#fe2c55]" />
+                    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[20px] h-[12px] rounded-[3px] bg-white flex items-center justify-center">
+                      <svg width="7" height="7" viewBox="0 0 7 7" fill="none"><path d="M3.5 1.2V5.8M1.2 3.5H5.8" stroke="black" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                    </div>
+                  </div>
+                </div>
+                {/* Inbox — chat bubble */}
+                <div className="flex flex-col items-center gap-[1px]">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2 2.5h8a1 1 0 011 1v4.5a1 1 0 01-1 1H6L3.5 10.5V9H2a1 1 0 01-1-1V3.5a1 1 0 011-1z" stroke="white" strokeWidth="0.8" opacity="0.6"/>
+                  </svg>
+                  <span className="text-[4.5px] text-[#8a8a8a]">受信箱</span>
+                </div>
+                <div className="flex flex-col items-center gap-[1px]">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="4" r="2.2" stroke="white" strokeWidth="0.8" opacity="0.6"/><path d="M1.5 11c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="white" strokeWidth="0.8" opacity="0.6"/></svg>
+                  <span className="text-[4.5px] text-[#8a8a8a]">プロフィール</span>
+                </div>
+              </div>
+
+              {/* Home indicator */}
+              <div className="flex justify-center pt-[2px] pb-[4px] bg-black">
+                <div className="w-[38%] h-[2.5px] bg-white/40 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cold overlay for Before */}
+      {isBefore && (
+        <div className="absolute inset-0 rounded-[28px] pointer-events-none z-40" style={{ background: "rgba(20, 30, 50, 0.12)" }} />
+      )}
     </div>
   );
 }
@@ -2300,7 +4458,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
     : "";
   // After自社: elevation + ring
   const ownAfterElevation = !isBefore && isOwn
-    ? "shadow-[0_4px_16px_rgba(59,130,246,0.25)] ring-2 ring-blue-400/50"
+    ? "ring-2 ring-white/20"
     : "";
 
   return (
@@ -2312,11 +4470,11 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); }}
-          className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-white border border-slate-300 shadow-md flex items-center justify-center
-            transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-lg
+          className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-[#f5f5f5] border border-black/8 shadow-md flex items-center justify-center
+            transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/15
             ${editOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/slot:opacity-100 group-hover/slot:scale-100 group-hover/slot:pointer-events-auto"}`}
         >
-          <Pencil className="h-2.5 w-2.5 text-slate-500" />
+          <Pencil className="h-2.5 w-2.5 text-[#6b7280]" />
         </button>
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -2352,7 +4510,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
             )}
 
             {/* サムネイル */}
-            <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-slate-200/70"}`}>
+            <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-black/6/70"}`}>
               {/* 左アクセントバー */}
               {isLabeled && (
                 <div className={`absolute top-0 left-0 bottom-0 w-[3px] ${cfg.accentBar} z-10`} />
@@ -2385,26 +4543,26 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
               <div className={`absolute bottom-0 left-0 right-0 h-1.5 z-10 ${genreInfo.barCls}`} />
               {/* ランク変動バッジ */}
               {rankChangeLabel && (
-                <span className={`absolute bottom-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-bold text-white whitespace-nowrap z-20 ${rankChangeBadgeColor || "bg-black/55"}`}>
+                <span className={`absolute bottom-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#0a0a0a] whitespace-nowrap z-20 ${rankChangeBadgeColor || "bg-black/55"}`}>
                   {rankChangeLabel}
                 </span>
               )}
             </div>
           </a>
         </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs bg-white text-foreground border shadow-lg p-3 space-y-1.5">
+        <TooltipContent side="top" className="max-w-xs bg-[#f5f5f5] text-foreground border shadow-none p-3 space-y-1.5">
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-xs">#{slot.rank}</span>
-            <span className="text-xs text-blue-600">@{slot.creator_username}</span>
+            <span className="text-xs text-[#525252]">@{slot.creator_username}</span>
             {isOwn && cfg.capLabel && (
               <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
             )}
             {isCompetitor && slot.owner_name && (
-              <span className="text-[9px] text-orange-600 font-medium">競合: {slot.owner_name}</span>
+              <span className="text-[9px] text-[#9ca3af] font-medium">競合: {slot.owner_name}</span>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
-          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+          <div className="flex items-center gap-3 text-[10px] text-[#6b7280]">
             <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
             <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(slot.like_count)}</span>
             <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(slot.comment_count)}</span>
@@ -2478,7 +4636,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
 
   const rankCell = (before: number | null, after: number | null) => (
     <div className="flex flex-col items-center">
-      {before != null && <span className="text-[10px] text-slate-400">{before}位</span>}
+      {before != null && <span className="text-[10px] text-[#9ca3af]">{before}位</span>}
       <span className={`font-medium ${after != null ? "text-foreground" : "text-muted-foreground"}`}>
         {after != null ? `${after}位` : "圏外"}
       </span>
@@ -2502,7 +4660,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
               <TableHeader>
                 <TableRow>
                   <TableHead>キーワード</TableHead>
-                  <TableHead className="text-center text-blue-600">自社</TableHead>
+                  <TableHead className="text-center text-[#171717] font-bold">自社</TableHead>
                   {compList.map(([id, name]) => (
                     <TableHead key={id} className="text-center">{name}</TableHead>
                   ))}
@@ -2514,12 +4672,12 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{row.keyword}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${row.type === "ビッグKW" ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${row.type === "ビッグKW" ? "bg-[#f5f5f5] text-[#9ca3af]" : "bg-[#f5f5f5] text-[#6b7280]"}`}>
                           {row.type}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center bg-blue-50/50">
+                    <TableCell className="text-center bg-white/80/50">
                       {rankCell(row.ownBefore, row.ownAfter)}
                     </TableCell>
                     {compList.map(([id]) => {
@@ -2583,8 +4741,8 @@ function UgcCardGrid({ videos, initialShow, overrides, onSentimentChange }: {
   return (
     <Card>
       <CardContent className="p-0">
-        <div className="px-5 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-800">注目の第三者投稿（再生数上位）</h3>
+        <div className="px-5 py-4 border-b border-black/4">
+          <h3 className="text-sm font-bold text-[#0a0a0a]">注目の第三者投稿（再生数上位）</h3>
           <p className="text-xs text-muted-foreground mt-0.5">施策の波及で生まれたオーガニック投稿</p>
         </div>
         <div className="p-5">
@@ -2596,10 +4754,10 @@ function UgcCardGrid({ videos, initialShow, overrides, onSentimentChange }: {
           </div>
           {/* Show more / less button */}
           {videos.length > initialShow && (
-            <div className="text-center mt-4 pt-3 border-t border-slate-100">
+            <div className="text-center mt-4 pt-3 border-t border-black/4">
               <button
                 onClick={(e) => { e.preventDefault(); setShowAll(!showAll); }}
-                className="text-xs font-semibold text-purple-600 hover:text-purple-700 hover:bg-purple-50 px-4 py-1.5 rounded-full transition-colors"
+                className="text-xs font-semibold text-[#9ca3af] hover:text-[#9ca3af] hover:bg-white/80 px-4 py-1.5 rounded-full transition-colors"
               >
                 {showAll ? `閉じる` : `もっと見る（残り ${videos.length - initialShow} 件）`}
               </button>
@@ -2630,15 +4788,15 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         href={v.video_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex gap-3 rounded-xl bg-slate-50/80 border border-slate-100 p-3.5 hover:border-slate-300 hover:shadow-md transition-all"
+        className="flex gap-3 rounded-xl bg-white/80/80 border border-black/4 p-3.5 hover:border-black/8 hover:border-black/12 transition-all"
       >
         {/* Thumbnail */}
         <div className="relative flex-shrink-0">
           {v.cover_url ? (
             <img src={v.cover_url} alt="" className="w-[56px] h-[100px] rounded-lg object-cover" loading="lazy" />
           ) : (
-            <div className="w-[56px] h-[100px] rounded-lg bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center">
-              <Play className="h-4 w-4 text-white/80" />
+            <div className="w-[56px] h-[100px] rounded-lg bg-[#f5f5f5] flex items-center justify-center">
+              <Play className="h-4 w-4 text-[#9ca3af]" />
             </div>
           )}
           <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border shadow-sm flex items-center justify-center ${sentCfg.bg}`}>
@@ -2649,32 +4807,32 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-slate-800 truncate">@{v.creator}</p>
+              <p className="text-xs font-bold text-[#0a0a0a] truncate">@{v.creator}</p>
               <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded-full border ${sentCfg.bg} ${sentCfg.color} flex-shrink-0`}>
                 <sentCfg.Icon className="h-2 w-2" />
                 {sentCfg.label}
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 line-clamp-2 leading-snug mt-0.5">{v.description?.slice(0, 80)}</p>
+            <p className="text-[11px] text-[#6b7280] line-clamp-2 leading-snug mt-0.5">{v.description?.slice(0, 80)}</p>
           </div>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {tags.map((tag: string, ti: number) => (
-                <span key={ti} className="text-[9px] font-medium text-purple-600 bg-purple-50 border border-purple-100 rounded-full px-1.5 py-px">
+                <span key={ti} className="text-[9px] font-medium text-[#9ca3af] bg-white/80 border border-black/6 rounded-full px-1.5 py-px">
                   #{tag.replace(/^#/, "")}
                 </span>
               ))}
             </div>
           )}
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-slate-400">
-            <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.views)}</strong></span>
-            <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.likes)}</strong></span>
-            <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.comments)}</strong></span>
-            <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.shares)}</strong></span>
-            {v.saves != null && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-slate-700">{fmt(v.saves)}</strong></span>}
-            {v.views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-slate-700">{(((v.likes || 0) + (v.comments || 0)) / v.views * 100).toFixed(2)}%</strong></span>}
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-[#9ca3af]">
+            <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.views)}</strong></span>
+            <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.likes)}</strong></span>
+            <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.comments)}</strong></span>
+            <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.shares)}</strong></span>
+            {v.saves != null && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.saves)}</strong></span>}
+            {v.views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-[#171717]">{(((v.likes || 0) + (v.comments || 0)) / v.views * 100).toFixed(2)}%</strong></span>}
           </div>
-          {v.posted_at && <p className="text-[10px] text-slate-400">{new Date(v.posted_at).toLocaleDateString("ja-JP")}</p>}
+          {v.posted_at && <p className="text-[10px] text-[#9ca3af]">{new Date(v.posted_at).toLocaleDateString("ja-JP")}</p>}
         </div>
       </a>
       {/* Edit pencil */}
@@ -2682,17 +4840,17 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-blue-50 hover:border-blue-400 hover:shadow-md ${
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-black/6 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/12 ${
               editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/ugc:opacity-100 group-hover/ugc:scale-100 group-hover/ugc:pointer-events-auto"
             }`}
           >
-            <Pencil className="h-3 w-3 text-slate-400" />
+            <Pencil className="h-3 w-3 text-[#9ca3af]" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="left" align="start" className="p-3 w-48 z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className="space-y-2">
-            <div className="flex items-center gap-2 pb-1.5 border-b border-slate-100">
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">センチメント分類</span>
+            <div className="flex items-center gap-2 pb-1.5 border-b border-black/4">
+              <span className="text-[10px] font-semibold text-[#9ca3af] uppercase tracking-wider">センチメント分類</span>
             </div>
             <div className="flex flex-col gap-1">
               {SENTIMENT_KEYS.map(key => {
@@ -2704,10 +4862,10 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
                     type="button"
                     onClick={() => { onSentimentChange(vKey, key); setEditOpen(false); }}
                     className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      isActive ? `${cfg.bg} ${cfg.color} border` : "text-slate-600 hover:bg-slate-50"
+                      isActive ? `${cfg.bg} ${cfg.color} border` : "text-[#9ca3af] hover:bg-white/80"
                     }`}
                   >
-                    <cfg.Icon className={`h-3.5 w-3.5 ${isActive ? cfg.color : "text-slate-400"}`} />
+                    <cfg.Icon className={`h-3.5 w-3.5 ${isActive ? cfg.color : "text-[#9ca3af]"}`} />
                     {cfg.label}
                     {isActive && <Check className="h-3 w-3 ml-auto" />}
                   </button>
@@ -2725,7 +4883,7 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
 // Section 7: Ripple
 // ============================
 
-export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record<string, any>; campaign?: any; campaignId?: number }) {
+export function RippleSection({ ripple, campaign, campaignId, keywordSentimentReport }: { ripple: Record<string, any>; campaign?: any; campaignId?: number; keywordSentimentReport?: Record<string, { total: number; positive: number; neutral: number; negative: number }> }) {
   // Load saved sentiments from ripple data
   const savedSentiments = useMemo(() => {
     const map: Record<string, "positive" | "neutral" | "negative"> = {};
@@ -2764,14 +4922,7 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
     );
   }
 
-  // Aggregate totals
-  const totalBeforePosts = entries.reduce((sum, [, d]) => sum + (d.before_posts || 0), 0);
-  const totalAfterPosts = entries.reduce((sum, [, d]) => sum + (d.after_posts || 0), 0);
-  const totalBeforeViews = entries.reduce((sum, [, d]) => sum + (d.before_total_views || 0), 0);
-  const totalAfterViews = entries.reduce((sum, [, d]) => sum + (d.after_total_views || 0), 0);
-  const totalThirdParty = entries.reduce((sum, [, d]) => sum + (d.third_party_count || d.omaage_count || 0), 0);
-
-  // All third-party videos (deduped, sorted by views)
+  // All third-party videos (deduped across hashtags, sorted by views)
   const allVideosRaw = entries.flatMap(([, data]) =>
     (data.third_party_videos || data.omaage_videos || [])
   );
@@ -2785,32 +4936,33 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
       return true;
     });
 
-  // Aggregate KPIs
-  const allViews = allVideos.map((v: any) => v.views || 0);
-  const avgViews = allVideos.length > 0 ? Math.round(allViews.reduce((s, v) => s + v, 0) / allVideos.length) : 0;
-  const maxViews = allViews.length > 0 ? Math.max(...allViews) : 0;
+  // Aggregate KPIs — use deduplicated allVideos for consistency
+  const dedupTotalViews = allVideos.reduce((s: number, v: any) => s + (v.views || 0), 0);
+  const maxViews = allVideos.length > 0 ? Math.max(...allVideos.map((v: any) => v.views || 0)) : 0;
 
-  // Max views across tags (for bar normalization)
-  const maxTagViews = Math.max(...entries.map(([, d]) => d.after_total_views || 0), 1);
-
-  // Filter out zero entries & sort by views desc
-  const sortedEntries = [...entries]
-    .filter(([, d]) => {
-      const count = d.third_party_count || d.omaage_count || 0;
-      const beforeCount = d.before_posts || 0;
-      return count > 0 || beforeCount > 0;
-    })
-    .sort(([, a], [, b]) => (b.after_total_views || 0) - (a.after_total_views || 0));
+  // KW sentiment aggregated totals
+  const kwSentAgg = useMemo(() => {
+    if (!keywordSentimentReport) return null;
+    let total = 0, positive = 0, neutral = 0, negative = 0;
+    for (const v of Object.values(keywordSentimentReport)) {
+      total += v.total; positive += v.positive; neutral += v.neutral; negative += v.negative;
+    }
+    return { total, positive, neutral, negative };
+  }, [keywordSentimentReport]);
 
   return (
     <div className="space-y-5">
-      {/* ======== Hero KPI Row (4 cards) ======== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ======== Hero KPI Row ======== */}
+      <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-4" : "grid-cols-3"}`}>
         {[
-          { label: "第三者投稿", value: totalThirdParty, unit: "本", color: "text-blue-600", change: null },
-          { label: "総再生数", value: totalAfterViews, unit: "", color: "text-purple-600", change: null, fmtVal: true },
-          { label: "平均再生数", value: avgViews, unit: "", color: "text-amber-600", change: null, fmtVal: true },
-          { label: "最高再生", value: maxViews, unit: "", color: "text-green-600", change: null, fmtVal: true },
+          { label: "第三者投稿", value: allVideos.length, unit: "本", color: "text-[#0a0a0a]", fmtVal: false },
+          { label: "総再生数", value: dedupTotalViews, unit: "", color: "text-[#171717]", fmtVal: true },
+          ...(kwSentAgg ? [
+            { label: "検索分析数", value: kwSentAgg.total, unit: "件", color: "text-[#0a0a0a]", fmtVal: false },
+            { label: "ポジティブ率", value: kwSentAgg.total > 0 ? Math.round((kwSentAgg.positive / kwSentAgg.total) * 100) : 0, unit: "%", color: "text-emerald-600", fmtVal: false },
+          ] : [
+            { label: "最高再生", value: maxViews, unit: "", color: "text-[#0a0a0a]", fmtVal: true },
+          ]),
         ].map((kpi, i) => (
           <Card key={i}>
             <CardContent className="py-3 px-4 text-center">
@@ -2819,74 +4971,104 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
                 {kpi.fmtVal ? fmt(kpi.value) : kpi.value}
                 {kpi.unit && <span className="text-base font-semibold ml-0.5">{kpi.unit}</span>}
               </p>
-              {kpi.change != null && kpi.change !== 0 && (
-                <div className="mt-2">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${kpi.change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
-                    {kpi.change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {kpi.change > 0 ? "+" : ""}{kpi.fmtVal ? fmt(kpi.change) : kpi.change} vs 施策前
-                  </span>
-                </div>
-              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* ======== Hashtag Breakdown Table ======== */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h3 className="text-sm font-bold text-slate-800">ハッシュタグ別内訳</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-slate-50/80">
-                  <th className="py-2.5 px-5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">タグ</th>
-                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">投稿数</th>
-                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider min-w-[180px]">総再生数</th>
-                  <th className="py-2.5 px-4 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">施策前比</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedEntries.map(([tag, data]) => {
-                  const count = data.third_party_count || data.omaage_count || 0;
-                  const views = data.after_total_views || 0;
-                  const beforeCount = data.before_posts || 0;
-                  const change = count - beforeCount;
-                  const barPct = maxTagViews > 0 ? (views / maxTagViews) * 100 : 0;
-                  return (
-                    <tr key={tag} className="border-b border-slate-50 last:border-0">
-                      <td className="py-3 px-5 text-sm font-bold text-slate-800">{tag}</td>
-                      <td className="py-3 px-4 text-right text-sm font-medium text-slate-600">{count}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                            <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${barPct}%` }} />
-                          </div>
-                          <span className="text-sm font-medium text-slate-700 tabular-nums">{fmt(views)}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        {change !== 0 ? (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${change > 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>
-                            {change > 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                            {change > 0 ? "+" : ""}{change}本
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400">±0</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ======== KW Sentiment Analysis (new) ======== */}
+      {kwSentAgg && kwSentAgg.total > 0 && (() => {
+        const total = kwSentAgg.total;
+        const posPct = Math.round((kwSentAgg.positive / total) * 100);
+        const neuPct = Math.round((kwSentAgg.neutral / total) * 100);
+        const negPct = 100 - posPct - neuPct;
+        const segments = [
+          { key: "positive" as const, pct: posPct, count: kwSentAgg.positive },
+          { key: "neutral" as const, pct: neuPct, count: kwSentAgg.neutral },
+          { key: "negative" as const, pct: negPct, count: kwSentAgg.negative },
+        ].filter(s => s.count > 0);
+        const radius = 42;
+        const circumference = 2 * Math.PI * radius;
+        let cumulativeOffset = 0;
+        const donutSegments = segments.map(s => {
+          const dash = (s.pct / 100) * circumference;
+          const offset = cumulativeOffset;
+          cumulativeOffset += dash;
+          return { ...s, dash, offset };
+        });
+        const donutColors = { positive: "#059669", neutral: "#6b7280", negative: "#D71921" };
 
-      {/* ======== Sentiment Analysis ======== */}
+        return (
+          <Card>
+            <CardContent className="p-0">
+              <div className="px-5 py-4 border-b border-black/4">
+                <h3 className="text-sm font-bold text-[#0a0a0a]">センチメント分析</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">KW検索結果のキャプションから感情を自動分類</p>
+              </div>
+              <div className="p-5">
+                <div className="flex items-center gap-8">
+                  <div className="flex-shrink-0 relative">
+                    <svg width="120" height="120" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e5e5" strokeWidth="12" />
+                      {donutSegments.map((seg) => (
+                        <circle
+                          key={seg.key}
+                          cx="60" cy="60" r={radius}
+                          fill="none"
+                          stroke={donutColors[seg.key]}
+                          strokeWidth="12"
+                          strokeDasharray={`${seg.dash} ${circumference - seg.dash}`}
+                          strokeDashoffset={-seg.offset}
+                          strokeLinecap="round"
+                          transform="rotate(-90 60 60)"
+                          className="animate-donut-fill"
+                          style={{ opacity: 0.85 }}
+                        />
+                      ))}
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-[#0a0a0a]">{total}</span>
+                      <span className="text-[10px] text-[#9ca3af] font-medium">分析数</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 space-y-3">
+                    {([
+                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: "bg-emerald-500", textColor: "text-emerald-700", iconColor: "text-emerald-500" },
+                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: "bg-[#9ca3af]", textColor: "text-[#6b7280]", iconColor: "text-[#9ca3af]" },
+                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: "bg-[#D71921]", textColor: "text-[#D71921]", iconColor: "text-[#D71921]/70" },
+                    ]).map((row) => {
+                      const count = kwSentAgg[row.key];
+                      const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                      return (
+                        <div key={row.key}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#171717]">
+                              <row.Icon className={`h-3.5 w-3.5 ${row.iconColor}`} />
+                              {row.label}
+                            </span>
+                            <span className="text-xs tabular-nums">
+                              <strong className={row.textColor}>{count}</strong>
+                              <span className="text-[#9ca3af] ml-1">({pct}%)</span>
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-[#f5f5f5] overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${row.color} transition-all duration-700 ease-out`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
+      {/* ======== Post-Campaign Sentiment Analysis (既存: renamed) ======== */}
       {allVideos.length > 0 && (() => {
         const sentCounts = { positive: 0, neutral: 0, negative: 0 };
         for (const v of allVideos) {
@@ -2912,13 +5094,13 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
           cumulativeOffset += dash;
           return { ...s, dash, offset };
         });
-        const donutColors = { positive: "#10b981", neutral: "#94a3b8", negative: "#ef4444" };
+        const donutColors = { positive: "#059669", neutral: "#6b7280", negative: "#D71921" };
 
         return (
           <Card>
             <CardContent className="p-0">
-              <div className="px-5 py-4 border-b border-slate-100">
-                <h3 className="text-sm font-bold text-slate-800">センチメント分析</h3>
+              <div className="px-5 py-4 border-b border-black/4">
+                <h3 className="text-sm font-bold text-[#0a0a0a]">施策後センチメント分析</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">第三者投稿のキャプションから感情を自動分類</p>
               </div>
               <div className="p-5">
@@ -2926,7 +5108,7 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
                   {/* Donut chart */}
                   <div className="flex-shrink-0 relative">
                     <svg width="120" height="120" viewBox="0 0 120 120">
-                      <circle cx="60" cy="60" r={radius} fill="none" stroke="#f1f5f9" strokeWidth="12" />
+                      <circle cx="60" cy="60" r={radius} fill="none" stroke="#e5e5e5" strokeWidth="12" />
                       {donutSegments.map((seg) => (
                         <circle
                           key={seg.key}
@@ -2944,33 +5126,33 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
                       ))}
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-slate-800">{total}</span>
-                      <span className="text-[10px] text-slate-400 font-medium">投稿</span>
+                      <span className="text-2xl font-black text-[#0a0a0a]">{total}</span>
+                      <span className="text-[10px] text-[#9ca3af] font-medium">投稿</span>
                     </div>
                   </div>
 
                   {/* Breakdown bars */}
                   <div className="flex-1 space-y-3">
                     {([
-                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: "bg-emerald-500", textColor: "text-emerald-600", iconColor: "text-emerald-500" },
-                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: "bg-slate-400", textColor: "text-slate-500", iconColor: "text-slate-400" },
-                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: "bg-red-500", textColor: "text-red-500", iconColor: "text-red-400" },
+                      { key: "positive" as const, label: "ポジティブ", Icon: TrendingUp, color: "bg-emerald-500", textColor: "text-emerald-700", iconColor: "text-emerald-500" },
+                      { key: "neutral" as const, label: "ナチュラル", Icon: Minus, color: "bg-[#9ca3af]", textColor: "text-[#6b7280]", iconColor: "text-[#9ca3af]" },
+                      { key: "negative" as const, label: "ネガティブ", Icon: TrendingDown, color: "bg-[#D71921]", textColor: "text-[#D71921]", iconColor: "text-[#D71921]/70" },
                     ]).map((row) => {
                       const count = sentCounts[row.key];
                       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                       return (
                         <div key={row.key}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#171717]">
                               <row.Icon className={`h-3.5 w-3.5 ${row.iconColor}`} />
                               {row.label}
                             </span>
                             <span className="text-xs tabular-nums">
                               <strong className={row.textColor}>{count}</strong>
-                              <span className="text-slate-400 ml-1">({pct}%)</span>
+                              <span className="text-[#9ca3af] ml-1">({pct}%)</span>
                             </span>
                           </div>
-                          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-2 rounded-full bg-[#f5f5f5] overflow-hidden">
                             <div
                               className={`h-full rounded-full ${row.color} transition-all duration-700 ease-out`}
                               style={{ width: `${pct}%` }}
@@ -2993,13 +5175,13 @@ export function RippleSection({ ripple, campaign, campaignId }: { ripple: Record
       )}
 
       {/* ======== Story Connector ======== */}
-      <div className="flex items-center justify-center gap-3 py-2 text-xs font-semibold text-slate-400">
+      <div className="flex items-center justify-center gap-3 py-2 text-xs font-semibold text-[#9ca3af]">
         <span>TikTokでの拡散</span>
-        <div className="w-8 h-px bg-slate-300 relative">
+        <div className="w-8 h-px bg-[#d4d4d4] relative">
           <div className="absolute -right-1 -top-[3px] border-l-[6px] border-l-slate-300 border-y-[4px] border-y-transparent" />
         </div>
         <span>Google検索への波及</span>
-        <div className="w-8 h-px bg-slate-300 relative">
+        <div className="w-8 h-px bg-[#d4d4d4] relative">
           <div className="absolute -right-1 -top-[3px] border-l-[6px] border-l-slate-300 border-y-[4px] border-y-transparent" />
         </div>
         <span>認知度の向上</span>
@@ -3087,15 +5269,27 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
     });
   }, [data, videoMetrics, ripple]);
 
-  const markerDates = useMemo(() => {
-    const dates = new Set<string>((data.videoMarkers || []).map((m: any) => m.date as string));
-    if (dates.size === 0 && videoMetrics && videoMetrics.length > 0) {
+  // マーカー: date → platforms のMap（全媒体対応）
+  const markerMap = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const m of (data.videoMarkers || []) as Array<{ date: string; platform?: string }>) {
+      const platforms = map.get(m.date) || new Set<string>();
+      platforms.add(m.platform || "tiktok");
+      map.set(m.date, platforms);
+    }
+    if (map.size === 0 && videoMetrics && videoMetrics.length > 0) {
       for (const v of videoMetrics) {
-        if (v.postedAt) dates.add(new Date(v.postedAt).toISOString().split("T")[0]);
+        if (v.postedAt) {
+          const d = new Date(v.postedAt).toISOString().split("T")[0];
+          const platforms = map.get(d) || new Set<string>();
+          platforms.add("tiktok");
+          map.set(d, platforms);
+        }
       }
     }
-    return dates;
+    return map;
   }, [data, videoMetrics]);
+  const markerDates = useMemo(() => new Set(markerMap.keys()), [markerMap]);
 
   // 表示期間フィルタ: 最初の投稿日の2週間前 〜 最後の投稿日の2ヶ月後
   const filteredDailyChartData = useMemo(() => {
@@ -3155,17 +5349,17 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
   }, [markerDates]);
 
 
-  const VOLUME_COLORS = ["#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6", "#06b6d4"];
+  const VOLUME_COLORS = ["#0a0a0a", "#D71921", "#6366f1", "#059669", "#f59e0b", "#8b5cf6"];
 
   // Correlation strength helpers
   const corr = data.correlation as number | null | undefined;
   const corrAbs = corr != null ? Math.abs(corr) : 0;
   const corrStrength = corrAbs >= 0.7 ? "強い" : corrAbs >= 0.4 ? "中程度" : "弱い";
   const corrColor = corrAbs >= 0.7 ? "emerald" : corrAbs >= 0.4 ? "amber" : "slate";
-  const corrBgClass = corrAbs >= 0.7 ? "bg-emerald-50 border-emerald-200" : corrAbs >= 0.4 ? "bg-amber-50 border-amber-200" : "bg-slate-50 border-slate-200";
-  const corrTextClass = corrAbs >= 0.7 ? "text-emerald-700" : corrAbs >= 0.4 ? "text-amber-700" : "text-slate-500";
-  const corrBadgeBg = corrAbs >= 0.7 ? "bg-emerald-100 text-emerald-700 border-emerald-300" : corrAbs >= 0.4 ? "bg-amber-100 text-amber-700 border-amber-300" : "bg-slate-100 text-slate-500 border-slate-300";
-  const corrDesc = corrAbs >= 0.7 ? "TikTok施策がGoogle検索トレンドに明確な影響を与えています" : corrAbs >= 0.4 ? "TikTok施策とGoogle検索に一定の関連が見られます" : "TikTok施策とGoogle検索の直接的な関連は限定的です";
+  const corrBgClass = corrAbs >= 0.7 ? "bg-white/80 border-black/8" : corrAbs >= 0.4 ? "bg-white/80 border-black/8" : "bg-white/80 border-black/6";
+  const corrTextClass = corrAbs >= 0.7 ? "text-emerald-700" : corrAbs >= 0.4 ? "text-amber-700" : "text-[#6b7280]";
+  const corrBadgeBg = corrAbs >= 0.7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : corrAbs >= 0.4 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-[#f5f5f5] text-[#6b7280] border-black/8";
+  const corrDesc = corrAbs >= 0.7 ? "施策動画がGoogle検索トレンドに明確な影響を与えています" : corrAbs >= 0.4 ? "施策動画とGoogle検索に一定の関連が見られます" : "施策動画とGoogle検索の直接的な関連は限定的です";
 
   // Monthly volume: compute peak spike
   const peakMonth = useMemo(() => {
@@ -3189,7 +5383,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
             <div className="flex items-center gap-6">
               {/* Coefficient Circle */}
               <div className="flex-shrink-0">
-                <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center ${corrAbs >= 0.7 ? "bg-emerald-600" : corrAbs >= 0.4 ? "bg-amber-500" : "bg-slate-400"} text-white shadow-lg`}
+                <div className={`w-20 h-20 rounded-2xl flex flex-col items-center justify-center ${corrAbs >= 0.7 ? "bg-emerald-600 text-white" : corrAbs >= 0.4 ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-600"} shadow-none`}
                   style={{ boxShadow: `0 8px 24px ${corrAbs >= 0.7 ? "rgba(16,185,129,0.3)" : corrAbs >= 0.4 ? "rgba(245,158,11,0.3)" : "rgba(100,116,139,0.2)"}` }}>
                   <span className="text-[10px] font-medium opacity-80 tracking-wider uppercase">相関</span>
                   <span className="text-2xl font-black tabular-nums leading-none mt-0.5">{corr.toFixed(2)}</span>
@@ -3198,22 +5392,22 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="text-base font-bold text-slate-800">Google Trends × TikTok 相関分析</h3>
+                  <h3 className="text-base font-bold text-[#0a0a0a]">Google Trends × 施策動画 相関分析</h3>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${corrBadgeBg}`}>{corrStrength}</span>
                 </div>
                 <p className={`text-sm ${corrTextClass}`}>{corrDesc}</p>
-                <div className="flex items-center gap-4 mt-3 text-xs text-slate-500">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Google Trends</span>
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> TikTok 施策投稿</span>
+                <div className="flex items-center gap-4 mt-3 text-xs text-[#6b7280]">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#0a0a0a]" /> Google Trends</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#6366f1]" /> 全媒体 施策投稿</span>
                   <span className="flex items-center gap-1"><span className="w-6 h-px bg-emerald-400 border-dashed border-t" /> 投稿日マーカー</span>
                 </div>
               </div>
               {/* Strength meter */}
               <div className="flex-shrink-0 hidden sm:flex flex-col items-center gap-1">
-                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Strength</span>
+                <span className="text-[10px] font-medium text-[#9ca3af] uppercase tracking-wider">Strength</span>
                 <div className="flex gap-0.5">
                   {[0.2, 0.4, 0.6, 0.8, 1.0].map((t, i) => (
-                    <div key={i} className={`w-2 rounded-full transition-all ${corrAbs >= t ? (corrAbs >= 0.7 ? "bg-emerald-500 h-6" : corrAbs >= 0.4 ? "bg-amber-400 h-5" : "bg-slate-300 h-4") : "bg-slate-200 h-3"}`}
+                    <div key={i} className={`w-2 rounded-full transition-all ${corrAbs >= t ? (corrAbs >= 0.7 ? "bg-white h-6" : corrAbs >= 0.4 ? "bg-[#a3a3a3] h-5" : "bg-[#d4d4d4] h-4") : "bg-[#e5e5e5] h-3"}`}
                       style={{ height: `${12 + i * 4}px` }} />
                   ))}
                 </div>
@@ -3228,48 +5422,43 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+              <CardTitle className="text-sm font-bold text-[#171717] flex items-center gap-2">
                 <Globe className="h-4 w-4 text-blue-500" />
-                Google Trends × TikTok 施策タイムライン
+                Google Trends × 全媒体施策タイムライン
               </CardTitle>
             </div>
             {highlightRange && (
-              <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="text-[10px] font-medium text-[#525252] bg-[#f5f5f5] border border-black/8 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <CalendarDays className="h-3 w-3" />
                 施策期間
               </span>
             )}
           </div>
           <CardDescription className="text-xs mt-0.5">
-            検索トレンドの推移と施策投稿の日次・累計再生数を重ね合わせて表示
+            検索トレンドの推移と施策投稿の日次再生数を重ね合わせて表示
           </CardDescription>
         </CardHeader>
         <CardContent>
           <>
                 <div className="flex items-center justify-center gap-4 sm:gap-6 mb-3 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-blue-500" /> Google Trends（左軸）</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded-sm bg-amber-400/70" /> 日次再生数（右軸）</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-orange-600" /> 累計再生数（右軸）</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-[#0a0a0a]" /> Google Trends（左軸）</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-2.5 rounded-sm bg-[#6366f1]/50" /> 日次再生数（右軸）</span>
                   <span className="flex items-center gap-1.5"><span className="w-3 h-px bg-emerald-400 border-dashed border-t" /> 投稿日</span>
                 </div>
                 <ResponsiveContainer width="100%" height={320}>
                   <ComposedChart data={filteredDailyChartData} margin={{ top: 10, right: 50, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="cumViewsFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ea580c" stopOpacity={0.12} />
-                        <stop offset="95%" stopColor="#ea580c" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#0a0a0a" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="#0a0a0a" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
-                    <YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#b45309" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#d4d4d4" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#6b7280" }} axisLine={{ stroke: "#d4d4d4" }} tickLine={false} />
+                    <YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 10, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#6b7280" }} axisLine={false} tickLine={false} tickFormatter={(v: number) => fmt(v)} />
                     <RechartsTooltip
-                      contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
+                      contentStyle={{ borderRadius: "10px", border: "1px solid #d4d4d4", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
                       formatter={(value: any, name: string) => {
                         if (value === null || value === undefined) return ["—", name];
                         if (name === "Google Trends") return [`${value} / 100`, name];
@@ -3277,15 +5466,14 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                       }}
                     />
                     {highlightRange && (
-                      <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#10b981" fillOpacity={0.06} />
+                      <ReferenceArea x1={highlightRange.start} x2={highlightRange.end} fill="#9ca3af" fillOpacity={0.06} />
                     )}
-                    <Area yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#3b82f6" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
-                    <Bar yAxisId="right" dataKey="dailyViews" name="日次再生数" fill="#f59e0b" fillOpacity={0.7} radius={[2, 2, 0, 0]} barSize={6} />
-                    <Area yAxisId="right" type="monotone" dataKey="views" name="累計再生数" stroke="#ea580c" strokeWidth={2} fill="url(#cumViewsFill)" dot={false} connectNulls />
+                    <Area yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#0a0a0a" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
+                    <Bar yAxisId="right" dataKey="dailyViews" name="日次再生数" fill="#6366f1" fillOpacity={0.5} radius={[2, 2, 0, 0]} barSize={6} />
                     {Array.from(markerDates).map((date: string) => (
-                      <ReferenceLine key={date} x={date.slice(5)} stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 3" yAxisId="left">
+                      <ReferenceLine key={date} x={date.slice(5)} stroke="#059669" strokeWidth={1.5} strokeDasharray="4 3" yAxisId="left">
                         <label position="top" offset={8}>
-                          <text style={{ fontSize: 9, fill: "#10b981", fontWeight: 600 }}>
+                          <text style={{ fontSize: 9, fill: "#059669", fontWeight: 600 }}>
                             <tspan>&#9658;</tspan>
                           </text>
                         </label>
@@ -3296,13 +5484,17 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               </>
           {/* Event marker legend below chart */}
           {markerDates.size > 0 && (
-            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
-              {Array.from(markerDates).sort().map((date: string) => (
-                <span key={date} className="text-[10px] text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5 flex items-center gap-1">
-                  <Play className="h-2.5 w-2.5 fill-emerald-500 text-emerald-500" />
-                  {date.slice(5).replace("-", "/")} 投稿
-                </span>
-              ))}
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-black/4">
+              {Array.from(markerDates).sort().map((date: string) => {
+                const platforms = markerMap.get(date);
+                const labels = platforms ? Array.from(platforms).map(p => p === "youtube" ? "YT" : p === "instagram" ? "IG" : "TT") : ["TT"];
+                return (
+                  <span key={date} className="text-[10px] text-[#525252] bg-[#f5f5f5] border border-black/8 rounded-full px-2 py-0.5 flex items-center gap-1">
+                    <Play className="h-2.5 w-2.5 fill-emerald-500 text-emerald-500" />
+                    {date.slice(5).replace("-", "/")} {labels.join("/")}
+                  </span>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -3314,14 +5506,14 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                <CardTitle className="text-sm font-bold text-[#171717] flex items-center gap-2">
                   <Search className="h-4 w-4 text-indigo-500" />
                   Google 月間検索ボリューム推移
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">Google Ads Keyword Planner — 施策前後の検索数変化</CardDescription>
               </div>
               {peakMonth && peakMonth.pctChange > 0 && (
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+                <span className="text-[10px] font-bold text-[#0a0a0a] bg-white/80 border border-black/8 rounded-full px-2.5 py-0.5 flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" />
                   ピーク月 +{peakMonth.pctChange}%
                 </span>
@@ -3339,16 +5531,16 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                     </linearGradient>
                   ))}
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#94a3b8" }} axisLine={{ stroke: "#e2e8f0" }} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v: number) => fmt(v)} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#d4d4d4" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#6b7280" }} axisLine={{ stroke: "#d4d4d4" }} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickFormatter={(v: number) => fmt(v)} axisLine={false} tickLine={false} />
                 <RechartsTooltip
-                  contentStyle={{ borderRadius: "10px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
+                  contentStyle={{ borderRadius: "10px", border: "1px solid #d4d4d4", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: 12 }}
                   formatter={(value: any, name: string) => [Number(value).toLocaleString(), name]}
                 />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                 {highlightMonths && (
-                  <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#6366f1" fillOpacity={0.05} />
+                  <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#6b7280" fillOpacity={0.05} />
                 )}
                 {keywordVolumes!.map((kw: any, i: number) => (
                   <Area key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} fill={`url(#volFill-${i})`} dot={{ r: 2.5, strokeWidth: 0, fill: VOLUME_COLORS[i % VOLUME_COLORS.length] }} connectNulls />
@@ -3357,18 +5549,18 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
             </ResponsiveContainer>
             {/* Keyword chips below chart */}
             {keywordVolumes && keywordVolumes.length > 1 && (
-              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-black/4">
                 {keywordVolumes.map((kw: any, i: number) => {
                   const vols = (kw.monthlyVolumes || []) as any[];
                   const lastVol = vols.length > 0 ? vols[vols.length - 1].volume : 0;
                   const prevVol = vols.length > 1 ? vols[vols.length - 2].volume : 0;
                   const change = prevVol > 0 ? Math.round(((lastVol - prevVol) / prevVol) * 100) : 0;
                   return (
-                    <span key={kw.keyword} className="text-[10px] bg-slate-50 border border-slate-200 rounded-full px-2 py-0.5 flex items-center gap-1.5">
+                    <span key={kw.keyword} className="text-[10px] bg-white/80 border border-black/6 rounded-full px-2 py-0.5 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: VOLUME_COLORS[i % VOLUME_COLORS.length] }} />
-                      <span className="font-medium text-slate-600">{kw.keyword}</span>
+                      <span className="font-medium text-[#525252]">{kw.keyword}</span>
                       {change !== 0 && (
-                        <span className={`font-bold ${change > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                        <span className={`font-bold ${change > 0 ? "text-emerald-600" : "text-[#D71921]"}`}>
                           {change > 0 ? "+" : ""}{change}%
                         </span>
                       )}
@@ -3405,24 +5597,27 @@ type UnifiedVideo = {
   er: number;
   hashtags: string[];
   musicInfo?: { title: string; artist: string; isOriginal?: boolean } | null;
+  /** 3秒視聴維持率 (%) — Instagram only */
+  retention3s?: number | null;
 };
 
 const PLATFORM_COLORS = {
-  tiktok: { accent: "#00f2ea", bg: "bg-cyan-50 dark:bg-cyan-950/30", border: "border-l-cyan-400", dot: "bg-cyan-400", text: "text-cyan-600 dark:text-cyan-400" },
-  youtube: { accent: "#dc2626", bg: "bg-red-50 dark:bg-red-950/30", border: "border-l-red-500", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" },
-  instagram: { accent: "#e1306c", bg: "bg-pink-50 dark:bg-pink-950/30", border: "border-l-pink-500", dot: "bg-pink-500", text: "text-pink-600 dark:text-pink-400" },
+  tiktok: { accent: "#0a0a0a", bg: "bg-[#f5f5f5]", border: "border-l-[#0a0a0a]", dot: "bg-[#0a0a0a]", text: "text-[#0a0a0a]" },
+  youtube: { accent: "#D71921", bg: "bg-red-50", border: "border-l-[#D71921]", dot: "bg-[#D71921]", text: "text-[#D71921]" },
+  instagram: { accent: "#a855f7", bg: "bg-purple-50", border: "border-l-purple-500", dot: "bg-purple-500", text: "text-purple-600" },
 } as const;
 
 const PLATFORM_ICONS: Record<string, string> = { tiktok: "TT", youtube: "YT", instagram: "IG" };
 
-export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMetrics, hasBaseline = true }: {
+export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMetrics, hasBaseline = true, campaign }: {
   tiktokVideos: any[];
   platformSummary: {
     youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
-    instagram?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalThreeSecViews?: number; totalLikes: number; avgER: number; avgRetention3s?: number; videos: any[] };
   };
   dailyMetrics: any[];
   hasBaseline?: boolean;
+  campaign?: any;
 }) {
   const [bestWorstSort, setBestWorstSort] = useState<"views" | "likes" | "er" | "comments">("views");
   const [tablePlatformFilter, setTablePlatformFilter] = useState<"all" | "tiktok" | "youtube" | "instagram">("all");
@@ -3567,6 +5762,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
         er: views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0,
         hashtags: igTags,
         musicInfo: igMusic ? { title: igMusic.title || "", artist: igMusic.artistName || "" } : null,
+        retention3s: (v as any).retention3s ?? null,
       });
     }
     return vids;
@@ -3651,14 +5847,19 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
 
     if (igData) {
       const igER = igViews > 0 ? Number(((igLikes + igComments) / igViews * 100).toFixed(2)) : 0;
+      const igRetention3s = (igData as any).avgRetention3s ?? null;
+      const igStats: typeof cards[0]["stats"] = [
+        { label: "再生数", value: igViews, icon: Eye },
+        { label: "いいね", value: igLikes, icon: Heart },
+        { label: "コメント", value: igComments, icon: MessageCircle },
+        { label: "平均ER", value: igER, icon: TrendingUp },
+      ];
+      if (igRetention3s != null && igRetention3s > 0) {
+        igStats.push({ label: "3秒維持率", value: igRetention3s, icon: Target });
+      }
       cards.push({
         key: "instagram", name: "Instagram", videoCount: igData.totalVideos,
-        stats: [
-          { label: "再生数", value: igViews, icon: Eye },
-          { label: "いいね", value: igLikes, icon: Heart },
-          { label: "コメント", value: igComments, icon: MessageCircle },
-          { label: "平均ER", value: igER, icon: TrendingUp },
-        ],
+        stats: igStats,
       });
     }
 
@@ -3686,10 +5887,10 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "総投稿数", value: totalVideos.toString(), icon: Play, color: "text-foreground" },
-          { label: "総再生数", value: fmt(totalViews), icon: Eye, color: "text-blue-600" },
+          { label: "総再生数", value: fmt(totalViews), icon: Eye, color: "text-[#0a0a0a]" },
           { label: "総いいね", value: fmt(totalLikes), icon: Heart, color: "text-rose-500" },
-          { label: "総コメント", value: fmt(totalComments), icon: MessageCircle, color: "text-amber-500" },
-          { label: "平均ER", value: `${avgER}%`, icon: TrendingUp, color: "text-emerald-500" },
+          { label: "総コメント", value: fmt(totalComments), icon: MessageCircle, color: "text-[#6b7280]" },
+          { label: "平均ER", value: `${avgER}%`, icon: TrendingUp, color: "text-[#0a0a0a]" },
         ].map(c => {
           const Icon = c.icon;
           // Sparkline-style proportional bar
@@ -3697,7 +5898,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
           const rawNum = c.label === "総再生数" ? totalViews : c.label === "総いいね" ? totalLikes : c.label === "総コメント" ? totalComments : 0;
           const barPct = c.label === "平均ER" ? Math.min(avgER * 5, 100) : c.label === "総投稿数" ? Math.min(totalVideos * 3, 100) : Math.min((rawNum / maxVal) * 100, 100);
           return (
-            <Card key={c.label} className="group hover:shadow-md transition-shadow duration-200">
+            <Card key={c.label} className="group hover:border-black/12 transition-shadow duration-200">
               <CardContent className="py-4 px-4">
                 <div className="flex items-center gap-1.5 mb-2">
                   <Icon className={`h-3.5 w-3.5 ${c.color}`} />
@@ -3705,7 +5906,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                 </div>
                 <p className={`text-2xl font-bold tracking-tight ${c.color}`}>{c.value}</p>
                 <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-700 ease-out ${c.label === "平均ER" ? "bg-emerald-400" : c.label === "総再生数" ? "bg-blue-400" : c.label === "総いいね" ? "bg-rose-400" : c.label === "総コメント" ? "bg-amber-400" : "bg-foreground/30"}`} style={{ width: `${barPct}%` }} />
+                  <div className={`h-full rounded-full transition-all duration-700 ease-out ${c.label === "平均ER" ? "bg-emerald-400" : c.label === "総再生数" ? "bg-blue-400" : c.label === "総いいね" ? "bg-rose-400" : c.label === "総コメント" ? "bg-[#a3a3a3]" : "bg-foreground/30"}`} style={{ width: `${barPct}%` }} />
                 </div>
               </CardContent>
             </Card>
@@ -3739,7 +5940,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                             <SIcon className="h-2.5 w-2.5 text-muted-foreground" />
                             <span className="text-[9px] text-muted-foreground">{s.label}</span>
                           </div>
-                          <p className="text-xs font-bold">{s.label === "平均ER" ? `${s.value}%` : fmt(s.value)}</p>
+                          <p className="text-xs font-bold">{s.label === "平均ER" || s.label === "3秒維持率" ? `${s.value}%` : fmt(s.value)}</p>
                         </div>
                       );
                     })}
@@ -3751,8 +5952,8 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
         </div>
       )}
 
-      {/* ── 2c. Daily Chart (enhanced) — レポートAのみ表示 ── */}
-      {hasBaseline && <AllPlatformDailyChart dailyMetrics={dailyMetrics} />}
+      {/* ── 2c. Daily Chart ── */}
+      <CumulativeMetricsChart dailyMetrics={dailyMetrics} campaign={campaign} />
 
       {/* ── 2d. Best / Worst Videos ── */}
       {allVideos.length >= 3 && (
@@ -3760,7 +5961,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
           <CardHeader className="py-2.5 px-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs flex items-center gap-1.5">
-                <Trophy className="h-3.5 w-3.5 text-amber-500" />
+                <Trophy className="h-3.5 w-3.5 text-[#6b7280]" />
                 Best / Worst パフォーマンス
               </CardTitle>
               <div className="flex gap-1">
@@ -3780,7 +5981,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Best 3 */}
               <div>
-                <p className="text-sm font-semibold text-emerald-600 mb-2 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> TOP 3</p>
+                <p className="text-sm font-semibold text-[#0a0a0a] mb-2 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> TOP 3</p>
                 <div className="space-y-1.5">
                   {bestVideos.map((v, i) => (
                     <BestWorstVideoCard key={`best-${i}`} video={v} rank={i + 1} type="best" sortKey={bestWorstSort} />
@@ -3861,6 +6062,9 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                   <TableHead className="text-xs cursor-pointer hover:text-foreground" onClick={() => toggleSort("er")}>
                     <span className="flex items-center gap-0.5">ER{tableSortKey === "er" && <ArrowUpDown className="h-3 w-3" />}</span>
                   </TableHead>
+                  <TableHead className="text-xs">
+                    <span className="flex items-center gap-0.5" title="3秒視聴維持率（Instagram）">3s維持</span>
+                  </TableHead>
                   <TableHead className="text-xs min-w-[120px]">
                     <span className="flex items-center gap-0.5"><Music className="h-3 w-3" />音源</span>
                   </TableHead>
@@ -3898,6 +6102,9 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                       <TableCell className="text-xs tabular-nums py-1.5">{v.shareCount != null ? fmt(v.shareCount) : "-"}</TableCell>
                       <TableCell className="text-xs tabular-nums py-1.5">{v.saveCount != null ? fmt(v.saveCount) : "-"}</TableCell>
                       <TableCell className="text-xs font-medium tabular-nums py-1.5">{v.er}%</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">
+                        {v.retention3s != null ? <span className="font-medium">{v.retention3s}%</span> : <span className="text-muted-foreground">-</span>}
+                      </TableCell>
                       <TableCell className="py-1.5">
                         {v.musicInfo && v.musicInfo.title ? (
                           <div className="flex items-center gap-1 text-[10px] text-violet-600 dark:text-violet-400 max-w-[150px]">
@@ -3933,8 +6140,8 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
 }) {
   const colors = PLATFORM_COLORS[video.platform];
   const rankColors = type === "best"
-    ? (rank === 1 ? "bg-amber-400 text-amber-900" : rank === 2 ? "bg-slate-300 text-slate-700" : "bg-orange-300 text-orange-800")
-    : "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
+    ? (rank === 1 ? "bg-[#a3a3a3] text-[#0a0a0a]" : rank === 2 ? "bg-[#d4d4d4] text-[#171717]" : "bg-[#d4d4d4] text-[#9ca3af]")
+    : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-[#D71921]/70";
 
   const highlightValue = sortKey === "views" ? fmt(video.viewCount) : sortKey === "likes" ? fmt(video.likeCount) : sortKey === "comments" ? fmt(video.commentCount) : `${video.er}%`;
   const highlightLabel = sortKey === "views" ? "再生" : sortKey === "likes" ? "いいね" : sortKey === "comments" ? "コメント" : "ER";
@@ -3954,7 +6161,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
         {video.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {video.hashtags.slice(0, 3).map((tag, ti) => (
-              <span key={ti} className="text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-px dark:text-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-800">
+              <span key={ti} className="text-[10px] font-medium text-[#9ca3af] bg-white/80 border border-black/6 rounded-full px-1.5 py-px dark:text-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-800">
                 #{tag.replace(/^#/, "")}
               </span>
             ))}
@@ -3982,7 +6189,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
         )}
       </div>
       <div className="text-right flex-shrink-0">
-        <p className={`text-base font-bold ${type === "best" ? "text-emerald-600" : "text-orange-500"}`}>{highlightValue}</p>
+        <p className={`text-base font-bold ${type === "best" ? "text-[#0a0a0a]" : "text-orange-500"}`}>{highlightValue}</p>
         <p className="text-[11px] text-muted-foreground">{highlightLabel}</p>
       </div>
     </div>
@@ -3997,22 +6204,64 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
   const cumulativeData = useMemo(() => {
     if (!dailyMetrics || dailyMetrics.length === 0) return [];
     const filtered = chartFilter === "all" ? dailyMetrics : dailyMetrics.filter((m: any) => m.platform === chartFilter);
-    const byDate = new Map<string, { date: string; views: number; likes: number; comments: number; shares: number; saves: number }>();
+
+    // 動画URL別 → 日付別にスナップショットを整理
+    const byVideo = new Map<string, Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>>();
     for (const m of filtered) {
-      const existing = byDate.get(m.dateKey) || { date: m.dateKey, views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
-      existing.views += m.viewCount || 0;
-      existing.likes += m.likeCount || 0;
-      existing.comments += m.commentCount || 0;
-      existing.shares += m.shareCount || 0;
-      existing.saves += m.saveCount || 0;
-      byDate.set(m.dateKey, existing);
+      const url = m.videoUrl || "";
+      const dateKey = m.dateKey;
+      if (!url || !dateKey) continue;
+      if (!byVideo.has(url)) byVideo.set(url, new Map());
+      const videoMap = byVideo.get(url)!;
+      const entry = videoMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      entry.views += m.viewCount || 0;
+      entry.likes += m.likeCount || 0;
+      entry.comments += m.commentCount || 0;
+      entry.shares += m.shareCount || 0;
+      entry.saves += m.saveCount || 0;
+      videoMap.set(dateKey, entry);
     }
-    return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    const allDates = new Set<string>();
+    for (const videoMap of byVideo.values()) {
+      for (const d of videoMap.keys()) allDates.add(d);
+    }
+    const sortedDates = [...allDates].sort();
+
+    // Forward-fill: 欠損日を前日値で埋めて累積値が下がるのを防止
+    for (const videoMap of byVideo.values()) {
+      let lastKnown: { views: number; likes: number; comments: number; shares: number; saves: number } | null = null;
+      for (const dateKey of sortedDates) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          lastKnown = snap;
+        } else if (lastKnown) {
+          videoMap.set(dateKey, { ...lastKnown });
+        }
+      }
+    }
+
+    // 各日付の全動画合計
+    return sortedDates.map(dateKey => {
+      let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+      for (const videoMap of byVideo.values()) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          views += snap.views;
+          likes += snap.likes;
+          comments += snap.comments;
+          shares += snap.shares;
+          saves += snap.saves;
+        }
+      }
+      return { date: dateKey, views, likes, comments, shares, saves };
+    });
   }, [dailyMetrics, chartFilter]);
 
   const dailyIncrementData = useMemo(() => {
-    return cumulativeData.map((d, i) => {
-      const prev = i > 0 ? cumulativeData[i - 1] : { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+    // Skip first day — its "increment" would be the full cumulative total
+    return cumulativeData.slice(1).map((d, i) => {
+      const prev = cumulativeData[i]; // i offset by 1 due to slice
       return {
         date: d.date,
         views: Math.max(0, d.views - prev.views),
@@ -4044,23 +6293,23 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-sm">メトリクス推移</CardTitle>
-            <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+            <CardTitle className="text-sm">パフォーマンス推移</CardTitle>
+            <div className="flex rounded-lg border border-black/6 overflow-hidden">
               <button
                 className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
                   chartMode === "cumulative"
-                    ? "bg-blue-500 text-white"
-                    : "bg-white hover:bg-slate-50 text-slate-500"
+                    ? "bg-[#0a0a0a] text-white"
+                    : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
                 }`}
                 onClick={() => setChartMode("cumulative")}
               >
                 累計
               </button>
               <button
-                className={`px-2 py-0.5 text-[10px] font-medium transition-colors border-l border-slate-200 ${
+                className={`px-2 py-0.5 text-[10px] font-medium transition-colors border-l border-black/6 ${
                   chartMode === "daily"
-                    ? "bg-blue-500 text-white"
-                    : "bg-white hover:bg-slate-50 text-slate-500"
+                    ? "bg-[#0a0a0a] text-white"
+                    : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
                 }`}
                 onClick={() => setChartMode("daily")}
               >
@@ -4091,25 +6340,25 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
             <ComposedChart data={chartData}>
               <defs>
                 <linearGradient id="gradViews2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#0a0a0a" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="#0a0a0a" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} domain={['dataMin', 'dataMax']} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} domain={['dataMin', 'dataMax']} />
               <RechartsTooltip
                 formatter={(v: number, name: string) => [fmt(v), metricNames[name] || name]}
                 labelFormatter={v => v}
                 contentStyle={{ fontSize: 11 }}
               />
               <Legend formatter={(v) => metricNames[v] || v} wrapperStyle={{ fontSize: 11 }} />
-              <Area yAxisId="left" type="monotone" dataKey="views" stroke="#3b82f6" fill="url(#gradViews2)" strokeWidth={2} name="views" />
-              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={1.5} dot={false} name="likes" />
-              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="comments" />
-              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="shares" />}
-              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#10b981" strokeWidth={1.5} dot={false} name="saves" />}
+              <Area yAxisId="left" type="monotone" dataKey="views" stroke="#0a0a0a" fill="url(#gradViews2)" strokeWidth={2} name="views" />
+              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#D71921" strokeWidth={1.5} dot={false} name="likes" />
+              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#6366f1" strokeWidth={1.5} dot={false} name="comments" />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="shares" />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="saves" />}
             </ComposedChart>
           ) : (
             <ComposedChart data={chartData}>
@@ -4123,11 +6372,442 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
                 contentStyle={{ fontSize: 11 }}
               />
               <Legend formatter={(v) => metricNames[v] || v} wrapperStyle={{ fontSize: 11 }} />
-              <Bar yAxisId="left" dataKey="views" fill="#3b82f6" fillOpacity={0.7} radius={[2, 2, 0, 0]} name="views" />
-              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#ef4444" strokeWidth={1.5} dot={false} name="likes" />
-              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="comments" />
-              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="shares" />}
-              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#10b981" strokeWidth={1.5} dot={false} name="saves" />}
+              <Bar yAxisId="left" dataKey="views" fill="#0a0a0a" fillOpacity={0.7} radius={[2, 2, 0, 0]} name="views" />
+              <Line yAxisId="right" type="monotone" dataKey="likes" stroke="#D71921" strokeWidth={1.5} dot={false} name="likes" />
+              <Line yAxisId="right" type="monotone" dataKey="comments" stroke="#6366f1" strokeWidth={1.5} dot={false} name="comments" />
+              {hasShares && <Line yAxisId="right" type="monotone" dataKey="shares" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="shares" />}
+              {hasSaves && <Line yAxisId="right" type="monotone" dataKey="saves" stroke="#8b5cf6" strokeWidth={1.5} dot={false} name="saves" />}
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================
+// Target Achievement Section (目標達成)
+// ============================
+
+function TargetAchievementSection({ videoMetrics, platformSummary, campaign, dailyMetrics }: {
+  videoMetrics?: any[];
+  platformSummary?: {
+    youtube?: { totalVideos: number; totalViews: number; totalLikes: number; avgER: number; videos: any[] };
+    instagram?: { totalVideos: number; totalViews: number; totalThreeSecViews?: number; totalLikes: number; avgER: number; avgRetention3s?: number; videos: any[] };
+  };
+  campaign?: any;
+  dailyMetrics?: any[];
+}) {
+  // Build latest-value lookup from dailyMetrics (same logic as PlatformSummarySection)
+  const latestByUrl = useMemo(() => {
+    const map = new Map<string, { viewCount: number }>();
+    if (!dailyMetrics) return map;
+    for (const dm of dailyMetrics) {
+      const url = dm.videoUrl;
+      if (!url) continue;
+      const existing = map.get(url);
+      const dateKey = dm.dateKey || "";
+      if (!existing || dateKey > (existing as any)._dk) {
+        map.set(url, { viewCount: dm.viewCount || 0, _dk: dateKey } as any);
+      }
+    }
+    return map;
+  }, [dailyMetrics]);
+
+  // TikTok: use max(dailyMetrics latest, report snapshot)
+  const tiktokViews = videoMetrics?.reduce((sum: number, v: any) => {
+    const url = v.videoUrl || "";
+    const dm = latestByUrl.get(url);
+    return sum + Math.max(dm?.viewCount || 0, v.views || v.after?.viewCount || 0);
+  }, 0) ?? 0;
+
+  // YouTube / Instagram: use max(dailyMetrics latest, report snapshot) per video
+  const youtubeViews = (platformSummary?.youtube?.videos || []).reduce((sum: number, v: any) => {
+    const dm = latestByUrl.get(v.videoUrl || "");
+    return sum + Math.max(dm?.viewCount || 0, v.viewCount || 0);
+  }, 0);
+  const instagramViews = (platformSummary?.instagram?.videos || []).reduce((sum: number, v: any) => {
+    const dm = latestByUrl.get(v.videoUrl || "");
+    return sum + Math.max(dm?.viewCount || 0, v.viewCount || 0);
+  }, 0);
+
+  const totalViews = tiktokViews + youtubeViews + instagramViews;
+
+  const targetViews = campaign?.targetViews as number | undefined;
+  const achievementRate = targetViews && targetViews > 0 ? Math.round((totalViews / targetViews) * 100) : null;
+  const clampedRate = Math.min(achievementRate ?? 0, 100);
+
+  const platforms = [
+    { label: "TikTok", abbr: "TT", views: tiktokViews, color: "#171717", ring: "stroke-[#171717]" },
+    { label: "YouTube", abbr: "YT", views: youtubeViews, color: "#D71921", ring: "stroke-[#D71921]" },
+    { label: "Instagram", abbr: "IG", views: instagramViews, color: "#a855f7", ring: "stroke-purple-500" },
+  ].filter(p => p.views > 0);
+
+  // Gauge SVG params
+  const gaugeR = 58;
+  const gaugeC = 2 * Math.PI * gaugeR;
+  const gaugeStroke = gaugeC * (1 - clampedRate / 100);
+  const rateColor = (achievementRate ?? 0) >= 100 ? "#059669" : (achievementRate ?? 0) >= 70 ? "#171717" : "#D71921";
+
+  // Stacked bar proportions
+  const barTotal = platforms.reduce((s, p) => s + p.views, 0) || 1;
+
+  return (
+    <Card className="relative overflow-hidden">
+      <CardContent className="p-0">
+        <div className="flex flex-col md:flex-row">
+          {/* Left: Radial gauge */}
+          <div className="flex items-center justify-center py-8 px-10 md:border-r border-black/4">
+            <div className="relative">
+              <svg width="140" height="140" viewBox="0 0 140 140" className="transform -rotate-90">
+                <circle cx="70" cy="70" r={gaugeR} fill="none" stroke="#f0f0f0" strokeWidth="10" />
+                <circle
+                  cx="70" cy="70" r={gaugeR} fill="none"
+                  stroke={rateColor} strokeWidth="10" strokeLinecap="round"
+                  strokeDasharray={`${gaugeC}`}
+                  strokeDashoffset={gaugeStroke}
+                  className="transition-all duration-1000 ease-out"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-black tabular-nums leading-none" style={{ color: rateColor }}>{achievementRate ?? 0}%</span>
+                <span className="text-[10px] text-[#9ca3af] font-medium mt-1">達成率</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Numbers + breakdown */}
+          <div className="flex-1 py-6 px-6 flex flex-col justify-center gap-5">
+            {/* Current / Target row */}
+            <div className="flex items-end gap-6">
+              <div>
+                <p className="text-[11px] text-[#9ca3af] font-medium uppercase tracking-wider mb-0.5">実績</p>
+                <p className="text-3xl font-black tabular-nums leading-none text-[#0a0a0a]">
+                  {totalViews >= 10000 ? `${(totalViews / 10000).toFixed(1)}万` : fmt(totalViews)}
+                </p>
+              </div>
+              {targetViews && targetViews > 0 && (
+                <div>
+                  <p className="text-[11px] text-[#9ca3af] font-medium uppercase tracking-wider mb-0.5">目標</p>
+                  <p className="text-xl font-bold tabular-nums leading-none text-[#525252]">
+                    {targetViews >= 10000 ? `${(targetViews / 10000).toFixed(1)}万` : fmt(targetViews)}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Stacked horizontal bar */}
+            {platforms.length > 0 && (
+              <div>
+                <div className="flex h-2.5 rounded-full overflow-hidden bg-[#f0f0f0]">
+                  {platforms.map((p, i) => (
+                    <div
+                      key={p.label}
+                      className="h-full transition-all duration-700 ease-out"
+                      style={{
+                        width: `${Math.max((p.views / barTotal) * 100, 1)}%`,
+                        backgroundColor: p.color,
+                        borderRadius: i === 0 ? "9999px 0 0 9999px" : i === platforms.length - 1 ? "0 9999px 9999px 0" : undefined,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-4 mt-2.5">
+                  {platforms.map(p => (
+                    <div key={p.label} className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                      <span className="text-[11px] text-[#6b7280] font-medium">{p.label}</span>
+                      <span className="text-[11px] font-bold tabular-nums text-[#171717]">{fmt(p.views)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================
+// Cumulative Metrics Chart (累計メトリクス推移)
+// ============================
+
+type MetricKey = "views" | "likes" | "comments" | "shares" | "saves";
+const METRIC_CONFIG: { key: MetricKey; label: string; color: string }[] = [
+  { key: "views", label: "再生数", color: "#0a0a0a" },
+  { key: "likes", label: "いいね", color: "#D71921" },
+  { key: "comments", label: "コメント", color: "#6366f1" },
+  { key: "shares", label: "シェア", color: "#f59e0b" },
+  { key: "saves", label: "保存", color: "#8b5cf6" },
+];
+
+function CumulativeMetricsChart({ dailyMetrics, campaign }: { dailyMetrics: any[]; campaign?: any }) {
+  const [chartFilter, setChartFilter] = useState<"all" | "tiktok" | "youtube" | "instagram">("all");
+  const [chartMode, setChartMode] = useState<"cumulative" | "daily">("cumulative");
+  const [enabledMetrics, setEnabledMetrics] = useState<Set<MetricKey>>(new Set(["views", "likes", "comments", "shares", "saves"]));
+
+  const targetViews = campaign?.targetViews as number | undefined;
+
+  const toggleMetric = (key: MetricKey) => {
+    setEnabledMetrics(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        if (next.size > 1) next.delete(key); // 最低1つは残す
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  // 動画URL別 → 日付別のスナップショットを整理
+  const { cumulativeData, dailyIncrementData } = useMemo(() => {
+    if (!dailyMetrics || dailyMetrics.length === 0) return { cumulativeData: [], dailyIncrementData: [] };
+    const filtered = chartFilter === "all" ? dailyMetrics : dailyMetrics.filter((m: any) => m.platform === chartFilter);
+
+    const byVideo = new Map<string, Map<string, { views: number; likes: number; comments: number; shares: number; saves: number }>>();
+    for (const m of filtered) {
+      const url = m.videoUrl || "";
+      const dateKey = m.dateKey;
+      if (!url || !dateKey) continue;
+      if (!byVideo.has(url)) byVideo.set(url, new Map());
+      const videoMap = byVideo.get(url)!;
+      const entry = videoMap.get(dateKey) || { views: 0, likes: 0, comments: 0, shares: 0, saves: 0 };
+      entry.views += m.viewCount || 0;
+      entry.likes += m.likeCount || 0;
+      entry.comments += m.commentCount || 0;
+      entry.shares += m.shareCount || 0;
+      entry.saves += m.saveCount || 0;
+      videoMap.set(dateKey, entry);
+    }
+
+    const allDates = new Set<string>();
+    for (const videoMap of byVideo.values()) {
+      for (const d of videoMap.keys()) allDates.add(d);
+    }
+    const sortedDates = [...allDates].sort();
+    if (sortedDates.length < 2) return { cumulativeData: [], dailyIncrementData: [] };
+
+    // Forward-fill: 欠損日を前日値で埋めて累積値が下がるのを防止
+    for (const videoMap of byVideo.values()) {
+      let lastKnown: { views: number; likes: number; comments: number; shares: number; saves: number } | null = null;
+      for (const dateKey of sortedDates) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          lastKnown = snap;
+        } else if (lastKnown) {
+          videoMap.set(dateKey, { ...lastKnown });
+        }
+      }
+    }
+
+    // 日次増分（前日比）
+    const dailyIncr = sortedDates.slice(1).map((dateKey, i) => {
+      const prevDate = sortedDates[i];
+      let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+      for (const videoMap of byVideo.values()) {
+        const cur = videoMap.get(dateKey);
+        const prev = videoMap.get(prevDate);
+        if (cur && prev) {
+          views += Math.max(0, cur.views - prev.views);
+          likes += Math.max(0, cur.likes - prev.likes);
+          comments += Math.max(0, cur.comments - prev.comments);
+          shares += Math.max(0, cur.shares - prev.shares);
+          saves += Math.max(0, cur.saves - prev.saves);
+        }
+      }
+      return { date: dateKey, views, likes, comments, shares, saves };
+    });
+
+    // 累積データ：各日付の全動画合計スナップショット値（実際の累積再生数）
+    const cumData = sortedDates.map(dateKey => {
+      let views = 0, likes = 0, comments = 0, shares = 0, saves = 0;
+      for (const videoMap of byVideo.values()) {
+        const snap = videoMap.get(dateKey);
+        if (snap) {
+          views += snap.views;
+          likes += snap.likes;
+          comments += snap.comments;
+          shares += snap.shares;
+          saves += snap.saves;
+        }
+      }
+      return { date: dateKey, views, likes, comments, shares, saves };
+    });
+
+    return { cumulativeData: cumData, dailyIncrementData: dailyIncr };
+  }, [dailyMetrics, chartFilter]);
+
+  const chartData = chartMode === "cumulative" ? cumulativeData : dailyIncrementData;
+
+  const availablePlatforms = useMemo(() => {
+    if (!dailyMetrics || dailyMetrics.length === 0) return new Set<string>();
+    return new Set(dailyMetrics.map((m: any) => m.platform).filter(Boolean));
+  }, [dailyMetrics]);
+
+  // どのメトリクスが存在するか（生の dailyMetrics レコードで判定）
+  const availableMetrics = useMemo(() => {
+    const set = new Set<MetricKey>(["views"]);
+    if (!dailyMetrics) return set;
+    const filtered = chartFilter === "all" ? dailyMetrics : dailyMetrics.filter((m: any) => m.platform === chartFilter);
+    for (const m of filtered) {
+      if ((m.likeCount || 0) > 0) set.add("likes");
+      if ((m.commentCount || 0) > 0) set.add("comments");
+      if ((m.shareCount || 0) > 0) set.add("shares");
+      if ((m.saveCount || 0) > 0) set.add("saves");
+    }
+    return set;
+  }, [dailyMetrics, chartFilter]);
+
+  // 再生数と他メトリクスでスケールが大きく異なるのでデュアルY軸を使う
+  const activeMetrics = METRIC_CONFIG.filter(m => availableMetrics.has(m.key) && enabledMetrics.has(m.key));
+  const showViews = enabledMetrics.has("views") && availableMetrics.has("views");
+  const engagementMetrics = activeMetrics.filter(m => m.key !== "views");
+  const needsDualAxis = showViews && engagementMetrics.length > 0;
+
+  if (cumulativeData.length < 2) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex flex-col gap-2">
+          {/* Row 1: Title + cumulative/daily toggle + platform filter */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm">パフォーマンス推移</CardTitle>
+              <div className="flex rounded-lg border border-black/6 dark:border-slate-700 overflow-hidden">
+                <button
+                  className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+                    chartMode === "cumulative"
+                      ? "bg-[#0a0a0a] text-white"
+                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-white/80 dark:hover:bg-slate-800 text-[#6b7280]"
+                  }`}
+                  onClick={() => setChartMode("cumulative")}
+                >
+                  累積
+                </button>
+                <button
+                  className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors border-l border-black/6 dark:border-slate-700 ${
+                    chartMode === "daily"
+                      ? "bg-[#0a0a0a] text-white"
+                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-white/80 dark:hover:bg-slate-800 text-[#6b7280]"
+                  }`}
+                  onClick={() => setChartMode("daily")}
+                >
+                  日次
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-1">
+              {(["all", "tiktok", "youtube", "instagram"] as const).map(pf => {
+                if (pf !== "all" && !availablePlatforms.has(pf)) return null;
+                const active = chartFilter === pf;
+                return (
+                  <button
+                    key={pf}
+                    onClick={() => setChartFilter(pf)}
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                  >
+                    {pf === "all" ? "全体" : pf === "tiktok" ? "TikTok" : pf === "youtube" ? "YouTube" : "Instagram"}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {/* Row 2: Metric toggle buttons — click to show/hide each metric */}
+          <div className="flex items-center gap-1 flex-wrap">
+            {METRIC_CONFIG.filter(m => availableMetrics.has(m.key)).map(m => {
+              const active = enabledMetrics.has(m.key);
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => toggleMetric(m.key)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5 ${
+                    active
+                      ? "text-white shadow-sm"
+                      : "bg-[#f5f5f5] dark:bg-slate-800 text-[#9ca3af] hover:bg-[#e5e5e5] dark:hover:bg-slate-700 line-through"
+                  }`}
+                  style={active ? { backgroundColor: m.color } : undefined}
+                >
+                  <span className="w-2 h-2 rounded-full border border-current" style={active ? { backgroundColor: "rgba(255,255,255,0.5)" } : { backgroundColor: m.color, opacity: 0.4 }} />
+                  {m.label}
+                </button>
+              );
+            })}
+            {needsDualAxis && (
+              <span className="ml-auto text-[10px] text-muted-foreground">左軸: 再生数 / 右軸: エンゲージメント</span>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={300}>
+          {chartMode === "cumulative" ? (
+            <ComposedChart data={chartData}>
+              <defs>
+                {activeMetrics.map(m => (
+                  <linearGradient key={m.key} id={`gradCumul_${m.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={m.color} stopOpacity={m.key === "views" ? 0.15 : 0} />
+                    <stop offset="95%" stopColor={m.color} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              {needsDualAxis && (
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              )}
+              <RechartsTooltip
+                formatter={(v: number, name: string) => {
+                  const mc = METRIC_CONFIG.find(m => m.key === name);
+                  return [v.toLocaleString(), mc?.label ?? name];
+                }}
+                labelFormatter={v => v}
+                contentStyle={{ fontSize: 11 }}
+              />
+              {showViews && (
+                <Area yAxisId="left" type="monotone" dataKey="views" stroke="#0a0a0a" fill={`url(#gradCumul_views)`} strokeWidth={2} name="views" dot={{ r: 2, fill: "#0a0a0a" }} />
+              )}
+              {engagementMetrics.map(m => (
+                <Line key={m.key} yAxisId={needsDualAxis ? "right" : "left"} type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={2} name={m.key} dot={{ r: 2, fill: m.color }} />
+              ))}
+              {!needsDualAxis && activeMetrics.filter(m => m.key !== "views").length === 0 && showViews && targetViews && targetViews > 0 && (
+                <ReferenceLine yAxisId="left" y={targetViews} stroke="#f97316" strokeDasharray="6 3" strokeWidth={2} label={{ value: `目標 ${targetViews >= 10000 ? `${(targetViews / 10000).toFixed(1)}万` : fmt(targetViews)}`, position: "insideTopRight", fontSize: 10, fill: "#f97316" }} />
+              )}
+            </ComposedChart>
+          ) : (
+            <ComposedChart data={chartData}>
+              <defs>
+                {activeMetrics.map(m => (
+                  <linearGradient key={m.key} id={`gradDaily_${m.key}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={m.color} stopOpacity={m.key === "views" ? 0.15 : 0} />
+                    <stop offset="95%" stopColor={m.color} stopOpacity={0} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={v => v.slice(5)} />
+              <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              {needsDualAxis && (
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={v => fmt(v)} />
+              )}
+              <RechartsTooltip
+                formatter={(v: number, name: string) => {
+                  const mc = METRIC_CONFIG.find(m => m.key === name);
+                  return [`+${fmt(v)}`, mc?.label ?? name];
+                }}
+                labelFormatter={v => v}
+                contentStyle={{ fontSize: 11 }}
+              />
+              {showViews && (
+                <Area yAxisId="left" type="monotone" dataKey="views" stroke="#0a0a0a" fill={`url(#gradDaily_views)`} strokeWidth={2} name="views" dot={{ r: 2, fill: "#0a0a0a" }} />
+              )}
+              {engagementMetrics.map(m => (
+                <Line key={m.key} yAxisId={needsDualAxis ? "right" : "left"} type="monotone" dataKey={m.key} stroke={m.color} strokeWidth={2} name={m.key} dot={{ r: 2, fill: m.color }} />
+              ))}
             </ComposedChart>
           )}
         </ResponsiveContainer>

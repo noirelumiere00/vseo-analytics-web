@@ -310,18 +310,28 @@ export function registerOAuthRoutes(app: Express) {
         });
         const data = await tokenRes.json() as any;
         if (data.refresh_token) {
+          // Refresh tokenをファイルに直接書き出し（ログには残さない）
+          const tokenPreview = String(data.refresh_token).slice(0, 10) + "...";
+          console.log(`[GoogleAds] Refresh token acquired (preview: ${tokenPreview}). Written to data/.google-ads-refresh-token`);
+          try {
+            const fs = await import("fs");
+            const path = await import("path");
+            const outPath = path.default.resolve(process.cwd(), "data", ".google-ads-refresh-token");
+            fs.default.writeFileSync(outPath, String(data.refresh_token), "utf-8");
+          } catch (writeErr) {
+            console.error("[GoogleAds] Failed to write token file:", writeErr);
+          }
           res.send(`<html><body style="font-family:sans-serif;padding:40px;max-width:600px;margin:0 auto">
-            <h2>Google Ads API Refresh Token 取得成功</h2>
-            <p>以下を <code>.env</code> に追加してください:</p>
-            <pre style="background:#f1f5f9;padding:16px;border-radius:8px;overflow-x:auto">GOOGLE_ADS_DEVELOPER_TOKEN=REDACTED_DEV_TOKEN
-GOOGLE_ADS_REFRESH_TOKEN=${data.refresh_token}
-GOOGLE_ADS_CUSTOMER_ID=REDACTED_CUSTOMER_ID</pre>
+            <h2 style="color:#16a34a">Google Ads API 認証成功</h2>
+            <p>Refresh Tokenはサーバーログに出力されました。</p>
+            <p>管理者がサーバーログを確認し、<code>.env</code> に設定してください。</p>
             <p style="color:#666;font-size:14px">このページを閉じて大丈夫です。</p>
           </body></html>`);
         } else {
+          console.error("[GoogleAds] Token exchange failed:", JSON.stringify(data));
           res.status(400).send(`<html><body style="font-family:sans-serif;padding:40px">
             <h2>エラー</h2>
-            <pre>${JSON.stringify(data, null, 2)}</pre>
+            <p>トークン取得に失敗しました。サーバーログを確認してください。</p>
           </body></html>`);
         }
         return;
@@ -405,10 +415,23 @@ GOOGLE_ADS_CUSTOMER_ID=REDACTED_CUSTOMER_ID</pre>
   /**
    * GET /api/auth/google-ads
    * Google Ads API用のOAuth認証開始（Refresh Token取得用）
-   * 既存の /api/auth/google/callback リダイレクトURIを流用し、stateで区別する
+   * 管理者のみアクセス可能
    */
   app.get("/api/auth/google-ads", async (_req: Request, res: Response) => {
     try {
+      // 管理者���証チェック
+      let user;
+      try {
+        user = await sdk.authenticateRequest(_req);
+      } catch {
+        res.status(401).send("ログインが必要です。");
+        return;
+      }
+      if (user.role !== "admin") {
+        res.status(403).send("管理者権限が必要です。");
+        return;
+      }
+
       const nonce = crypto.randomBytes(16).toString("hex");
       const state = await signState({ nonce, purpose: "google_ads" });
 

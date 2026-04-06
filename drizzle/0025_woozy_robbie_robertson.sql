@@ -1,0 +1,1 @@
+ALTER TABLE `campaign_reports` ADD `instagramHashtagReport` json;

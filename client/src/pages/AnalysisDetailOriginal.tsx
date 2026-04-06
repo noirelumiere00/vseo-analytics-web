@@ -1196,16 +1196,9 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 検索相関分析（Google Trends × TikTok） */}
+                  {/* 検索相関分析（Google Trends × TikTok）— 相関が弱い場合は自動非表示 */}
                   {data.job?.keyword && (
-                    <AccordionItem value="search-correlation" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        🔍 検索相関分析（Google Trends × TikTok）
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} />
-                      </AccordionContent>
-                    </AccordionItem>
+                    <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} asAccordionItem />
                   )}
 
                   {/* エンゲージメント詳細 */}

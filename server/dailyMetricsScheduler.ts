@@ -40,6 +40,16 @@ function daysBetween(a: Date, b: Date): number {
   return Math.floor((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
 }
 
+/** Fisher-Yates シャッフル — 処理順を毎回ランダム化し特定キャンペーンが常に不利にならないようにする */
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 async function checkAndCapture() {
   const campaigns = await db.getTrackingEnabledCampaigns();
   if (campaigns.length === 0) return;
@@ -48,12 +58,22 @@ async function checkAndCapture() {
   today.setHours(0, 0, 0, 0);
   const todayStr = today.toISOString().slice(0, 10);
 
-  for (const campaign of campaigns) {
+  // 処理順をランダム化（常に最後のキャンペーンがリソース不足に陥るのを防止）
+  const shuffled = shuffle(campaigns);
+  console.log(`[DailyScheduler] Processing order: ${shuffled.map(c => c.id).join(", ")}`);
+
+  for (const campaign of shuffled) {
     try {
       await processCampaign(campaign, today, todayStr);
     } catch (e) {
       console.error(`[DailyScheduler] Campaign ${campaign.id} error:`, e);
     }
+
+    // キャンペーン間でリソース解放: GC + 短いディレイ
+    if (global.gc) {
+      try { global.gc(); } catch {}
+    }
+    await new Promise(r => setTimeout(r, 1000));
   }
 }
 

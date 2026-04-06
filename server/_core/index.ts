@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "path";
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -45,7 +46,22 @@ async function startServer() {
 
   const app = express();
   app.set("trust proxy", 1);
-  app.use(helmet({ contentSecurityPolicy: false }));
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:"],
+        connectSrc: ["'self'", "https://accounts.google.com", "https://oauth2.googleapis.com", "https://api.stripe.com"],
+        frameSrc: ["'self'", "https://accounts.google.com", "https://js.stripe.com"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'", "https://accounts.google.com"],
+      },
+    },
+  }));
   app.use(cors({ origin: ENV.appUrl, credentials: true }));
   const server = createServer(app);
 
@@ -86,6 +102,11 @@ async function startServer() {
       createContext,
     })
   );
+  // サムネイル画像のローカル配信（CDN期限切れ対策）
+  {
+    const coversPath = path.resolve(import.meta.dirname, process.env.NODE_ENV === "development" ? "../../data/covers" : "../data/covers");
+    app.use("/covers", express.static(coversPath, { maxAge: "30d", immutable: true }));
+  }
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);

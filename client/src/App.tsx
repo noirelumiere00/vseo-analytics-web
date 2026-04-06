@@ -35,15 +35,7 @@ const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
 const Activity = lazy(() => import("./pages/Activity"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 
-// Beta routes — new report structures
-const BetaTrendDiscovery = lazy(() => import("./pages/TrendDiscovery"));
-const BetaTrendDiscoveryDetail = lazy(() => import("./pages/TrendDiscoveryDetail"));
-const BetaAnalysisNew = lazy(() => import("./pages/AnalysisNew"));
-const BetaAnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
-const BetaCampaignList = lazy(() => import("./pages/CampaignList"));
-const BetaCampaignNew = lazy(() => import("./pages/CampaignNew"));
-const BetaCampaignDetail = lazy(() => import("./pages/CampaignDetail"));
-const BetaCampaignReport = lazy(() => import("./pages/CampaignReport"));
+
 
 function RedirectTo({ to }: { to: string }) {
   const [, navigate] = useLocation();
@@ -111,16 +103,6 @@ function Router() {
       <Route path="/report/view/:jobId" component={ReportView} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/logs" component={AdminLogs} />
-      {/* Beta routes — isolated from existing */}
-      <Route path="/beta/activity" component={Activity} />
-      <Route path="/beta/trend-discovery" component={BetaTrendDiscovery} />
-      <Route path="/beta/trend-discovery/:id" component={BetaTrendDiscoveryDetail} />
-      <Route path="/beta/analysis/new" component={BetaAnalysisNew} />
-      <Route path="/beta/analysis/:id" component={BetaAnalysisDetail} />
-      <Route path="/beta/campaigns" component={BetaCampaignList} />
-      <Route path="/beta/campaigns/new" component={BetaCampaignNew} />
-      <Route path="/beta/campaigns/:id" component={BetaCampaignDetail} />
-      <Route path="/beta/campaigns/:id/report" component={BetaCampaignReport} />
       {/* Final fallback route */}
       <Route component={NotFound} />
     </Switch>
