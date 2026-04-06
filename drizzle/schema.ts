@@ -879,6 +879,7 @@ export const campaignReports = mysqlTable("campaign_reports", {
   // 共有リンク
   shareToken: varchar("shareToken", { length: 64 }).unique(),
   shareEnabled: boolean("shareEnabled").default(false),
+  shareExpiresAt: timestamp("shareExpiresAt"),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

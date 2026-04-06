@@ -127,7 +127,19 @@ test2-*
 _check-*
 mock-*
 fix-*.mjs
+tmp_*.ts
 *.save
 .envsudo
+
+# AI/MCP tool configs (個人環境固有)
 .aidesigner/*
 !.aidesigner/.gitkeep
+.agents/
+.claude/
+.mcp.json
+
+# Data files (covers cache, scraping dumps)
+data/covers/
+universal-data.json
+global-universal-data.json
+tiktok-search-page.html

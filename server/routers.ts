@@ -241,7 +241,7 @@ export const appRouter = router({
           console.error(`[Analysis] Error in getById for job ${input.jobId}:`, error);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: error instanceof Error ? error.message : "分析ジョブの詳細取得に失敗しました",
+            message: "分析ジョブの詳細取得に失敗しました",
           });
         }
       }),
@@ -1477,12 +1477,11 @@ export const appRouter = router({
             message: `ファイルから最新 ${recentLines.length} 行を取得しました`,
           };
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : '不明なエラー';
-          console.error('[Admin] Log retrieval error:', errorMessage);
+          console.error('[Admin] Log retrieval error:', error);
           return {
             success: false,
-            logs: [`[エラー] ログ取得失敗: ${errorMessage}`],
-            message: `ログ取得エラー: ${errorMessage}`,
+            logs: [`[エラー] ログ取得に失敗しました`],
+            message: "ログ取得に失敗しました",
           };
         }
       }),

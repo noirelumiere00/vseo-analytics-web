@@ -1,0 +1,77 @@
+#!/bin/bash
+# Pre-commit hook: シークレット漏洩防止
+# ステージングされたファイルにトークンやシークレットが含まれていないかチェック
+
+# 除外パターン（.env.example, hooks自身などはOK）
+EXCLUDE_PATTERN="\.env\.example$|\.sample$|CLAUDE\.md$|pre-commit$|\.md$"
+
+# 検出パターン
+SECRET_PATTERNS=(
+  # Cloud provider keys
+  'AKIA[0-9A-Z]{16}'                        # AWS Access Key ID
+  'AIza[0-9A-Za-z_-]{35}'                  # Google API Key
+  'GOCSPX-[A-Za-z0-9_-]{20,}'             # Google OAuth Client Secret
+  'sk-[0-9a-zA-Z]{32,}'                    # OpenAI/Stripe secret key
+  'sk_live_[0-9a-zA-Z]{24,}'              # Stripe live key
+  'ghp_[0-9a-zA-Z]{36}'                   # GitHub Personal Access Token
+  'apify_api_[A-Za-z0-9]{30,}'            # Apify API Token
+  # Token assignments in source code
+  'developer.?token.*=.*[A-Za-z0-9+/]{20,}'
+  'refresh.?token.*=.*1//[A-Za-z0-9_-]{20,}'
+  'client.?secret.*=.*GOCSPX'
+  # Instagram/social credentials in source
+  'INSTAGRAM_Pass(word)?=.+'
+  # Weak JWT patterns (project-name-jwt-secret style)
+  'jwt.?secret.*=.*[a-z]+-[a-z]+-jwt-secret'
+  # Private keys
+  '-----BEGIN (RSA |EC )?PRIVATE KEY-----'
+  # Connection strings with passwords
+  'mysql://[^:]+:[^@]+@'
+  'postgres://[^:]+:[^@]+@'
+  'mongodb(\+srv)?://[^:]+:[^@]+@'
+)
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -vE "$EXCLUDE_PATTERN")
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+FOUND_SECRETS=0
+
+for pattern in "${SECRET_PATTERNS[@]}"; do
+  MATCHES=$(echo "$STAGED_FILES" | xargs grep -lnE "$pattern" 2>/dev/null)
+  if [ -n "$MATCHES" ]; then
+    echo "⛔ シークレット漏洩の可能性を検出:"
+    echo "$MATCHES" | while read file; do
+      echo "  → $file"
+      grep -nE "$pattern" "$file" | head -3 | sed 's/^/    /'
+    done
+    FOUND_SECRETS=1
+  fi
+done
+
+# .env ファイルがステージングされていないかチェック
+ENV_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^\.env$|^\.env\.(local|production|development)$')
+if [ -n "$ENV_FILES" ]; then
+  echo "⛔ .env ファイルがコミットに含まれています:"
+  echo "$ENV_FILES" | sed 's/^/  → /'
+  FOUND_SECRETS=1
+fi
+
+# data/ ディレクトリの機密ファイルチェック
+DATA_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^data/')
+if [ -n "$DATA_FILES" ]; then
+  echo "⛔ data/ ディレクトリのファイルがコミットに含まれています:"
+  echo "$DATA_FILES" | sed 's/^/  → /'
+  FOUND_SECRETS=1
+fi
+
+if [ "$FOUND_SECRETS" -eq 1 ]; then
+  echo ""
+  echo "コミットをブロックしました。"
+  echo "誤検知の場合: git commit --no-verify でスキップ可能"
+  exit 1
+fi
+
+exit 0

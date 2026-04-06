@@ -2,15 +2,10 @@
  * Instagram sessionid 自動取得スクリプト
  *
  * Puppeteerでログインし、sessionid Cookieを取得して .env に書き込む。
+ * 認証情報はファイルに保存せず、実行時に対話入力で取得する。
  *
  * 使い方:
  *   npx tsx server/instagramLogin.ts
- *
- * 環境変数:
- *   INSTAGRAM_USERNAME — Instagramのユーザー名またはメールアドレス
- *   INSTAGRAM_PASSWORD — Instagramのパスワード
- *
- * 取得成功すると .env に INSTAGRAM_SESSION_ID=xxx を追記/更新する。
  */
 
 import "dotenv/config";
@@ -18,18 +13,54 @@ import puppeteer from "puppeteer-core";
 import { findChromiumPath, buildChromiumArgs } from "./tiktokScraper";
 import * as fs from "fs";
 import * as path from "path";
+import * as readline from "readline";
+
+/** ターミナルから対話入力を取得（パスワードは非表示） */
+function prompt(question: string, hidden = false): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    if (hidden && process.stdin.isTTY) {
+      // パスワード入力時はエコーバックを無効化
+      process.stdout.write(question);
+      const stdin = process.openStdin();
+      process.stdin.on("data", (char) => {
+        const str = char.toString();
+        if (str === "\n" || str === "\r" || str === "\r\n") return;
+        process.stdout.clearLine(0);
+        process.stdout.cursorTo(0);
+        process.stdout.write(question + "*".repeat(str.length));
+      });
+      rl.question("", (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    } else {
+      rl.question(question, (answer) => {
+        rl.close();
+        resolve(answer.trim());
+      });
+    }
+  });
+}
 
 async function extractSessionId(): Promise<string | null> {
-  const username = process.env.INSTAGRAM_USERNAME || process.env.INSTAGRAM_ID;
-  const password = process.env.INSTAGRAM_PASSWORD || process.env.INSTAGRAM_Pass;
+  console.log("=== Instagram Session ID 取得ツール ===\n");
+  console.log("※ 認証情報はメモリ上のみで使用し、ファイルには保存しません。\n");
+
+  const username = await prompt("Instagram ユーザー名/メール: ");
+  const password = await prompt("Instagram パスワード: ");
 
   if (!username || !password) {
-    console.error("Error: INSTAGRAM_USERNAME/INSTAGRAM_ID and INSTAGRAM_PASSWORD/INSTAGRAM_Pass must be set in .env");
+    console.error("Error: ユーザー名とパスワードの両方が必要です。");
     process.exit(1);
   }
 
   const chromiumPath = findChromiumPath();
-  console.log(`[IG Login] Launching browser: ${chromiumPath}`);
+  console.log(`\n[IG Login] Launching browser: ${chromiumPath}`);
 
   const browser = await puppeteer.launch({
     executablePath: chromiumPath,
@@ -63,7 +94,7 @@ async function extractSessionId(): Promise<string | null> {
       }
     } catch { /* no cookie banner */ }
 
-    // ログインフォームを待機（Meta統合後はname="email"/name="pass"）
+    // ログインフォームを待機
     await page.waitForSelector('input[name="email"], input[name="username"]', { timeout: 15000 });
     await new Promise(r => setTimeout(r, 1000));
 
@@ -84,11 +115,11 @@ async function extractSessionId(): Promise<string | null> {
     await passwordInput.type(password, { delay: 50 });
     await new Promise(r => setTimeout(r, 500));
 
-    // ログイン送信（Enterキーで確実に送信）
+    // ログイン送信
     console.log("[IG Login] Submitting login...");
     await page.keyboard.press("Enter");
 
-    // ログイン完了を待機（sessionid Cookieが設定されるまで）
+    // ログイン完了を待機
     console.log("[IG Login] Waiting for login to complete...");
     let sessionId: string | null = null;
 
@@ -115,8 +146,6 @@ async function extractSessionId(): Promise<string | null> {
 
     if (!sessionId) {
       console.error("[IG Login] Timeout: sessionid not found after 60 seconds");
-
-      // 2FA チェック
       const pageUrl = page.url();
       if (pageUrl.includes("challenge") || pageUrl.includes("two_factor")) {
         console.error("[IG Login] 2FA/Challenge detected. Please disable 2FA or complete the challenge manually.");
@@ -124,7 +153,7 @@ async function extractSessionId(): Promise<string | null> {
       return null;
     }
 
-    // "Save login info" ポップアップをスキップ（あれば）
+    // "Save login info" ポップアップをスキップ
     try {
       const notNowBtn = await page.$x('//button[contains(text(), "Not Now") or contains(text(), "後で")]');
       if (notNowBtn.length > 0) {
@@ -149,11 +178,15 @@ async function updateEnvFile(sessionId: string): Promise<void> {
   const key = "INSTAGRAM_SESSION_ID";
   const newLine = `${key}=${sessionId}`;
 
-  if (content.includes(`${key}=`)) {
-    // 既存のセッションIDを更新
-    content = content.replace(new RegExp(`^${key}=.*$`, "m"), newLine);
+  // コメントアウトされた行も置換対象
+  const commentedPattern = new RegExp(`^#\\s*${key}=.*$`, "m");
+  const activePattern = new RegExp(`^${key}=.*$`, "m");
+
+  if (activePattern.test(content)) {
+    content = content.replace(activePattern, newLine);
+  } else if (commentedPattern.test(content)) {
+    content = content.replace(commentedPattern, newLine);
   } else {
-    // 新規追加
     content = content.trimEnd() + "\n" + newLine + "\n";
   }
 

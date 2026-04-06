@@ -1,4 +1,4 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, SESSION_MAX_AGE_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
 import crypto from "crypto";
 import { nanoid } from "nanoid";
@@ -91,11 +91,11 @@ export function registerOAuthRoutes(app: Express) {
 
       const sessionToken = await sdk.createSessionToken(existingUser.openId, {
         name: existingUser.name || trimmed,
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
       res.json({ success: true });
     } catch (error) {
       console.error("[Auth] Login failed", error);
@@ -158,11 +158,11 @@ export function registerOAuthRoutes(app: Express) {
 
       const sessionToken = await sdk.createSessionToken(openId, {
         name: name.trim(),
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
       res.json({ success: true });
     } catch (error) {
       console.error("[Auth] Register failed", error);
@@ -396,10 +396,10 @@ export function registerOAuthRoutes(app: Express) {
 
       const sessionToken = await sdk.createSessionToken(user.openId, {
         name: user.name || userInfo.name,
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
 
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: SESSION_MAX_AGE_MS });
       res.redirect(302, "/");
     } catch (error) {
       console.error("[Auth] Google callback failed", error);

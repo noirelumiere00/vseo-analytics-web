@@ -754,7 +754,14 @@ export async function getReportByShareToken(token: string) {
     })
     .from(campaignReports)
     .innerJoin(campaigns, eq(campaigns.id, campaignReports.campaignId))
-    .where(and(eq(campaignReports.shareToken, token), eq(campaignReports.shareEnabled, true)))
+    .where(and(
+      eq(campaignReports.shareToken, token),
+      eq(campaignReports.shareEnabled, true),
+      or(
+        isNull(campaignReports.shareExpiresAt),
+        gte(campaignReports.shareExpiresAt, new Date()),
+      ),
+    ))
     .limit(1);
   return result[0] ?? undefined;
 }
@@ -762,9 +769,10 @@ export async function getReportByShareToken(token: string) {
 export async function setShareToken(campaignId: number, token: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30日後
   await db
     .update(campaignReports)
-    .set({ shareToken: token, shareEnabled: true })
+    .set({ shareToken: token, shareEnabled: true, shareExpiresAt: expiresAt })
     .where(eq(campaignReports.campaignId, campaignId));
 }
 
@@ -794,7 +802,14 @@ export async function getDailyMetricsByShareToken(token: string) {
   const reportRow = await db
     .select({ campaignId: campaignReports.campaignId })
     .from(campaignReports)
-    .where(and(eq(campaignReports.shareToken, token), eq(campaignReports.shareEnabled, true)))
+    .where(and(
+      eq(campaignReports.shareToken, token),
+      eq(campaignReports.shareEnabled, true),
+      or(
+        isNull(campaignReports.shareExpiresAt),
+        gte(campaignReports.shareExpiresAt, new Date()),
+      ),
+    ))
     .limit(1);
   if (!reportRow[0]) return [];
   return db.select().from(campaignDailyMetrics)
