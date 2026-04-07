@@ -1325,6 +1325,536 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
   );
 }
 
+
+// ============================
+// Instagram Phone Mockup — Search Results Mock (matching TikTok pattern)
+// ============================
+
+type IGPostData = {
+  position: number;
+  shortcode: string;
+  username: string;
+  type: string;
+  likeCount: number;
+  commentCount: number;
+  viewCount: number;
+  coverUrl: string;
+  postUrl: string;
+  isOwn: boolean;
+};
+
+function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag: string }) {
+  return (
+    <div className="relative hover:scale-[1.02] transition-all duration-500">
+      {/* iPhone 15 Pro chassis */}
+      <div
+        className="relative"
+        style={{
+          width: 220, height: 476,
+          filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 12px 24px rgba(0,0,0,0.12)) drop-shadow(0 24px 48px rgba(0,0,0,0.08))",
+        }}
+      >
+        {/* Side buttons */}
+        <div className="absolute -left-[3px] top-[74px] w-[3px] h-[15px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -left-[3px] top-[103px] w-[3px] h-[19px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -left-[3px] top-[127px] w-[3px] h-[19px] rounded-l-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+        <div className="absolute -right-[3px] top-[112px] w-[3px] h-[23px] rounded-r-[1.5px]" style={{ background: "linear-gradient(180deg, #48484a, #2c2c2e)" }} />
+
+        {/* Titanium frame */}
+        <div
+          className="relative w-full h-full rounded-[28px] p-[2.5px]"
+          style={{
+            background: "linear-gradient(170deg, #48484a 0%, #3a3a3c 15%, #2c2c2e 40%, #1c1c1e 60%, #2c2c2e 80%, #3a3a3c 100%)",
+            boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06), inset 0 -1px 0 0 rgba(255,255,255,0.03)",
+          }}
+        >
+          {/* Inner bezel */}
+          <div className="relative w-full h-full rounded-[26px] border-[1px] border-[#050505] bg-white overflow-hidden">
+            {/* Dynamic Island */}
+            <div className="absolute top-[6px] left-1/2 -translate-x-1/2 z-20">
+              <div
+                className="w-[62px] h-[18px] bg-black rounded-full"
+                style={{ boxShadow: "0 0 0 1px rgba(255,255,255,0.06)" }}
+              >
+                <div className="absolute right-[13px] top-1/2 -translate-y-1/2 w-[5px] h-[5px] rounded-full bg-[#0a0a14]" style={{ boxShadow: "inset 0 0 1px rgba(255,255,255,0.1)" }} />
+              </div>
+            </div>
+
+            {/* Glass reflection */}
+            <div className="absolute inset-0 rounded-[24px] z-30 pointer-events-none" style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 30%, transparent 50%)" }} />
+
+            {/* Screen */}
+            <div className="w-full h-full rounded-[24px] overflow-hidden bg-white flex flex-col" style={{ fontFamily: "-apple-system, 'Hiragino Sans', sans-serif" }}>
+
+              {/* Status Bar */}
+              <div className="relative flex items-center justify-between px-[16px] h-[24px] shrink-0">
+                <span className="text-[8px] font-semibold text-black tabular-nums tracking-tight" style={{ marginTop: 10 }}>9:41</span>
+                <div className="flex items-center gap-[2.5px]" style={{ marginTop: 10 }}>
+                  <svg width="12" height="7" viewBox="0 0 12 7" fill="none">
+                    <rect x="0" y="5" width="2" height="2" rx="0.4" fill="black"/>
+                    <rect x="2.8" y="3.5" width="2" height="3.5" rx="0.4" fill="black"/>
+                    <rect x="5.6" y="1.8" width="2" height="5.2" rx="0.4" fill="black"/>
+                    <rect x="8.4" y="0" width="2" height="7" rx="0.4" fill="black"/>
+                  </svg>
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M5 7.5a0.7 0.7 0 1 0 0-1.4 0.7 0.7 0 0 0 0 1.4Z" fill="black"/>
+                    <path d="M3.2 5.6a2.5 2.5 0 0 1 3.6 0" stroke="black" strokeWidth="1.1" strokeLinecap="round"/>
+                    <path d="M1.5 3.8a4.9 4.9 0 0 1 7 0" stroke="black" strokeWidth="1.1" strokeLinecap="round"/>
+                  </svg>
+                  <svg width="16" height="8" viewBox="0 0 16 8" fill="none">
+                    <rect x="0.5" y="0.5" width="12" height="7" rx="2.2" stroke="black" strokeWidth="0.8" opacity="0.4"/>
+                    <rect x="1.5" y="1.5" width="10" height="5" rx="1.2" fill="black"/>
+                    <path d="M13.5 2.8v2.4a1 1 0 0 0 0-2.4Z" fill="black" opacity="0.4"/>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Search Header — Instagram style */}
+              <div className="flex items-center gap-[4px] px-[6px] pb-[3px] shrink-0">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
+                  <path d="M7 1.5L3 5L7 8.5" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <div className="flex-1 flex items-center gap-[4px] bg-[#efefef] rounded-[8px] px-[7px] py-[4px]">
+                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="shrink-0">
+                    <circle cx="4" cy="4" r="2.8" stroke="#8e8e8e" strokeWidth="0.9"/>
+                    <path d="M6 6L8 8" stroke="#8e8e8e" strokeWidth="0.9" strokeLinecap="round"/>
+                  </svg>
+                  <span className="text-[8px] text-black truncate leading-none flex-1 font-medium">#{hashtag}</span>
+                </div>
+              </div>
+
+              {/* Tabs — Instagram hashtag page style */}
+              <div className="flex items-end shrink-0 border-b border-[#dbdbdb] py-[3px]">
+                {["\u30C8\u30C3\u30D7", "\u30EA\u30FC\u30EB"].map((tab) => {
+                  const isActive = tab === "\u30C8\u30C3\u30D7";
+                  return (
+                    <div key={tab} className="flex-1 flex flex-col items-center gap-[2px]" style={{ minWidth: 0 }}>
+                      <span className={`text-[7.5px] whitespace-nowrap ${isActive ? "text-black font-bold" : "text-[#8e8e8e] font-medium"}`}>
+                        {tab}
+                      </span>
+                      {isActive && <div className="w-[14px] h-[2px] bg-black rounded-full" />}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* 3x3 Grid of square thumbnails */}
+              <div className="flex-1 overflow-hidden relative bg-white">
+                <div className="grid grid-cols-3 gap-[1.5px]">
+                  {posts.slice(0, 9).map((post, i) => {
+                    return (
+                      <div
+                        key={i}
+                        className="relative aspect-square overflow-visible"
+                        style={post.isOwn ? {
+                          zIndex: 2,
+                          boxShadow: "0 0 0 1.5px #E1306C, 0 0 6px 1px rgba(225,48,108,0.4)",
+                        } : undefined}
+                      >
+                        <div className="w-full h-full overflow-hidden">
+                          {post.coverUrl ? (
+                            <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-[#fafafa] to-[#efefef] flex items-center justify-center">
+                              <span className="text-[10px] text-[#b0b0b0]">{post.position}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Own-video overlay */}
+                        {post.isOwn && (
+                          <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: "rgba(225,48,108,0.25)" }} />
+                        )}
+
+                        {/* Position badge */}
+                        <div className={`absolute top-[1.5px] left-[1.5px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/40"}`}>
+                          <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
+                        </div>
+
+                        {/* Reel / carousel indicator */}
+                        {(post.type === "reel" || post.type === "video") && (
+                          <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+                            <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
+                          </svg>
+                        )}
+                        {post.type === "carousel" && (
+                          <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+                            <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
+                            <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
+                          </svg>
+                        )}
+
+                        {/* Own accent bar */}
+                        {post.isOwn && (
+                          <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4] bg-[#E1306C]" />
+                        )}
+
+                        {/* Bottom gradient + engagement */}
+                        <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                        <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
+                          <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
+                            <path d="M2.5 0.5L3.2 1.9L4.7 2.1L3.6 3.2L3.9 4.7L2.5 3.9L1.1 4.7L1.4 3.2L0.3 2.1L1.8 1.9Z" />
+                          </svg>
+                          <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+                            {fmt(post.likeCount)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Scroll fade */}
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+              </div>
+
+              {/* Bottom Nav — Instagram style */}
+              <div className="flex items-center justify-around px-1 pt-[4px] pb-[2px] bg-white border-t border-[#dbdbdb] shrink-0">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z" fill="black" opacity="0.7"/></svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5.5" cy="5" r="3.5" stroke="black" strokeWidth="1.2"/><path d="M8 8L10.5 10.5" stroke="black" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="2" stroke="black" strokeWidth="1" opacity="0.7"/><path d="M6 4V8M4 6H8" stroke="black" strokeWidth="1" strokeLinecap="round"/></svg>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 0.5L4 4L2.5 3L1 4Z" fill="black" opacity="0.6"/><rect x="1" y="5" width="10" height="6" rx="1" stroke="black" strokeWidth="0.8" opacity="0.6"/><path d="M1 7.5H11" stroke="black" strokeWidth="0.5" opacity="0.4"/></svg>
+                <div className="w-[12px] h-[12px] rounded-full bg-gradient-to-br from-[#833AB4] via-[#E1306C] to-[#F77737]" />
+              </div>
+
+              {/* Home indicator */}
+              <div className="flex justify-center pt-[2px] pb-[4px] bg-white">
+                <div className="w-[38%] h-[2.5px] bg-black/20 rounded-full" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================
+// Instagram Phone Mockup Stage — 3D Carousel (matching TikTok pattern)
+// ============================
+
+function getIGCardTransform(offset: number, count: number): { tx: number; scale: number; rotateY: number; z: number; opacity: number } {
+  const abs = Math.abs(offset);
+  const sign = offset < 0 ? -1 : 1;
+  if (count <= 3 && abs >= 2) {
+    return { tx: sign * 520, scale: 0.62, rotateY: sign * -13, z: 8, opacity: 0.55 };
+  }
+  if (abs === 0) return { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 };
+  if (abs === 1) return { tx: sign * 540, scale: 0.55, rotateY: sign * -16, z: 8, opacity: 0.70 };
+  if (abs === 2) return { tx: sign * 840, scale: 0.40, rotateY: sign * -26, z: 6, opacity: 0.30 };
+  return { tx: sign * 1000, scale: 0.28, rotateY: sign * -33, z: 2, opacity: 0 };
+}
+
+function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, onActiveTagChange, IG }: {
+  validReports: Array<{ hashtag: string; topPosts: IGPostData[] }>;
+  tagStats: Array<{ hashtag: string; ownCount: number; totalCount: number; bestPos: number | null; sovPct: number; totalViews: number; ownViews: number }>;
+  activeTag: string | null;
+  showOwnOnly: boolean;
+  onActiveTagChange: (tag: string | null) => void;
+  IG: { pink: string; orange: string; purple: string; yellow: string };
+}) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState(0);
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setRevealed(true); obs.disconnect(); } },
+      { threshold: 0.15 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  // Sync selectedIdx when activeTag changes
+  useEffect(() => {
+    if (activeTag) {
+      const idx = validReports.findIndex(r => r.hashtag === activeTag);
+      if (idx >= 0) setSelectedIdx(idx);
+    } else {
+      setSelectedIdx(0);
+    }
+  }, [activeTag, validReports]);
+
+  const count = validReports.length;
+  const isSingle = count <= 1;
+
+  const navigate = useCallback((dir: 1 | -1) => {
+    const next = (selectedIdx + dir + count) % count;
+    setSelectedIdx(next);
+    onActiveTagChange(validReports[next].hashtag);
+  }, [selectedIdx, count, validReports, onActiveTagChange]);
+
+  // Keyboard nav
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") navigate(-1);
+      else if (e.key === "ArrowRight") navigate(1);
+    };
+    const el = stageRef.current;
+    el?.addEventListener("keydown", handler);
+    return () => el?.removeEventListener("keydown", handler);
+  }, [navigate]);
+
+  const PHONE_SCALE = 1.3;
+  const PHONE_H = Math.round(476 * PHONE_SCALE);
+  const PHONE_W = Math.round(220 * PHONE_SCALE);
+
+  const selectedReport = validReports[selectedIdx];
+  const selectedTag = tagStats.find(t => t.hashtag === selectedReport?.hashtag);
+  const selectedPosts = selectedReport ? selectedReport.topPosts.slice(0, 10) : [];
+  const filteredSlotPosts = showOwnOnly ? selectedPosts.filter(p => p.isOwn) : selectedPosts;
+
+  return (
+    <div className="space-y-4">
+      {/* Phone Carousel Card */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div
+            ref={stageRef}
+            tabIndex={0}
+            className="relative bg-transparent px-3 sm:px-6 py-5 sm:py-8 outline-none min-w-0 overflow-hidden"
+          >
+            {/* Section title */}
+            <div className="flex items-center gap-2 mb-5">
+              <span className="text-[11px] uppercase tracking-[0.2em] text-[#a3a3a3] font-medium" style={{ fontFamily: "'Space Mono', monospace" }}>
+                ハッシュタグ検索結果
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
+              </span>
+              <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
+              </span>
+            </div>
+
+            {/* 3D Carousel Viewport */}
+            <div
+              className="relative mx-auto overflow-hidden"
+              style={{
+                perspective: "1400px",
+                height: PHONE_H + 80,
+              }}
+            >
+              {validReports.map((report, kwIdx) => {
+                const ts = tagStats.find(t => t.hashtag === report.hashtag);
+                const ownCount = report.topPosts.filter(p => p.isOwn).length;
+                const offset = kwIdx - selectedIdx;
+                const t = isSingle
+                  ? { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 }
+                  : getIGCardTransform(offset, count);
+                const isActive = offset === 0;
+
+                return (
+                  <div
+                    key={report.hashtag}
+                    className="absolute left-1/2 top-0 flex flex-col items-center gap-2"
+                    style={{
+                      transform: isActive
+                        ? `translateX(calc(-50% + ${t.tx}px))`
+                        : `translateX(calc(-50% + ${t.tx}px)) translateZ(${t.z}px) scale(${t.scale}) rotateY(${t.rotateY}deg)`,
+                      transformStyle: isActive ? "flat" : "preserve-3d",
+                      opacity: revealed ? t.opacity : 0,
+                      zIndex: 10 - Math.abs(offset),
+                      transition: "transform 800ms var(--md-ease-emphasized-decel), opacity 600ms var(--md-ease-standard)",
+                      pointerEvents: t.opacity === 0 ? "none" : "auto",
+                      cursor: isActive ? "default" : "pointer",
+                    }}
+                    onClick={() => {
+                      if (!isActive) {
+                        setSelectedIdx(kwIdx);
+                        onActiveTagChange(report.hashtag);
+                      }
+                    }}
+                  >
+                    {/* Hashtag label pill */}
+                    <div className="text-center">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide text-white"
+                        style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                        <Hash className="w-[10px] h-[10px] opacity-80" />
+                        {report.hashtag}
+                      </span>
+                    </div>
+
+                    {/* Phone + metrics */}
+                    <div className="text-center flex flex-col items-center gap-1.5">
+                      <div className="space-y-0.5">
+                        <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block" style={{ fontFamily: "'Space Mono', monospace" }}>
+                          Current
+                        </span>
+                        <span className="text-[13px] font-semibold block" style={{ color: IG.pink }}>
+                          {ownCount}/{report.topPosts.length}枠
+                        </span>
+                      </div>
+                      <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
+                        <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
+                          <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Navigation arrows */}
+            {!isSingle && (
+              <>
+                <button
+                  onClick={() => navigate(-1)}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+                >
+                  <ChevronLeft className="w-4 h-4 text-secondary-foreground" />
+                </button>
+                <button
+                  onClick={() => navigate(1)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+                >
+                  <ChevronRight className="w-4 h-4 text-secondary-foreground" />
+                </button>
+              </>
+            )}
+
+            {/* Dot indicators */}
+            {!isSingle && (
+              <div className="flex items-center gap-1.5 mt-3 justify-center">
+                {validReports.map((report, i) => {
+                  const isActiveIdx = i === selectedIdx;
+                  return (
+                    <button
+                      key={report.hashtag}
+                      onClick={() => { setSelectedIdx(i); onActiveTagChange(report.hashtag); }}
+                      className={`transition-all duration-300 rounded-full ${isActiveIdx ? "h-2 px-3" : "w-2 h-2 hover:scale-125"}`}
+                      style={isActiveIdx
+                        ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }
+                        : { background: "#d4d4d4" }
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Slot Row — top 10 posts as horizontal thumbnails */}
+      {selectedReport && (
+        <Card className="overflow-hidden">
+          <CardContent className="p-0">
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-[0.15em] text-[#a3a3a3] font-semibold" style={{ fontFamily: "'Space Mono', monospace" }}>
+                  #{selectedReport.hashtag} 上位表示マップ
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
+                </span>
+              </div>
+              {selectedReport.topPosts.filter(p => p.isOwn).length > 0 && (
+                <div className="flex items-center gap-1.5">
+                  <Trophy className="h-3 w-3" style={{ color: IG.pink }} />
+                  <span className="text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>
+                    {selectedReport.topPosts.filter(p => p.isOwn).map(p => `${p.position}\u4F4D`).join("\u30FB")}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Horizontal slot row */}
+            <div className="px-5 py-5">
+              <div className="flex gap-2 overflow-x-auto pb-2 min-w-0">
+                {filteredSlotPosts.map((post, i) => (
+                  <a
+                    key={i}
+                    href={post.postUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`relative flex flex-col shrink-0 group/slot transition-all duration-200 hover:scale-110 hover:z-10 ${post.isOwn ? "w-20" : "w-16"}`}
+                  >
+                    {/* Top cap: own = gradient badge */}
+                    {post.isOwn ? (
+                      <div className="text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0 text-white"
+                        style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                        施策
+                      </div>
+                    ) : (
+                      <div className="h-[14px] shrink-0" />
+                    )}
+
+                    {/* Thumbnail — 9:16 aspect */}
+                    <div className={`relative w-full overflow-hidden ${post.isOwn ? `h-[142px] rounded-b-md border-2 border-[#E1306C] shadow-lg shadow-[#E1306C]/20` : "h-[114px] rounded-md border border-border/70"}`}>
+                      {/* Accent bar */}
+                      {post.isOwn && (
+                        <div className="absolute top-0 left-0 bottom-0 w-[3px] z-10" style={{ background: `linear-gradient(180deg, ${IG.pink}, ${IG.purple})` }} />
+                      )}
+
+                      {post.coverUrl ? (
+                        <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-[#E1306C]/10" : "bg-slate-50"}`}>
+                          <span className={`text-lg font-bold ${post.isOwn ? "text-[#E1306C]" : "text-[#d4d4d4]"}`}>{post.position}</span>
+                        </div>
+                      )}
+
+                      {/* Position badge */}
+                      <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${post.isOwn ? "bg-[#E1306C] text-white" : "bg-black/50 text-white"}`}>
+                        {post.position}
+                      </span>
+
+                      {/* Bottom gradient */}
+                      <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+                    </div>
+
+                    {/* Username below */}
+                    <span className={`text-[9px] mt-1 truncate max-w-full text-center ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>
+                      @{post.username}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Stats strip below slots */}
+            <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 min-w-0">
+              <div className="flex flex-col items-center py-3">
+                <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>上位シェア率</span>
+                <span className="text-lg font-black text-foreground tabular-nums">
+                  {selectedReport.topPosts.filter(p => p.isOwn).length}
+                  <span className="text-xs font-normal text-[#b0b0b0]">/{selectedPosts.length > 10 ? 10 : selectedPosts.length}</span>
+                </span>
+              </div>
+              <div className="flex flex-col items-center py-3">
+                <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>自社動画</span>
+                <span className="text-lg font-black text-foreground tabular-nums">
+                  {selectedReport.topPosts.filter(p => p.isOwn).length}
+                  <span className="text-xs font-normal text-[#b0b0b0]">/{selectedReport.topPosts.length}</span>
+                </span>
+              </div>
+              <div className="flex flex-col items-center py-3">
+                <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>最高順位</span>
+                <span className="text-lg font-black text-foreground tabular-nums">
+                  {(() => {
+                    const ownPosts = selectedReport.topPosts.filter(p => p.isOwn);
+                    if (ownPosts.length === 0) return <span className="text-[#d4d4d4]">&mdash;</span>;
+                    const best = Math.min(...ownPosts.map(p => p.position));
+                    return <>{best}<span className="text-xs font-normal text-[#b0b0b0]">位</span></>;
+                  })()}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+
 // ============================
 // Instagram Hashtag Ranking Section (順位・シェア IG tab)
 // ============================
@@ -1518,253 +2048,15 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
         </div>
       )}
 
-      {/* ======== SOV Slot Visualization ======== */}
-      {(() => {
-        if (isOverview) {
-          // Overview: Instagram Explore-style grid per hashtag
-          return (
-            <Card className="overflow-hidden">
-              <CardContent className="p-0">
-                <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#a3a3a3] font-semibold">ハッシュタグ別 上位表示マップ</span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
-                    </span>
-                  </div>
-                </div>
-                <div className="p-5 space-y-6">
-                  {validReports.map(r => {
-                    const filteredPosts = showOwnOnly ? r.topPosts.filter(p => p.isOwn) : r.topPosts;
-                    if (showOwnOnly && filteredPosts.length === 0) return null;
-                    const top = filteredPosts.slice(0, 9); // 3×3 grid like IG Explore
-                    const ownCount = r.topPosts.filter(p => p.isOwn).length;
-                    const ts = tagStats.find(t => t.hashtag === r.hashtag);
-                    return (
-                      <div key={r.hashtag}>
-                        {/* Tag header with mini stats */}
-                        <button className="w-full flex items-center justify-between mb-2.5 group/hdr" onClick={() => setActiveTag(r.hashtag)}>
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${IG.yellow}40, ${IG.pink}40, ${IG.purple}40)` }}>
-                              <Hash className="h-3.5 w-3.5" style={{ color: IG.pink }} />
-                            </div>
-                            <div className="text-left">
-                              <span className="text-sm font-bold text-foreground group-hover/hdr:text-[#E1306C] transition-colors">#{r.hashtag}</span>
-                              <div className="flex items-center gap-2 text-[10px] text-[#a3a3a3]">
-                                <span>自社 {ownCount}件</span>
-                                <span>·</span>
-                                <span>SOV {ts?.sovPct || 0}%</span>
-                                {ts?.bestPos && <><span>·</span><span>最高{ts.bestPos}位</span></>}
-                              </div>
-                            </div>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-[#d4d4d4] group-hover/hdr:text-[#E1306C] transition-colors" />
-                        </button>
-                        {/* Horizontal scroll — matching TikTok SOV direction */}
-                        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1">
-                          {top.map((post, i) => (
-                            <div key={i} className={`relative shrink-0 w-28 aspect-[9/16] group/cell overflow-hidden cursor-pointer rounded-lg ${post.isOwn ? "ring-2 ring-[#E1306C] ring-offset-1" : ""}`} onClick={() => setActiveTag(r.hashtag)}>
-                              {post.coverUrl ? (
-                                <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover/cell:scale-110" loading="lazy" />
-                              ) : (
-                                <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-[#E1306C]/10" : "bg-slate-50"}`}>
-                                  <span className="text-xs text-[#d4d4d4] tabular-nums">#{post.position}</span>
-                                </div>
-                              )}
-                              {/* Hover overlay */}
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cell:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-4">
-                                <span className="flex items-center gap-1 text-white text-xs font-bold"><Heart className="h-3.5 w-3.5 fill-white" />{fmt(post.likeCount)}</span>
-                                <span className="flex items-center gap-1 text-white text-xs font-bold"><MessageCircle className="h-3.5 w-3.5 fill-white" />{fmt(post.commentCount)}</span>
-                              </div>
-                              {/* Own indicator — full red overlay bottom bar */}
-                              {post.isOwn && (
-                                <>
-                                  <div className="absolute inset-0 border-2 border-[#E1306C] rounded-lg pointer-events-none" />
-                                  <div className="absolute bottom-0 left-0 right-0 py-1 text-center text-[9px] font-black text-white"
-                                    style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
-                                    {post.position}位 · 施策動画
-                                  </div>
-                                </>
-                              )}
-                              {/* Position badge */}
-                              <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${post.isOwn ? "bg-[#E1306C]" : "bg-black/40"}`}>
-                                {post.position}
-                              </div>
-                              {/* Multi-post indicator */}
-                              {post.type === "carousel" && (
-                                <Layers className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />
-                              )}
-                              {(post.type === "reel" || post.type === "video") && (
-                                <Play className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-white fill-white drop-shadow" />
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        }
-
-        // Individual hashtag view: IG Stories-ring style slot grid + engagement bars
-        if (!activeReport) return null;
-        const allTop = activeReport.topPosts.slice(0, 30);
-        const top = showOwnOnly ? allTop.filter(p => p.isOwn) : allTop;
-        const ownPosts = allTop.filter(p => p.isOwn);
-        const maxViews = Math.max(...top.map(p => p.viewCount), 1);
-        const maxEr = Math.max(...top.map(p => p.viewCount > 0 ? (p.likeCount + p.commentCount) / p.viewCount * 100 : 0), 1);
-
-        return (
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
-              {/* Header with gradient accent */}
-              <div className="relative px-5 py-3 border-b border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] uppercase tracking-[0.15em] text-[#a3a3a3] font-semibold">#{activeTag} 上位表示マップ</span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
-                    </span>
-                    <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
-                      <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
-                    </span>
-                  </div>
-                  {ownPosts.length > 0 && (
-                    <div className="flex items-center gap-1.5">
-                      <Trophy className="h-3 w-3" style={{ color: IG.pink }} />
-                      <span className="text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>
-                        {ownPosts.map(p => `${p.position}位`).join("・")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Stories-ring style: Top 10 as horizontal scroll like IG Stories */}
-              <div className="px-5 py-5">
-                <div className="flex gap-3 overflow-x-auto pb-2 min-w-0">
-                  {top.slice(0, 10).map((post, i) => {
-                    const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
-                    return (
-                      <a key={i} href={post.postUrl} target="_blank" rel="noopener noreferrer"
-                        className="flex flex-col items-center flex-shrink-0 w-[72px] group/slot">
-                        {/* Story ring — gradient for own, gray for others */}
-                        <div className={`w-[68px] h-[68px] rounded-full p-[3px] mb-1 ${!post.isOwn ? "bg-slate-200" : ""}`}
-                          style={post.isOwn ? { background: `linear-gradient(135deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` } : undefined}>
-                          <div className="w-full h-full rounded-full border-2 border-white overflow-hidden">
-                            {post.coverUrl ? (
-                              <img src={post.coverUrl} alt="" className="w-full h-full object-cover group-hover/slot:scale-110 transition-transform duration-300" loading="lazy" />
-                            ) : (
-                              <div className="w-full h-full bg-slate-50 flex items-center justify-center">
-                                <span className="text-[11px] text-[#b0b0b0]">{post.position}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        {/* Rank + username */}
-                        <span className={`text-[10px] font-black tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-foreground"}`}>{post.position}位</span>
-                        <span className={`text-[9px] truncate max-w-full ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>@{post.username}</span>
-                        <span className="text-[8px] text-[#b0b0b0] tabular-nums mt-0.5">{fmt(post.viewCount)}</span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Engagement Rate comparison — horizontal bars like IG Insights */}
-              <div className="px-5 pb-5">
-                <p className="text-[10px] uppercase tracking-wider text-[#a3a3a3] font-semibold mb-3">エンゲージメント率 比較</p>
-                <div className="space-y-1.5">
-                  {top.slice(0, 15).map((post, i) => {
-                    const er = post.viewCount > 0 ? (post.likeCount + post.commentCount) / post.viewCount * 100 : 0;
-                    const barPct = maxEr > 0 ? (er / maxEr) * 100 : 0;
-                    return (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className={`text-[10px] font-bold tabular-nums w-6 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>{post.position}</span>
-                        <span className={`text-[10px] w-16 truncate flex-shrink-0 ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-secondary-foreground"}`}>@{post.username}</span>
-                        <div className="flex-1 h-4 bg-slate-50 rounded-sm overflow-hidden">
-                          <div className="h-full rounded-sm transition-all duration-500" style={{
-                            width: `${barPct}%`,
-                            background: post.isOwn ? `linear-gradient(90deg, ${IG.orange}, ${IG.pink})` : "#e5e5e5"
-                          }} />
-                        </div>
-                        <span className={`text-[10px] font-bold tabular-nums w-12 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-secondary-foreground"}`}>{er.toFixed(1)}%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Remaining posts 11-30 — IG feed style list */}
-              {top.length > 10 && (
-                <div className="border-t border-slate-100 px-5 py-4">
-                  <p className="text-[10px] text-[#a3a3a3] uppercase tracking-wider font-medium mb-2">全{top.length}投稿一覧</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    {top.slice(10).map(post => {
-                      const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
-                      return (
-                        <a key={post.shortcode} href={post.postUrl} target="_blank" rel="noopener noreferrer"
-                          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
-                            post.isOwn ? "bg-[#E1306C]/[0.04] hover:bg-[#E1306C]/[0.08]" : "hover:bg-slate-50"
-                          }`}>
-                          {post.coverUrl ? (
-                            <img src={post.coverUrl} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" loading="lazy" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                              <span className="text-[9px] text-[#b0b0b0]">{post.position}</span>
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`text-[10px] font-bold tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>#{post.position}</span>
-                              <span className={`text-[11px] truncate ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-secondary-foreground"}`}>@{post.username}</span>
-                            </div>
-                            <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#a3a3a3] tabular-nums">
-                              <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(post.viewCount)}</span>
-                              <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(post.likeCount)}</span>
-                              <span className="text-secondary-foreground font-semibold">ER {er}%</span>
-                            </div>
-                          </div>
-                          {post.isOwn && (
-                            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />
-                          )}
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Bottom summary strip */}
-              <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 min-w-0">
-                <div className="flex flex-col items-center py-3">
-                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">SOV占有率</span>
-                  <span className="text-lg font-black text-foreground tabular-nums">{ownPosts.length}<span className="text-xs font-normal text-[#b0b0b0]">/{top.length}</span></span>
-                </div>
-                <div className="flex flex-col items-center py-3">
-                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">総再生数</span>
-                  <span className="text-lg font-black text-foreground tabular-nums">{fmt(top.reduce((s, p) => s + p.viewCount, 0))}</span>
-                </div>
-                <div className="flex flex-col items-center py-3">
-                  <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">平均ER</span>
-                  <span className="text-lg font-black text-foreground tabular-nums">{(() => {
-                    const tv = top.reduce((s, p) => s + p.viewCount, 0);
-                    const tl = top.reduce((s, p) => s + p.likeCount, 0);
-                    const tc = top.reduce((s, p) => s + p.commentCount, 0);
-                    return tv > 0 ? ((tl + tc) / tv * 100).toFixed(1) : "0.0";
-                  })()}<span className="text-xs font-normal text-[#b0b0b0]">%</span></span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
+      {/* ======== Instagram Phone Mockup SOV Visualization ======== */}
+      <IGPhoneMockupStage
+        validReports={validReports}
+        tagStats={tagStats}
+        activeTag={activeTag}
+        showOwnOnly={showOwnOnly}
+        onActiveTagChange={setActiveTag}
+        IG={IG}
+      />
 
       {/* ======== Summary Table with Accordion ======== */}
       {validReports.length > 0 && (
