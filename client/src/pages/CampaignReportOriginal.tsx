@@ -1092,29 +1092,6 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                         </svg>
                       </div>
                     )}
-                    {/* 直近3日の日次増分テーブル (bars) */}
-                    {recent3.length > 0 && (
-                      <div className="px-3 pb-2 post-card-mini-spark">
-                        <div className="space-y-0.5">
-                          {recent3.map((d, di) => {
-                            const val = Number((d as any)[deltaKey]) || 0;
-                            const maxInRecent = Math.max(...recent3.map(r => Number((r as any)[deltaKey]) || 0), 1);
-                            const barPct = Math.min((val / maxInRecent) * 100, 100);
-                            return (
-                              <div key={di} className="flex items-center gap-1.5 text-[9px]">
-                                <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
-                                <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
-                                  <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
-                                </div>
-                                <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
-                                  {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                     {/* コンパクトメトリクス */}
                     <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
                       <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
@@ -3564,7 +3541,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <p className="text-sm font-semibold">投稿パフォーマンス推移</p>
-            <p className="text-[11px] text-muted-foreground">{hasDailyData ? "日次増分バー ＋ ホバーで累積推移・詳細" : "各投稿の施策前後パフォーマンス"}</p>
+            <p className="text-[11px] text-muted-foreground">{hasDailyData ? "累積推移スパークライン ＋ ホバーで詳細" : "各投稿の施策前後パフォーマンス"}</p>
           </div>
           <div className="flex gap-1 flex-wrap">
             {sortOptions.map(opt => (
@@ -3616,29 +3593,6 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
                     </p>
                   </div>
                 </div>
-                {/* 直近3日の日次増分テーブル */}
-                {recent3.length > 0 && (
-                  <div className="px-3 pb-2 post-card-mini-spark">
-                    <div className="space-y-0.5">
-                      {recent3.map((d, di) => {
-                        const val = Number((d as any)[deltaKey]) || 0;
-                        const maxInRecent = Math.max(...recent3.map(r => Number((r as any)[deltaKey]) || 0), 1);
-                        const barPct = Math.min((val / maxInRecent) * 100, 100);
-                        return (
-                          <div key={di} className="flex items-center gap-1.5 text-[9px]">
-                            <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
-                            <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
-                              <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
-                            </div>
-                            <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
-                              {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 {/* コンパクトメトリクス */}
                 <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
                   <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
