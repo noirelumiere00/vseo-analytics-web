@@ -169,24 +169,24 @@ export default function SharedReport() {
   })();
 
   return (
-    <div className="nothing-report min-h-screen bg-[#fafafa]">
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 space-y-4 pt-4 pb-8 overflow-x-hidden">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-[0.08em] text-[#0a0a0a]" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{campaignName || "施策効果レポート"}</h1>
-            <p className="text-xs text-[#6b7280] font-mono">
+            <h1 className="text-xl font-bold tracking-[0.08em] text-foreground">{campaignName || "施策効果レポート"}</h1>
+            <p className="text-xs text-muted-foreground font-mono">
               {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
             </p>
           </div>
-          <Badge variant="secondary" className="gap-1.5 text-xs bg-white/80 text-[#6b7280] border border-black/6 backdrop-blur-sm">
+          <Badge variant="secondary" className="gap-1.5 text-xs bg-card text-muted-foreground border border-border backdrop-blur-sm">
             <Eye className="h-3 w-3" />
             閲覧専用
           </Badge>
         </div>
 
         {/* Sticky Navigation — iOS 26 Segment Control */}
-        <nav className="sticky top-0 z-10 bg-[#fafafa]/90 backdrop-blur-xl border-b border-black/6 py-2 -mx-4 px-4 overflow-x-auto">
+        <nav className="sticky top-0 z-10 bg-background/90 backdrop-blur-xl border-b border-border py-2 -mx-4 px-4 overflow-x-auto">
           <div className="segment-control flex gap-0.5 min-w-max">
             {visibleSections.map((sec) => {
               const Icon = sec.icon;
@@ -196,8 +196,8 @@ export default function SharedReport() {
                   onClick={() => scrollTo(sec.id)}
                   className={`segment-item flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
                     activeSection === sec.id
-                      ? "active text-[#0a0a0a]"
-                      : "text-[#6b7280] hover:text-[#0a0a0a]"
+                      ? "active text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -214,16 +214,16 @@ export default function SharedReport() {
           {aiReport && (
             <Card className="mb-4 relative overflow-hidden">
               <div className="absolute top-3 right-3">
-                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-white/80 backdrop-blur-sm border-black/6 text-[#6b7280]">
+                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-card backdrop-blur-sm border-border text-muted-foreground">
                   <Sparkles className="h-3 w-3" />
                   AI Generated
                 </Badge>
               </div>
               <CardContent className="py-5 flex items-start gap-4">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ring-4 ring-offset-2 ring-offset-[#fafafa] ${gradeColors[aiReport.grade] || gradeColors.C} ${aiReport.grade === "S" ? "ring-[#D71921]" : aiReport.grade === "A" ? "ring-[#0a0a0a]/40" : aiReport.grade === "B" ? "ring-[#9ca3af]" : "ring-[#d4d4d4]"}`} style={{ fontFamily: '"Space Mono", monospace' }}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ring-4 ring-offset-2 ring-offset-background ${gradeColors[aiReport.grade] || gradeColors.C} ${aiReport.grade === "S" ? "ring-[#D71921]" : aiReport.grade === "A" ? "ring-foreground/40" : aiReport.grade === "B" ? "ring-muted-foreground" : "ring-[#d4d4d4]"}`} style={{ fontFamily: '"Space Mono", monospace' }}>
                   {aiReport.grade}
                 </div>
-                <p className="text-sm leading-relaxed pt-2 pr-20 text-[#4b5563]">{aiReport.summary}</p>
+                <p className="text-sm leading-relaxed pt-2 pr-20 text-muted-foreground">{aiReport.summary}</p>
               </CardContent>
             </Card>
           )}
@@ -307,7 +307,7 @@ export default function SharedReport() {
         )}
 
         {/* Footer */}
-        <div className="text-center text-xs text-[#9ca3af] py-6 border-t border-black/6 font-mono tracking-wider uppercase">
+        <div className="text-center text-xs text-muted-foreground py-6 border-t border-border font-mono tracking-wider uppercase">
           Powered by VSEO Analytics
         </div>
       </div>

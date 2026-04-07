@@ -49,7 +49,7 @@ export default function ForgotPassword() {
         <div className="space-y-1.5">
           <h2
             className="text-2xl tracking-tight"
-            style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 700 }}
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
           >
             パスワードリセット
           </h2>
@@ -62,7 +62,7 @@ export default function ForgotPassword() {
           <div className="space-y-5 text-center py-4">
             <div
               className="mx-auto h-14 w-14 rounded-full flex items-center justify-center"
-              style={{ background: "oklch(0.45 0.18 25 / 0.08)" }}
+              style={{ background: "rgba(10, 10, 10, 0.06)" }}
             >
               <Mail className="h-6 w-6 text-primary" />
             </div>
@@ -97,9 +97,9 @@ export default function ForgotPassword() {
               <div
                 className="px-4 py-3 rounded-md border text-sm animate-in fade-in slide-in-from-top-1 duration-200"
                 style={{
-                  background: "oklch(0.55 0.22 30 / 0.06)",
-                  borderColor: "oklch(0.55 0.22 30 / 0.15)",
-                  color: "oklch(0.45 0.18 25)",
+                  background: "rgba(215, 25, 33, 0.06)",
+                  borderColor: "rgba(215, 25, 33, 0.15)",
+                  color: "var(--destructive)",
                 }}
               >
                 {error}

@@ -79,7 +79,7 @@ export default function ResetPassword() {
         <div className="space-y-1.5">
           <h2
             className="text-2xl tracking-tight"
-            style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 700 }}
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
           >
             新しいパスワード設定
           </h2>
@@ -122,9 +122,9 @@ export default function ResetPassword() {
             <div
               className="px-4 py-3 rounded-md border text-sm animate-in fade-in slide-in-from-top-1 duration-200"
               style={{
-                background: "oklch(0.55 0.22 30 / 0.06)",
-                borderColor: "oklch(0.55 0.22 30 / 0.15)",
-                color: "oklch(0.45 0.18 25)",
+                background: "rgba(215, 25, 33, 0.06)",
+                borderColor: "rgba(215, 25, 33, 0.15)",
+                color: "var(--destructive)",
               }}
             >
               {error}

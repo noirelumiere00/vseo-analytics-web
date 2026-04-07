@@ -12,25 +12,25 @@ const features = [
     icon: Search,
     title: "定量的分析",
     desc: `${SCRAPER_SESSION_COUNT}アカウント×上位${SCRAPER_VIDEOS_PER_SESSION}投稿を自動収集し、重複度から真の人気動画を特定`,
-    accent: "oklch(0.55 0.18 25)",
+    accent: "#171717",
   },
   {
     icon: Video,
     title: "完全解析",
     desc: "OCR（2秒/1フレーム）+ Whisper音声文字起こしで構成要素を完全分解",
-    accent: "oklch(0.50 0.14 45)",
+    accent: "#525252",
   },
   {
     icon: TrendingUp,
     title: "工数 1/30",
     desc: "15時間かかっていた分析を30分に短縮。圧倒的な業務効率化を実現",
-    accent: "oklch(0.45 0.12 160)",
+    accent: "#737373",
   },
   {
     icon: BarChart3,
     title: "施策効果測定",
     desc: "SOV・検索順位・波及効果をBefore/Afterで可視化し、PR施策の成果を定量証明",
-    accent: "oklch(0.50 0.10 250)",
+    accent: "#404040",
   },
 ];
 
@@ -67,7 +67,7 @@ export default function Home() {
           <img src="/favicon.png" alt="" className="h-8 w-8 object-contain logo-blend" />
           <span
             className="text-lg tracking-tight"
-            style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 800 }}
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
           >
             <span className="text-primary">V</span>SEO
           </span>
@@ -93,9 +93,9 @@ export default function Home() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background: `
-              radial-gradient(ellipse 50% 40% at 50% 30%, oklch(0.45 0.18 25 / 0.04), transparent),
-              radial-gradient(ellipse 70% 50% at 80% 80%, oklch(0.45 0.12 25 / 0.02), transparent),
-              radial-gradient(circle at 1px 1px, oklch(0.45 0.18 25 / 0.02) 1px, transparent 0)
+              radial-gradient(ellipse 50% 40% at 50% 30%, rgba(10, 10, 10, 0.03), transparent),
+              radial-gradient(ellipse 70% 50% at 80% 80%, rgba(10, 10, 10, 0.02), transparent),
+              radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.02) 1px, transparent 0)
             `,
             backgroundSize: "100% 100%, 100% 100%, 20px 20px",
           }}
@@ -117,8 +117,8 @@ export default function Home() {
           </div>
 
           <h1
-            className="text-5xl md:text-7xl lg:text-8xl tracking-tight leading-[0.95]"
-            style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 800 }}
+            className="text-5xl md:text-7xl lg:text-8xl tracking-tight leading-[0.95] normal-case"
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
           >
             <span className="text-primary">V</span>SEO
             <br />
@@ -131,13 +131,13 @@ export default function Home() {
           <div className="flex justify-center">
             <div
               className="w-24 h-[2px] rounded-full"
-              style={{ background: "linear-gradient(90deg, transparent, oklch(0.55 0.20 25), transparent)" }}
+              style={{ background: "linear-gradient(90deg, transparent, #171717, transparent)" }}
             />
           </div>
 
           <p
             className="text-xl md:text-2xl text-muted-foreground leading-relaxed max-w-lg mx-auto"
-            style={{ fontFamily: '"Shippori Mincho", serif', fontWeight: 500 }}
+            style={{ fontFamily: '"Noto Sans JP", sans-serif', fontWeight: 500 }}
           >
             ショート動画時代の<span className="text-foreground">PR革命</span>ツール
           </p>

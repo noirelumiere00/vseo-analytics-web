@@ -46,9 +46,9 @@ function ChangeIndicator({ value, suffix = "", inverse = false }: { value: numbe
 function BeforeAfter({ before, after, suffix = "" }: { before: string | number; after: string | number; suffix?: string }) {
   return (
     <span>
-      <span className="text-[#9ca3af]">{before}{suffix}</span>
-      <span className="text-[#404040] mx-1">&rarr;</span>
-      <span className="text-[#0a0a0a] font-semibold">{after}{suffix}</span>
+      <span className="text-muted-foreground">{before}{suffix}</span>
+      <span className="text-foreground mx-1">&rarr;</span>
+      <span className="text-foreground font-semibold">{after}{suffix}</span>
     </span>
   );
 }
@@ -374,44 +374,44 @@ export default function CampaignReport() {
 
   return (
     <DashboardLayout>
-      <div className="nothing-report bg-[#fafafa] flex flex-col h-full">
+      <div className="bg-background flex flex-col h-full min-w-0 -m-2 md:-m-3 max-w-full">
         {/* Fixed Header + Nav */}
-        <div className="shrink-0 bg-white/80 backdrop-blur-xl z-20 border-b border-black/6">
-          <div className="max-w-[1600px] mx-auto px-2 md:px-3">
+        <div className="shrink-0 bg-card backdrop-blur-xl z-20 border-b border-border min-w-0 max-w-full">
+          <div className="px-3 md:px-4 min-w-0 max-w-full">
             {/* Header */}
-            <div className="flex items-center justify-between py-2">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-[#6b7280] hover:text-[#0a0a0a] hover:bg-black/4" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
+            <div className="flex items-center justify-between py-2 gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground hover:bg-black/4" onClick={() => setLocation(`/campaigns/${campaignId}`)}>
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </Button>
-                <div>
-                  <h1 className="text-lg font-bold tracking-[0.08em] leading-tight text-[#0a0a0a]" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{campaign?.name || "施策効果レポート"}</h1>
-                  <p className="text-xs text-[#6b7280] font-mono">
+                <div className="min-w-0">
+                  <h1 className="text-lg font-bold tracking-[0.08em] leading-tight text-foreground truncate" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{campaign?.name || "施策効果レポート"}</h1>
+                  <p className="text-xs text-muted-foreground font-mono">
                     {report.baselineDate ? new Date(report.baselineDate).toLocaleDateString("ja-JP") : "?"} &rarr; {report.measurementDate ? new Date(report.measurementDate).toLocaleDateString("ja-JP") : "?"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <TrackingToggle campaignId={campaignId} />
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => regenerateMutation.mutate({ campaignId })}
                   disabled={regenerateMutation.isPending}
-                  className="gap-2"
+                  className="gap-1.5"
                 >
                   <RefreshCw className={`h-4 w-4 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
-                  {regenerateMutation.isPending ? "再生成中…" : "レポート再生成"}
+                  <span className="hidden lg:inline">{regenerateMutation.isPending ? "再生成中…" : "再生成"}</span>
                 </Button>
-                <Button variant="outline" onClick={handleCsvExport} className="gap-2">
+                <Button variant="outline" size="sm" onClick={handleCsvExport} className="gap-1.5">
                   <Download className="h-4 w-4" />
-                  CSV
+                  <span className="hidden lg:inline">CSV</span>
                 </Button>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
+                    <Button variant="outline" size="sm" className="gap-1.5">
                       <Link2 className="h-4 w-4" />
-                      共有
+                      <span className="hidden lg:inline">共有</span>
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-80" align="end">
@@ -483,8 +483,8 @@ export default function CampaignReport() {
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1600px] mx-auto px-2 md:px-3 space-y-4 pt-4 pb-8">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 max-w-full">
+          <div className="px-3 md:px-4 space-y-4 pt-4 pb-8 min-w-0 max-w-full">
 
         {/* Section: Executive Summary */}
         <div id="summary" ref={el => { sectionRefs.current["summary"] = el; }} className="scroll-mt-16 section-fade-in">
@@ -492,7 +492,7 @@ export default function CampaignReport() {
           {aiReport && (
             <Card className="mb-4 relative overflow-hidden">
               <div className="absolute top-3 right-3">
-                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-white/60 backdrop-blur-sm border-black/6 text-[#6b7280]">
+                <Badge variant="outline" className="gap-1 text-[10px] px-2 py-0.5 bg-white/60 backdrop-blur-sm border-border text-muted-foreground">
                   <Sparkles className="h-3 w-3" />
                   AI Generated
                 </Badge>
@@ -501,7 +501,7 @@ export default function CampaignReport() {
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold flex-shrink-0 ring-4 ring-offset-2 ring-offset-white ${gradeColors[aiReport.grade] || gradeColors.C} ${aiReport.grade === "S" ? "ring-[#D71921]" : aiReport.grade === "A" ? "ring-black/20" : aiReport.grade === "B" ? "ring-black/12" : "ring-black/8"}`} style={{ fontFamily: '"Space Mono", monospace' }}>
                   {aiReport.grade}
                 </div>
-                <p className="text-sm leading-relaxed pt-2 pr-20 text-[#525252]">{aiReport.summary}</p>
+                <p className="text-sm leading-relaxed pt-2 pr-20 text-secondary-foreground">{aiReport.summary}</p>
               </CardContent>
             </Card>
           )}
@@ -635,7 +635,7 @@ export function SectionHeader({ number, title, question }: { number: number; tit
         <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">{String(number).padStart(2, "0")}</span>
         <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>{title}</h2>
       </div>
-      <p className="text-xs text-[#6b7280] ml-9 mt-0.5">{question}</p>
+      <p className="text-xs text-muted-foreground ml-9 mt-0.5">{question}</p>
     </div>
   );
 }
@@ -944,22 +944,22 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
       {/* ── KPI Summary Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card><CardContent className="py-3 px-4 space-y-1">
-          <p className="text-xs text-[#6b7280]">平均検索順位</p>
-          <p className="text-xl font-bold text-[#0a0a0a] font-mono">
+          <p className="text-xs text-muted-foreground">平均検索順位</p>
+          <p className="text-xl font-bold text-foreground font-mono">
             {hashtagSummary.avgRank != null ? `${hashtagSummary.rankedCount}タグ ${hashtagSummary.avgRank}位` : "圏外"}
           </p>
         </CardContent></Card>
         <Card><CardContent className="py-3 px-4 space-y-1">
-          <p className="text-xs text-[#6b7280]">平均ER</p>
-          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{avgEr}%</p>
+          <p className="text-xs text-muted-foreground">平均ER</p>
+          <p className="text-xl font-bold text-foreground font-mono">{avgEr}%</p>
         </CardContent></Card>
         <Card><CardContent className="py-3 px-4 space-y-1">
-          <p className="text-xs text-[#6b7280]">上位表示率</p>
-          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{hashtagSummary.topTagCount}タグ</p>
+          <p className="text-xs text-muted-foreground">上位表示率</p>
+          <p className="text-xl font-bold text-foreground font-mono">{hashtagSummary.topTagCount}タグ</p>
         </CardContent></Card>
         <Card><CardContent className="py-3 px-4 space-y-1">
-          <p className="text-xs text-[#6b7280]">第三者投稿</p>
-          <p className="text-xl font-bold text-[#0a0a0a] font-mono">{allOwnPosts.length}本</p>
+          <p className="text-xs text-muted-foreground">第三者投稿</p>
+          <p className="text-xl font-bold text-foreground font-mono">{allOwnPosts.length}本</p>
         </CardContent></Card>
       </div>
 
@@ -1050,29 +1050,51 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                         </p>
                       </div>
                     </div>
-                    {/* 直近3日の日次増分テーブル */}
-                    {recent3.length > 0 && (
-                      <div className="px-3 pb-2 post-card-mini-spark">
-                        <div className="space-y-0.5">
-                          {recent3.map((d, di) => {
-                            const val = Number(d[deltaKey]) || 0;
-                            const maxInRecent = Math.max(...recent3.map(r => Number(r[deltaKey]) || 0), 1);
-                            const barPct = Math.min((val / maxInRecent) * 100, 100);
-                            return (
-                              <div key={di} className="flex items-center gap-1.5 text-[9px]">
-                                <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
-                                <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
-                                  <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
-                                </div>
-                                <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
-                                  {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
+                    {/* 直近3日の縦折れ線ミニグラフ */}
+                    {recent3.length > 0 && (() => {
+                      const vals = recent3.map(d => Number(d[deltaKey]) || 0);
+                      const maxV = Math.max(...vals, 1);
+                      const minV = Math.min(...vals, 0);
+                      const range = maxV - minV || 1;
+                      const h = 40; // SVG height
+                      const w = 80; // SVG width
+                      const pad = 6;
+                      const pts = vals.map((v, i) => ({
+                        x: pad + (i / Math.max(vals.length - 1, 1)) * (w - pad * 2),
+                        y: pad + (1 - (v - minV) / range) * (h - pad * 2),
+                        v,
+                        date: recent3[i].dateKey.replace(/^\d{4}-/, ""),
+                      }));
+                      const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+                      const area = `${line} L${pts[pts.length - 1].x},${h - pad} L${pts[0].x},${h - pad} Z`;
+                      return (
+                        <div className="px-3 pb-2 post-card-mini-spark">
+                          <div className="flex items-end gap-1.5">
+                            <svg viewBox={`0 0 ${w} ${h}`} className="flex-1 h-10" preserveAspectRatio="none">
+                              <defs>
+                                <linearGradient id={`mg-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="0%" stopColor={sc} stopOpacity="0.25" />
+                                  <stop offset="100%" stopColor={sc} stopOpacity="0.02" />
+                                </linearGradient>
+                              </defs>
+                              <path d={area} fill={`url(#mg-${idx})`} />
+                              <path d={line} fill="none" stroke={sc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                              {pts.map((p, pi) => (
+                                <circle key={pi} cx={p.x} cy={p.y} r="2.5" fill="white" stroke={sc} strokeWidth="1.5" />
+                              ))}
+                            </svg>
+                            <div className="flex flex-col items-end gap-0 flex-shrink-0">
+                              {pts.map((p, pi) => (
+                                <span key={pi} className="text-[8px] tabular-nums leading-[14px] text-slate-400">
+                                  <span className="text-slate-300">{p.date}</span>{" "}
+                                  <span className="text-slate-600 font-bold">{deltaKey === "er" ? `${p.v}%` : `+${fmt(p.v)}`}</span>
                                 </span>
-                              </div>
-                            );
-                          })}
+                              ))}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                     {/* コンパクトメトリクス */}
                     <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
                       <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
@@ -1168,7 +1190,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {allOwnPosts.map(post => (
-                <div key={post.shortcode} className="p-3 rounded-lg bg-white/80 border border-[#E1306C]/10">
+                <div key={post.shortcode} className="p-3 rounded-lg bg-card border border-[#E1306C]/10">
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className="text-[10px] text-muted-foreground">#{post.hashtag}</span>
                   </div>
@@ -1414,7 +1436,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
               ].map((s, i) => (
                 <div key={i} className="bg-white flex flex-col items-center justify-center py-4 px-3">
                   <p className="text-[10px] text-[#b0b0b0] uppercase tracking-wider mb-1 font-medium">{s.label}</p>
-                  <p className="text-xl font-black text-[#171717] leading-none tabular-nums">
+                  <p className="text-xl font-black text-foreground leading-none tabular-nums">
                     {s.val}<span className="text-xs font-normal text-[#b0b0b0] ml-0.5">{s.sub}</span>
                   </p>
                 </div>
@@ -1451,7 +1473,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap ${
                     isActive
                       ? "text-white shadow-lg"
-                      : "bg-slate-100 text-[#737373] hover:bg-slate-200"
+                      : "bg-slate-100 text-muted-foreground hover:bg-slate-200"
                   }`}
                   style={isActive ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` } : undefined}
                 >
@@ -1498,7 +1520,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                               <Hash className="h-3.5 w-3.5" style={{ color: IG.pink }} />
                             </div>
                             <div className="text-left">
-                              <span className="text-sm font-bold text-[#171717] group-hover/hdr:text-[#E1306C] transition-colors">#{r.hashtag}</span>
+                              <span className="text-sm font-bold text-foreground group-hover/hdr:text-[#E1306C] transition-colors">#{r.hashtag}</span>
                               <div className="flex items-center gap-2 text-[10px] text-[#a3a3a3]">
                                 <span>自社 {ownCount}件</span>
                                 <span>·</span>
@@ -1611,7 +1633,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                           </div>
                         </div>
                         {/* Rank + username */}
-                        <span className={`text-[10px] font-black tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-[#171717]"}`}>{post.position}位</span>
+                        <span className={`text-[10px] font-black tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-foreground"}`}>{post.position}位</span>
                         <span className={`text-[9px] truncate max-w-full ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>@{post.username}</span>
                         <span className="text-[8px] text-[#b0b0b0] tabular-nums mt-0.5">{fmt(post.viewCount)}</span>
                       </a>
@@ -1630,14 +1652,14 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                     return (
                       <div key={i} className="flex items-center gap-2">
                         <span className={`text-[10px] font-bold tabular-nums w-6 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>{post.position}</span>
-                        <span className={`text-[10px] w-16 truncate flex-shrink-0 ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#525252]"}`}>@{post.username}</span>
+                        <span className={`text-[10px] w-16 truncate flex-shrink-0 ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-secondary-foreground"}`}>@{post.username}</span>
                         <div className="flex-1 h-4 bg-slate-50 rounded-sm overflow-hidden">
                           <div className="h-full rounded-sm transition-all duration-500" style={{
                             width: `${barPct}%`,
                             background: post.isOwn ? `linear-gradient(90deg, ${IG.orange}, ${IG.pink})` : "#e5e5e5"
                           }} />
                         </div>
-                        <span className={`text-[10px] font-bold tabular-nums w-12 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-[#525252]"}`}>{er.toFixed(1)}%</span>
+                        <span className={`text-[10px] font-bold tabular-nums w-12 text-right flex-shrink-0 ${post.isOwn ? "text-[#E1306C]" : "text-secondary-foreground"}`}>{er.toFixed(1)}%</span>
                       </div>
                     );
                   })}
@@ -1666,12 +1688,12 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className={`text-[10px] font-bold tabular-nums ${post.isOwn ? "text-[#E1306C]" : "text-[#a3a3a3]"}`}>#{post.position}</span>
-                              <span className={`text-[11px] truncate ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#525252]"}`}>@{post.username}</span>
+                              <span className={`text-[11px] truncate ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-secondary-foreground"}`}>@{post.username}</span>
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#a3a3a3] tabular-nums">
                               <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(post.viewCount)}</span>
                               <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" />{fmt(post.likeCount)}</span>
-                              <span className="text-[#525252] font-semibold">ER {er}%</span>
+                              <span className="text-secondary-foreground font-semibold">ER {er}%</span>
                             </div>
                           </div>
                           {post.isOwn && (
@@ -1688,15 +1710,15 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
               <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
                 <div className="flex flex-col items-center py-3">
                   <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">SOV占有率</span>
-                  <span className="text-lg font-black text-[#171717] tabular-nums">{ownPosts.length}<span className="text-xs font-normal text-[#b0b0b0]">/{top.length}</span></span>
+                  <span className="text-lg font-black text-foreground tabular-nums">{ownPosts.length}<span className="text-xs font-normal text-[#b0b0b0]">/{top.length}</span></span>
                 </div>
                 <div className="flex flex-col items-center py-3">
                   <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">総再生数</span>
-                  <span className="text-lg font-black text-[#171717] tabular-nums">{fmt(top.reduce((s, p) => s + p.viewCount, 0))}</span>
+                  <span className="text-lg font-black text-foreground tabular-nums">{fmt(top.reduce((s, p) => s + p.viewCount, 0))}</span>
                 </div>
                 <div className="flex flex-col items-center py-3">
                   <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">平均ER</span>
-                  <span className="text-lg font-black text-[#171717] tabular-nums">{(() => {
+                  <span className="text-lg font-black text-foreground tabular-nums">{(() => {
                     const tv = top.reduce((s, p) => s + p.viewCount, 0);
                     const tl = top.reduce((s, p) => s + p.likeCount, 0);
                     const tc = top.reduce((s, p) => s + p.commentCount, 0);
@@ -1716,11 +1738,11 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="py-2.5 px-4 text-left text-[11px] font-semibold text-[#737373]">ハッシュタグ</th>
-                  <th className="py-2.5 px-3 text-left text-[11px] font-semibold text-[#737373] w-36">SOV占有率</th>
-                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">自社投稿</th>
-                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">最高順位</th>
-                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-[#737373] whitespace-nowrap">総再生数</th>
+                  <th className="py-2.5 px-4 text-left text-[11px] font-semibold text-muted-foreground">ハッシュタグ</th>
+                  <th className="py-2.5 px-3 text-left text-[11px] font-semibold text-muted-foreground w-36">SOV占有率</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-muted-foreground whitespace-nowrap">自社投稿</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-muted-foreground whitespace-nowrap">最高順位</th>
+                  <th className="py-2.5 px-3 text-center text-[11px] font-semibold text-muted-foreground whitespace-nowrap">総再生数</th>
                 </tr>
               </thead>
               <tbody>
@@ -1737,7 +1759,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <ChevronRight className={`h-3.5 w-3.5 text-[#b0b0b0] transition-transform duration-200 ${isExp ? "rotate-90" : ""}`} />
-                            <span className="font-semibold text-sm text-[#171717]">#{ts.hashtag}</span>
+                            <span className="font-semibold text-sm text-foreground">#{ts.hashtag}</span>
                             <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-slate-200 text-[#a3a3a3]">{ts.totalCount}件</Badge>
                           </div>
                         </td>
@@ -1749,21 +1771,21 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                                 background: `linear-gradient(90deg, ${IG.orange}, ${IG.pink})`
                               }} />
                             </div>
-                            <span className="text-xs font-bold text-[#171717] tabular-nums w-12 text-right">{ts.sovPct}%</span>
+                            <span className="text-xs font-bold text-foreground tabular-nums w-12 text-right">{ts.sovPct}%</span>
                           </div>
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span className="text-sm font-bold text-[#171717] tabular-nums">{ts.ownCount}<span className="text-[10px] font-normal text-[#a3a3a3]">/{ts.totalCount}</span></span>
+                          <span className="text-sm font-bold text-foreground tabular-nums">{ts.ownCount}<span className="text-[10px] font-normal text-[#a3a3a3]">/{ts.totalCount}</span></span>
                         </td>
                         <td className="py-3 px-3 text-center">
                           {ts.bestPos != null ? (
-                            <span className={`text-sm font-bold tabular-nums ${ts.bestPos <= 3 ? "text-[#E1306C]" : ts.bestPos <= 10 ? "text-[#171717]" : "text-[#a3a3a3]"}`}>{ts.bestPos}位</span>
+                            <span className={`text-sm font-bold tabular-nums ${ts.bestPos <= 3 ? "text-[#E1306C]" : ts.bestPos <= 10 ? "text-foreground" : "text-[#a3a3a3]"}`}>{ts.bestPos}位</span>
                           ) : (
                             <span className="text-xs text-[#d4d4d4]">—</span>
                           )}
                         </td>
                         <td className="py-3 px-3 text-center">
-                          <span className="text-sm font-medium text-[#525252] tabular-nums">{fmt(ts.totalViews)}</span>
+                          <span className="text-sm font-medium text-secondary-foreground tabular-nums">{fmt(ts.totalViews)}</span>
                         </td>
                       </tr>
                       {/* Accordion: IG-native own posts detail */}
@@ -1799,7 +1821,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5">
-                                              <span className="text-[13px] font-semibold text-[#171717]">@{post.username}</span>
+                                              <span className="text-[13px] font-semibold text-foreground">@{post.username}</span>
                                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>{post.position}位</span>
                                             </div>
                                             <span className="text-[10px] text-[#a3a3a3]">{post.type === "reel" ? "Reel" : post.type === "carousel" ? "Carousel" : "Post"}</span>
@@ -1809,21 +1831,21 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                                         {/* Caption + metrics */}
                                         <div className="px-3.5 pb-3">
                                           {post.caption && (
-                                            <p className="text-[11px] text-[#525252] line-clamp-2 mb-2 leading-relaxed">{post.caption}</p>
+                                            <p className="text-[11px] text-secondary-foreground line-clamp-2 mb-2 leading-relaxed">{post.caption}</p>
                                           )}
                                           {/* IG-style action row */}
                                           <div className="flex items-center gap-4">
                                             <span className="flex items-center gap-1.5 text-[12px]">
                                               <Heart className="h-4 w-4 text-[#E1306C]" />
-                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.likeCount)}</span>
+                                              <span className="font-semibold text-foreground tabular-nums">{fmt(post.likeCount)}</span>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-[12px]">
-                                              <MessageCircle className="h-4 w-4 text-[#525252]" />
-                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.commentCount)}</span>
+                                              <MessageCircle className="h-4 w-4 text-secondary-foreground" />
+                                              <span className="font-semibold text-foreground tabular-nums">{fmt(post.commentCount)}</span>
                                             </span>
                                             <span className="flex items-center gap-1.5 text-[12px]">
-                                              <Eye className="h-4 w-4 text-[#525252]" />
-                                              <span className="font-semibold text-[#171717] tabular-nums">{fmt(post.viewCount)}</span>
+                                              <Eye className="h-4 w-4 text-secondary-foreground" />
+                                              <span className="font-semibold text-foreground tabular-nums">{fmt(post.viewCount)}</span>
                                             </span>
                                             <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>ER {er}%</span>
                                           </div>
@@ -1910,27 +1932,27 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
         {cards.map((card) => (
           <Card key={card.title}>
             <CardContent className="py-3 px-4 space-y-1 text-center">
-              <p className="text-xs text-[#6b7280]">{card.title}</p>
+              <p className="text-xs text-muted-foreground">{card.title}</p>
               {card.before != null ? (
                 <>
                   <p className="text-base font-bold font-mono">
-                    <span className="text-[#9ca3af]">{card.before}</span>
-                    <span className="text-[#404040] mx-1">&rarr;</span>
-                    <span className="text-[#0a0a0a]">{card.after}</span>
+                    <span className="text-muted-foreground">{card.before}</span>
+                    <span className="text-foreground mx-1">&rarr;</span>
+                    <span className="text-foreground">{card.after}</span>
                   </p>
                   {card.change && <div className="text-sm">{card.change}</div>}
                 </>
               ) : (
-                <p className="text-xl font-bold text-[#0a0a0a] font-mono">{card.value}</p>
+                <p className="text-xl font-bold text-foreground font-mono">{card.value}</p>
               )}
             </CardContent>
           </Card>
         ))}
         <Card>
           <CardContent className="py-3 px-4 space-y-1 text-center">
-            <p className="text-xs text-[#6b7280]">第三者投稿</p>
-            <p className="text-xl font-bold text-[#0a0a0a] font-mono">{tpStats.count}本</p>
-            {tpStats.views > 0 && <p className="text-xs text-[#9ca3af]">{fmt(tpStats.views)} 再生</p>}
+            <p className="text-xs text-muted-foreground">第三者投稿</p>
+            <p className="text-xl font-bold text-foreground font-mono">{tpStats.count}本</p>
+            {tpStats.views > 0 && <p className="text-xs text-muted-foreground">{fmt(tpStats.views)} 再生</p>}
           </CardContent>
         </Card>
       </div>
@@ -1949,8 +1971,8 @@ export function SummaryCards({ summary, thirdPartyCount, hasBaseline, ripple, so
       {absCards.map((card) => (
         <Card key={card.title}>
           <CardContent className="py-3 px-4 space-y-1">
-            <p className="text-xs text-[#6b7280]">{card.title}</p>
-            <p className="text-xl font-bold text-[#0a0a0a] font-mono">{card.value}</p>
+            <p className="text-xs text-muted-foreground">{card.title}</p>
+            <p className="text-xl font-bold text-foreground font-mono">{card.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -1993,13 +2015,13 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
-            <span className="text-sm font-semibold text-[#0a0a0a] truncate">@{slot.creator_username}</span>
+            <span className="text-sm font-semibold text-foreground truncate">@{slot.creator_username}</span>
           </div>
-          <p className="text-xs text-[#9ca3af] truncate mt-0.5">{slot.description?.slice(0, 40)}</p>
+          <p className="text-xs text-muted-foreground truncate mt-0.5">{slot.description?.slice(0, 40)}</p>
           <div className="flex items-center gap-2 mt-1">
             <span className={`text-[9px] px-1 rounded ${genreInfo.cls}`}>{genreInfo.label}</span>
-            <span className="text-xs font-bold text-[#9ca3af]">#{slot.rank}</span>
-            <span className="text-[10px] text-[#9ca3af] flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
+            <span className="text-xs font-bold text-muted-foreground">#{slot.rank}</span>
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
           </div>
         </div>
       </a>
@@ -2009,11 +2031,11 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-black/6 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/12 ${
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-border shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-card hover:border-black/12 hover:border-black/12 ${
               editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/card:opacity-100 group-hover/card:scale-100 group-hover/card:pointer-events-auto"
             }`}
           >
-            <Pencil className="h-3 w-3 text-[#9ca3af]" />
+            <Pencil className="h-3 w-3 text-muted-foreground" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="left" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -2267,11 +2289,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         <text x="60" y="55" textAnchor="middle" dominantBaseline="central" className="text-[26px] font-extrabold" fill="#0a0a0a">{heroPct}<tspan className="text-[14px] font-medium" fill="#9ca3af">%</tspan></text>
                         <text x="60" y="77" textAnchor="middle" dominantBaseline="central" className="text-[10px] font-medium" fill="#9ca3af">上位シェア ({heroOwn}/{heroTotal})</text>
                       </svg>
-                      <p className="text-xs text-[#9ca3af] mt-1.5">全{heroAllTotal}本中 {heroAllOwn}本が自社</p>
+                      <p className="text-xs text-muted-foreground mt-1.5">全{heroAllTotal}本中 {heroAllOwn}本が自社</p>
                       {/* ミニ内訳 */}
                       <div className="flex items-center gap-2 mt-1">
                         {segments.filter(s => s.count > 0).map(seg => (
-                          <span key={seg.label} className="inline-flex items-center gap-1 text-[9px] text-[#6b7280]">
+                          <span key={seg.label} className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
                             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: seg.color }} />
                             {seg.count}
                           </span>
@@ -2286,15 +2308,15 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               <div className="grid grid-cols-2 gap-px bg-[#f5f5f5]">
                 {heroStats.map((stat, i) => (
                   <div key={i} className="bg-[#f5f5f5] flex flex-col items-center justify-center py-4 px-3">
-                    <p className="text-[10px] text-[#9ca3af] uppercase tracking-wider mb-1">{stat.label}</p>
-                    <p className="text-2xl font-extrabold text-[#0a0a0a] leading-none">{stat.value}<span className="text-sm font-normal text-[#9ca3af] ml-0.5">{stat.sub}</span></p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{stat.label}</p>
+                    <p className="text-2xl font-extrabold text-foreground leading-none">{stat.value}<span className="text-sm font-normal text-muted-foreground ml-0.5">{stat.sub}</span></p>
                   </div>
                 ))}
               </div>
 
               {/* Account breakdown */}
               <div className="flex flex-col justify-center py-5 px-5 gap-3">
-                <p className="text-[10px] text-[#9ca3af] uppercase tracking-wider font-medium">アカウント内訳</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">アカウント内訳</p>
                 {[
                   { label: "公式", count: heroOfficialCount, color: "bg-blue-600", textColor: "text-blue-700" },
                   { label: "サテライト", count: heroSatelliteCount, color: "bg-teal-600", textColor: "text-teal-700" },
@@ -2305,7 +2327,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                     <div key={cat.label} className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
                         <span className={`font-medium ${cat.textColor}`}>{cat.label}</span>
-                        <span className="text-[#6b7280] tabular-nums">{cat.count}本</span>
+                        <span className="text-muted-foreground tabular-nums">{cat.count}本</span>
                       </div>
                       <div className="h-1.5 rounded-full bg-[#f5f5f5] overflow-hidden">
                         <div className={`h-full rounded-full ${cat.color} transition-all`} style={{ width: `${pct}%`, minWidth: cat.count > 0 ? '4px' : 0 }} />
@@ -2330,11 +2352,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
                 isOverviewMode
                   ? "bg-blue-600 text-white shadow-md"
-                  : "bg-[#f5f5f5] text-[#9ca3af] hover:bg-[#e5e5e5]"
+                  : "bg-[#f5f5f5] text-muted-foreground hover:bg-[#e5e5e5]"
               }`}
             >
               全体
-              <span className={`text-[11px] font-bold tabular-nums ${isOverviewMode ? "text-blue-200" : "text-[#9ca3af]"}`}>
+              <span className={`text-[11px] font-bold tabular-nums ${isOverviewMode ? "text-blue-200" : "text-muted-foreground"}`}>
                 {totalOwn}/{totalScanned}
               </span>
             </button>
@@ -2349,12 +2371,12 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                   className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
                       ? "bg-blue-600 text-white shadow-md"
-                      : "bg-[#f5f5f5] text-[#9ca3af] hover:bg-[#e5e5e5]"
+                      : "bg-[#f5f5f5] text-muted-foreground hover:bg-[#e5e5e5]"
                   }`}
                 >
                   {kw.keyword}
                   {totalCount > 0 && (
-                    <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-blue-200" : "text-[#9ca3af]"}`}>
+                    <span className={`text-[11px] font-bold tabular-nums ${isActive ? "text-blue-200" : "text-muted-foreground"}`}>
                       {ownCount}/{totalCount}
                     </span>
                   )}
@@ -2376,14 +2398,14 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               <Card>
                 <CardContent className="p-0">
                   {/* Legend */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-[#6b7280]">
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">アカウント</span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-muted-foreground">
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">アカウント</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-blue-600" />公式</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-teal-600" />サテライト</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-[#D71921]" />施策</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-slate-500" />競合</span>
                     <span className="w-px h-3 bg-black/8 mx-1" />
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ジャンル</span>
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ジャンル</span>
                     {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
                       <span key={key} className="flex items-center gap-1">
                         <span className={`w-3 h-1 rounded-full ${barCls}`} />
@@ -2391,7 +2413,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       </span>
                     ))}
                     <span className="w-px h-3 bg-black/8 mx-1" />
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ラベル</span>
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ラベル</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
                   </div>
@@ -2421,14 +2443,14 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                                   <div className="transition-transform duration-300 group-hover/phone:scale-[1.04] origin-top-left"
                                     style={{ transform: `scale(${sc})`, transformOrigin: "top left", width: PW }}>
                                     <div className="space-y-0.5 text-center mb-1.5">
-                                      <span className="text-[14px] font-mono text-[#171717] font-bold tracking-wider block">Current</span>
+                                      <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block">Current</span>
                                       <span className="text-[13px] text-blue-600 font-semibold block">{d.own}/{d.total}枠</span>
                                     </div>
                                     <TikTokSearchMock slots={padSlots(d.afterSlots)} keyword={d.keyword} />
                                   </div>
                                 </div>
                                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-md">
-                                  <span className={`text-[11px] font-bold ${aPct >= 30 ? "text-emerald-600" : "text-[#737373]"}`}>{d.own}/{d.total}</span>
+                                  <span className={`text-[11px] font-bold ${aPct >= 30 ? "text-emerald-600" : "text-muted-foreground"}`}>{d.own}/{d.total}</span>
                                   <span className="text-[10px] text-[#b0b0b0]">上位シェア</span>
                                 </div>
                               </button>
@@ -2496,7 +2518,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
           if (!slot) return (
             <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
               <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{i + 1}</span>
-              <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-black/6/40 flex items-center justify-center`}>
+              <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-border/40 flex items-center justify-center`}>
                 <span className="text-[9px] text-slate-200">{i + 1}</span>
               </div>
             </div>
@@ -2539,14 +2561,14 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               <Card>
                 <CardContent className="p-0">
                   {/* Legend — compact pill bar */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-[#6b7280]">
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">アカウント</span>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 border-b border-black/4 text-[10px] text-muted-foreground">
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">アカウント</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-blue-600" />公式</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-teal-600" />サテライト</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-[#D71921]" />施策</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-[3px] bg-slate-500" />競合</span>
                     <span className="w-px h-3 bg-black/8 mx-1" />
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ジャンル</span>
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ジャンル</span>
                     {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => (
                       <span key={key} className="flex items-center gap-1">
                         <span className={`w-3 h-1 rounded-full ${barCls}`} />
@@ -2554,7 +2576,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       </span>
                     ))}
                     <span className="w-px h-3 bg-black/8 mx-1" />
-                    <span className="text-[9px] text-[#9ca3af] font-semibold tracking-wider uppercase mr-1">ラベル</span>
+                    <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ラベル</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
                   </div>
@@ -2588,8 +2610,8 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       {hasBaseline && beforeSlots.length > 0 && (
                         <div className="space-y-2">
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-[#6b7280] tracking-wide uppercase">Before</span>
-                            <span className="text-[11px] text-[#9ca3af] tabular-nums">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
                               自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%)  ·  ネガティブ {beforeNeg}本
                             </span>
                           </div>
@@ -2602,10 +2624,10 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
                       {hasBaseline && beforeSlots.length > 0 && (
                         <div className="flex items-center gap-1.5 overflow-x-auto py-2 -mx-1 px-1">
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f5f5f5] text-[#525252] whitespace-nowrap">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f5f5f5] text-secondary-foreground whitespace-nowrap">
                             <span className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a] shrink-0" />
                             施策動画
-                            <span className={`font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}`}>
+                            <span className={`font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
                               {beforeOwnCount}→{afterOwnCount}{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
                             </span>
                           </div>
@@ -2615,11 +2637,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                             const change = aCount - bCount;
                             return (
                               <div key={key} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap ${
-                                key === "negative" && change !== 0 ? "bg-red-50 text-[#D71921]" : "bg-[#f5f5f5] text-[#525252]"
+                                key === "negative" && change !== 0 ? "bg-red-50 text-[#D71921]" : "bg-[#f5f5f5] text-secondary-foreground"
                               }`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${barCls} shrink-0`} />
                                 {label}
-                                <span className={`font-bold tabular-nums ${change > 0 ? "text-emerald-600" : change < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}`}>
+                                <span className={`font-bold tabular-nums ${change > 0 ? "text-emerald-600" : change < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
                                   {bCount}→{aCount}{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
                                 </span>
                               </div>
@@ -2634,7 +2656,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">
                             {hasBaseline && beforeSlots.length > 0 ? "After" : "Current"}
                           </span>
-                          <span className="text-[11px] text-[#9ca3af] tabular-nums">
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
                             自社 {afterOwnCount}/{afterSlots.length} ({afterPct}%)  ·  ネガティブ {afterNeg}本
                           </span>
                         </div>
@@ -2651,11 +2673,11 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       {/* Change summary */}
                       {hasBaseline && beforeSlots.length > 0 && (
                         <div className="flex justify-center gap-6 px-5 py-2.5 text-[12px] font-semibold border-b border-black/4">
-                          <span className={pctChange > 0 ? "text-emerald-600" : pctChange < 0 ? "text-[#D71921]" : "text-[#9ca3af]"}>
+                          <span className={pctChange > 0 ? "text-emerald-600" : pctChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}>
                             上位シェア {beforeOwnCount}/{beforeSlots.length} → {afterOwnCount}/{afterSlots.length}（{ownChange > 0 ? "+" : ""}{ownChange}本）
                           </span>
                           <span className="text-black/10">|</span>
-                          <span className={negChange < 0 ? "text-[#D71921]" : negChange > 0 ? "text-emerald-600" : "text-[#9ca3af]"}>
+                          <span className={negChange < 0 ? "text-[#D71921]" : negChange > 0 ? "text-emerald-600" : "text-muted-foreground"}>
                             ネガティブ {beforeNeg} → {afterNeg}本（{negChange < 0 ? "" : negChange > 0 ? "+" : "±"}{negChange}）
                           </span>
                         </div>
@@ -2668,20 +2690,20 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         return (
                           <div className="grid grid-cols-3 divide-x divide-black/4">
                             <div className="flex flex-col items-center gap-0.5 py-3">
-                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">上位シェア率</span>
-                              <span className="text-xl font-black text-[#0a0a0a] tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-[#9ca3af] ml-0.5">/{afterSlots.length}</span></span>
+                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">上位シェア率</span>
+                              <span className="text-xl font-black text-foreground tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-muted-foreground ml-0.5">/{afterSlots.length}</span></span>
                               {hasBaseline && beforeSlots.length > 0 && <ChangeIndicator value={ownChange} suffix="本" />}
                             </div>
                             <div className="flex flex-col items-center gap-0.5 py-3">
-                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">自社動画</span>
-                              <span className="text-xl font-black text-[#171717] tabular-nums">{sovData?.allOwn || 0}<span className="text-xs font-normal text-[#9ca3af] ml-0.5">/{sovData?.allTotal || 0}</span></span>
+                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">自社動画</span>
+                              <span className="text-xl font-black text-foreground tabular-nums">{sovData?.allOwn || 0}<span className="text-xs font-normal text-muted-foreground ml-0.5">/{sovData?.allTotal || 0}</span></span>
                               {hasBaseline && beforeSlots.length > 0 && <ChangeIndicator value={(sovData?.allOwn || 0) - (sovData?.beforeAllOwn || 0)} suffix="本" />}
                             </div>
                             <div className="flex flex-col items-center gap-0.5 py-3">
-                              <span className="text-[10px] text-[#9ca3af] font-medium uppercase tracking-wider">最高順位</span>
+                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">最高順位</span>
                               {afterRank != null ? (
                                 <>
-                                  <span className="text-xl font-black text-[#171717] tabular-nums">{afterRank}<span className="text-xs font-normal ml-0.5">位</span></span>
+                                  <span className="text-xl font-black text-foreground tabular-nums">{afterRank}<span className="text-xs font-normal ml-0.5">位</span></span>
                                   {hasBaseline && rankChange != null && <ChangeIndicator value={rankChange} suffix="位" />}
                                 </>
                               ) : (
@@ -2709,12 +2731,12 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
           <CardContent className="p-0">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-white/80 border-b border-black/6">
-                  <th className="py-2.5 px-4 text-left text-xs font-semibold text-[#6b7280]">キーワード</th>
-                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-[#6b7280] w-40">上位シェア率</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">自社動画</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">最高順位</th>
-                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-[#6b7280] whitespace-nowrap">順位変動</th>
+                <tr className="bg-card border-b border-border">
+                  <th className="py-2.5 px-4 text-left text-xs font-semibold text-muted-foreground">キーワード</th>
+                  <th className="py-2.5 px-3 text-left text-xs font-semibold text-muted-foreground w-40">上位シェア率</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap">自社動画</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap">最高順位</th>
+                  <th className="py-2.5 px-3 text-center text-xs font-semibold text-muted-foreground whitespace-nowrap">順位変動</th>
                 </tr>
               </thead>
               <tbody>
@@ -2736,14 +2758,14 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                   return (
                     <Fragment key={kw.keyword}>
                     <tr
-                      className={`border-b border-black/4 hover:bg-white/80/40 transition-colors cursor-pointer ${kw.keyword === activeKw ? "bg-white/80/60" : ""}`}
+                      className={`border-b border-black/4 hover:bg-card/40 transition-colors cursor-pointer ${kw.keyword === activeKw ? "bg-card/60" : ""}`}
                       onClick={() => { setActiveKw(kw.keyword); toggleExpanded(kw.keyword); }}
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <ChevronRight className={`h-3.5 w-3.5 text-[#9ca3af] transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
-                          <span className="font-medium text-sm text-[#171717]">{kw.keyword}</span>
-                          {kw.isBigKeyword && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-[#9ca3af] border-black/8 bg-white/80">ビッグKW</Badge>}
+                          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                          <span className="font-medium text-sm text-foreground">{kw.keyword}</span>
+                          {kw.isBigKeyword && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 text-muted-foreground border-black/8 bg-card">ビッグKW</Badge>}
                         </div>
                       </td>
                       <td className="py-3 px-3">
@@ -2751,15 +2773,15 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                           <div className="flex-1 h-1.5 rounded-full bg-[#f5f5f5] overflow-hidden">
                             <div className="h-full rounded-full bg-[#0a0a0a] transition-all" style={{ width: `${slotTotal > 0 ? (own / slotTotal) * 100 : 0}%` }} />
                           </div>
-                          <span className="text-xs font-bold text-[#0a0a0a] tabular-nums w-10 text-right">{own}<span className="text-[10px] font-normal text-[#9ca3af]">/{slotTotal}</span></span>
+                          <span className="text-xs font-bold text-foreground tabular-nums w-10 text-right">{own}<span className="text-[10px] font-normal text-muted-foreground">/{slotTotal}</span></span>
                         </div>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <span className="text-sm font-bold text-[#171717]">{allOwn}<span className="text-xs font-normal text-[#9ca3af]">/{allTotal}</span></span>
+                        <span className="text-sm font-bold text-foreground">{allOwn}<span className="text-xs font-normal text-muted-foreground">/{allTotal}</span></span>
                       </td>
                       <td className="py-3 px-3 text-center">
                         {afterRank != null ? (
-                          <span className={`text-sm font-bold ${afterRank <= 3 ? "text-[#D71921]" : afterRank <= 10 ? "text-[#171717]" : "text-[#9ca3af]"}`}>{afterRank}位</span>
+                          <span className={`text-sm font-bold ${afterRank <= 3 ? "text-[#D71921]" : afterRank <= 10 ? "text-foreground" : "text-muted-foreground"}`}>{afterRank}位</span>
                         ) : (
                           <span className="text-xs text-slate-300">—</span>
                         )}
@@ -2784,7 +2806,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       return (
                       <tr>
                         <td colSpan={5} className="p-0">
-                          <div className="bg-[#fafafa] border-b border-black/6">
+                          <div className="bg-background border-b border-border">
                             {allOwnVideos.length > 0 ? (
                               <div className="divide-y divide-black/4">
                                 {allOwnVideos.map(v => (
@@ -2796,18 +2818,18 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                                       <div className="w-10 h-10 rounded bg-[#e5e5e5] shrink-0" />
                                     )}
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-xs text-[#171717] truncate leading-snug">{v.description || "—"}</p>
-                                      <p className="text-[10px] text-[#9ca3af]">@{v.username}</p>
+                                      <p className="text-xs text-foreground truncate leading-snug">{v.description || "—"}</p>
+                                      <p className="text-[10px] text-muted-foreground">@{v.username}</p>
                                     </div>
                                     <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 shrink-0 border-[#D71921]/20 text-[#D71921] bg-[#D71921]/5">
                                       {v.detail === "official" ? "公式" : v.detail === "satellite" ? "サテライト" : "施策"}
                                     </Badge>
-                                    <span className="text-[10px] text-[#9ca3af] tabular-nums shrink-0">{v.view_count >= 10000 ? `${(v.view_count / 10000).toFixed(1)}万` : v.view_count.toLocaleString()}再生</span>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{v.view_count >= 10000 ? `${(v.view_count / 10000).toFixed(1)}万` : v.view_count.toLocaleString()}再生</span>
                                   </div>
                                 ))}
                               </div>
                             ) : (
-                              <p className="text-xs text-[#9ca3af] text-center py-4">このキーワードに施策動画なし</p>
+                              <p className="text-xs text-muted-foreground text-center py-4">このキーワードに施策動画なし</p>
                             )}
                           </div>
                         </td>
@@ -2834,8 +2856,8 @@ function getScoreGradeColor(score: number | undefined): string {
   if (score == null) return "bg-muted text-muted-foreground";
   if (score >= 90) return "bg-[#f5f5f5] text-[#D71921] border-[#D71921]/30"; // S
   if (score >= 75) return "bg-green-100 text-green-800 border-green-300";   // A
-  if (score >= 60) return "bg-[#f5f5f5] text-[#525252] border-black/8";      // B
-  if (score >= 40) return "bg-white/80 text-[#9ca3af] border-black/8"; // C
+  if (score >= 60) return "bg-[#f5f5f5] text-secondary-foreground border-black/8";      // B
+  if (score >= 40) return "bg-card text-muted-foreground border-black/8"; // C
   return "bg-red-50 text-[#D71921] border-[#D71921]/30";                          // D
 }
 
@@ -3176,22 +3198,22 @@ function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[];
               {chartMode === "cumulative" ? "全動画合計の累積再生数推移" : "日毎のメトリクス増分（前日比）"}
             </CardDescription>
           </div>
-          <div className="flex rounded-lg border border-black/6 overflow-hidden">
+          <div className="flex rounded-lg border border-border overflow-hidden">
             <button
               className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
                 chartMode === "cumulative"
                   ? "bg-[#0a0a0a] text-white"
-                  : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
+                  : "bg-[#f5f5f5] hover:bg-card text-muted-foreground"
               }`}
               onClick={() => setChartMode("cumulative")}
             >
               累積
             </button>
             <button
-              className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-black/6 ${
+              className={`px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-border ${
                 chartMode === "daily"
                   ? "bg-[#0a0a0a] text-white"
-                  : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
+                  : "bg-[#f5f5f5] hover:bg-card text-muted-foreground"
               }`}
               onClick={() => setChartMode("daily")}
             >
@@ -3815,13 +3837,13 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
     <div className="space-y-3 w-56">
       {/* Header */}
       <div className="flex items-center gap-2 pb-1 border-b border-black/4">
-        <span className="text-[10px] font-semibold text-[#9ca3af] uppercase tracking-wider">スロット編集</span>
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">スロット編集</span>
         <span className="text-[10px] text-slate-300">@{slot.creator_username}</span>
       </div>
 
       {/* Owner classification */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-[#6b7280]">分類</Label>
+        <Label className="text-[11px] font-semibold text-muted-foreground">分類</Label>
         <div className="flex flex-wrap gap-1">
           {OWNER_KEY_OPTIONS.map(opt => (
             <button
@@ -3831,7 +3853,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
               className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                 ownerKey === opt.key
                   ? `${opt.activeBg} ${opt.color}`
-                  : "border-black/6 text-[#9ca3af] hover:border-black/8 hover:text-[#9ca3af]"
+                  : "border-border text-muted-foreground hover:border-black/8 hover:text-muted-foreground"
               }`}
             >
               {opt.label}
@@ -3850,7 +3872,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
 
       {/* Genre */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-[#6b7280]">ジャンル</Label>
+        <Label className="text-[11px] font-semibold text-muted-foreground">ジャンル</Label>
         <div className="flex flex-wrap gap-1">
           {GENRE_OPTIONS.map(opt => {
             const gi = GENRE_CONFIG[opt.key] || GENRE_CONFIG.other;
@@ -3862,7 +3884,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
                 className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                   genre === opt.key
                     ? `${gi.cls} border-transparent`
-                    : "border-black/6 text-[#9ca3af] hover:border-black/8"
+                    : "border-border text-muted-foreground hover:border-black/8"
                 }`}
               >
                 {opt.label}
@@ -3874,7 +3896,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
 
       {/* TikTok labels */}
       <div className="space-y-1.5">
-        <Label className="text-[11px] font-semibold text-[#6b7280]">ラベル</Label>
+        <Label className="text-[11px] font-semibold text-muted-foreground">ラベル</Label>
         <div className="space-y-1">
           {Object.entries(TIKTOK_LABEL_CONFIG).map(([key, cfg]) => (
             <label key={key} className="flex items-center gap-2 cursor-pointer group/lbl">
@@ -3883,7 +3905,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
                 onCheckedChange={() => toggleLabel(key)}
                 className="h-3.5 w-3.5"
               />
-              <span className="flex items-center gap-1 text-[11px] text-[#9ca3af] group-hover/lbl:text-[#171717]">
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground group-hover/lbl:text-foreground">
                 <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
                 {cfg.text}
               </span>
@@ -3906,7 +3928,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
           size="sm"
           variant="ghost"
           onClick={onCancel}
-          className="h-7 text-xs px-2 text-[#9ca3af]"
+          className="h-7 text-xs px-2 text-muted-foreground"
         >
           キャンセル
         </Button>
@@ -4076,7 +4098,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                 {/* After phone */}
                 <div className="text-center flex flex-col items-center gap-1.5">
                   <div className="space-y-0.5">
-                    <span className="text-[14px] font-mono text-[#171717] font-bold tracking-wider block">
+                    <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block">
                       {showBefore ? "After" : "Current"}
                     </span>
                     <span className="text-[13px] text-blue-600 font-semibold block">{aOwnCount}/{aTotal}枠</span>
@@ -4095,7 +4117,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-sm">
                     <span className="text-[10px] text-[#b0b0b0]">{bPct}%</span>
                     <span className="text-[10px] text-[#d4d4d4]">&rarr;</span>
-                    <span className={`text-[10px] font-bold ${pctDelta > 0 ? "text-emerald-600" : pctDelta < 0 ? "text-[#D71921]" : "text-[#737373]"}`}>
+                    <span className={`text-[10px] font-bold ${pctDelta > 0 ? "text-emerald-600" : pctDelta < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
                       {aPct}%
                     </span>
                     {pctDelta !== 0 && (
@@ -4107,7 +4129,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                   <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-sm">
                     <span className="text-[10px] text-[#b0b0b0]">{bOwnCount}本</span>
                     <span className="text-[10px] text-[#d4d4d4]">&rarr;</span>
-                    <span className={`text-[10px] font-bold ${ownDelta > 0 ? "text-emerald-600" : ownDelta < 0 ? "text-[#D71921]" : "text-[#737373]"}`}>
+                    <span className={`text-[10px] font-bold ${ownDelta > 0 ? "text-emerald-600" : ownDelta < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
                       {aOwnCount}本
                     </span>
                   </div>
@@ -4125,13 +4147,13 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
             onClick={() => navigate(-1)}
             className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
           >
-            <ChevronLeft className="w-4 h-4 text-[#525252]" />
+            <ChevronLeft className="w-4 h-4 text-secondary-foreground" />
           </button>
           <button
             onClick={() => navigate(1)}
             className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
           >
-            <ChevronRight className="w-4 h-4 text-[#525252]" />
+            <ChevronRight className="w-4 h-4 text-secondary-foreground" />
           </button>
         </>
       )}
@@ -4148,7 +4170,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                 className={`px-2 py-0.5 rounded-full text-[9px] font-medium transition-all duration-500 ${
                   isActive
                     ? "bg-[#171717] text-white shadow-sm"
-                    : "bg-[#e5e5e5] text-[#9ca3af] hover:bg-[#d4d4d4] hover:text-[#737373]"
+                    : "bg-[#e5e5e5] text-muted-foreground hover:bg-[#d4d4d4] hover:text-muted-foreground"
                 }`}
               >
                 {entry.keyword}
@@ -4471,10 +4493,10 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
           type="button"
           onClick={(e) => { e.stopPropagation(); }}
           className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-[#f5f5f5] border border-black/8 shadow-md flex items-center justify-center
-            transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/15
+            transition-all duration-200 hover:bg-card hover:border-black/12 hover:border-black/15
             ${editOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/slot:opacity-100 group-hover/slot:scale-100 group-hover/slot:pointer-events-auto"}`}
         >
-          <Pencil className="h-2.5 w-2.5 text-[#6b7280]" />
+          <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
         </button>
       </PopoverTrigger>
       <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
@@ -4510,7 +4532,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
             )}
 
             {/* サムネイル */}
-            <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-black/6/70"}`}>
+            <div className={`relative w-full ${thumbH} overflow-hidden ${isLabeled ? `rounded-b-md border-2 ${cfg.wrapperBorder} ${cfg.wrapperShadow}` : "rounded-md border border-border/70"}`}>
               {/* 左アクセントバー */}
               {isLabeled && (
                 <div className={`absolute top-0 left-0 bottom-0 w-[3px] ${cfg.accentBar} z-10`} />
@@ -4543,7 +4565,7 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
               <div className={`absolute bottom-0 left-0 right-0 h-1.5 z-10 ${genreInfo.barCls}`} />
               {/* ランク変動バッジ */}
               {rankChangeLabel && (
-                <span className={`absolute bottom-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-bold text-[#0a0a0a] whitespace-nowrap z-20 ${rankChangeBadgeColor || "bg-black/55"}`}>
+                <span className={`absolute bottom-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[8px] font-bold text-foreground whitespace-nowrap z-20 ${rankChangeBadgeColor || "bg-black/55"}`}>
                   {rankChangeLabel}
                 </span>
               )}
@@ -4553,16 +4575,16 @@ function SovSlotCell({ slot, keyword, phase, isBefore, onSlotUpdate, rankChangeL
         <TooltipContent side="top" className="max-w-xs bg-[#f5f5f5] text-foreground border shadow-none p-3 space-y-1.5">
           <div className="flex items-center gap-1.5">
             <span className="font-semibold text-xs">#{slot.rank}</span>
-            <span className="text-xs text-[#525252]">@{slot.creator_username}</span>
+            <span className="text-xs text-secondary-foreground">@{slot.creator_username}</span>
             {isOwn && cfg.capLabel && (
               <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold ${cfg.capBg} ${cfg.capText}`}>{cfg.capLabel}</span>
             )}
             {isCompetitor && slot.owner_name && (
-              <span className="text-[9px] text-[#9ca3af] font-medium">競合: {slot.owner_name}</span>
+              <span className="text-[9px] text-muted-foreground font-medium">競合: {slot.owner_name}</span>
             )}
           </div>
           <p className="text-[11px] text-muted-foreground line-clamp-2">{slot.description}</p>
-          <div className="flex items-center gap-3 text-[10px] text-[#6b7280]">
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{fmt(slot.view_count)}</span>
             <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{fmt(slot.like_count)}</span>
             <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{fmt(slot.comment_count)}</span>
@@ -4636,7 +4658,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
 
   const rankCell = (before: number | null, after: number | null) => (
     <div className="flex flex-col items-center">
-      {before != null && <span className="text-[10px] text-[#9ca3af]">{before}位</span>}
+      {before != null && <span className="text-[10px] text-muted-foreground">{before}位</span>}
       <span className={`font-medium ${after != null ? "text-foreground" : "text-muted-foreground"}`}>
         {after != null ? `${after}位` : "圏外"}
       </span>
@@ -4660,7 +4682,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
               <TableHeader>
                 <TableRow>
                   <TableHead>キーワード</TableHead>
-                  <TableHead className="text-center text-[#171717] font-bold">自社</TableHead>
+                  <TableHead className="text-center text-foreground font-bold">自社</TableHead>
                   {compList.map(([id, name]) => (
                     <TableHead key={id} className="text-center">{name}</TableHead>
                   ))}
@@ -4672,12 +4694,12 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{row.keyword}</span>
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${row.type === "ビッグKW" ? "bg-[#f5f5f5] text-[#9ca3af]" : "bg-[#f5f5f5] text-[#6b7280]"}`}>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${row.type === "ビッグKW" ? "bg-[#f5f5f5] text-muted-foreground" : "bg-[#f5f5f5] text-muted-foreground"}`}>
                           {row.type}
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center bg-white/80/50">
+                    <TableCell className="text-center bg-card/50">
                       {rankCell(row.ownBefore, row.ownAfter)}
                     </TableCell>
                     {compList.map(([id]) => {
@@ -4742,7 +4764,7 @@ function UgcCardGrid({ videos, initialShow, overrides, onSentimentChange }: {
     <Card>
       <CardContent className="p-0">
         <div className="px-5 py-4 border-b border-black/4">
-          <h3 className="text-sm font-bold text-[#0a0a0a]">注目の第三者投稿（再生数上位）</h3>
+          <h3 className="text-sm font-bold text-foreground">注目の第三者投稿（再生数上位）</h3>
           <p className="text-xs text-muted-foreground mt-0.5">施策の波及で生まれたオーガニック投稿</p>
         </div>
         <div className="p-5">
@@ -4757,7 +4779,7 @@ function UgcCardGrid({ videos, initialShow, overrides, onSentimentChange }: {
             <div className="text-center mt-4 pt-3 border-t border-black/4">
               <button
                 onClick={(e) => { e.preventDefault(); setShowAll(!showAll); }}
-                className="text-xs font-semibold text-[#9ca3af] hover:text-[#9ca3af] hover:bg-white/80 px-4 py-1.5 rounded-full transition-colors"
+                className="text-xs font-semibold text-muted-foreground hover:text-muted-foreground hover:bg-card px-4 py-1.5 rounded-full transition-colors"
               >
                 {showAll ? `閉じる` : `もっと見る（残り ${videos.length - initialShow} 件）`}
               </button>
@@ -4788,7 +4810,7 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         href={v.video_url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex gap-3 rounded-xl bg-white/80/80 border border-black/4 p-3.5 hover:border-black/8 hover:border-black/12 transition-all"
+        className="flex gap-3 rounded-xl bg-card/80 border border-black/4 p-3.5 hover:border-black/8 hover:border-black/12 transition-all"
       >
         {/* Thumbnail */}
         <div className="relative flex-shrink-0">
@@ -4796,7 +4818,7 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
             <img src={v.cover_url} alt="" className="w-[56px] h-[100px] rounded-lg object-cover" loading="lazy" />
           ) : (
             <div className="w-[56px] h-[100px] rounded-lg bg-[#f5f5f5] flex items-center justify-center">
-              <Play className="h-4 w-4 text-[#9ca3af]" />
+              <Play className="h-4 w-4 text-muted-foreground" />
             </div>
           )}
           <span className={`absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full border shadow-sm flex items-center justify-center ${sentCfg.bg}`}>
@@ -4807,32 +4829,32 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         <div className="flex-1 min-w-0 flex flex-col justify-between gap-1">
           <div>
             <div className="flex items-center gap-1.5">
-              <p className="text-xs font-bold text-[#0a0a0a] truncate">@{v.creator}</p>
+              <p className="text-xs font-bold text-foreground truncate">@{v.creator}</p>
               <span className={`inline-flex items-center gap-0.5 text-[9px] font-semibold px-1.5 py-px rounded-full border ${sentCfg.bg} ${sentCfg.color} flex-shrink-0`}>
                 <sentCfg.Icon className="h-2 w-2" />
                 {sentCfg.label}
               </span>
             </div>
-            <p className="text-[11px] text-[#6b7280] line-clamp-2 leading-snug mt-0.5">{v.description?.slice(0, 80)}</p>
+            <p className="text-[11px] text-muted-foreground line-clamp-2 leading-snug mt-0.5">{v.description?.slice(0, 80)}</p>
           </div>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {tags.map((tag: string, ti: number) => (
-                <span key={ti} className="text-[9px] font-medium text-[#9ca3af] bg-white/80 border border-black/6 rounded-full px-1.5 py-px">
+                <span key={ti} className="text-[9px] font-medium text-muted-foreground bg-card border border-border rounded-full px-1.5 py-px">
                   #{tag.replace(/^#/, "")}
                 </span>
               ))}
             </div>
           )}
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-[#9ca3af]">
-            <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.views)}</strong></span>
-            <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.likes)}</strong></span>
-            <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.comments)}</strong></span>
-            <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.shares)}</strong></span>
-            {v.saves != null && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-[#171717]">{fmt(v.saves)}</strong></span>}
-            {v.views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-[#171717]">{(((v.likes || 0) + (v.comments || 0)) / v.views * 100).toFixed(2)}%</strong></span>}
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" /><strong className="text-foreground">{fmt(v.views)}</strong></span>
+            <span className="flex items-center gap-0.5"><Heart className="h-2.5 w-2.5" /><strong className="text-foreground">{fmt(v.likes)}</strong></span>
+            <span className="flex items-center gap-0.5"><MessageCircle className="h-2.5 w-2.5" /><strong className="text-foreground">{fmt(v.comments)}</strong></span>
+            <span className="flex items-center gap-0.5"><Share2 className="h-2.5 w-2.5" /><strong className="text-foreground">{fmt(v.shares)}</strong></span>
+            {v.saves != null && <span className="flex items-center gap-0.5"><Bookmark className="h-2.5 w-2.5" /><strong className="text-foreground">{fmt(v.saves)}</strong></span>}
+            {v.views > 0 && <span className="flex items-center gap-0.5"><TrendingUp className="h-2.5 w-2.5" /><strong className="text-foreground">{(((v.likes || 0) + (v.comments || 0)) / v.views * 100).toFixed(2)}%</strong></span>}
           </div>
-          {v.posted_at && <p className="text-[10px] text-[#9ca3af]">{new Date(v.posted_at).toLocaleDateString("ja-JP")}</p>}
+          {v.posted_at && <p className="text-[10px] text-muted-foreground">{new Date(v.posted_at).toLocaleDateString("ja-JP")}</p>}
         </div>
       </a>
       {/* Edit pencil */}
@@ -4840,17 +4862,17 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
         <PopoverTrigger asChild>
           <button
             type="button"
-            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-black/6 shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-white/80 hover:border-black/12 hover:border-black/12 ${
+            className={`absolute top-2 right-2 z-10 w-6 h-6 rounded-full bg-[#f5f5f5] border border-border shadow-sm flex items-center justify-center transition-all duration-200 hover:bg-card hover:border-black/12 hover:border-black/12 ${
               editOpen ? "opacity-100 scale-100" : "opacity-0 scale-90 pointer-events-none group-hover/ugc:opacity-100 group-hover/ugc:scale-100 group-hover/ugc:pointer-events-auto"
             }`}
           >
-            <Pencil className="h-3 w-3 text-[#9ca3af]" />
+            <Pencil className="h-3 w-3 text-muted-foreground" />
           </button>
         </PopoverTrigger>
         <PopoverContent side="left" align="start" className="p-3 w-48 z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
           <div className="space-y-2">
             <div className="flex items-center gap-2 pb-1.5 border-b border-black/4">
-              <span className="text-[10px] font-semibold text-[#9ca3af] uppercase tracking-wider">センチメント分類</span>
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">センチメント分類</span>
             </div>
             <div className="flex flex-col gap-1">
               {SENTIMENT_KEYS.map(key => {
@@ -4862,10 +4884,10 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
                     type="button"
                     onClick={() => { onSentimentChange(vKey, key); setEditOpen(false); }}
                     className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      isActive ? `${cfg.bg} ${cfg.color} border` : "text-[#9ca3af] hover:bg-white/80"
+                      isActive ? `${cfg.bg} ${cfg.color} border` : "text-muted-foreground hover:bg-card"
                     }`}
                   >
-                    <cfg.Icon className={`h-3.5 w-3.5 ${isActive ? cfg.color : "text-[#9ca3af]"}`} />
+                    <cfg.Icon className={`h-3.5 w-3.5 ${isActive ? cfg.color : "text-muted-foreground"}`} />
                     {cfg.label}
                     {isActive && <Check className="h-3 w-3 ml-auto" />}
                   </button>
@@ -4955,13 +4977,13 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
       {/* ======== Hero KPI Row ======== */}
       <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-4" : "grid-cols-3"}`}>
         {[
-          { label: "第三者投稿", value: allVideos.length, unit: "本", color: "text-[#0a0a0a]", fmtVal: false },
-          { label: "総再生数", value: dedupTotalViews, unit: "", color: "text-[#171717]", fmtVal: true },
+          { label: "第三者投稿", value: allVideos.length, unit: "本", color: "text-foreground", fmtVal: false },
+          { label: "総再生数", value: dedupTotalViews, unit: "", color: "text-foreground", fmtVal: true },
           ...(kwSentAgg ? [
-            { label: "検索分析数", value: kwSentAgg.total, unit: "件", color: "text-[#0a0a0a]", fmtVal: false },
+            { label: "検索分析数", value: kwSentAgg.total, unit: "件", color: "text-foreground", fmtVal: false },
             { label: "ポジティブ率", value: kwSentAgg.total > 0 ? Math.round((kwSentAgg.positive / kwSentAgg.total) * 100) : 0, unit: "%", color: "text-emerald-600", fmtVal: false },
           ] : [
-            { label: "最高再生", value: maxViews, unit: "", color: "text-[#0a0a0a]", fmtVal: true },
+            { label: "最高再生", value: maxViews, unit: "", color: "text-foreground", fmtVal: true },
           ]),
         ].map((kpi, i) => (
           <Card key={i}>
@@ -5002,7 +5024,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
           <Card>
             <CardContent className="p-0">
               <div className="px-5 py-4 border-b border-black/4">
-                <h3 className="text-sm font-bold text-[#0a0a0a]">センチメント分析</h3>
+                <h3 className="text-sm font-bold text-foreground">センチメント分析</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">KW検索結果のキャプションから感情を自動分類</p>
               </div>
               <div className="p-5">
@@ -5027,8 +5049,8 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
                       ))}
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-[#0a0a0a]">{total}</span>
-                      <span className="text-[10px] text-[#9ca3af] font-medium">分析数</span>
+                      <span className="text-2xl font-black text-foreground">{total}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">分析数</span>
                     </div>
                   </div>
                   <div className="flex-1 space-y-3">
@@ -5042,13 +5064,13 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
                       return (
                         <div key={row.key}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#171717]">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                               <row.Icon className={`h-3.5 w-3.5 ${row.iconColor}`} />
                               {row.label}
                             </span>
                             <span className="text-xs tabular-nums">
                               <strong className={row.textColor}>{count}</strong>
-                              <span className="text-[#9ca3af] ml-1">({pct}%)</span>
+                              <span className="text-muted-foreground ml-1">({pct}%)</span>
                             </span>
                           </div>
                           <div className="h-2 rounded-full bg-[#f5f5f5] overflow-hidden">
@@ -5100,7 +5122,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
           <Card>
             <CardContent className="p-0">
               <div className="px-5 py-4 border-b border-black/4">
-                <h3 className="text-sm font-bold text-[#0a0a0a]">施策後センチメント分析</h3>
+                <h3 className="text-sm font-bold text-foreground">施策後センチメント分析</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">第三者投稿のキャプションから感情を自動分類</p>
               </div>
               <div className="p-5">
@@ -5126,8 +5148,8 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
                       ))}
                     </svg>
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-2xl font-black text-[#0a0a0a]">{total}</span>
-                      <span className="text-[10px] text-[#9ca3af] font-medium">投稿</span>
+                      <span className="text-2xl font-black text-foreground">{total}</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">投稿</span>
                     </div>
                   </div>
 
@@ -5143,13 +5165,13 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
                       return (
                         <div key={row.key}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="flex items-center gap-1.5 text-xs font-semibold text-[#171717]">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                               <row.Icon className={`h-3.5 w-3.5 ${row.iconColor}`} />
                               {row.label}
                             </span>
                             <span className="text-xs tabular-nums">
                               <strong className={row.textColor}>{count}</strong>
-                              <span className="text-[#9ca3af] ml-1">({pct}%)</span>
+                              <span className="text-muted-foreground ml-1">({pct}%)</span>
                             </span>
                           </div>
                           <div className="h-2 rounded-full bg-[#f5f5f5] overflow-hidden">
@@ -5175,7 +5197,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
       )}
 
       {/* ======== Story Connector ======== */}
-      <div className="flex items-center justify-center gap-3 py-2 text-xs font-semibold text-[#9ca3af]">
+      <div className="flex items-center justify-center gap-3 py-2 text-xs font-semibold text-muted-foreground">
         <span>TikTokでの拡散</span>
         <div className="w-8 h-px bg-[#d4d4d4] relative">
           <div className="absolute -right-1 -top-[3px] border-l-[6px] border-l-slate-300 border-y-[4px] border-y-transparent" />
@@ -5356,9 +5378,9 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
   const corrAbs = corr != null ? Math.abs(corr) : 0;
   const corrStrength = corrAbs >= 0.7 ? "強い" : corrAbs >= 0.4 ? "中程度" : "弱い";
   const corrColor = corrAbs >= 0.7 ? "emerald" : corrAbs >= 0.4 ? "amber" : "slate";
-  const corrBgClass = corrAbs >= 0.7 ? "bg-white/80 border-black/8" : corrAbs >= 0.4 ? "bg-white/80 border-black/8" : "bg-white/80 border-black/6";
-  const corrTextClass = corrAbs >= 0.7 ? "text-emerald-700" : corrAbs >= 0.4 ? "text-amber-700" : "text-[#6b7280]";
-  const corrBadgeBg = corrAbs >= 0.7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : corrAbs >= 0.4 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-[#f5f5f5] text-[#6b7280] border-black/8";
+  const corrBgClass = corrAbs >= 0.7 ? "bg-card border-black/8" : corrAbs >= 0.4 ? "bg-card border-black/8" : "bg-card border-border";
+  const corrTextClass = corrAbs >= 0.7 ? "text-emerald-700" : corrAbs >= 0.4 ? "text-amber-700" : "text-muted-foreground";
+  const corrBadgeBg = corrAbs >= 0.7 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : corrAbs >= 0.4 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-[#f5f5f5] text-muted-foreground border-black/8";
   const corrDesc = corrAbs >= 0.7 ? "施策動画がGoogle検索トレンドに明確な影響を与えています" : corrAbs >= 0.4 ? "施策動画とGoogle検索に一定の関連が見られます" : "施策動画とGoogle検索の直接的な関連は限定的です";
 
   // Monthly volume: compute peak spike
@@ -5392,11 +5414,11 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="text-base font-bold text-[#0a0a0a]">Google Trends × 施策動画 相関分析</h3>
+                  <h3 className="text-base font-bold text-foreground">Google Trends × 施策動画 相関分析</h3>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${corrBadgeBg}`}>{corrStrength}</span>
                 </div>
                 <p className={`text-sm ${corrTextClass}`}>{corrDesc}</p>
-                <div className="flex items-center gap-4 mt-3 text-xs text-[#6b7280]">
+                <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#0a0a0a]" /> Google Trends</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#6366f1]" /> 全媒体 施策投稿</span>
                   <span className="flex items-center gap-1"><span className="w-6 h-px bg-emerald-400 border-dashed border-t" /> 投稿日マーカー</span>
@@ -5404,7 +5426,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               </div>
               {/* Strength meter */}
               <div className="flex-shrink-0 hidden sm:flex flex-col items-center gap-1">
-                <span className="text-[10px] font-medium text-[#9ca3af] uppercase tracking-wider">Strength</span>
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Strength</span>
                 <div className="flex gap-0.5">
                   {[0.2, 0.4, 0.6, 0.8, 1.0].map((t, i) => (
                     <div key={i} className={`w-2 rounded-full transition-all ${corrAbs >= t ? (corrAbs >= 0.7 ? "bg-white h-6" : corrAbs >= 0.4 ? "bg-[#a3a3a3] h-5" : "bg-[#d4d4d4] h-4") : "bg-[#e5e5e5] h-3"}`}
@@ -5422,13 +5444,13 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <CardTitle className="text-sm font-bold text-[#171717] flex items-center gap-2">
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                 <Globe className="h-4 w-4 text-blue-500" />
                 Google Trends × 全媒体施策タイムライン
               </CardTitle>
             </div>
             {highlightRange && (
-              <span className="text-[10px] font-medium text-[#525252] bg-[#f5f5f5] border border-black/8 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="text-[10px] font-medium text-secondary-foreground bg-[#f5f5f5] border border-black/8 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <CalendarDays className="h-3 w-3" />
                 施策期間
               </span>
@@ -5489,7 +5511,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                 const platforms = markerMap.get(date);
                 const labels = platforms ? Array.from(platforms).map(p => p === "youtube" ? "YT" : p === "instagram" ? "IG" : "TT") : ["TT"];
                 return (
-                  <span key={date} className="text-[10px] text-[#525252] bg-[#f5f5f5] border border-black/8 rounded-full px-2 py-0.5 flex items-center gap-1">
+                  <span key={date} className="text-[10px] text-secondary-foreground bg-[#f5f5f5] border border-black/8 rounded-full px-2 py-0.5 flex items-center gap-1">
                     <Play className="h-2.5 w-2.5 fill-emerald-500 text-emerald-500" />
                     {date.slice(5).replace("-", "/")} {labels.join("/")}
                   </span>
@@ -5506,14 +5528,14 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-bold text-[#171717] flex items-center gap-2">
+                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Search className="h-4 w-4 text-indigo-500" />
                   Google 月間検索ボリューム推移
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">Google Ads Keyword Planner — 施策前後の検索数変化</CardDescription>
               </div>
               {peakMonth && peakMonth.pctChange > 0 && (
-                <span className="text-[10px] font-bold text-[#0a0a0a] bg-white/80 border border-black/8 rounded-full px-2.5 py-0.5 flex items-center gap-1">
+                <span className="text-[10px] font-bold text-foreground bg-card border border-black/8 rounded-full px-2.5 py-0.5 flex items-center gap-1">
                   <TrendingUp className="h-3 w-3" />
                   ピーク月 +{peakMonth.pctChange}%
                 </span>
@@ -5556,9 +5578,9 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                   const prevVol = vols.length > 1 ? vols[vols.length - 2].volume : 0;
                   const change = prevVol > 0 ? Math.round(((lastVol - prevVol) / prevVol) * 100) : 0;
                   return (
-                    <span key={kw.keyword} className="text-[10px] bg-white/80 border border-black/6 rounded-full px-2 py-0.5 flex items-center gap-1.5">
+                    <span key={kw.keyword} className="text-[10px] bg-card border border-border rounded-full px-2 py-0.5 flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: VOLUME_COLORS[i % VOLUME_COLORS.length] }} />
-                      <span className="font-medium text-[#525252]">{kw.keyword}</span>
+                      <span className="font-medium text-secondary-foreground">{kw.keyword}</span>
                       {change !== 0 && (
                         <span className={`font-bold ${change > 0 ? "text-emerald-600" : "text-[#D71921]"}`}>
                           {change > 0 ? "+" : ""}{change}%
@@ -5887,10 +5909,10 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "総投稿数", value: totalVideos.toString(), icon: Play, color: "text-foreground" },
-          { label: "総再生数", value: fmt(totalViews), icon: Eye, color: "text-[#0a0a0a]" },
+          { label: "総再生数", value: fmt(totalViews), icon: Eye, color: "text-foreground" },
           { label: "総いいね", value: fmt(totalLikes), icon: Heart, color: "text-rose-500" },
-          { label: "総コメント", value: fmt(totalComments), icon: MessageCircle, color: "text-[#6b7280]" },
-          { label: "平均ER", value: `${avgER}%`, icon: TrendingUp, color: "text-[#0a0a0a]" },
+          { label: "総コメント", value: fmt(totalComments), icon: MessageCircle, color: "text-muted-foreground" },
+          { label: "平均ER", value: `${avgER}%`, icon: TrendingUp, color: "text-foreground" },
         ].map(c => {
           const Icon = c.icon;
           // Sparkline-style proportional bar
@@ -5961,7 +5983,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
           <CardHeader className="py-2.5 px-4">
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs flex items-center gap-1.5">
-                <Trophy className="h-3.5 w-3.5 text-[#6b7280]" />
+                <Trophy className="h-3.5 w-3.5 text-muted-foreground" />
                 Best / Worst パフォーマンス
               </CardTitle>
               <div className="flex gap-1">
@@ -5981,7 +6003,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Best 3 */}
               <div>
-                <p className="text-sm font-semibold text-[#0a0a0a] mb-2 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> TOP 3</p>
+                <p className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5"><TrendingUp className="h-4 w-4" /> TOP 3</p>
                 <div className="space-y-1.5">
                   {bestVideos.map((v, i) => (
                     <BestWorstVideoCard key={`best-${i}`} video={v} rank={i + 1} type="best" sortKey={bestWorstSort} />
@@ -6161,7 +6183,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
         {video.hashtags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {video.hashtags.slice(0, 3).map((tag, ti) => (
-              <span key={ti} className="text-[10px] font-medium text-[#9ca3af] bg-white/80 border border-black/6 rounded-full px-1.5 py-px dark:text-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-800">
+              <span key={ti} className="text-[10px] font-medium text-muted-foreground bg-card border border-border rounded-full px-1.5 py-px dark:text-indigo-400 dark:bg-indigo-950/40 dark:border-indigo-800">
                 #{tag.replace(/^#/, "")}
               </span>
             ))}
@@ -6189,7 +6211,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
         )}
       </div>
       <div className="text-right flex-shrink-0">
-        <p className={`text-base font-bold ${type === "best" ? "text-[#0a0a0a]" : "text-orange-500"}`}>{highlightValue}</p>
+        <p className={`text-base font-bold ${type === "best" ? "text-foreground" : "text-orange-500"}`}>{highlightValue}</p>
         <p className="text-[11px] text-muted-foreground">{highlightLabel}</p>
       </div>
     </div>
@@ -6294,22 +6316,22 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CardTitle className="text-sm">パフォーマンス推移</CardTitle>
-            <div className="flex rounded-lg border border-black/6 overflow-hidden">
+            <div className="flex rounded-lg border border-border overflow-hidden">
               <button
                 className={`px-2 py-0.5 text-[10px] font-medium transition-colors ${
                   chartMode === "cumulative"
                     ? "bg-[#0a0a0a] text-white"
-                    : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
+                    : "bg-[#f5f5f5] hover:bg-card text-muted-foreground"
                 }`}
                 onClick={() => setChartMode("cumulative")}
               >
                 累計
               </button>
               <button
-                className={`px-2 py-0.5 text-[10px] font-medium transition-colors border-l border-black/6 ${
+                className={`px-2 py-0.5 text-[10px] font-medium transition-colors border-l border-border ${
                   chartMode === "daily"
                     ? "bg-[#0a0a0a] text-white"
-                    : "bg-[#f5f5f5] hover:bg-white/80 text-[#6b7280]"
+                    : "bg-[#f5f5f5] hover:bg-card text-muted-foreground"
                 }`}
                 onClick={() => setChartMode("daily")}
               >
@@ -6471,7 +6493,7 @@ function TargetAchievementSection({ videoMetrics, platformSummary, campaign, dai
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-3xl font-black tabular-nums leading-none" style={{ color: rateColor }}>{achievementRate ?? 0}%</span>
-                <span className="text-[10px] text-[#9ca3af] font-medium mt-1">達成率</span>
+                <span className="text-[10px] text-muted-foreground font-medium mt-1">達成率</span>
               </div>
             </div>
           </div>
@@ -6481,15 +6503,15 @@ function TargetAchievementSection({ videoMetrics, platformSummary, campaign, dai
             {/* Current / Target row */}
             <div className="flex items-end gap-6">
               <div>
-                <p className="text-[11px] text-[#9ca3af] font-medium uppercase tracking-wider mb-0.5">実績</p>
-                <p className="text-3xl font-black tabular-nums leading-none text-[#0a0a0a]">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">実績</p>
+                <p className="text-3xl font-black tabular-nums leading-none text-foreground">
                   {totalViews >= 10000 ? `${(totalViews / 10000).toFixed(1)}万` : fmt(totalViews)}
                 </p>
               </div>
               {targetViews && targetViews > 0 && (
                 <div>
-                  <p className="text-[11px] text-[#9ca3af] font-medium uppercase tracking-wider mb-0.5">目標</p>
-                  <p className="text-xl font-bold tabular-nums leading-none text-[#525252]">
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-0.5">目標</p>
+                  <p className="text-xl font-bold tabular-nums leading-none text-secondary-foreground">
                     {targetViews >= 10000 ? `${(targetViews / 10000).toFixed(1)}万` : fmt(targetViews)}
                   </p>
                 </div>
@@ -6516,8 +6538,8 @@ function TargetAchievementSection({ videoMetrics, platformSummary, campaign, dai
                   {platforms.map(p => (
                     <div key={p.label} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                      <span className="text-[11px] text-[#6b7280] font-medium">{p.label}</span>
-                      <span className="text-[11px] font-bold tabular-nums text-[#171717]">{fmt(p.views)}</span>
+                      <span className="text-[11px] text-muted-foreground font-medium">{p.label}</span>
+                      <span className="text-[11px] font-bold tabular-nums text-foreground">{fmt(p.views)}</span>
                     </div>
                   ))}
                 </div>
@@ -6677,22 +6699,22 @@ function CumulativeMetricsChart({ dailyMetrics, campaign }: { dailyMetrics: any[
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <CardTitle className="text-sm">パフォーマンス推移</CardTitle>
-              <div className="flex rounded-lg border border-black/6 dark:border-slate-700 overflow-hidden">
+              <div className="flex rounded-lg border border-border dark:border-slate-700 overflow-hidden">
                 <button
                   className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
                     chartMode === "cumulative"
                       ? "bg-[#0a0a0a] text-white"
-                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-white/80 dark:hover:bg-slate-800 text-[#6b7280]"
+                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-card dark:hover:bg-slate-800 text-muted-foreground"
                   }`}
                   onClick={() => setChartMode("cumulative")}
                 >
                   累積
                 </button>
                 <button
-                  className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors border-l border-black/6 dark:border-slate-700 ${
+                  className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors border-l border-border dark:border-slate-700 ${
                     chartMode === "daily"
                       ? "bg-[#0a0a0a] text-white"
-                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-white/80 dark:hover:bg-slate-800 text-[#6b7280]"
+                      : "bg-[#f5f5f5] dark:bg-slate-900 hover:bg-card dark:hover:bg-slate-800 text-muted-foreground"
                   }`}
                   onClick={() => setChartMode("daily")}
                 >
@@ -6727,7 +6749,7 @@ function CumulativeMetricsChart({ dailyMetrics, campaign }: { dailyMetrics: any[
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5 ${
                     active
                       ? "text-white shadow-sm"
-                      : "bg-[#f5f5f5] dark:bg-slate-800 text-[#9ca3af] hover:bg-[#e5e5e5] dark:hover:bg-slate-700 line-through"
+                      : "bg-[#f5f5f5] dark:bg-slate-800 text-muted-foreground hover:bg-[#e5e5e5] dark:hover:bg-slate-700 line-through"
                   }`}
                   style={active ? { backgroundColor: m.color } : undefined}
                 >

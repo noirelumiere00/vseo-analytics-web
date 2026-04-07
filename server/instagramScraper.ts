@@ -300,15 +300,32 @@ async function scrapeHashtagWithPuppeteer(
     }
 
     // スクロールで追加データ取得（maxResults未達の場合）
-    if (posts.length < maxResults && posts.length > 0) {
-      for (let scroll = 0; scroll < 3 && posts.length < maxResults; scroll++) {
+    // Reelのみカウントするので、十分な数が得られるまで最大10回スクロール
+    const reelCount = () => posts.filter(p => p.type === "reel").length;
+    if (reelCount() < maxResults && posts.length > 0) {
+      const maxScrolls = 10;
+      for (let scroll = 0; scroll < maxScrolls && reelCount() < maxResults; scroll++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 2500));
+        // DOM追加パースも試行
+        const domPosts = await parseDOMPosts(page, ownNamesLower);
+        const prevLen = posts.length;
         const newPosts = parseGraphQLData(capturedData, ownNamesLower);
-        if (newPosts.length > posts.length) {
-          posts = newPosts;
+        // GraphQL + DOM の両方からマージ
+        const merged = [...newPosts];
+        const seenCodes = new Set(merged.map(p => p.shortcode));
+        for (const dp of domPosts) {
+          if (!seenCodes.has(dp.shortcode)) {
+            merged.push(dp);
+            seenCodes.add(dp.shortcode);
+          }
+        }
+        if (merged.length > posts.length) {
+          posts = merged;
+          console.log(`[Instagram Hashtag] Scroll ${scroll + 1}: ${posts.length} posts (${reelCount()} reels)`);
         } else {
-          break;
+          // 2回連続で新規取得なしなら終了
+          if (scroll > 0) break;
         }
       }
     }
@@ -319,6 +336,7 @@ async function scrapeHashtagWithPuppeteer(
       .slice(0, maxResults)
       .map((p, i) => ({ ...p, position: i + 1 }));
     const ownRanks = reelsOnly.filter(p => p.isOwn).map(p => p.position);
+    console.log(`[Instagram Hashtag] #${tag}: ${posts.length} total → ${reelsOnly.length} reels`);
 
     return {
       hashtag: tag,
@@ -496,8 +514,8 @@ async function scrapeHashtagWithApify(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           hashtags: [tag],
-          resultsLimit: maxResults,
-          resultsType: "reels",
+          resultsLimit: Math.max(maxResults * 2, 50),
+          resultsType: "posts",
         }),
         signal: AbortSignal.timeout(150_000),
       },
@@ -521,11 +539,11 @@ async function scrapeHashtagWithApify(
     }
 
     const itemsRes = await fetch(
-      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=${maxResults}`,
+      `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=${Math.max(maxResults * 2, 50)}`,
     );
     const items = await itemsRes.json() as any[];
 
-    const posts: InstagramHashtagPost[] = items.map((item: any, i: number) => {
+    const allPosts: InstagramHashtagPost[] = items.map((item: any, i: number) => {
       const username = item.ownerUsername || item.owner?.username || "";
       return {
         position: i + 1,
@@ -542,8 +560,13 @@ async function scrapeHashtagWithApify(
       };
     });
 
+    // Reelのみにフィルター + position再番号付け
+    const posts = allPosts
+      .filter(p => p.type === "reel")
+      .slice(0, maxResults)
+      .map((p, i) => ({ ...p, position: i + 1 }));
     const ownRanks = posts.filter(p => p.isOwn).map(p => p.position);
-    console.log(`[Instagram Hashtag] Apify: #${tag} → ${posts.length} posts`);
+    console.log(`[Instagram Hashtag] Apify: #${tag} → ${allPosts.length} total, ${posts.length} reels`);
 
     return {
       hashtag: tag,

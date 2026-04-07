@@ -79,12 +79,12 @@
   --md-dur-xlong1: 700ms;
   --md-dur-xlong2: 800ms;
 
-  /* --- M3 Shape Scale --- */
-  --md-shape-xs: 4px;
-  --md-shape-sm: 8px;
-  --md-shape-md: 12px;
-  --md-shape-lg: 16px;
-  --md-shape-xl: 28px;
+  /* --- M3 Shape Scale (Liquid Glass — generous rounding) --- */
+  --md-shape-xs: 8px;
+  --md-shape-sm: 12px;
+  --md-shape-md: 16px;
+  --md-shape-lg: 22px;
+  --md-shape-xl: 32px;
   --md-shape-full: 9999px;
 
   /* --- M3 State Layer Opacity --- */
@@ -93,42 +93,44 @@
   --md-state-pressed: 0.10;
   --md-state-dragged: 0.16;
 
-  /* --- Editorial/Data Brand: "The Nikkei" — Vermillion + Sumi Ink --- */
-  --primary: oklch(0.45 0.18 25);
-  --primary-foreground: oklch(0.98 0.005 60);
-  --secondary: oklch(0.94 0.01 75);
-  --secondary-foreground: oklch(0.35 0.02 60);
-  --accent: oklch(0.92 0.015 75);
-  --accent-foreground: oklch(0.20 0.02 60);
-  --background: oklch(0.975 0.005 80);
-  --foreground: oklch(0.18 0.02 55);
-  --card: oklch(0.99 0.003 80);
-  --card-foreground: oklch(0.18 0.02 55);
-  --popover: oklch(0.99 0.003 80);
-  --popover-foreground: oklch(0.18 0.02 55);
-  --muted: oklch(0.94 0.008 75);
-  --muted-foreground: oklch(0.50 0.015 60);
-  --border: oklch(0.90 0.008 75);
-  --input: oklch(0.92 0.006 75);
-  --ring: oklch(0.45 0.18 25);
-  --destructive: oklch(0.55 0.22 30);
-  --destructive-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.55 0.18 25);
-  --chart-2: oklch(0.60 0.12 70);
-  --chart-3: oklch(0.55 0.10 160);
-  --chart-4: oklch(0.50 0.08 45);
-  --chart-5: oklch(0.65 0.06 250);
-  --radius: 0.125rem;
-  --sidebar: oklch(0.97 0.005 75);
-  --sidebar-foreground: oklch(0.18 0.02 55);
-  --sidebar-primary: oklch(0.45 0.18 25);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.93 0.015 25);
-  --sidebar-accent-foreground: oklch(0.35 0.10 25);
-  --sidebar-border: oklch(0.90 0.008 75);
-  --sidebar-ring: oklch(0.55 0.16 25);
+  /* --- iOS 26 Liquid Glass — Light --- */
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: rgba(255, 255, 255, 0.72);
+  --card-foreground: #171717;
+  --popover: rgba(255, 255, 255, 0.85);
+  --popover-foreground: #171717;
+  --primary: #0a0a0a;
+  --primary-foreground: #ffffff;
+  --secondary: rgba(120, 120, 128, 0.08);
+  --secondary-foreground: #525252;
+  --muted: rgba(120, 120, 128, 0.08);
+  --muted-foreground: #737373;
+  --accent: rgba(120, 120, 128, 0.08);
+  --accent-foreground: #171717;
+  --destructive: #D71921;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.06);
+  --ring: #D71921;
+  --chart-1: #0a0a0a;
+  --chart-2: #D71921;
+  --chart-3: #737373;
+  --chart-4: #a3a3a3;
+  --chart-5: #d4d4d4;
+  --radius: 1rem;
+  --sidebar: rgba(255, 255, 255, 0.60);
+  --sidebar-foreground: #171717;
+  --sidebar-primary: #0a0a0a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(120, 120, 128, 0.08);
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-ring: #D71921;
+  color: #171717;
 }
 
+/* --- iOS 26 Liquid Glass — Dark --- */
 .dark {
   --md-elevation-1: 0px 1px 3px 1px rgba(0,0,0,0.40), 0px 1px 2px 0px rgba(0,0,0,0.50);
   --md-elevation-2: 0px 2px 6px 2px rgba(0,0,0,0.40), 0px 1px 2px 0px rgba(0,0,0,0.50);
@@ -136,38 +138,38 @@
   --md-elevation-4: 0px 6px 10px 4px rgba(0,0,0,0.40), 0px 2px 3px 0px rgba(0,0,0,0.50);
   --md-elevation-5: 0px 8px 12px 6px rgba(0,0,0,0.40), 0px 4px 4px 0px rgba(0,0,0,0.50);
 
-  --primary: oklch(0.65 0.18 25);
-  --primary-foreground: oklch(0.12 0.01 60);
-  --secondary: oklch(0.22 0.01 60);
-  --secondary-foreground: oklch(0.75 0.01 60);
-  --accent: oklch(0.25 0.015 55);
-  --accent-foreground: oklch(0.92 0.005 60);
-  --background: oklch(0.14 0.01 55);
-  --foreground: oklch(0.88 0.008 65);
-  --card: oklch(0.19 0.012 55);
-  --card-foreground: oklch(0.88 0.008 65);
-  --popover: oklch(0.19 0.012 55);
-  --popover-foreground: oklch(0.88 0.008 65);
-  --muted: oklch(0.25 0.008 55);
-  --muted-foreground: oklch(0.60 0.012 60);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.65 0.18 25);
-  --destructive: oklch(0.68 0.19 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --chart-1: oklch(0.70 0.18 25);
-  --chart-2: oklch(0.72 0.12 70);
-  --chart-3: oklch(0.68 0.10 160);
-  --chart-4: oklch(0.62 0.08 45);
-  --chart-5: oklch(0.70 0.06 250);
-  --sidebar: oklch(0.17 0.012 55);
-  --sidebar-foreground: oklch(0.88 0.008 65);
-  --sidebar-primary: oklch(0.65 0.18 25);
-  --sidebar-primary-foreground: oklch(0.12 0 0);
-  --sidebar-accent: oklch(0.25 0.015 25);
-  --sidebar-accent-foreground: oklch(0.92 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.65 0.18 25);
+  --background: #1a1a1a;
+  --foreground: #e5e5e5;
+  --card: rgba(30, 30, 30, 0.72);
+  --card-foreground: #e5e5e5;
+  --popover: rgba(30, 30, 30, 0.85);
+  --popover-foreground: #e5e5e5;
+  --primary: #e5e5e5;
+  --primary-foreground: #0a0a0a;
+  --secondary: rgba(120, 120, 128, 0.16);
+  --secondary-foreground: #a3a3a3;
+  --muted: rgba(120, 120, 128, 0.16);
+  --muted-foreground: #737373;
+  --accent: rgba(120, 120, 128, 0.16);
+  --accent-foreground: #e5e5e5;
+  --destructive: #ff453a;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #ff453a;
+  --chart-1: #e5e5e5;
+  --chart-2: #ff453a;
+  --chart-3: #a3a3a3;
+  --chart-4: #737373;
+  --chart-5: #525252;
+  --sidebar: rgba(30, 30, 30, 0.60);
+  --sidebar-foreground: #e5e5e5;
+  --sidebar-primary: #e5e5e5;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: rgba(120, 120, 128, 0.16);
+  --sidebar-accent-foreground: #e5e5e5;
+  --sidebar-border: rgba(255, 255, 255, 0.10);
+  --sidebar-ring: #ff453a;
 }
 
 /* ========================================
@@ -180,7 +182,7 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: "Zen Kaku Gothic New", "Noto Sans JP", sans-serif;
+    font-family: "Noto Sans JP", "Zen Kaku Gothic New", sans-serif;
     font-feature-settings: "palt", "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -197,11 +199,15 @@
     @apply cursor-pointer;
   }
   h1, h2, h3 {
-    font-family: "Shippori Mincho", "Noto Serif JP", serif;
+    font-family: "Space Mono", "JetBrains Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: var(--foreground);
   }
-  h1 { font-weight: 800; letter-spacing: -0.03em; line-height: 1.2; }
-  h2 { font-weight: 700; letter-spacing: -0.025em; line-height: 1.3; }
-  h3 { font-weight: 500; letter-spacing: -0.015em; line-height: 1.4; }
+  h1 { font-size: 1.25rem; letter-spacing: 0.1em; line-height: 1.2; }
+  h2 { font-size: 1rem; line-height: 1.3; }
+  h3 { font-size: 0.875rem; line-height: 1.4; }
   .font-data {
     font-family: "JetBrains Mono", monospace;
     font-feature-settings: "tnum";
@@ -239,52 +245,75 @@
     }
   }
 
-  /* --- Gradient utilities (Editorial vermillion) --- */
+  /* --- Gradient utilities (Liquid Glass — monochrome) --- */
   .gradient-primary {
-    background: linear-gradient(135deg, oklch(0.50 0.18 25) 0%, oklch(0.45 0.15 15) 50%, oklch(0.40 0.12 5) 100%);
+    background: linear-gradient(135deg, #0a0a0a 0%, #262626 50%, #404040 100%);
     transition: filter var(--md-dur-short4) var(--md-ease-standard);
   }
   .gradient-primary:hover {
     filter: brightness(1.08);
   }
   .gradient-text {
-    background: linear-gradient(135deg, oklch(0.50 0.18 25) 0%, oklch(0.45 0.15 15) 50%, oklch(0.40 0.12 5) 100%);
+    background: linear-gradient(135deg, #0a0a0a 0%, #262626 50%, #404040 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
   /* ========================================
-     M3 Card System — Elevation + State Layers
+     M3 Card System — iOS 26 Liquid Glass
      ======================================== */
 
-  /* Editorial card: hairline border, no shadow, vermillion hover tint */
+  /* Glass card: frosted surface, inset highlight */
   [data-slot="card"] {
-    box-shadow: none;
+    background: var(--card);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
     border: 0.5px solid var(--border);
     border-radius: var(--radius);
-    transition: border-color var(--md-dur-short4) var(--md-ease-standard);
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset,
+      0 1px 3px rgba(0, 0, 0, 0.06);
+    transition:
+      border-color var(--md-dur-short4) var(--md-ease-standard),
+      box-shadow var(--md-dur-short4) var(--md-ease-standard);
     position: relative;
     overflow: hidden;
   }
   [data-slot="card"]:hover {
-    border-color: oklch(0.50 0.18 25 / 30%);
+    border-color: rgba(0, 0, 0, 0.12);
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset,
+      0 2px 8px rgba(0, 0, 0, 0.08);
   }
 
-  /* Interactive card (clickable) — border accent only, no lift */
+  /* Dark mode glass cards */
+  .dark [data-slot="card"] {
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.06) inset,
+      0 1px 3px rgba(0, 0, 0, 0.20);
+  }
+  .dark [data-slot="card"]:hover {
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.06) inset,
+      0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+
+  /* Interactive card (clickable) — subtle border darkening */
   .card-interactive {
     border: 0.5px solid var(--border);
     transition:
       border-color var(--md-dur-short4) var(--md-ease-standard);
   }
   .card-interactive:hover {
-    border-color: oklch(0.50 0.18 25 / 40%);
+    border-color: rgba(0, 0, 0, 0.16);
   }
   .card-interactive:active {
-    border-color: oklch(0.50 0.18 25 / 60%);
+    border-color: rgba(0, 0, 0, 0.24);
   }
 
-  /* Stat card — M3 accent bar reveal */
+  /* Stat card — M3 accent bar reveal (monochrome) */
   .stat-card {
     position: relative;
     overflow: hidden;
@@ -296,7 +325,7 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, oklch(0.50 0.18 25), oklch(0.60 0.14 45));
+    background: linear-gradient(90deg, #0a0a0a, #404040);
     opacity: 0;
     transform: scaleX(0);
     transform-origin: left;
@@ -352,6 +381,163 @@
   }
   .md-ripple:active::before {
     opacity: var(--md-state-pressed);
+  }
+
+  /* ========================================
+     iOS 26 Liquid Glass Components (global)
+     ======================================== */
+
+  /* Glass button */
+  .glass-btn {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    border-radius: 22px;
+    padding: 8px 18px;
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
+      0 1px 2px rgba(0, 0, 0, 0.06);
+    transition: all 0.2s ease;
+  }
+  .glass-btn:hover {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow:
+      0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
+      0 2px 6px rgba(0, 0, 0, 0.08);
+  }
+  .glass-btn:active {
+    transform: scale(0.97);
+    background: rgba(255, 255, 255, 0.6);
+  }
+  .dark .glass-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.10);
+  }
+  .dark .glass-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  /* Glass surface utility */
+  .glass-surface {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset;
+  }
+  .dark .glass-surface {
+    background: rgba(30, 30, 30, 0.72);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: 0 0.5px 0 0 rgba(255, 255, 255, 0.06) inset;
+  }
+
+  /* Segment control */
+  .segment-control {
+    background: rgba(120, 120, 128, 0.08);
+    border-radius: 10px;
+    padding: 2px;
+    display: inline-flex;
+    gap: 0;
+  }
+  .segment-item {
+    position: relative;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #737373;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+  .segment-item.active {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: #0a0a0a;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+  .segment-item:not(.active):hover {
+    color: #404040;
+  }
+  .dark .segment-control {
+    background: rgba(120, 120, 128, 0.16);
+  }
+  .dark .segment-item.active {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e5e5e5;
+  }
+  .dark .segment-item:not(.active):hover {
+    color: #a3a3a3;
+  }
+
+  /* iOS 26 Toggle Switch */
+  [data-slot="switch"] {
+    width: 51px !important;
+    height: 31px !important;
+    border-radius: 15.5px !important;
+    background: rgba(120, 120, 128, 0.16) !important;
+    border: none !important;
+    transition: background 0.25s ease !important;
+  }
+  [data-slot="switch"][data-state="checked"] {
+    background: #D71921 !important;
+  }
+  [data-slot="switch"] > span {
+    width: 27px !important;
+    height: 27px !important;
+    border-radius: 13.5px !important;
+    background: white !important;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Tables — clean borders, mono font */
+  th,
+  td {
+    border-color: var(--border);
+    border-style: solid;
+  }
+  th {
+    color: var(--muted-foreground);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.625rem;
+  }
+
+  /* Badges — glass surface */
+  [data-slot="badge"] {
+    background: rgba(120, 120, 128, 0.08);
+    color: var(--secondary-foreground);
+    border: 0.5px solid rgba(0, 0, 0, 0.06);
+    border-radius: 9999px;
+  }
+  .dark [data-slot="badge"] {
+    background: rgba(120, 120, 128, 0.16);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  /* Accordion */
+  [data-slot="accordion-trigger"] {
+    color: var(--secondary-foreground);
+  }
+  [data-slot="accordion-trigger"]:hover {
+    color: var(--foreground);
+  }
+
+  /* Scrollbar — minimal */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 9999px;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
   }
 
   /* ========================================
@@ -545,7 +731,7 @@
     overflow: hidden;
   }
 
-  /* Post card — interactive state with vermillion accent */
+  /* Post card — interactive state with monochrome accent */
   .post-card {
     position: relative;
     border: 0.5px solid var(--border);
@@ -565,7 +751,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, oklch(0.50 0.18 25), oklch(0.60 0.14 45));
+    background: linear-gradient(90deg, #0a0a0a, #404040);
     opacity: 0;
     transform: scaleX(0);
     transform-origin: left;
@@ -575,7 +761,7 @@
     z-index: 1;
   }
   .post-card:hover {
-    border-color: oklch(0.50 0.18 25 / 35%);
+    border-color: rgba(0, 0, 0, 0.16);
     box-shadow: var(--md-elevation-3);
     z-index: 10;
   }
@@ -614,9 +800,9 @@
     animation: nav-pill-enter var(--md-dur-short4) var(--md-ease-standard) both;
   }
 
-  /* Floating badge — editorial: no pulse, static */
+  /* Floating badge */
   .animate-float {
-    /* Removed: editorial aesthetic values stillness */
+    /* Static: glass aesthetic values stillness */
   }
 
   /* Donut chart fill — M3 emphasized decel */
@@ -699,7 +885,6 @@
   }
 
   .animate-logo-pulse {
-    /* Removed: editorial aesthetic — no logo animation */
     opacity: 0.4;
   }
 
@@ -768,200 +953,6 @@
 }
 
 /* ========================================
-   Nothing Report — White + iOS 26 Liquid Glass
-   ======================================== */
-
-.nothing-report {
-  --background: #fafafa;
-  --foreground: #171717;
-  --card: rgba(255, 255, 255, 0.72);
-  --card-foreground: #171717;
-  --popover: rgba(255, 255, 255, 0.85);
-  --popover-foreground: #171717;
-  --primary: #0a0a0a;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(120, 120, 128, 0.08);
-  --secondary-foreground: #525252;
-  --muted: rgba(120, 120, 128, 0.08);
-  --muted-foreground: #737373;
-  --accent: rgba(120, 120, 128, 0.08);
-  --accent-foreground: #171717;
-  --destructive: #D71921;
-  --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
-  --input: rgba(0, 0, 0, 0.06);
-  --ring: #D71921;
-  --chart-1: #0a0a0a;
-  --chart-2: #D71921;
-  --chart-3: #737373;
-  --chart-4: #a3a3a3;
-  --chart-5: #d4d4d4;
-  color: #171717;
-}
-
-/* Headings — Space Mono, uppercase, tech aesthetic */
-.nothing-report h1,
-.nothing-report h2,
-.nothing-report h3 {
-  font-family: "Space Mono", "JetBrains Mono", monospace;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 700;
-  color: #0a0a0a;
-}
-.nothing-report h1 { font-size: 1.25rem; letter-spacing: 0.1em; }
-.nothing-report h2 { font-size: 1rem; }
-.nothing-report h3 { font-size: 0.875rem; }
-
-/* Body text — Noto Sans JP for Japanese legibility */
-.nothing-report p,
-.nothing-report span,
-.nothing-report li,
-.nothing-report td,
-.nothing-report th,
-.nothing-report label {
-  font-family: "Noto Sans JP", "Zen Kaku Gothic New", sans-serif;
-}
-
-/* --- iOS 26 Liquid Glass Card --- */
-.nothing-report [data-slot="card"] {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 0.5px solid rgba(0, 0, 0, 0.06);
-  border-radius: 16px;
-  box-shadow:
-    0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset,
-    0 1px 3px rgba(0, 0, 0, 0.06);
-}
-.nothing-report [data-slot="card"]:hover {
-  border-color: rgba(0, 0, 0, 0.12);
-  box-shadow:
-    0 0.5px 0 0 rgba(255, 255, 255, 0.8) inset,
-    0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-/* Tables — clean borders, mono font */
-.nothing-report th,
-.nothing-report td {
-  border-color: rgba(0, 0, 0, 0.06);
-  border-style: solid;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.75rem;
-}
-.nothing-report th {
-  color: #737373;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.625rem;
-}
-
-/* Badges — glass surface */
-.nothing-report [data-slot="badge"] {
-  background: rgba(120, 120, 128, 0.08);
-  color: #525252;
-  border: 0.5px solid rgba(0, 0, 0, 0.06);
-  border-radius: 9999px;
-}
-
-/* --- iOS 26 Liquid Glass Buttons --- */
-.nothing-report button {
-  border-radius: 9999px;
-}
-.nothing-report .glass-btn {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px) saturate(150%);
-  -webkit-backdrop-filter: blur(12px) saturate(150%);
-  border: 0.5px solid rgba(0, 0, 0, 0.06);
-  border-radius: 22px;
-  padding: 8px 18px;
-  box-shadow:
-    0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
-    0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: all 0.2s ease;
-}
-.nothing-report .glass-btn:hover {
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow:
-    0 0.5px 0 0 rgba(255, 255, 255, 0.6) inset,
-    0 2px 6px rgba(0, 0, 0, 0.08);
-}
-.nothing-report .glass-btn:active {
-  transform: scale(0.97);
-  background: rgba(255, 255, 255, 0.6);
-}
-
-/* --- iOS 26 Segment Control (nav) --- */
-.nothing-report .segment-control {
-  background: rgba(120, 120, 128, 0.08);
-  border-radius: 10px;
-  padding: 2px;
-  display: inline-flex;
-  gap: 0;
-}
-.nothing-report .segment-item {
-  position: relative;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #737373;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-}
-.nothing-report .segment-item.active {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: #0a0a0a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.nothing-report .segment-item:not(.active):hover {
-  color: #404040;
-}
-
-/* --- iOS 26 Toggle Switch --- */
-.nothing-report [data-slot="switch"] {
-  width: 51px !important;
-  height: 31px !important;
-  border-radius: 15.5px !important;
-  background: rgba(120, 120, 128, 0.16) !important;
-  border: none !important;
-  transition: background 0.25s ease !important;
-}
-.nothing-report [data-slot="switch"][data-state="checked"] {
-  background: #D71921 !important;
-}
-.nothing-report [data-slot="switch"] > span {
-  width: 27px !important;
-  height: 27px !important;
-  border-radius: 13.5px !important;
-  background: white !important;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1) !important;
-}
-
-/* Accordion */
-.nothing-report [data-slot="accordion-trigger"] {
-  color: #525252;
-}
-.nothing-report [data-slot="accordion-trigger"]:hover {
-  color: #171717;
-}
-
-/* Scrollbar — minimal light */
-.nothing-report ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
-}
-.nothing-report ::-webkit-scrollbar-track {
-  background: transparent;
-}
-.nothing-report ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 9999px;
-}
-
-/* ========================================
    Print Styles
    ======================================== */
 
@@ -996,7 +987,7 @@
   body {
     background: white;
     color: black;
-    font-family: 'Zen Kaku Gothic New', 'Noto Sans JP', 'Segoe UI', sans-serif;
+    font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', sans-serif;
   }
   [class*="bg-"],
   [class*="gradient"],
@@ -1026,7 +1017,7 @@
     page-break-inside: avoid;
   }
   * {
-    font-family: 'Zen Kaku Gothic New', 'Noto Sans JP', 'Segoe UI', sans-serif !important;
+    font-family: 'Noto Sans JP', 'Zen Kaku Gothic New', sans-serif !important;
   }
   /* Disable all animations/shadows for print */
   [data-slot="card"] {

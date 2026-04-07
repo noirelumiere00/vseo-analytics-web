@@ -305,7 +305,7 @@ function DashboardLayoutContent({
             <PageBreadcrumb />
           </div>
         )}
-        <main className="flex-1 overflow-y-auto p-2 md:p-3">{children}</main>
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-2 md:p-3 max-w-full">{children}</main>
       </SidebarInset>
     </>
   );
