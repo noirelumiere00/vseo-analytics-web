@@ -5,7 +5,7 @@
  */
 
 import { ENV } from "./_core/env";
-import puppeteer from "puppeteer-core";
+import puppeteer, { type Page } from "puppeteer-core";
 import { findChromiumPath, buildChromiumArgs } from "./tiktokScraper";
 
 export interface InstagramPostData {
@@ -23,15 +23,17 @@ export interface InstagramPostData {
   musicInfo?: { title: string; artistName: string } | null;
 }
 
-/**
- * Apify Instagram Scraper で投稿データを一括取得
- */
 /** Apify実行のステータスを待機してポーリング */
 async function waitForApifyRun(runId: string, token: string, maxWaitMs: number = 300_000): Promise<string> {
   const start = Date.now();
   const POLL_INTERVAL = 10_000;
   while (Date.now() - start < maxWaitMs) {
     const res = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${token}`);
+    if (!res.ok) {
+      console.warn(`[Instagram] Apify poll failed: HTTP ${res.status}`);
+      await new Promise(r => setTimeout(r, POLL_INTERVAL));
+      continue;
+    }
     const data = (await res.json()) as any;
     const status = data?.data?.status;
     if (status === "SUCCEEDED" || status === "FAILED" || status === "ABORTED" || status === "TIMED-OUT") {
@@ -92,11 +94,15 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
       },
     );
 
+    if (!res.ok) {
+      console.error(`[Instagram] Apify run request failed: HTTP ${res.status}`);
+      return results;
+    }
     const runData = await res.json() as any;
     const runId = runData?.data?.id;
     const datasetId = runData?.data?.defaultDatasetId;
     if (!datasetId) {
-      console.error("[Instagram] Apify run failed:", runData?.data?.status, JSON.stringify(runData?.error || {}).slice(0, 200));
+      console.error("[Instagram] Apify run failed:", runData?.data?.status);
       return results;
     }
 
@@ -118,7 +124,12 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
     const itemsRes = await fetch(
       `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=200`,
     );
-    const items = await itemsRes.json() as any[];
+    if (!itemsRes.ok) {
+      console.error(`[Instagram] Dataset fetch failed: HTTP ${itemsRes.status}`);
+      return results;
+    }
+    const itemsRaw = await itemsRes.json();
+    const items: any[] = Array.isArray(itemsRaw) ? itemsRaw : [];
 
     for (const item of items) {
       results.push(parseInstagramItem(item));
@@ -263,6 +274,19 @@ async function scrapeHashtagWithPuppeteer(
     await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
     await new Promise(r => setTimeout(r, 3000));
 
+    // sessionid期限切れ検出: ログインページへリダイレクトされた場合
+    const currentUrl = page.url();
+    if (currentUrl.includes("/accounts/login") || currentUrl.includes("/challenge/")) {
+      console.error("[Instagram Hashtag] Session expired — redirected to login/challenge page");
+      return {
+        hashtag: tag,
+        totalFetched: 0,
+        method: "puppeteer",
+        topPosts: [],
+        ownRanks: [],
+      };
+    }
+
     // 1. まずGraphQLインターセプトデータからパース
     let posts = parseGraphQLData(capturedData, ownNamesLower);
 
@@ -302,12 +326,11 @@ async function scrapeHashtagWithPuppeteer(
     // スクロールで追加データ取得（maxResults未達の場合）
     if (posts.length < maxResults && posts.length > 0) {
       const maxScrolls = 10;
+      let noProgressCount = 0;
       for (let scroll = 0; scroll < maxScrolls && posts.length < maxResults; scroll++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await new Promise(r => setTimeout(r, 2500));
-        // DOM追加パースも試行
         const domPosts = await parseDOMPosts(page, ownNamesLower);
-        const prevLen = posts.length;
         const newPosts = parseGraphQLData(capturedData, ownNamesLower);
         // GraphQL + DOM の両方からマージ
         const merged = [...newPosts];
@@ -320,10 +343,11 @@ async function scrapeHashtagWithPuppeteer(
         }
         if (merged.length > posts.length) {
           posts = merged;
-          console.log(`[Instagram Hashtag] Scroll ${scroll + 1}: ${posts.length} posts (${reelCount()} reels)`);
+          noProgressCount = 0;
+          console.log(`[Instagram Hashtag] Scroll ${scroll + 1}: ${posts.length} posts (${posts.filter(p => p.type === "reel").length} reels)`);
         } else {
-          // 2回連続で新規取得なしなら終了
-          if (scroll > 0) break;
+          noProgressCount++;
+          if (noProgressCount >= 2) break;
         }
       }
     }
@@ -369,14 +393,26 @@ function parseGraphQLData(
 
     const username = media.user?.username || media.owner?.username || "";
     const mediaType = media.media_type ?? (media.is_video ? 2 : 1);
+    const productType = media.product_type || "";
+    const typename = media.__typename || "";
+    // media_type: 1=image, 2=video, 8=carousel
+    // product_type: "clips"=reel, "feed"/"igtv"=video
+    // __typename: GraphQLSidecar=carousel, GraphQLVideo=video/reel, GraphQLImage=image
+    const type: InstagramHashtagPost["type"] =
+      mediaType === 8 || typename === "GraphQLSidecar" ? "carousel" :
+      mediaType === 2 || typename === "GraphQLVideo" || media.is_video === true
+        ? (productType === "clips" || productType === "reels" ? "reel" : "video")
+        : "image";
     posts.push({
       position: posts.length + 1,
       shortcode: code,
       username,
-      type: mediaType === 2 ? "reel" : mediaType === 8 ? "carousel" : "image",
+      type,
       likeCount: media.like_count || media.edge_liked_by?.count || 0,
       commentCount: media.comment_count || media.edge_media_to_comment?.count || 0,
-      viewCount: media.play_count || media.view_count || media.video_view_count || 0,
+      viewCount: type === "image" || type === "carousel"
+        ? 0
+        : (media.play_count || media.view_count || media.video_view_count || 0),
       caption: media.caption?.text || media.edge_media_to_caption?.edges?.[0]?.node?.text || "",
       coverUrl: media.image_versions2?.candidates?.[0]?.url || media.thumbnail_src || media.display_url || "",
       postUrl: `https://www.instagram.com/p/${code}/`,
@@ -452,7 +488,7 @@ function extractMediasRecursive(obj: any, pushMedia: (m: any) => void, depth = 0
 
 /** DOM直接パース（フォールバック） */
 async function parseDOMPosts(
-  page: any,
+  page: Page,
   ownNamesLower: Set<string>,
 ): Promise<InstagramHashtagPost[]> {
   const posts: InstagramHashtagPost[] = [];
@@ -524,6 +560,10 @@ async function scrapeHashtagWithApify(
       },
     );
 
+    if (!res.ok) {
+      console.error(`[Instagram Hashtag] Apify run request failed: HTTP ${res.status}`);
+      return { hashtag: tag, totalFetched: 0, method: "apify", topPosts: [], ownRanks: [] };
+    }
     const runData = await res.json() as any;
     const datasetId = runData?.data?.defaultDatasetId;
     const runId = runData?.data?.id;
@@ -544,7 +584,12 @@ async function scrapeHashtagWithApify(
     const itemsRes = await fetch(
       `https://api.apify.com/v2/datasets/${datasetId}/items?token=${token}&limit=${Math.max(maxResults * 2, 50)}`,
     );
-    const items = await itemsRes.json() as any[];
+    if (!itemsRes.ok) {
+      console.error(`[Instagram Hashtag] Dataset fetch failed: HTTP ${itemsRes.status}`);
+      return { hashtag: tag, totalFetched: 0, method: "apify" as const, topPosts: [], ownRanks: [] };
+    }
+    const itemsRaw = await itemsRes.json();
+    const items: any[] = Array.isArray(itemsRaw) ? itemsRaw : [];
 
     const allPosts: InstagramHashtagPost[] = items.map((item: any, i: number) => {
       const username = item.ownerUsername || item.owner?.username || "";
@@ -552,7 +597,10 @@ async function scrapeHashtagWithApify(
         position: i + 1,
         shortcode: item.shortCode || item.id || "",
         username,
-        type: item.type === "Video" || item.isVideo ? "reel" : item.type === "Sidecar" ? "carousel" : "image",
+        type: item.type === "Sidecar" ? "carousel"
+            : (item.type === "Video" || item.isVideo)
+              ? (item.productType === "clips" || item.productType === "reels" ? "reel" : "video")
+              : "image",
         likeCount: Math.max(0, item.likesCount || 0),
         commentCount: item.commentsCount || 0,
         viewCount: item.videoPlayCount || item.videoViewCount || 0,
