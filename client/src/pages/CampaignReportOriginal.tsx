@@ -1053,8 +1053,8 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                     {/* 直近3日の縦折れ線ミニグラフ */}
                     {recent3.length > 0 && (() => {
                       const vals = recent3.map(d => Number(d[deltaKey]) || 0);
-                      const maxV = Math.max(...vals, 1);
-                      const minV = Math.min(...vals, 0);
+                      const maxV = Math.max(...vals);
+                      const minV = Math.min(...vals);
                       const range = maxV - minV || 1;
                       const h = 40; // SVG height
                       const w = 80; // SVG width
@@ -1318,6 +1318,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
 export function InstagramHashtagRankingSection({ instagramHashtagReport }: { instagramHashtagReport: IGHashtagReport }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
+  const [showOwnOnly, setShowOwnOnly] = useState(false);
   const toggleExpand = (tag: string) => setExpandedTags(prev => {
     const n = new Set(prev);
     if (n.has(tag)) n.delete(tag); else n.add(tag);
@@ -1446,9 +1447,10 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
         </CardContent>
       </Card>
 
-      {/* ======== Tag Selector Pills ======== */}
+      {/* ======== Tag Selector Pills + Own Filter ======== */}
       {validReports.length > 0 && (
-        <div className="overflow-x-auto min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="overflow-x-auto flex-1 min-w-0">
           <div className="flex gap-2 min-w-max">
             <button
               onClick={() => setActiveTag(null)}
@@ -1485,6 +1487,20 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
               );
             })}
           </div>
+          </div>
+          {/* Own-only filter toggle */}
+          <button
+            onClick={() => setShowOwnOnly(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${
+              showOwnOnly
+                ? "text-white shadow-md"
+                : "bg-slate-100 text-[#a3a3a3] hover:bg-slate-200"
+            }`}
+            style={showOwnOnly ? { background: `linear-gradient(135deg, #E1306C, #833AB4)` } : undefined}
+          >
+            <Filter className="h-3 w-3" />
+            自社のみ
+          </button>
         </div>
       )}
 
@@ -1508,7 +1524,9 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                 </div>
                 <div className="p-5 space-y-6">
                   {validReports.map(r => {
-                    const top = r.topPosts.slice(0, 9); // 3×3 grid like IG Explore
+                    const filteredPosts = showOwnOnly ? r.topPosts.filter(p => p.isOwn) : r.topPosts;
+                    if (showOwnOnly && filteredPosts.length === 0) return null;
+                    const top = filteredPosts.slice(0, 9); // 3×3 grid like IG Explore
                     const ownCount = r.topPosts.filter(p => p.isOwn).length;
                     const ts = tagStats.find(t => t.hashtag === r.hashtag);
                     return (
@@ -1580,8 +1598,9 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
 
         // Individual hashtag view: IG Stories-ring style slot grid + engagement bars
         if (!activeReport) return null;
-        const top = activeReport.topPosts.slice(0, 30);
-        const ownPosts = top.filter(p => p.isOwn);
+        const allTop = activeReport.topPosts.slice(0, 30);
+        const top = showOwnOnly ? allTop.filter(p => p.isOwn) : allTop;
+        const ownPosts = allTop.filter(p => p.isOwn);
         const maxViews = Math.max(...top.map(p => p.viewCount), 1);
         const maxEr = Math.max(...top.map(p => p.viewCount > 0 ? (p.likeCount + p.commentCount) / p.viewCount * 100 : 0), 1);
 
