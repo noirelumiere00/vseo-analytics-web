@@ -303,7 +303,7 @@ export default function CampaignReport() {
   if (reportQuery.isLoading) {
     return (
       <DashboardLayout>
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full min-w-0">
           <div className="space-y-4">
             {[1, 2, 3].map(i => <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />)}
           </div>
@@ -315,7 +315,7 @@ export default function CampaignReport() {
   if (!report) {
     return (
       <DashboardLayout>
-        <div className="max-w-7xl mx-auto text-center py-12">
+        <div className="w-full min-w-0 text-center py-12">
           <p className="text-muted-foreground">レポートが見つかりません</p>
           <Button variant="link" onClick={() => setLocation(`/campaigns/${campaignId}`)}>キャンペーンに戻る</Button>
         </div>
