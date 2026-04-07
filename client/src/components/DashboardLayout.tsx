@@ -287,7 +287,7 @@ function DashboardLayoutContent({
         />
       </div>
 
-      <SidebarInset className="h-svh overflow-hidden flex flex-col" style={{ maxWidth: "calc(100vw - var(--sidebar-width, 0px))" }}>
+      <SidebarInset className="h-svh overflow-hidden flex flex-col">
         {/* Mobile header */}
         {isMobile && (
           <div className="flex border-b h-12 items-center justify-between bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:backdrop-blur shrink-0 z-40">
