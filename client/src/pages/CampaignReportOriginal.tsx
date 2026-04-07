@@ -919,6 +919,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
     { key: "likes", label: "いいね" },
     { key: "comments", label: "コメント" },
     { key: "er", label: "ER" },
+    { key: "date", label: "投稿日" },
   ];
   const [sortBy, setSortBy] = useState("views");
 
@@ -927,6 +928,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
       if (sortBy === "er") return b.er - a.er;
       if (sortBy === "likes") return b.allMetrics.likeCount - a.allMetrics.likeCount;
       if (sortBy === "comments") return b.allMetrics.commentCount - a.allMetrics.commentCount;
+      if (sortBy === "date") return b.latestVal - a.latestVal;
       return b.allMetrics.viewCount - a.allMetrics.viewCount;
     });
   }, [sparks, sortBy]);
@@ -998,13 +1000,13 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
             <div className="flex items-center justify-between flex-wrap gap-2">
               <div>
                 <p className="text-sm font-semibold">投稿パフォーマンス推移</p>
-                <p className="text-[11px] text-muted-foreground">日次増分バー ＋ ホバーで累積推移・詳細</p>
+                <p className="text-[11px] text-muted-foreground">累積推移スパークライン ＋ ホバーで詳細</p>
               </div>
               <div className="flex gap-1 flex-wrap">
                 {IG_SORT_OPTIONS.map(opt => (
                   <button key={opt.key} onClick={() => {
                     setSortBy(opt.key);
-                    const sparkMap: Record<string, "views" | "likes" | "comments"> = { views: "views", likes: "likes", comments: "comments", er: "views" };
+                    const sparkMap: Record<string, "views" | "likes" | "comments"> = { views: "views", likes: "likes", comments: "comments", er: "views", date: "views" };
                     setSparkMetric(sparkMap[opt.key] || "views");
                   }}
                     className={`px-2 py-1 rounded text-[11px] transition-colors ${sortBy === opt.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
@@ -1018,11 +1020,36 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                 const displayVal = sortBy === "er" ? s.er : s.latestVal;
                 const intensity = topVal > 0 ? Math.min(displayVal / topVal, 1) : 0.5;
                 const sc = intensity > 0.5 ? "#E1306C" : intensity > 0.2 ? "#C13584" : "#a5b4fc";
-                const igMetricKeyMap: Record<string, string> = { views: "views", likes: "likes", comments: "comments", er: "er" };
+                const isExpanded = expandedCard === s.videoUrl;
+                const igMetricKeyMap: Record<string, string> = { views: "views", likes: "likes", comments: "comments", er: "er", date: "views" };
                 const deltaKey = igMetricKeyMap[sortBy] || "views";
                 const recent3 = s.recentDeltas.slice(-3);
 
-                const isExpanded = expandedCard === s.videoUrl;
+                // Sparkline SVG from s.data
+                const sparkData = s.data;
+                const sparkW = 100;
+                const sparkH = 28;
+                let sparkPath = "";
+                if (sparkData.length >= 2) {
+                  const vals = sparkData.map(d => d.value);
+                  const minV = Math.min(...vals);
+                  const maxV = Math.max(...vals);
+                  const range = maxV - minV || 1;
+                  const points = vals.map((v, i) => {
+                    const x = (i / (vals.length - 1)) * sparkW;
+                    const y = sparkH - ((v - minV) / range) * (sparkH - 4) - 2;
+                    return `${x},${y}`;
+                  });
+                  sparkPath = `M${points.join("L")}`;
+                }
+
+                const IG_TREND_CONFIG: Record<string, { cls: string; dot: string }> = {
+                  "バイラル": { cls: "text-[#D71921] bg-[#D71921]/8", dot: "bg-[#D71921]" },
+                  "急成長": { cls: "text-emerald-700 bg-emerald-50", dot: "bg-emerald-500" },
+                  "安定": { cls: "text-slate-600 bg-slate-100", dot: "bg-slate-400" },
+                  "停滞": { cls: "text-amber-700 bg-amber-50", dot: "bg-amber-500" },
+                };
+
                 return (
                   <div key={s.videoUrl || idx}
                     className="post-card"
@@ -1043,14 +1070,29 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                         {s.username && <p className="text-[10px] font-bold text-slate-600 truncate">{s.username}</p>}
                         <p className="text-[10px] text-slate-400 truncate leading-snug">{s.caption || "投稿"}</p>
                         <p className="text-lg font-extrabold tabular-nums text-slate-800 leading-tight mt-0.5">
-                          {sortBy === "er" ? `${s.er}%` : fmt(s.latestVal)}
+                          {sortBy === "er" ? `${s.er}%` : sortBy === "date" ? "-" : fmt(s.latestVal)}
                         </p>
                         <p className="text-[9px] text-slate-400 font-medium">
-                          {sortBy === "er" ? "ER" : IG_SPARK_LABELS[sparkMetric]} (累計)
+                          {sortBy === "er" ? "ER" : sortBy === "date" ? "投稿日" : IG_SPARK_LABELS[sparkMetric]} (累計)
                         </p>
                       </div>
                     </div>
-                    {/* 直近3日の日次増分テーブル (TikTok matching bars) */}
+                    {/* ミニスパークライン（累積推移の折れ線） */}
+                    {sparkPath && (
+                      <div className="px-3 pb-2 post-card-mini-spark">
+                        <svg width="100%" height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none" className="overflow-visible">
+                          <defs>
+                            <linearGradient id={`ig-spark-fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={sc} stopOpacity="0.18" />
+                              <stop offset="100%" stopColor={sc} stopOpacity="0.02" />
+                            </linearGradient>
+                          </defs>
+                          <path d={`${sparkPath}L${sparkW},${sparkH}L0,${sparkH}Z`} fill={`url(#ig-spark-fill-${idx})`} />
+                          <path d={sparkPath} fill="none" stroke={sc} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                    )}
+                    {/* 直近3日の日次増分テーブル (bars) */}
                     {recent3.length > 0 && (
                       <div className="px-3 pb-2 post-card-mini-spark">
                         <div className="space-y-0.5">
@@ -1109,7 +1151,10 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                             ))}
                           </div>
                           <div className="spark-detail-item flex items-center justify-between pt-1">
-                            <span className="text-[8px] text-muted-foreground font-semibold tabular-nums">ER {s.er}%</span>
+                            <span className={`inline-flex items-center gap-1 text-[8px] font-bold px-1.5 py-0.5 rounded-sm ${IG_TREND_CONFIG[s.trendLabel]?.cls || ""}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${IG_TREND_CONFIG[s.trendLabel]?.dot || ""}`} />
+                              {s.trendLabel}
+                            </span>
                             <a href={s.postUrl} target="_blank" rel="noopener noreferrer"
                               className="inline-flex items-center gap-0.5 text-[8px] text-primary hover:text-primary/80 font-bold transition-colors"
                               onClick={e => e.stopPropagation()}
