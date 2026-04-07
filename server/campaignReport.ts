@@ -593,14 +593,41 @@ export async function generateCampaignReport(
 
   if (keywords.length > 0) {
     try {
+      // 自社アカウント名（TikTok + Instagram共通）
       const ownNames = [
         ...(campaign.ownAccountIds || []),
         ...((campaign as any).satelliteAccountIds || []),
       ];
+
+      // 自社動画URLからInstagramのショートコードとユーザー名を抽出して照合に追加
+      const ownVideoUrls: string[] = (campaign as any).ownVideoUrls || [];
+      const ownVideoData: Array<{ videoUrl?: string; username?: string }> = (campaign as any).ownVideoData || [];
+      const ownShortcodes = new Set<string>();
+
+      for (const url of ownVideoUrls) {
+        const match = url.match(/instagram\.com\/(p|reel|reels)\/([^/?]+)/);
+        if (match) ownShortcodes.add(match[2]);
+      }
+      for (const v of ownVideoData) {
+        if (v.videoUrl) {
+          const match = v.videoUrl.match(/instagram\.com\/(p|reel|reels)\/([^/?]+)/);
+          if (match) ownShortcodes.add(match[2]);
+        }
+        if (v.username) ownNames.push(v.username);
+      }
+
       const hashtagResults: InstagramHashtagResult[] = [];
       for (const kw of keywords) {
         try {
           const result = await searchInstagramHashtag(kw, 30, ownNames);
+          // ショートコードでも自社判定（ユーザー名が一致しなくてもURLで判定）
+          if (ownShortcodes.size > 0) {
+            for (const post of result.topPosts) {
+              if (!post.isOwn && post.shortcode && ownShortcodes.has(post.shortcode)) {
+                post.isOwn = true;
+              }
+            }
+          }
           hashtagResults.push(result);
         } catch (e) {
           console.error(`[Report] Instagram hashtag search failed for #${kw}:`, e);
