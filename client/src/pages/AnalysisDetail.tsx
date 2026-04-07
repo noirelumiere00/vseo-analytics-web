@@ -990,7 +990,7 @@ export default function AnalysisDetail() {
                   <h3 className="text-lg font-semibold mb-4">センチメント構成比</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     {/* ドーナツチャート */}
-                    <div className="relative">
+                    <div className="relative min-w-0">
                       <ResponsiveContainer width="100%" height={260}>
                         <PieChart>
                           <Pie
