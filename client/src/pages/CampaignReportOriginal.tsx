@@ -1734,7 +1734,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
       {/* ======== Summary Table with Accordion ======== */}
       {validReports.length > 0 && (
         <Card className="overflow-hidden">
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
@@ -2728,7 +2728,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
       {/* ======== KwSummaryTable (アコーディオン付き) ======== */}
       {kwList.length > 0 && (
         <Card>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-card border-b border-border">
@@ -4975,7 +4975,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
   return (
     <div className="space-y-5">
       {/* ======== Hero KPI Row ======== */}
-      <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-4" : "grid-cols-3"}`}>
+      <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
         {[
           { label: "第三者投稿", value: allVideos.length, unit: "本", color: "text-foreground", fmtVal: false },
           { label: "総再生数", value: dedupTotalViews, unit: "", color: "text-foreground", fmtVal: true },
