@@ -1560,14 +1560,14 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                           </div>
                           <ChevronRight className="h-4 w-4 text-[#d4d4d4] group-hover/hdr:text-[#E1306C] transition-colors" />
                         </button>
-                        {/* 3×3 Explore-style grid */}
-                        <div className="grid grid-cols-3 gap-0.5 rounded-xl overflow-hidden">
+                        {/* Horizontal scroll — matching TikTok SOV direction */}
+                        <div className="flex gap-1 overflow-x-auto pb-2 -mx-1 px-1">
                           {top.map((post, i) => (
-                            <div key={i} className="relative aspect-square group/cell overflow-hidden cursor-pointer" onClick={() => setActiveTag(r.hashtag)}>
+                            <div key={i} className={`relative shrink-0 w-28 aspect-[9/16] group/cell overflow-hidden cursor-pointer rounded-lg ${post.isOwn ? "ring-2 ring-[#E1306C] ring-offset-1" : ""}`} onClick={() => setActiveTag(r.hashtag)}>
                               {post.coverUrl ? (
                                 <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover/cell:scale-110" loading="lazy" />
                               ) : (
-                                <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-gradient-to-br from-[#E1306C]/8 to-[#833AB4]/8" : "bg-slate-50"}`}>
+                                <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-[#E1306C]/10" : "bg-slate-50"}`}>
                                   <span className="text-xs text-[#d4d4d4] tabular-nums">#{post.position}</span>
                                 </div>
                               )}
@@ -1576,18 +1576,20 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
                                 <span className="flex items-center gap-1 text-white text-xs font-bold"><Heart className="h-3.5 w-3.5 fill-white" />{fmt(post.likeCount)}</span>
                                 <span className="flex items-center gap-1 text-white text-xs font-bold"><MessageCircle className="h-3.5 w-3.5 fill-white" />{fmt(post.commentCount)}</span>
                               </div>
-                              {/* Own indicator — gradient ring effect */}
+                              {/* Own indicator — full red overlay bottom bar */}
                               {post.isOwn && (
-                                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-full text-[8px] font-black text-white"
-                                  style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
-                                  {post.position}位 · 自社
-                                </div>
+                                <>
+                                  <div className="absolute inset-0 border-2 border-[#E1306C] rounded-lg pointer-events-none" />
+                                  <div className="absolute bottom-0 left-0 right-0 py-1 text-center text-[9px] font-black text-white"
+                                    style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                                    {post.position}位 · 施策動画
+                                  </div>
+                                </>
                               )}
-                              {!post.isOwn && (
-                                <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/40 flex items-center justify-center text-[9px] font-bold text-white">
-                                  {post.position}
-                                </div>
-                              )}
+                              {/* Position badge */}
+                              <div className={`absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white ${post.isOwn ? "bg-[#E1306C]" : "bg-black/40"}`}>
+                                {post.position}
+                              </div>
                               {/* Multi-post indicator */}
                               {post.type === "carousel" && (
                                 <Layers className="absolute top-1.5 right-1.5 h-3.5 w-3.5 text-white drop-shadow" />
