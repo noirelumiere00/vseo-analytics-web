@@ -1667,7 +1667,7 @@ function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[];
 const SPARK_LABELS: Record<string, string> = { views: "再生数", likes: "いいね", comments: "コメント", shares: "シェア", saves: "保存" };
 const SPARK_KEY: Record<string, string> = { views: "viewCount", likes: "likeCount", comments: "commentCount", shares: "shareCount", saves: "saveCount" };
 
-function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric, sortBy, setSortBy, sortOptions, videoScores, bestVideoId, kwSet, bigKwSet, hasBaseline = true }: {
+function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric, sortBy, setSortBy, sortOptions, videoScores, bestVideoId, kwSet, bigKwSet, hasBaseline = true, platform = "tiktok" }: {
   videos: any[];
   dailyMetrics?: any[];
   sparkMetric: "views" | "likes" | "shares" | "saves";
@@ -1680,6 +1680,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
   kwSet: Set<string>;
   bigKwSet: Set<string>;
   hasBaseline?: boolean;
+  platform?: string;
 }) {
   const scoreMap = new Map((videoScores || []).map((s: any) => [s.videoId, s]));
   const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
@@ -1692,7 +1693,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
     const latestDm = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number; dateKey: string }>();
     if (hasDailyData) {
       for (const dm of dailyMetrics) {
-        if (dm.platform !== "tiktok") continue;
+        if (dm.platform !== platform) continue;
         const url = dm.videoUrl;
         if (!url) continue;
         if (!byVideo.has(url)) byVideo.set(url, []);
@@ -1768,7 +1769,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
         postedAt: v.postedAt || "",
       };
     }).filter(s => s.data.length >= 2);
-  }, [videos, dailyMetrics, sparkMetric, metricKey, hasDailyData]);
+  }, [videos, dailyMetrics, sparkMetric, metricKey, hasDailyData, platform]);
 
   const SPARK_PAGE = 8;
   const [sparkDisplayCount, setSparkDisplayCount] = useState(SPARK_PAGE);
@@ -3353,7 +3354,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                   <ReferenceArea x1={highlightMonths.start} x2={highlightMonths.end} fill="#6366f1" fillOpacity={0.05} />
                 )}
                 {keywordVolumes!.map((kw: any, i: number) => (
-                  <Area key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} fill={`url(#volFill-${i})`} dot={{ r: 2.5, strokeWidth: 0, fill: VOLUME_COLORS[i % VOLUME_COLORS.length] }} connectNulls />
+                  <Area key={kw.keyword} type="monotone" dataKey={kw.keyword} stroke={VOLUME_COLORS[i % VOLUME_COLORS.length]} strokeWidth={2} fill={`url(#volFill-${i})`} dot={false} connectNulls />
                 ))}
               </AreaChart>
             </ResponsiveContainer>
@@ -3432,6 +3433,29 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
   const [tableSortDir, setTableSortDir] = useState<"asc" | "desc">("desc");
   const TABLE_PAGE_SIZE = 5;
   const [tableDisplayCount, setTableDisplayCount] = useState(TABLE_PAGE_SIZE);
+
+  // IG mini graph state
+  const [igSparkMetric, setIgSparkMetric] = useState<"views" | "likes" | "shares" | "saves">("views");
+  const [igSortBy, setIgSortBy] = useState("views");
+  const IG_SORT_OPTIONS = [
+    { key: "views", label: "再生数" },
+    { key: "likes", label: "いいね" },
+    { key: "comments", label: "コメント" },
+    { key: "er", label: "ER" },
+    { key: "date", label: "投稿日" },
+  ];
+  // TT mini graph state
+  const [ttSparkMetric, setTtSparkMetric] = useState<"views" | "likes" | "shares" | "saves">("views");
+  const [ttSortBy, setTtSortBy] = useState("views");
+  const TT_SORT_OPTIONS = [
+    { key: "views", label: "再生数" },
+    { key: "likes", label: "いいね" },
+    { key: "comments", label: "コメント" },
+    { key: "saves", label: "保存" },
+    { key: "shares", label: "シェア" },
+    { key: "er", label: "ER" },
+    { key: "date", label: "投稿日" },
+  ];
 
   // === Latest values from dailyMetrics (per-video, per-platform) ===
   const latestByUrl = useMemo(() => {
@@ -3752,6 +3776,58 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
           })}
         </div>
       )}
+
+      {/* ── 2b2. Per-platform PostPerformanceGrid (TT & IG unified) ── */}
+      {tiktokVideos.length > 0 && (() => {
+        const ttNormalized = tiktokVideos.map((v: any) => ({
+          videoUrl: v.videoUrl || "",
+          description: v.description || "",
+          coverUrl: v.coverUrl || "",
+          before: v.before,
+          after: v.after,
+          postedAt: v.postedAt || "",
+          hashtags: v.hashtags || [],
+        }));
+        const ttSorted = [...ttNormalized].sort((a, b) => {
+          if (ttSortBy === "date") return (b.postedAt || "").localeCompare(a.postedAt || "");
+          const metricMap: Record<string, string> = { views: "viewCount", likes: "likeCount", comments: "commentCount", shares: "shareCount", saves: "saveCount" };
+          const key = metricMap[ttSortBy] || "viewCount";
+          return (Number(b.after?.[key]) || 0) - (Number(a.after?.[key]) || 0);
+        });
+        return (
+          <PostPerformanceGrid
+            videos={ttSorted} dailyMetrics={dailyMetrics}
+            sparkMetric={ttSparkMetric} setSparkMetric={setTtSparkMetric}
+            sortBy={ttSortBy} setSortBy={setTtSortBy} sortOptions={TT_SORT_OPTIONS}
+            kwSet={new Set()} bigKwSet={new Set()} hasBaseline={hasBaseline} platform="tiktok"
+          />
+        );
+      })()}
+      {igData && igData.videos.length > 0 && (() => {
+        const igNormalized = igData.videos.map((v: any) => ({
+          videoUrl: v.videoUrl || "",
+          description: v.caption || "",
+          coverUrl: v.coverUrl || "",
+          before: undefined,
+          after: { viewCount: v.viewCount || 0, likeCount: v.likeCount || 0, commentCount: v.commentCount || 0, shareCount: 0, saveCount: 0 },
+          postedAt: v.publishedAt || "",
+          hashtags: [],
+        }));
+        const igSorted = [...igNormalized].sort((a, b) => {
+          if (igSortBy === "date") return (b.postedAt || "").localeCompare(a.postedAt || "");
+          const metricMap: Record<string, string> = { views: "viewCount", likes: "likeCount", comments: "commentCount" };
+          const key = metricMap[igSortBy] || "viewCount";
+          return (Number(b.after?.[key]) || 0) - (Number(a.after?.[key]) || 0);
+        });
+        return (
+          <PostPerformanceGrid
+            videos={igSorted} dailyMetrics={dailyMetrics}
+            sparkMetric={igSparkMetric} setSparkMetric={setIgSparkMetric}
+            sortBy={igSortBy} setSortBy={setIgSortBy} sortOptions={IG_SORT_OPTIONS}
+            kwSet={new Set()} bigKwSet={new Set()} hasBaseline={false} platform="instagram"
+          />
+        );
+      })()}
 
       {/* ── 2c. Daily Chart (enhanced) — レポートAのみ表示 ── */}
       {hasBaseline && <AllPlatformDailyChart dailyMetrics={dailyMetrics} />}
