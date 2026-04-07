@@ -300,11 +300,9 @@ async function scrapeHashtagWithPuppeteer(
     }
 
     // スクロールで追加データ取得（maxResults未達の場合）
-    // Reelのみカウントするので、十分な数が得られるまで最大10回スクロール
-    const reelCount = () => posts.filter(p => p.type === "reel").length;
-    if (reelCount() < maxResults && posts.length > 0) {
+    if (posts.length < maxResults && posts.length > 0) {
       const maxScrolls = 10;
-      for (let scroll = 0; scroll < maxScrolls && reelCount() < maxResults; scroll++) {
+      for (let scroll = 0; scroll < maxScrolls && posts.length < maxResults; scroll++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
         await new Promise(r => setTimeout(r, 2500));
         // DOM追加パースも試行
@@ -330,19 +328,24 @@ async function scrapeHashtagWithPuppeteer(
       }
     }
 
-    // Reelのみフィルター + position再番号付け
-    const reelsOnly = posts
-      .filter(p => p.type === "reel")
+    // 全タイプ混合ランキング（Instagramの実際の表示順を維持）
+    const allPosts = posts
       .slice(0, maxResults)
       .map((p, i) => ({ ...p, position: i + 1 }));
-    const ownRanks = reelsOnly.filter(p => p.isOwn).map(p => p.position);
-    console.log(`[Instagram Hashtag] #${tag}: ${posts.length} total → ${reelsOnly.length} reels`);
+    const ownRanks = allPosts.filter(p => p.isOwn).map(p => p.position);
+    const typeBreakdown = {
+      reel: allPosts.filter(p => p.type === "reel").length,
+      image: allPosts.filter(p => p.type === "image").length,
+      carousel: allPosts.filter(p => p.type === "carousel").length,
+      video: allPosts.filter(p => p.type === "video").length,
+    };
+    console.log(`[Instagram Hashtag] #${tag}: ${posts.length} total → ${allPosts.length} posts (reel:${typeBreakdown.reel} image:${typeBreakdown.image} carousel:${typeBreakdown.carousel})`);
 
     return {
       hashtag: tag,
-      totalFetched: reelsOnly.length,
+      totalFetched: allPosts.length,
       method: "puppeteer",
-      topPosts: reelsOnly,
+      topPosts: allPosts,
       ownRanks,
     };
   } finally {
@@ -560,13 +563,12 @@ async function scrapeHashtagWithApify(
       };
     });
 
-    // Reelのみにフィルター + position再番号付け
+    // 全タイプ混合ランキング + position再番号付け
     const posts = allPosts
-      .filter(p => p.type === "reel")
       .slice(0, maxResults)
       .map((p, i) => ({ ...p, position: i + 1 }));
     const ownRanks = posts.filter(p => p.isOwn).map(p => p.position);
-    console.log(`[Instagram Hashtag] Apify: #${tag} → ${allPosts.length} total, ${posts.length} reels`);
+    console.log(`[Instagram Hashtag] Apify: #${tag} → ${allPosts.length} total, ${posts.length} posts`);
 
     return {
       hashtag: tag,
