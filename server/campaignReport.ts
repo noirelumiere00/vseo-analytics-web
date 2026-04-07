@@ -620,18 +620,26 @@ export async function generateCampaignReport(
       for (const kw of keywords) {
         try {
           const result = await searchInstagramHashtag(kw, 30, ownNames);
-          // ショートコードでも自社判定（ユーザー名が一致しなくてもURLで判定）
-          if (ownShortcodes.size > 0) {
-            for (const post of result.topPosts) {
-              if (!post.isOwn && post.shortcode && ownShortcodes.has(post.shortcode)) {
-                post.isOwn = true;
-              }
-            }
-          }
           hashtagResults.push(result);
         } catch (e) {
           console.error(`[Report] Instagram hashtag search failed for #${kw}:`, e);
         }
+      }
+
+      // ショートコード照合で施策動画を判定（searchInstagramHashtag内のownNames照合に加えて）
+      if (ownShortcodes.size > 0) {
+        let matchCount = 0;
+        for (const result of hashtagResults) {
+          for (const post of result.topPosts) {
+            if (!post.isOwn && post.shortcode && ownShortcodes.has(post.shortcode)) {
+              (post as any).isOwn = true;
+              matchCount++;
+            }
+          }
+          // ownRanksも再計算
+          (result as any).ownRanks = result.topPosts.filter(p => p.isOwn).map(p => p.position);
+        }
+        console.log(`[Report] Instagram shortcode matching: ${ownShortcodes.size} own codes, ${matchCount} matches found`);
       }
       if (hashtagResults.length > 0) {
         instagramHashtagReport = hashtagResults;
