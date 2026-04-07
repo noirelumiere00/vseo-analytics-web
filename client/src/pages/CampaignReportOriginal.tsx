@@ -991,7 +991,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
         </CardContent></Card>
       </div>
 
-      {/* ── 投稿パフォーマンス推移 (mini cards + mini sparklines) ── */}
+      {/* ── 投稿パフォーマンス推移 (mini cards — TikTok-matching layout) ── */}
       {sortedSparks.length > 0 && (
         <Card>
           <CardContent className="py-4 space-y-3">
@@ -1018,8 +1018,8 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                 const displayVal = sortBy === "er" ? s.er : s.latestVal;
                 const intensity = topVal > 0 ? Math.min(displayVal / topVal, 1) : 0.5;
                 const sc = intensity > 0.5 ? "#E1306C" : intensity > 0.2 ? "#C13584" : "#a5b4fc";
-                const metricKeyMap: Record<string, keyof typeof s.recentDeltas[0]> = { views: "views", likes: "likes", comments: "comments", er: "er" };
-                const deltaKey = metricKeyMap[sortBy] || "views";
+                const igMetricKeyMap: Record<string, string> = { views: "views", likes: "likes", comments: "comments", er: "er" };
+                const deltaKey = igMetricKeyMap[sortBy] || "views";
                 const recent3 = s.recentDeltas.slice(-3);
 
                 const isExpanded = expandedCard === s.videoUrl;
@@ -1050,51 +1050,29 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
                         </p>
                       </div>
                     </div>
-                    {/* 直近3日の縦折れ線ミニグラフ */}
-                    {recent3.length > 0 && (() => {
-                      const vals = recent3.map(d => Number(d[deltaKey]) || 0);
-                      const maxV = Math.max(...vals);
-                      const minV = Math.min(...vals);
-                      const range = maxV - minV || 1;
-                      const h = 40; // SVG height
-                      const w = 80; // SVG width
-                      const pad = 6;
-                      const pts = vals.map((v, i) => ({
-                        x: pad + (i / Math.max(vals.length - 1, 1)) * (w - pad * 2),
-                        y: pad + (1 - (v - minV) / range) * (h - pad * 2),
-                        v,
-                        date: recent3[i].dateKey.replace(/^\d{4}-/, ""),
-                      }));
-                      const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-                      const area = `${line} L${pts[pts.length - 1].x},${h - pad} L${pts[0].x},${h - pad} Z`;
-                      return (
-                        <div className="px-3 pb-2 post-card-mini-spark">
-                          <div className="flex items-end gap-1.5">
-                            <svg viewBox={`0 0 ${w} ${h}`} className="flex-1 h-10" preserveAspectRatio="none">
-                              <defs>
-                                <linearGradient id={`mg-${idx}`} x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="0%" stopColor={sc} stopOpacity="0.25" />
-                                  <stop offset="100%" stopColor={sc} stopOpacity="0.02" />
-                                </linearGradient>
-                              </defs>
-                              <path d={area} fill={`url(#mg-${idx})`} />
-                              <path d={line} fill="none" stroke={sc} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                              {pts.map((p, pi) => (
-                                <circle key={pi} cx={p.x} cy={p.y} r="2.5" fill="white" stroke={sc} strokeWidth="1.5" />
-                              ))}
-                            </svg>
-                            <div className="flex flex-col items-end gap-0 flex-shrink-0">
-                              {pts.map((p, pi) => (
-                                <span key={pi} className="text-[8px] tabular-nums leading-[14px] text-slate-400">
-                                  <span className="text-slate-300">{p.date}</span>{" "}
-                                  <span className="text-slate-600 font-bold">{deltaKey === "er" ? `${p.v}%` : `+${fmt(p.v)}`}</span>
+                    {/* 直近3日の日次増分テーブル (TikTok matching bars) */}
+                    {recent3.length > 0 && (
+                      <div className="px-3 pb-2 post-card-mini-spark">
+                        <div className="space-y-0.5">
+                          {recent3.map((d, di) => {
+                            const val = Number((d as any)[deltaKey]) || 0;
+                            const maxInRecent = Math.max(...recent3.map(r => Number((r as any)[deltaKey]) || 0), 1);
+                            const barPct = Math.min((val / maxInRecent) * 100, 100);
+                            return (
+                              <div key={di} className="flex items-center gap-1.5 text-[9px]">
+                                <span className="text-slate-400 tabular-nums w-10 text-right flex-shrink-0">{d.dateKey.replace(/^\d{4}-/, "")}</span>
+                                <div className="flex-1 h-3.5 bg-slate-50 rounded-sm overflow-hidden">
+                                  <div className="h-full rounded-sm transition-all" style={{ width: `${barPct}%`, background: `linear-gradient(90deg, ${sc}40, ${sc}cc)` }} />
+                                </div>
+                                <span className="text-slate-700 font-bold tabular-nums w-12 text-right flex-shrink-0">
+                                  {deltaKey === "er" ? `${val}%` : `+${fmt(val)}`}
                                 </span>
-                              ))}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })()}
+                      </div>
+                    )}
                     {/* コンパクトメトリクス */}
                     <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
                       <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
@@ -1147,9 +1125,12 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
               })}
             </div>
             {sparkRemaining > 0 && (
-              <button onClick={() => setSparkDisplayCount(prev => prev + SPARK_PAGE)} className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors border border-dashed border-muted rounded-lg">
-                さらに {Math.min(sparkRemaining, SPARK_PAGE)} 件表示
-              </button>
+              <div className="flex justify-center pt-3">
+                <button onClick={() => setSparkDisplayCount(prev => prev + SPARK_PAGE)}
+                  className="inline-flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  <ChevronDown className="h-3.5 w-3.5" />もっと見る（残り{sparkRemaining}件）
+                </button>
+              </div>
             )}
           </CardContent>
         </Card>
