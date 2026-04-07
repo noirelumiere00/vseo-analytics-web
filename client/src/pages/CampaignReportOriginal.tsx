@@ -534,7 +534,7 @@ export default function CampaignReport() {
         {(hasVideoMetrics || hasInstagramHashtag) && (
           <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
             <div className="flex items-end justify-between">
-              <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question={platformTab === "tiktok" ? "TikTok動画の状況は？" : "Instagram Reelの状況は？"} />
+              <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question={platformTab === "tiktok" ? "TikTok動画の状況は？" : "Instagram投稿の状況は？"} />
               {hasVideoMetrics && hasInstagramHashtag && (
                 <PlatformTabSwitcher value={platformTab} onChange={setPlatformTab} />
               )}
@@ -1159,7 +1159,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
 }
 
 // ============================
-// Instagram Reel Section (施策動画 IG tab)
+// Instagram Post Section (施策動画 IG tab — reels + images + carousels)
 // ============================
 
 type IGHashtagReport = Array<{
@@ -1186,7 +1186,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
           <CardContent className="py-4">
             <div className="flex items-center gap-2 mb-3">
               <Star className="h-4 w-4 text-[#E1306C]" />
-              <span className="text-xs font-bold text-[#E1306C]">自社 Reel パフォーマンス</span>
+              <span className="text-xs font-bold text-[#E1306C]">自社投稿パフォーマンス</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {allOwnPosts.map(post => (
@@ -1222,7 +1222,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
         </Card>
       )}
 
-      {/* Per-hashtag reel list */}
+      {/* Per-hashtag post list (reels + images + carousels) */}
       {instagramHashtagReport.filter(r => r.topPosts.length > 0).map(result => {
         const maxViews = Math.max(...result.topPosts.map(p => p.viewCount), 1);
         return (
@@ -1243,6 +1243,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
                     <TableRow className="text-[10px]">
                       <TableHead className="w-10 text-center">#</TableHead>
                       <TableHead>アカウント</TableHead>
+                      <TableHead className="w-16 text-center">タイプ</TableHead>
                       <TableHead className="w-[140px]">再生数</TableHead>
                       <TableHead className="w-16 text-right">いいね</TableHead>
                       <TableHead className="w-16 text-right">コメント</TableHead>
@@ -1274,6 +1275,16 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
                                 {post.username ? `@${post.username}` : "—"}
                               </span>
                             </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full ${
+                              post.type === "reel" ? "bg-purple-100 text-purple-700" :
+                              post.type === "carousel" ? "bg-blue-100 text-blue-700" :
+                              post.type === "video" ? "bg-amber-100 text-amber-700" :
+                              "bg-gray-100 text-gray-700"
+                            }`}>
+                              {post.type === "reel" ? "Reel" : post.type === "carousel" ? "カルーセル" : post.type === "video" ? "動画" : "画像"}
+                            </span>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
