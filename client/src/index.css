@@ -940,21 +940,51 @@
 }
 
 /* ========================================
-   Sidebar Inset — Overflow Safety Net
+   Sidebar Inset — Overflow Prevention
    ======================================== */
+
+/* The flex wrapper: force flex-item sizing, never grow beyond parent */
+[data-slot="sidebar-wrapper"] {
+  overflow: hidden !important;
+}
 
 [data-slot="sidebar-inset"] {
   overflow: hidden !important;
   width: 0 !important;
   flex: 1 1 0% !important;
   min-width: 0 !important;
+  max-width: 100% !important;
 }
 
+/* The main scrollable content area */
 [data-slot="sidebar-inset"] main {
-  contain: inline-size;
   overflow-y: auto;
-  overflow-x: clip;
+  overflow-x: hidden;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* All direct children of main must respect container width */
+[data-slot="sidebar-inset"] main > * {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Force all cards inside main to never exceed parent */
+[data-slot="sidebar-inset"] [data-slot="card"] {
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Grids and flex containers: prevent children from pushing parent wider */
+[data-slot="sidebar-inset"] .grid,
+[data-slot="sidebar-inset"] [class*="grid-cols"] {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* ========================================
