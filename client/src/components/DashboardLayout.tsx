@@ -167,7 +167,7 @@ function DashboardLayoutContent({
 
   return (
     <>
-      <div className="relative" ref={sidebarRef}>
+      <div className="relative shrink-0" ref={sidebarRef}>
         <Sidebar collapsible="icon" className="border-r-0" disableTransition={isResizing}>
           {/* Brand */}
           <SidebarHeader className="h-14 justify-center">
@@ -305,7 +305,7 @@ function DashboardLayoutContent({
             <PageBreadcrumb />
           </div>
         )}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 p-2 md:p-3 max-w-full">{children}</main>
+        <main className="flex-1 min-w-0 p-2 md:p-3">{children}</main>
       </SidebarInset>
     </>
   );
