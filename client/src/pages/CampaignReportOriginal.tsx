@@ -374,7 +374,7 @@ export default function CampaignReport() {
 
   return (
     <DashboardLayout>
-      <div className="bg-background flex flex-col h-full min-w-0 -m-2 md:-m-3 max-w-full">
+      <div className="bg-background flex flex-col h-full min-w-0 -m-2 md:-m-3 max-w-full overflow-x-hidden">
         {/* Fixed Header + Nav */}
         <div className="shrink-0 bg-card backdrop-blur-xl z-20 border-b border-border min-w-0 max-w-full">
           <div className="px-3 md:px-4 min-w-0 max-w-full">
@@ -460,7 +460,7 @@ export default function CampaignReport() {
             </div>
 
             {/* Navigation */}
-            <nav className="py-1 overflow-x-auto">
+            <nav className="py-1 overflow-x-auto min-w-0">
               <div className="flex gap-0 min-w-max segment-control">
                 {visibleSections.map((sec) => {
                   const Icon = sec.icon;
@@ -940,7 +940,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
   const topVal = sortBy === "er" ? Math.max(...sortedSparks.map(s => s.er), 1) : Math.max(...sortedSparks.map(s => s.latestVal), 1);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* ── KPI Summary Cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card><CardContent className="py-3 px-4 space-y-1">
@@ -1179,7 +1179,7 @@ export function InstagramReelSection({ instagramHashtagReport }: { instagramHash
     : 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* Own posts hero */}
       {allOwnPosts.length > 0 && (
         <Card className="border-[#E1306C]/15 bg-gradient-to-r from-[#E1306C]/[0.03] to-[#F77737]/[0.02]">
@@ -1385,14 +1385,14 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
   const IG = { pink: "#E1306C", orange: "#F77737", purple: "#833AB4", yellow: "#FCAF45" };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
 
       {/* ======== Hero Card — Instagram gradient aesthetic ======== */}
       <Card className="overflow-hidden border-0 shadow-lg">
         <CardContent className="p-0">
           {/* Gradient header strip */}
           <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` }} />
-          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-0">
+          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-0 min-w-0">
             {/* Left: SOV ring */}
             <div className="flex flex-col items-center justify-center py-6 px-4 md:border-r border-slate-100">
               {(() => {
@@ -1425,7 +1425,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
             </div>
 
             {/* Right: Stat grid — 2×3 */}
-            <div className="grid grid-cols-3 grid-rows-2 gap-px bg-slate-100">
+            <div className="grid grid-cols-3 grid-rows-2 gap-px bg-slate-100 min-w-0">
               {[
                 { label: "自社投稿", val: `${hero.totalOwn}`, sub: `/${hero.totalPosts}件` },
                 { label: "最高順位", val: hero.bestRank != null ? `${hero.bestRank}` : "—", sub: hero.bestRank != null ? "位" : "" },
@@ -1448,7 +1448,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
 
       {/* ======== Tag Selector Pills ======== */}
       {validReports.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-w-0">
           <div className="flex gap-2 min-w-max">
             <button
               onClick={() => setActiveTag(null)}
@@ -1613,7 +1613,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
 
               {/* Stories-ring style: Top 10 as horizontal scroll like IG Stories */}
               <div className="px-5 py-5">
-                <div className="flex gap-3 overflow-x-auto pb-2">
+                <div className="flex gap-3 overflow-x-auto pb-2 min-w-0">
                   {top.slice(0, 10).map((post, i) => {
                     const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
                     return (
@@ -1707,7 +1707,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
               )}
 
               {/* Bottom summary strip */}
-              <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+              <div className="border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100 min-w-0">
                 <div className="flex flex-col items-center py-3">
                   <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider">SOV占有率</span>
                   <span className="text-lg font-black text-foreground tabular-nums">{ownPosts.length}<span className="text-xs font-normal text-[#b0b0b0]">/{top.length}</span></span>
@@ -1733,8 +1733,8 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
 
       {/* ======== Summary Table with Accordion ======== */}
       {validReports.length > 0 && (
-        <Card className="overflow-hidden">
-          <CardContent className="p-0 overflow-x-auto">
+        <Card className="overflow-hidden min-w-0">
+          <CardContent className="p-0 overflow-x-auto min-w-0">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-slate-100">
@@ -2199,7 +2199,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   }, [chartData]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
       {/* ======== HeroCard ======== */}
       {chartData.length > 0 && (() => {
         // Per-KW hero values when individual KW selected
@@ -2248,7 +2248,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
         return (
         <Card key={activeKw ?? "__overview__"} className="overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardContent className="p-0">
-            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-0 md:divide-x divide-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-0 md:divide-x divide-slate-100 min-w-0">
               {/* Donut — アカウント種別ごとにセグメント分け */}
               <div className="flex flex-col items-center justify-center py-6 px-4">
                 {(() => {
@@ -2305,7 +2305,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               </div>
 
               {/* 4 stat boxes */}
-              <div className="grid grid-cols-2 gap-px bg-[#f5f5f5]">
+              <div className="grid grid-cols-2 gap-px bg-[#f5f5f5] min-w-0">
                 {heroStats.map((stat, i) => (
                   <div key={i} className="bg-[#f5f5f5] flex flex-col items-center justify-center py-4 px-3">
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{stat.label}</p>
@@ -2315,7 +2315,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               </div>
 
               {/* Account breakdown */}
-              <div className="flex flex-col justify-center py-5 px-5 gap-3">
+              <div className="flex flex-col justify-center py-5 px-5 gap-3 min-w-0">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">アカウント内訳</p>
                 {[
                   { label: "公式", count: heroOfficialCount, color: "bg-blue-600", textColor: "text-blue-700" },
@@ -2344,7 +2344,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
 
       {/* ======== KwTabBar ======== */}
       {kwList.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-w-0">
           <div className="flex gap-2 min-w-max">
             {/* 全体 (overview) button */}
             <button
@@ -2429,7 +2429,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       const totalH = PH + labelH;
                       const sc = visibleKws.length <= 2 ? 1.15 : visibleKws.length <= 4 ? 0.95 : 0.75;
                       return (
-                        <div className="flex justify-center gap-3 overflow-x-auto pb-2">
+                        <div className="flex justify-center gap-3 overflow-x-auto pb-2 min-w-0">
                           {visibleKws.map(d => {
                             const aPct = d.total > 0 ? Math.round((d.own / d.total) * 100) : 0;
                             return (
@@ -2546,7 +2546,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
           <div className="space-y-5">
             {/* Animated collapse wrapper — grid-rows trick for smooth height */}
             <div
-              className="grid transition-all"
+              className="grid transition-all min-w-0"
               style={{
                 gridTemplateRows: showCard ? "1fr" : "0fr",
                 opacity: showCard ? 1 : 0,
@@ -2615,7 +2615,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                               自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%)  ·  ネガティブ {beforeNeg}本
                             </span>
                           </div>
-                          <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
+                          <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
                             {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
                           </div>
                         </div>
@@ -2688,7 +2688,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         const afterRank = activeKwData!.posData?.afterRank;
                         const rankChange = activeKwData!.posData?.rankChange;
                         return (
-                          <div className="grid grid-cols-3 divide-x divide-black/4">
+                          <div className="grid grid-cols-3 divide-x divide-black/4 min-w-0">
                             <div className="flex flex-col items-center gap-0.5 py-3">
                               <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">上位シェア率</span>
                               <span className="text-xl font-black text-foreground tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-muted-foreground ml-0.5">/{afterSlots.length}</span></span>
@@ -2728,7 +2728,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
       {/* ======== KwSummaryTable (アコーディオン付き) ======== */}
       {kwList.length > 0 && (
         <Card>
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="p-0 overflow-x-auto min-w-0">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-card border-b border-border">
@@ -2999,7 +2999,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
   const hasDailyData = dailyMetrics && dailyMetrics.length > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* サマリー */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card><CardContent className="py-3 px-4 text-center">
@@ -3059,7 +3059,7 @@ export function VideoSection({ videos, videoScores, hasBaseline = true, dailyMet
               <CardTitle className="text-base">パフォーマンス推移</CardTitle>
               <CardDescription className="text-xs">日別累積値（投稿日順）</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0 overflow-hidden">
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={lineData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -3222,7 +3222,7 @@ function TikTokPerformanceChart({ dailyMetrics, videos }: { dailyMetrics: any[];
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0 overflow-hidden">
         <ResponsiveContainer width="100%" height={300}>
           {chartMode === "cumulative" ? (
             <LineChart data={lineData}>
@@ -4018,7 +4018,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
     <div
       ref={stageRef}
       tabIndex={0}
-      className="relative bg-transparent px-3 sm:px-6 py-5 sm:py-8 outline-none"
+      className="relative bg-transparent px-3 sm:px-6 py-5 sm:py-8 outline-none min-w-0 overflow-hidden"
     >
       {/* Section title */}
       <div className="flex items-center gap-2 mb-5">
@@ -4669,7 +4669,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 min-w-0">
       {/* 統合順位比較テーブル */}
       {rows.length > 0 && (
         <Card>
@@ -4677,7 +4677,7 @@ export function CompetitorSection({ compReport, freqReport, bigKeywordReport, ha
             <CardTitle className="text-base">キーワード別順位比較</CardTitle>
             <CardDescription className="text-xs">施策KW・ビッグKWでの自社と競合の検索順位（Top30）</CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent className="overflow-x-auto min-w-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -4973,7 +4973,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
   }, [keywordSentimentReport]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
       {/* ======== Hero KPI Row ======== */}
       <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
         {[
@@ -5395,7 +5395,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
   }, [monthlyVolumeData]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
       {/* ====== Correlation Hero Card ====== */}
       {corr != null && (
         <Card className={`border ${corrBgClass} relative overflow-hidden`}>
@@ -5460,7 +5460,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
             検索トレンドの推移と施策投稿の日次再生数を重ね合わせて表示
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0 overflow-hidden">
           <>
                 <div className="flex items-center justify-center gap-4 sm:gap-6 mb-3 text-xs">
                   <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 rounded bg-[#0a0a0a]" /> Google Trends（左軸）</span>
@@ -5542,7 +5542,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
               )}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-w-0 overflow-hidden">
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={monthlyVolumeData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
@@ -5903,10 +5903,10 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
   }, [ytData, igData, tiktokVideos, tiktokViews, tiktokLikes, tiktokComments, tiktokShares, tiktokSaves, ytViews, ytLikes, ytComments, igViews, igLikes, igComments]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0">
 
       {/* ── 2a. Global KPI Cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: "総投稿数", value: totalVideos.toString(), icon: Play, color: "text-foreground" },
           { label: "総再生数", value: fmt(totalViews), icon: Eye, color: "text-foreground" },
@@ -6059,7 +6059,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
               </div>
             </div>
           </CardHeader>
-          <CardContent className="pt-0 px-3 pb-2 overflow-x-auto">
+          <CardContent className="pt-0 px-3 pb-2 overflow-x-auto min-w-0">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -6356,7 +6356,7 @@ function AllPlatformDailyChart({ dailyMetrics }: { dailyMetrics: any[] }) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0 overflow-hidden">
         <ResponsiveContainer width="100%" height={280}>
           {chartMode === "cumulative" ? (
             <ComposedChart data={chartData}>
@@ -6764,7 +6764,7 @@ function CumulativeMetricsChart({ dailyMetrics, campaign }: { dailyMetrics: any[
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0 overflow-hidden">
         <ResponsiveContainer width="100%" height={300}>
           {chartMode === "cumulative" ? (
             <ComposedChart data={chartData}>
