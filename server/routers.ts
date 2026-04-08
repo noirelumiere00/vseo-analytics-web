@@ -2002,6 +2002,68 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    // IG SOV スロット編集
+    updateIgSovSlot: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        hashtag: z.string(),
+        shortcode: z.string(),
+        changes: z.object({
+          owner: z.enum(["own", "competitor", "other"]).optional(),
+          owner_detail: z.enum(["official", "satellite", "campaign"]).optional(),
+          owner_name: z.string().optional(),
+          genre: z.enum(["recommend", "howto", "entertainment", "negative", "other"]).optional(),
+          ig_labels: z.array(z.enum(["promotion", "paid_partnership", "aigc"])).optional(),
+        }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report || !report.instagramHashtagReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません" });
+        }
+
+        const igReport = report.instagramHashtagReport as any[];
+        const tagReport = igReport.find((r: any) => r.hashtag === input.hashtag);
+        if (!tagReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "ハッシュタグが見つかりません" });
+        }
+
+        const posts: any[] = tagReport.topPosts || [];
+        const postIdx = posts.findIndex((p: any) => p.shortcode === input.shortcode);
+        if (postIdx === -1) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "投稿が見つかりません" });
+        }
+
+        const post = posts[postIdx];
+        if (input.changes.owner !== undefined) {
+          post.owner = input.changes.owner;
+          post.isOwn = input.changes.owner === "own";
+        }
+        if (input.changes.owner_detail !== undefined) post.owner_detail = input.changes.owner_detail;
+        if (input.changes.owner_name !== undefined) post.owner_name = input.changes.owner_name;
+        if (input.changes.genre !== undefined) post.genre = input.changes.genre;
+        if (input.changes.ig_labels !== undefined) post.ig_labels = input.changes.ig_labels;
+
+        if (post.owner !== "own") {
+          delete post.owner_detail;
+        }
+        if (post.owner !== "competitor") {
+          delete post.owner_name;
+        }
+
+        // Recalculate ownRanks
+        tagReport.ownRanks = posts
+          .filter((p: any) => p.owner === "own" || (p.owner === undefined && p.isOwn))
+          .map((p: any) => p.position);
+
+        await db.patchCampaignReportInstagramHashtag(input.campaignId, igReport);
+        return { success: true };
+      }),
+
     // 第三者動画センチメント更新
     updateThirdPartySentiment: protectedProcedure
       .input(z.object({

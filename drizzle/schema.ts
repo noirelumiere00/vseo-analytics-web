@@ -873,6 +873,11 @@ export const campaignReports = mysqlTable("campaign_reports", {
       coverUrl: string;
       postUrl: string;
       isOwn: boolean;
+      owner?: "own" | "competitor" | "other";
+      owner_detail?: "official" | "satellite" | "campaign";
+      owner_name?: string;
+      genre?: "recommend" | "howto" | "entertainment" | "negative" | "other";
+      ig_labels?: Array<"promotion" | "paid_partnership" | "aigc">;
     }>;
     ownRanks: number[];
   }>>(),

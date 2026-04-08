@@ -204,6 +204,51 @@ export default function CampaignReport() {
     });
   }, [campaignId, utils, updateSlotMutation]);
 
+  // IG SOV slot mutation
+  const updateIgSlotMutation = trpc.campaign.updateIgSovSlot.useMutation({
+    onError: () => {
+      toast.error("IG スロット更新に失敗しました");
+      reportQuery.refetch();
+    },
+  });
+
+  const handleIgSlotUpdate = useCallback((
+    hashtag: string,
+    shortcode: string,
+    changes: IgSlotChanges,
+  ) => {
+    // Optimistic update
+    utils.campaign.getReport.setData({ campaignId }, (old: any) => {
+      if (!old?.instagramHashtagReport) return old;
+      const igReport = [...old.instagramHashtagReport];
+      const tagIdx = igReport.findIndex((r: any) => r.hashtag === hashtag);
+      if (tagIdx === -1) return old;
+      const tagReport = { ...igReport[tagIdx] };
+      const posts = [...(tagReport.topPosts || [])];
+      const postIdx = posts.findIndex((p: any) => p.shortcode === shortcode);
+      if (postIdx === -1) return old;
+      const post = { ...posts[postIdx], ...changes, isOwn: changes.owner === "own" };
+      if (post.owner !== "own") delete post.owner_detail;
+      if (post.owner !== "competitor") delete post.owner_name;
+      posts[postIdx] = post;
+      tagReport.topPosts = posts;
+      tagReport.ownRanks = posts
+        .filter((p: any) => p.owner === "own" || (p.owner === undefined && p.isOwn))
+        .map((p: any) => p.position);
+      igReport[tagIdx] = tagReport;
+      return { ...old, instagramHashtagReport: igReport };
+    });
+
+    updateIgSlotMutation.mutate({
+      campaignId,
+      hashtag,
+      shortcode,
+      changes: changes as any,
+    });
+
+    toast.success("スロットを更新しました");
+  }, [campaignId, utils, updateIgSlotMutation]);
+
   // --- 共有リンク ---
   const shareStatusQuery = trpc.campaign.getShareStatus.useQuery(
     { campaignId },
@@ -584,7 +629,7 @@ export default function CampaignReport() {
 
           {/* Instagram Hashtag Rankings */}
           {platformTab === "instagram" && hasInstagramHashtag && (
-            <InstagramHashtagRankingSection instagramHashtagReport={instagramHashtagReport!} />
+            <InstagramHashtagRankingSection instagramHashtagReport={instagramHashtagReport!} campaignId={campaignId} onIgSlotUpdate={handleIgSlotUpdate} />
           )}
         </div>
 
@@ -1173,7 +1218,7 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
 
 type IGHashtagReport = Array<{
   hashtag: string; totalFetched: number; method: string;
-  topPosts: Array<{ position: number; shortcode: string; username: string; type: string; likeCount: number; commentCount: number; viewCount: number; caption: string; coverUrl: string; postUrl: string; isOwn: boolean }>;
+  topPosts: Array<IGPostData & { caption: string }>;
   ownRanks: number[];
 }>;
 
@@ -1347,7 +1392,42 @@ type IGPostData = {
   coverUrl: string;
   postUrl: string;
   isOwn: boolean;
+  owner?: "own" | "competitor" | "other";
+  owner_detail?: "official" | "satellite" | "campaign";
+  owner_name?: string;
+  genre?: "recommend" | "howto" | "entertainment" | "negative" | "other";
+  ig_labels?: Array<"promotion" | "paid_partnership" | "aigc">;
 };
+
+// ============================
+// Shared classification constants (used by both IG and TikTok SOV edit forms)
+// ============================
+const GENRE_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {
+  recommend: { label: "レコメンド", cls: "bg-blue-50 text-blue-700 border border-blue-200", barCls: "bg-blue-600" },
+  howto: { label: "How-to", cls: "bg-amber-50 text-amber-700 border border-amber-200", barCls: "bg-amber-500" },
+  entertainment: { label: "エンタメ", cls: "bg-purple-50 text-purple-700 border border-purple-200", barCls: "bg-purple-500" },
+  negative: { label: "ネガティブ", cls: "bg-red-50 text-[#D71921] border border-[#D71921]/20", barCls: "bg-[#D71921]" },
+  other: { label: "その他", cls: "bg-[#f5f5f5] text-[#6b7280] border border-black/6", barCls: "bg-[#9ca3af]" },
+};
+
+const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
+  official: { text: "公式", cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  satellite: { text: "サテライト", cls: "bg-teal-50 text-teal-700 border-teal-200" },
+  campaign: { text: "施策", cls: "bg-red-50 text-[#D71921] border-red-200" },
+  competitor: { text: "競合", cls: "bg-slate-100 text-slate-600 border-slate-300" },
+};
+
+type OwnerKey = "official" | "satellite" | "campaign" | "competitor" | "other";
+function slotToOwnerKey(slot: { owner?: string; owner_detail?: string }): OwnerKey {
+  if (slot.owner === "own") return (slot.owner_detail as OwnerKey) || "official";
+  if (slot.owner === "competitor") return "competitor";
+  return "other";
+}
+function ownerKeyToChanges(key: OwnerKey): { owner: "own" | "competitor" | "other"; owner_detail?: string } {
+  if (key === "official" || key === "satellite" || key === "campaign") return { owner: "own", owner_detail: key };
+  if (key === "competitor") return { owner: "competitor" };
+  return { owner: "other" };
+}
 
 function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: IGPostData[]; hashtag: string; isOwnOverrides?: Record<string, boolean> }) {
   return (
@@ -1455,7 +1535,7 @@ function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: I
                   <div className="grid grid-cols-3 gap-px bg-white">
                     {posts.slice(0, 30).map((post, i) => {
                       const slotKey = `${hashtag}:${post.shortcode}`;
-                      const effectiveIsOwn = slotKey in isOwnOverrides ? isOwnOverrides[slotKey] : post.isOwn;
+                      const effectiveIsOwn = slotKey in isOwnOverrides ? isOwnOverrides[slotKey] : (post.owner === "own" || (post.owner === undefined && post.isOwn));
                       const placeholderColors = [
                         "from-[#f0e6ff] to-[#e0d0f0]",
                         "from-[#e6f0ff] to-[#d0e0f0]",
@@ -1573,6 +1653,167 @@ function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: I
 }
 
 // ============================
+// IG SOV Slot Edit Form (matching TikTok SovSlotEditForm pattern)
+// ============================
+
+const IG_LABEL_CONFIG: Record<string, { text: string; dot: string }> = {
+  promotion: { text: "プロモーション", dot: "bg-amber-500" },
+  paid_partnership: { text: "有償パートナーシップ", dot: "bg-purple-500" },
+  aigc: { text: "AI生成メディアを含む", dot: "bg-teal-500" },
+};
+
+const IG_OWNER_KEY_OPTIONS: { key: OwnerKey; label: string; color: string; activeBg: string }[] = [
+  { key: "official", label: "公式", color: "text-blue-700", activeBg: "bg-blue-50 border-blue-300 ring-1 ring-blue-200" },
+  { key: "satellite", label: "サテライト", color: "text-teal-700", activeBg: "bg-teal-50 border-teal-300 ring-1 ring-teal-200" },
+  { key: "campaign", label: "施策", color: "text-[#D71921]", activeBg: "bg-red-50 border-red-300 ring-1 ring-red-200" },
+  { key: "competitor", label: "競合", color: "text-slate-600", activeBg: "bg-slate-100 border-slate-400 ring-1 ring-slate-300" },
+  { key: "other", label: "その他", color: "text-[#6b7280]", activeBg: "bg-[#f5f5f5] border-slate-400 ring-1 ring-slate-300" },
+];
+
+const IG_GENRE_OPTIONS: { key: string; label: string }[] = [
+  { key: "recommend", label: "レコメンド" },
+  { key: "howto", label: "How-to" },
+  { key: "entertainment", label: "エンタメ" },
+  { key: "negative", label: "ネガティブ" },
+  { key: "other", label: "その他" },
+];
+
+function igPostToOwnerKey(post: IGPostData): OwnerKey {
+  if (post.owner === "own") return (post.owner_detail as OwnerKey) || "campaign";
+  if (post.owner === "competitor") return "competitor";
+  if (post.owner === undefined && post.isOwn) return "campaign";
+  if (post.owner === undefined && !post.isOwn) return "other";
+  return "other";
+}
+
+type IgSlotChanges = { owner: string; owner_detail?: string; owner_name?: string; genre: string; ig_labels: string[] };
+
+function IgSovSlotEditForm({ post, onSave, onCancel }: {
+  post: IGPostData;
+  onSave: (changes: IgSlotChanges) => void;
+  onCancel: () => void;
+}) {
+  const [ownerKey, setOwnerKey] = useState<OwnerKey>(igPostToOwnerKey(post));
+  const [ownerName, setOwnerName] = useState(post.owner_name || "");
+  const [genre, setGenre] = useState(post.genre || "other");
+  const [labels, setLabels] = useState<string[]>([...(post.ig_labels || [])]);
+
+  const toggleLabel = (l: string) => setLabels(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
+
+  const handleSave = () => {
+    const base = ownerKeyToChanges(ownerKey);
+    onSave({
+      ...base,
+      owner_name: ownerKey === "competitor" ? ownerName : undefined,
+      genre,
+      ig_labels: labels,
+    });
+  };
+
+  return (
+    <div className="space-y-3 w-56">
+      <div className="flex items-center gap-2 pb-1 border-b border-black/4">
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">スロット編集</span>
+        <span className="text-[10px] text-slate-300">@{post.username}</span>
+      </div>
+
+      {/* Owner classification */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-muted-foreground">分類</Label>
+        <div className="flex flex-wrap gap-1">
+          {IG_OWNER_KEY_OPTIONS.map(opt => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setOwnerKey(opt.key)}
+              className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
+                ownerKey === opt.key
+                  ? `${opt.activeBg} ${opt.color}`
+                  : "border-border text-muted-foreground hover:border-black/8 hover:text-muted-foreground"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        {ownerKey === "competitor" && (
+          <Input
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+            placeholder="競合名"
+            className="h-7 text-xs mt-1"
+          />
+        )}
+      </div>
+
+      {/* Genre */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-muted-foreground">ジャンル</Label>
+        <div className="flex flex-wrap gap-1">
+          {IG_GENRE_OPTIONS.map(opt => {
+            const gi = GENRE_CONFIG[opt.key] || GENRE_CONFIG.other;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setGenre(opt.key)}
+                className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
+                  genre === opt.key
+                    ? `${gi.cls} border-transparent`
+                    : "border-border text-muted-foreground hover:border-black/8"
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Labels */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-muted-foreground">ラベル</Label>
+        <div className="space-y-1">
+          {Object.entries(IG_LABEL_CONFIG).map(([key, cfg]) => (
+            <label key={key} className="flex items-center gap-2 cursor-pointer group/lbl">
+              <Checkbox
+                checked={labels.includes(key)}
+                onCheckedChange={() => toggleLabel(key)}
+                className="h-3.5 w-3.5"
+              />
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground group-hover/lbl:text-foreground">
+                <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                {cfg.text}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 pt-1 border-t border-black/4">
+        <Button
+          size="sm"
+          onClick={handleSave}
+          className="h-7 text-xs px-3 gap-1"
+        >
+          <Check className="h-3 w-3" />
+          保存
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-7 text-xs px-2 text-muted-foreground"
+        >
+          キャンセル
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ============================
 // Instagram Phone Mockup Stage — 3D Carousel (matching TikTok pattern)
 // ============================
 
@@ -1595,13 +1836,13 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
   showOwnOnly: boolean;
   onActiveTagChange: (tag: string | null) => void;
   IG: { pink: string; orange: string; purple: string; yellow: string };
+  onSlotUpdate?: (hashtag: string, shortcode: string, changes: IgSlotChanges) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [revealed, setRevealed] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
-  // IG slot edit: track which slot popover is open (by position) and local isOwn overrides
+  // IG slot edit: track which slot popover is open (by position)
   const [igEditOpenSlot, setIgEditOpenSlot] = useState<number | null>(null);
-  const [igIsOwnOverrides, setIgIsOwnOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const el = stageRef.current;
@@ -1655,7 +1896,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
   const selectedReport = validReports[selectedIdx];
   const selectedTag = tagStats.find(t => t.hashtag === selectedReport?.hashtag);
   const selectedPosts = selectedReport ? selectedReport.topPosts.slice(0, 10) : [];
-  const filteredSlotPosts = showOwnOnly ? selectedPosts.filter(p => p.isOwn) : selectedPosts;
+  const filteredSlotPosts = showOwnOnly ? selectedPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)) : selectedPosts;
 
   return (
     <div className="space-y-4">
@@ -1684,7 +1925,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
             {isOverview ? (
               <div className="flex gap-6 overflow-x-auto pb-4 justify-center" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "thin" }}>
                 {validReports.map((report, kwIdx) => {
-                  const ownCount = report.topPosts.filter(p => p.isOwn).length;
+                  const ownCount = report.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length;
                   return (
                     <div
                       key={report.hashtag}
@@ -1719,7 +1960,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                         </div>
                         <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                           <div style={{ transform: `scale(${OVERVIEW_PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} isOwnOverrides={igIsOwnOverrides} />
+                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
                           </div>
                         </div>
                       </div>
@@ -1739,7 +1980,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                 >
                   {validReports.map((report, kwIdx) => {
                     const ts = tagStats.find(t => t.hashtag === report.hashtag);
-                    const ownCount = report.topPosts.filter(p => p.isOwn).length;
+                    const ownCount = report.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length;
                     const offset = kwIdx - selectedIdx;
                     const t = isSingle
                       ? { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 }
@@ -1851,17 +2092,23 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                   #{selectedReport.hashtag} 上位表示マップ
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />自社
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />公式
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600" />サテライト
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }} />施策
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-[#a3a3a3]">
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-200" />他社
                 </span>
               </div>
-              {selectedReport.topPosts.filter(p => p.isOwn).length > 0 && (
+              {selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length > 0 && (
                 <div className="flex items-center gap-1.5">
                   <Trophy className="h-3 w-3" style={{ color: IG.pink }} />
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>
-                    {selectedReport.topPosts.filter(p => p.isOwn).map(p => `${p.position}\u4F4D`).join("\u30FB")}
+                    {selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).map(p => `${p.position}\u4F4D`).join("\u30FB")}
                   </span>
                 </div>
               )}
@@ -1871,9 +2118,19 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
             <div className="px-5 py-5">
               <div className="flex gap-2 overflow-x-auto pb-2 min-w-0">
                 {filteredSlotPosts.map((post, i) => {
-                  const slotKey = `${selectedReport.hashtag}:${post.shortcode}`;
-                  const effectiveIsOwn = slotKey in igIsOwnOverrides ? igIsOwnOverrides[slotKey] : post.isOwn;
+                  const effectiveIsOwn = post.owner === "own" || (post.owner === undefined && post.isOwn);
+                  const isCompetitor = post.owner === "competitor";
+                  const isLabeled = effectiveIsOwn || isCompetitor;
+                  const detail = effectiveIsOwn ? (post.owner_detail || "campaign") : isCompetitor ? "competitor" : undefined;
+                  const IG_SLOT_CAP: Record<string, { bg: string; label: string }> = {
+                    official: { bg: "bg-blue-600", label: "公式" },
+                    satellite: { bg: "bg-teal-600", label: "サテライト" },
+                    campaign: { bg: "", label: "施策" },
+                    competitor: { bg: "bg-slate-500", label: "競合" },
+                  };
+                  const capCfg = detail ? IG_SLOT_CAP[detail] : undefined;
                   const isEditOpen = igEditOpenSlot === post.position;
+                  const postLabels = post.ig_labels || [];
                   return (
                   <Popover key={i} open={isEditOpen} onOpenChange={(open) => setIgEditOpenSlot(open ? post.position : null)}>
                   <div className={`relative flex flex-col shrink-0 group/slot transition-all duration-200 ${effectiveIsOwn ? "w-20" : "w-16"}`}>
@@ -1881,7 +2138,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        onClick={(e) => { e.stopPropagation(); }}
                         className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-white border border-black/8 shadow-md flex items-center justify-center
                           transition-all duration-200 hover:bg-card hover:border-black/12 hover:border-black/15
                           ${isEditOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/slot:opacity-100 group-hover/slot:scale-100 group-hover/slot:pointer-events-auto"}`}
@@ -1889,20 +2146,15 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                         <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent side="top" align="center" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
-                      <div className="flex flex-col gap-2 min-w-[140px]">
-                        <span className="text-[11px] font-semibold text-foreground">スロット編集</span>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-[11px] text-muted-foreground">施策動画</span>
-                          <Switch
-                            checked={effectiveIsOwn}
-                            onCheckedChange={(checked) => {
-                              setIgIsOwnOverrides(prev => ({ ...prev, [slotKey]: checked }));
-                            }}
-                          />
-                        </div>
-                        <span className="text-[9px] text-muted-foreground/60">@{post.username} · {post.position}位</span>
-                      </div>
+                    <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+                      <IgSovSlotEditForm
+                        post={post}
+                        onSave={(changes) => {
+                          onSlotUpdate?.(selectedReport.hashtag, post.shortcode, changes);
+                          setIgEditOpenSlot(null);
+                        }}
+                        onCancel={() => setIgEditOpenSlot(null)}
+                      />
                     </PopoverContent>
 
                     <a
@@ -1912,21 +2164,31 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                       className={`relative flex flex-col cursor-pointer transition-all duration-200 ${isEditOpen ? "" : "hover:scale-110 hover:z-10"}`}
                       onClick={(e) => { if (isEditOpen) { e.preventDefault(); } }}
                     >
-                    {/* Top cap: own = gradient badge */}
-                    {effectiveIsOwn ? (
-                      <div className="text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0 text-white"
-                        style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
-                        施策
+                    {/* Top cap: classification badge */}
+                    {isLabeled && capCfg ? (
+                      <div className={`text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0 text-white ${capCfg.bg}`}
+                        style={detail === "campaign" ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` } : undefined}>
+                        {capCfg.label}
                       </div>
                     ) : (
                       <div className="h-[14px] shrink-0" />
                     )}
 
                     {/* Thumbnail — 9:16 aspect */}
-                    <div className={`relative w-full overflow-hidden ${effectiveIsOwn ? `h-[142px] rounded-b-md border-2 border-[#E1306C] shadow-lg shadow-[#E1306C]/20` : "h-[114px] rounded-md border border-border/70"}`}>
+                    <div className={`relative w-full overflow-hidden ${effectiveIsOwn ? `h-[142px] rounded-b-md border-2 border-[#E1306C] shadow-lg shadow-[#E1306C]/20` : isCompetitor ? "h-[114px] rounded-b-md border-2 border-slate-300" : "h-[114px] rounded-md border border-border/70"}`}>
                       {/* Accent bar */}
                       {effectiveIsOwn && (
-                        <div className="absolute top-0 left-0 bottom-0 w-[3px] z-10" style={{ background: `linear-gradient(180deg, ${IG.pink}, ${IG.purple})` }} />
+                        <div className="absolute top-0 left-0 bottom-0 w-[3px] z-10" style={detail === "official" ? { background: "#2563eb" } : detail === "satellite" ? { background: "#0d9488" } : { background: `linear-gradient(180deg, ${IG.pink}, ${IG.purple})` }} />
+                      )}
+
+                      {/* Label dots (promotion/partnership/AI) */}
+                      {postLabels.length > 0 && (
+                        <div className="absolute top-1 left-1 flex gap-0.5 z-20">
+                          {postLabels.map(label => {
+                            const lCfg = IG_LABEL_CONFIG[label];
+                            return lCfg ? <span key={label} className={`w-2 h-2 rounded-full ${lCfg.dot} shadow-sm ring-1 ring-white/50`} /> : null;
+                          })}
+                        </div>
                       )}
 
                       {post.coverUrl ? (
@@ -1972,14 +2234,14 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
               <div className="flex flex-col items-center py-3">
                 <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>上位シェア率</span>
                 <span className="text-lg font-black text-foreground tabular-nums">
-                  {selectedReport.topPosts.filter(p => p.isOwn).length}
+                  {selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length}
                   <span className="text-xs font-normal text-[#b0b0b0]">/{selectedPosts.length > 10 ? 10 : selectedPosts.length}</span>
                 </span>
               </div>
               <div className="flex flex-col items-center py-3">
                 <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>自社動画</span>
                 <span className="text-lg font-black text-foreground tabular-nums">
-                  {selectedReport.topPosts.filter(p => p.isOwn).length}
+                  {selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length}
                   <span className="text-xs font-normal text-[#b0b0b0]">/{selectedReport.topPosts.length}</span>
                 </span>
               </div>
@@ -1987,7 +2249,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                 <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>最高順位</span>
                 <span className="text-lg font-black text-foreground tabular-nums">
                   {(() => {
-                    const ownPosts = selectedReport.topPosts.filter(p => p.isOwn);
+                    const ownPosts = selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn));
                     if (ownPosts.length === 0) return <span className="text-[#d4d4d4]">&mdash;</span>;
                     const best = Math.min(...ownPosts.map(p => p.position));
                     return <>{best}<span className="text-xs font-normal text-[#b0b0b0]">位</span></>;
@@ -2007,11 +2269,14 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
 // Instagram Hashtag Ranking Section (順位・シェア IG tab)
 // ============================
 
-export function InstagramHashtagRankingSection({ instagramHashtagReport }: { instagramHashtagReport: IGHashtagReport }) {
+export function InstagramHashtagRankingSection({ instagramHashtagReport, campaignId, onIgSlotUpdate }: {
+  instagramHashtagReport: IGHashtagReport;
+  campaignId: number;
+  onIgSlotUpdate?: (hashtag: string, shortcode: string, changes: IgSlotChanges) => void;
+}) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [showOwnOnly, setShowOwnOnly] = useState(false);
-  const [igIsOwnOverrides, setIgIsOwnOverrides] = useState<Record<string, boolean>>({});
   const toggleExpand = (tag: string) => setExpandedTags(prev => {
     const n = new Set(prev);
     if (n.has(tag)) n.delete(tag); else n.add(tag);
@@ -2021,19 +2286,29 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
   const validReports = instagramHashtagReport.filter(r => r.topPosts.length > 0);
   const isOverview = activeTag === null;
 
+  // Helper: check if a post is "own" (using owner field with isOwn fallback)
+  const isOwnPost = (p: IGPostData) => p.owner === "own" || (p.owner === undefined && p.isOwn);
+
   // --- Aggregate stats ---
   const agg = useMemo(() => {
     let totalOwn = 0, totalPosts = 0, bestRank = 999;
+    let officialCount = 0, satelliteCount = 0, campaignCount = 0;
     for (const r of validReports) {
-      const own = r.topPosts.filter(p => p.isOwn);
+      const own = r.topPosts.filter(isOwnPost);
       totalOwn += own.length;
       totalPosts += r.topPosts.length;
-      for (const p of own) { if (p.position < bestRank) bestRank = p.position; }
+      for (const p of own) {
+        if (p.position < bestRank) bestRank = p.position;
+        if (p.owner_detail === "official") officialCount++;
+        else if (p.owner_detail === "satellite") satelliteCount++;
+        else campaignCount++;
+      }
     }
     return {
       totalOwn, totalPosts, bestRank: bestRank < 999 ? bestRank : null,
       sovPct: totalPosts > 0 ? Math.round((totalOwn / totalPosts) * 1000) / 10 : 0,
       tagCount: validReports.length,
+      officialCount, satelliteCount, campaignCount,
     };
   }, [validReports]);
 
@@ -2042,7 +2317,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
   // Per-tag stats
   const tagStats = useMemo(() => {
     return validReports.map(r => {
-      const own = r.topPosts.filter(p => p.isOwn);
+      const own = r.topPosts.filter(isOwnPost);
       const bestPos = own.length > 0 ? Math.min(...own.map(p => p.position)) : null;
       const sovPct = r.topPosts.length > 0 ? Math.round((own.length / r.topPosts.length) * 1000) / 10 : 0;
       const totalViews = r.topPosts.reduce((s, p) => s + p.viewCount, 0);
@@ -2060,7 +2335,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
           totalViews += p.viewCount;
           totalLikes += p.likeCount;
           totalComments += p.commentCount;
-          if (p.isOwn) ownViews += p.viewCount;
+          if (isOwnPost(p)) ownViews += p.viewCount;
         }
       }
       const avgEr = totalViews > 0 ? Number(((totalLikes + totalComments) / totalViews * 100).toFixed(1)) : 0;
@@ -2135,9 +2410,9 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
             <div className="flex flex-col justify-center py-5 px-5 gap-3 min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">アカウント内訳</p>
               {[
-                { label: "公式", count: 0, color: "bg-blue-600", textColor: "text-blue-700" },
-                { label: "サテライト", count: 0, color: "bg-teal-600", textColor: "text-teal-700" },
-                { label: "施策", count: hero.totalOwn, color: "bg-[#D71921]", textColor: "text-[#D71921]" },
+                { label: "公式", count: agg.officialCount, color: "bg-blue-600", textColor: "text-blue-700" },
+                { label: "サテライト", count: agg.satelliteCount, color: "bg-teal-600", textColor: "text-teal-700" },
+                { label: "施策", count: agg.campaignCount, color: "bg-[#D71921]", textColor: "text-[#D71921]" },
               ].map(cat => {
                 const pct = hero.totalOwn > 0 ? (cat.count / Math.max(hero.totalOwn, 1)) * 100 : 0;
                 return (
@@ -2220,7 +2495,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
         showOwnOnly={showOwnOnly}
         onActiveTagChange={setActiveTag}
         IG={IG}
-        isOwnOverrides={igIsOwnOverrides}
+        onSlotUpdate={onIgSlotUpdate}
       />
 
       {/* ======== Summary Table with Accordion ======== */}
@@ -2240,7 +2515,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
               <tbody>
                 {tagStats.map(ts => {
                   const r = validReports.find(r => r.hashtag === ts.hashtag)!;
-                  const ownPosts = r.topPosts.filter(p => p.isOwn);
+                  const ownPosts = r.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn));
                   const isExp = expandedTags.has(ts.hashtag);
                   return (
                     <Fragment key={ts.hashtag}>
@@ -4177,21 +4452,6 @@ function VideoThumbnail({ url, className }: { url?: string; className?: string }
 // Section 4: 検索結果占有マップ（SOVスロットマップ）
 // ============================
 
-const GENRE_CONFIG: Record<string, { label: string; cls: string; barCls: string }> = {
-  recommend: { label: "レコメンド", cls: "bg-blue-50 text-blue-700 border border-blue-200", barCls: "bg-blue-600" },
-  howto: { label: "How-to", cls: "bg-amber-50 text-amber-700 border border-amber-200", barCls: "bg-amber-500" },
-  entertainment: { label: "エンタメ", cls: "bg-purple-50 text-purple-700 border border-purple-200", barCls: "bg-purple-500" },
-  negative: { label: "ネガティブ", cls: "bg-red-50 text-[#D71921] border border-[#D71921]/20", barCls: "bg-[#D71921]" },
-  other: { label: "その他", cls: "bg-[#f5f5f5] text-[#6b7280] border border-black/6", barCls: "bg-[#9ca3af]" },
-};
-
-const OWNER_LABEL_CONFIG: Record<string, { text: string; cls: string }> = {
-  official: { text: "公式", cls: "bg-blue-50 text-blue-700 border-blue-200" },
-  satellite: { text: "サテライト", cls: "bg-teal-50 text-teal-700 border-teal-200" },
-  campaign: { text: "施策", cls: "bg-red-50 text-[#D71921] border-red-200" },
-  competitor: { text: "競合", cls: "bg-slate-100 text-slate-600 border-slate-300" },
-};
-
 const TIKTOK_LABEL_CONFIG: Record<string, { text: string; dot: string }> = {
   promotion: { text: "プロモーション", dot: "bg-amber-500" },
   paid_partnership: { text: "有償パートナーシップ", dot: "bg-purple-500" },
@@ -4280,19 +4540,6 @@ const SOV_SLOT_CONFIG = {
     emptyText: "text-[#9ca3af]",
   },
 };
-
-// Owner key maps to owner + owner_detail combo
-type OwnerKey = "official" | "satellite" | "campaign" | "competitor" | "other";
-function slotToOwnerKey(slot: SlotData): OwnerKey {
-  if (slot.owner === "own") return (slot.owner_detail as OwnerKey) || "official";
-  if (slot.owner === "competitor") return "competitor";
-  return "other";
-}
-function ownerKeyToChanges(key: OwnerKey): { owner: "own" | "competitor" | "other"; owner_detail?: string } {
-  if (key === "official" || key === "satellite" || key === "campaign") return { owner: "own", owner_detail: key };
-  if (key === "competitor") return { owner: "competitor" };
-  return { owner: "other" };
-}
 
 const OWNER_KEY_OPTIONS: { key: OwnerKey; label: string; color: string; activeBg: string }[] = [
   { key: "official", label: "公式", color: "text-blue-700", activeBg: "bg-blue-50 border-blue-300 ring-1 ring-blue-200" },
