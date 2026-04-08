@@ -6116,11 +6116,13 @@ type UnifiedVideo = {
   coverUrl: string;
   platform: "tiktok" | "youtube" | "instagram";
   publishedAt: string;
-  er: number;
+  er: number | null;
   hashtags: string[];
   musicInfo?: { title: string; artist: string; isOriginal?: boolean } | null;
   /** 3秒視聴維持率 (%) — Instagram only */
   retention3s?: number | null;
+  /** Instagram: メトリクスが信頼できるか (viewCount > 100 && likeCount === 0 && commentCount === 0 の場合 false) */
+  igMetricsIncomplete?: boolean;
 };
 
 const PLATFORM_COLORS = {
@@ -6201,9 +6203,16 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
     for (const v of (igData?.videos || [])) {
       const url = v.videoUrl || "";
       const dm = latestByUrl.get(url);
-      igViews += Math.max(dm?.viewCount || 0, v.viewCount || 0);
-      igLikes += Math.max(dm?.likeCount || 0, v.likeCount || 0);
-      igCommentsSum += Math.max(dm?.commentCount || 0, v.commentCount || 0);
+      const vViews = Math.max(dm?.viewCount || 0, v.viewCount || 0);
+      const vLikes = Math.max(dm?.likeCount || 0, v.likeCount || 0);
+      const vComments = Math.max(dm?.commentCount || 0, v.commentCount || 0);
+      igViews += vViews;
+      // Exclude incomplete IG posts (high views but 0 engagement) from likes/comments totals
+      const isIgIncomplete = vViews > 100 && vLikes === 0 && vComments === 0;
+      if (!isIgIncomplete) {
+        igLikes += vLikes;
+        igCommentsSum += vComments;
+      }
     }
 
     return { ttViews, ttLikes, ttComments, ttShares, ttSaves, ytViews, ytLikes, ytCommentsSum, igViews, igLikes, igCommentsSum };
@@ -6276,15 +6285,18 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       const eng = likes + comments;
       const igTags = ((v.caption || "")).match(/#[^\s#]+/g)?.map((t: string) => t.replace(/^#/, "")) || [];
       const igMusic = (v as any).musicInfo;
+      // Detect incomplete IG metrics: high views but 0 likes & comments suggests API data issue
+      const isIgIncomplete = views > 100 && likes === 0 && comments === 0;
       vids.push({
         videoUrl: url, channelId: v.ownerUsername ? `@${v.ownerUsername}` : "",
         caption: v.caption || "", viewCount: views, likeCount: likes, commentCount: comments,
         shareCount: null, saveCount: null, coverUrl: v.coverUrl || "",
         platform: "instagram", publishedAt: v.publishedAt || "",
-        er: views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0,
+        er: isIgIncomplete ? null : (views > 0 ? Number(((eng / views) * 100).toFixed(2)) : 0),
         hashtags: igTags,
         musicInfo: igMusic ? { title: igMusic.title || "", artist: igMusic.artistName || "" } : null,
         retention3s: (v as any).retention3s ?? null,
+        igMetricsIncomplete: isIgIncomplete || undefined,
       });
     }
     // Dedup: same URL appearing twice
@@ -6626,11 +6638,11 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
                         </span>
                       </TableCell>
                       <TableCell className="text-xs font-medium tabular-nums py-1.5">{fmt(v.viewCount)}</TableCell>
-                      <TableCell className="text-xs tabular-nums py-1.5">{fmt(v.likeCount)}</TableCell>
-                      <TableCell className="text-xs tabular-nums py-1.5">{fmt(v.commentCount)}</TableCell>
-                      <TableCell className="text-xs tabular-nums py-1.5">{v.shareCount != null ? fmt(v.shareCount) : "-"}</TableCell>
-                      <TableCell className="text-xs tabular-nums py-1.5">{v.saveCount != null ? fmt(v.saveCount) : "-"}</TableCell>
-                      <TableCell className="text-xs font-medium tabular-nums py-1.5">{v.er}%</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.igMetricsIncomplete ? <span className="text-muted-foreground" title="データ取得不完全">-</span> : fmt(v.likeCount)}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.igMetricsIncomplete ? <span className="text-muted-foreground" title="データ取得不完全">-</span> : fmt(v.commentCount)}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.igMetricsIncomplete ? <span className="text-muted-foreground" title="データ取得不完全">-</span> : (v.shareCount != null ? fmt(v.shareCount) : "-")}</TableCell>
+                      <TableCell className="text-xs tabular-nums py-1.5">{v.igMetricsIncomplete ? <span className="text-muted-foreground" title="データ取得不完全">-</span> : (v.saveCount != null ? fmt(v.saveCount) : "-")}</TableCell>
+                      <TableCell className="text-xs font-medium tabular-nums py-1.5">{v.igMetricsIncomplete ? <span className="text-muted-foreground" title="データ取得不完全">-</span> : (v.er != null ? `${v.er}%` : "-")}</TableCell>
                       <TableCell className="text-xs tabular-nums py-1.5">
                         {v.retention3s != null ? <span className="font-medium">{v.retention3s}%</span> : <span className="text-muted-foreground">-</span>}
                       </TableCell>
