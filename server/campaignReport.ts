@@ -661,18 +661,15 @@ export async function generateCampaignReport(
   // ============================
   let videoMetricsReport: InsertCampaignReport["videoMetricsReport"] = undefined;
 
-  // TikTok動画のみ（既存のvideoMetricsReportはTikTok専用）
-  const tiktokVideoData = ownVideoDataFull?.filter(v => !v.platform || v.platform === "tiktok");
-
-  if (tiktokVideoData && tiktokVideoData.length > 0) {
+  // 全プラットフォームの施策動画（TikTok + Instagram + YouTube）
+  if (ownVideoDataFull && ownVideoDataFull.length > 0) {
     const baselineMetrics = baseline?.ownVideoMetrics || {};
     const measurementMetrics = measurement.ownVideoMetrics || {};
 
-    videoMetricsReport = tiktokVideoData.map(v => {
+    videoMetricsReport = ownVideoDataFull.map(v => {
       const bm = baselineMetrics[v.videoId] || null;
       const am = measurementMetrics[v.videoId] || null;
 
-      // ownVideoMetricsが空の場合、ownVideoData（URL登録時のスクレイプデータ）をフォールバック
       const fallbackMetrics = {
         viewCount: v.viewCount || 0,
         likeCount: v.likeCount || 0,
@@ -681,7 +678,6 @@ export async function generateCampaignReport(
         saveCount: v.saveCount || 0,
       };
 
-      // baseline が null の場合は before も null（比較データなし）
       const effectiveBefore = baseline ? (bm || fallbackMetrics) : null;
       const effectiveAfter = am || fallbackMetrics;
 
