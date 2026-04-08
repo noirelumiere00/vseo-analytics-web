@@ -1387,9 +1387,9 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
             <div className="w-full h-full rounded-[24px] overflow-hidden bg-white flex flex-col" style={{ fontFamily: "-apple-system, 'Hiragino Sans', sans-serif" }}>
 
               {/* Status Bar */}
-              <div className="relative flex items-center justify-between px-[16px] h-[24px] shrink-0">
-                <span className="text-[8px] font-semibold text-black tabular-nums tracking-tight" style={{ marginTop: 10 }}>9:41</span>
-                <div className="flex items-center gap-[2.5px]" style={{ marginTop: 10 }}>
+              <div className="relative flex items-center justify-between px-[16px] pt-[28px] pb-[2px] shrink-0">
+                <span className="text-[8px] font-semibold text-black tabular-nums tracking-tight">9:41</span>
+                <div className="flex items-center gap-[2.5px]">
                   <svg width="12" height="7" viewBox="0 0 12 7" fill="none">
                     <rect x="0" y="5" width="2" height="2" rx="0.4" fill="black"/>
                     <rect x="2.8" y="3.5" width="2" height="3.5" rx="0.4" fill="black"/>
@@ -1414,18 +1414,22 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
                   <path d="M7 1.5L3 5L7 8.5" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
-                <div className="flex-1 flex items-center gap-[4px] bg-[#efefef] rounded-[8px] px-[7px] py-[4px]">
-                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none" className="shrink-0">
-                    <circle cx="4" cy="4" r="2.8" stroke="#8e8e8e" strokeWidth="0.9"/>
-                    <path d="M6 6L8 8" stroke="#8e8e8e" strokeWidth="0.9" strokeLinecap="round"/>
+                <div className="flex-1 flex items-center gap-[4px] bg-[#f0f0f0] rounded-[8px] px-[7px] py-[4px]">
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" className="shrink-0">
+                    <circle cx="4.8" cy="4.8" r="3.2" stroke="#8e8e8e" strokeWidth="1.1"/>
+                    <path d="M7.2 7.2L9.8 9.8" stroke="#8e8e8e" strokeWidth="1.1" strokeLinecap="round"/>
                   </svg>
-                  <span className="text-[8px] text-black truncate leading-none flex-1 font-medium">#{hashtag}</span>
+                  <span className="text-[8px] text-black truncate leading-none flex-1 font-semibold">#{hashtag}</span>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0 opacity-50">
+                    <circle cx="5" cy="5" r="5" fill="#c4c4c4"/>
+                    <path d="M3.5 3.5L6.5 6.5M6.5 3.5L3.5 6.5" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
+                  </svg>
                 </div>
               </div>
 
               {/* Tabs — Instagram hashtag page style */}
               <div className="flex items-end shrink-0 border-b border-[#dbdbdb] py-[3px]">
-                {["\u30C8\u30C3\u30D7", "\u30EA\u30FC\u30EB"].map((tab) => {
+                {["\u30C8\u30C3\u30D7", "\u30EA\u30FC\u30EB", "\u30A2\u30AB\u30A6\u30F3\u30C8"].map((tab) => {
                   const isActive = tab === "\u30C8\u30C3\u30D7";
                   return (
                     <div key={tab} className="flex-1 flex flex-col items-center gap-[2px]" style={{ minWidth: 0 }}>
@@ -1438,73 +1442,121 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 })}
               </div>
 
-              {/* 3x3 Grid of square thumbnails */}
-              <div className="flex-1 overflow-hidden relative bg-white">
-                <div className="grid grid-cols-3 gap-[1.5px]">
-                  {posts.slice(0, 9).map((post, i) => {
-                    return (
-                      <div
-                        key={i}
-                        className="relative aspect-square overflow-visible"
-                        style={post.isOwn ? {
-                          zIndex: 2,
-                          boxShadow: "0 0 0 1.5px #E1306C, 0 0 6px 1px rgba(225,48,108,0.4)",
-                        } : undefined}
-                      >
-                        <div className="w-full h-full overflow-hidden">
-                          {post.coverUrl ? (
-                            <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-[#fafafa] to-[#efefef] flex items-center justify-center">
-                              <span className="text-[10px] text-[#b0b0b0]">{post.position}</span>
+              {/* Hashtag section header */}
+              <div className="shrink-0 bg-white px-[8px] py-[4px]">
+                <span className="text-[7px] text-[#8e8e8e] font-medium">投稿 {posts.length > 30 ? "30" : posts.length}件</span>
+              </div>
+
+              {/* Scrollable grid of square thumbnails */}
+              <div className="flex-1 relative bg-white overflow-hidden">
+                <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                  <div className="grid grid-cols-3 gap-px bg-white">
+                    {posts.slice(0, 30).map((post, i) => {
+                      const placeholderColors = [
+                        "from-[#f0e6ff] to-[#e0d0f0]",
+                        "from-[#e6f0ff] to-[#d0e0f0]",
+                        "from-[#fff0e6] to-[#f0e0d0]",
+                        "from-[#e6ffe6] to-[#d0f0d0]",
+                        "from-[#ffe6f0] to-[#f0d0e0]",
+                      ];
+                      return (
+                        <div
+                          key={i}
+                          className={`relative aspect-square overflow-visible group ${post.isOwn ? "ring-2 ring-[#E1306C]" : ""}`}
+                          style={post.isOwn ? {
+                            zIndex: 2,
+                            boxShadow: "0 0 8px 2px rgba(225,48,108,0.35)",
+                          } : undefined}
+                        >
+                          <div className="w-full h-full overflow-hidden">
+                            {post.coverUrl ? (
+                              <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" decoding="async" />
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${placeholderColors[i % placeholderColors.length]} flex items-center justify-center`}>
+                                {(post.type === "reel" || post.type === "video") ? (
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <path d="M4 2.5L11 7L4 11.5Z" fill="#b0b0b0" />
+                                  </svg>
+                                ) : post.type === "carousel" ? (
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <rect x="1" y="3" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/>
+                                    <rect x="4" y="1" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/>
+                                  </svg>
+                                ) : (
+                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                    <circle cx="7" cy="7" r="4.5" stroke="#b0b0b0" strokeWidth="1.2"/>
+                                    <circle cx="7" cy="7" r="1.5" fill="#b0b0b0"/>
+                                    <circle cx="10" cy="3.5" r="0.8" fill="#b0b0b0"/>
+                                  </svg>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Own-post overlay */}
+                          {post.isOwn && (
+                            <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: "rgba(225,48,108,0.10)" }} />
+                          )}
+
+                          {/* Own-post "施策" badge */}
+                          {post.isOwn && (
+                            <div className="absolute bottom-[10px] right-[1px] z-[5] bg-[#E1306C] rounded-[2px] px-[3px] py-[0.5px]">
+                              <span className="text-[5px] text-white font-bold leading-none tracking-tight">{"\u65BD\u7B56"}</span>
+                            </div>
+                          )}
+
+                          {/* Position badge */}
+                          <div className={`absolute top-[1.5px] left-[1.5px] min-w-[11px] h-[11px] rounded-[3px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/55"}`} style={{ backdropFilter: "blur(2px)" }}>
+                            <span className="text-[6px] text-white font-bold leading-none" style={{ textShadow: "0 0.5px 1px rgba(0,0,0,0.5)" }}>{post.position}</span>
+                          </div>
+
+                          {/* Reel / carousel indicator */}
+                          {(post.type === "reel" || post.type === "video") && (
+                            <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+                              <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
+                            </svg>
+                          )}
+                          {post.type === "carousel" && (
+                            <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+                              <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
+                              <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
+                            </svg>
+                          )}
+
+                          {/* Own accent bar (redundant with ring border, kept subtle) */}
+                          {post.isOwn && (
+                            <div className="absolute top-0 bottom-0 left-0 w-[2px] z-[4] bg-[#E1306C]" />
+                          )}
+
+                          {/* Bottom gradient + engagement */}
+                          <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+                          <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
+                            <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
+                              <path d="M2.5 0.5L3.2 1.9L4.7 2.1L3.6 3.2L3.9 4.7L2.5 3.9L1.1 4.7L1.4 3.2L0.3 2.1L1.8 1.9Z" />
+                            </svg>
+                            <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+                              {fmt(post.likeCount)}
+                            </span>
+                          </div>
+                          {/* View count overlay */}
+                          {post.viewCount > 0 && (
+                            <div className="absolute bottom-[2px] right-[2px] flex items-center gap-[1px]">
+                              <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.8">
+                                <path d="M0.5 2.5C0.5 2.5 1.5 0.8 2.5 0.8C3.5 0.8 4.5 2.5 4.5 2.5C4.5 2.5 3.5 4.2 2.5 4.2C1.5 4.2 0.5 2.5 0.5 2.5Z" />
+                                <circle cx="2.5" cy="2.5" r="0.8" fill="#333" opacity="0.6"/>
+                              </svg>
+                              <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+                                {fmt(post.viewCount)}
+                              </span>
                             </div>
                           )}
                         </div>
-
-                        {/* Own-video overlay */}
-                        {post.isOwn && (
-                          <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: "rgba(225,48,108,0.25)" }} />
-                        )}
-
-                        {/* Position badge */}
-                        <div className={`absolute top-[1.5px] left-[1.5px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/40"}`}>
-                          <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
-                        </div>
-
-                        {/* Reel / carousel indicator */}
-                        {(post.type === "reel" || post.type === "video") && (
-                          <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
-                            <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
-                          </svg>
-                        )}
-                        {post.type === "carousel" && (
-                          <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
-                            <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
-                            <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
-                          </svg>
-                        )}
-
-                        {/* Own accent bar */}
-                        {post.isOwn && (
-                          <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4] bg-[#E1306C]" />
-                        )}
-
-                        {/* Bottom gradient + engagement */}
-                        <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                        <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
-                          <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
-                            <path d="M2.5 0.5L3.2 1.9L4.7 2.1L3.6 3.2L3.9 4.7L2.5 3.9L1.1 4.7L1.4 3.2L0.3 2.1L1.8 1.9Z" />
-                          </svg>
-                          <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
-                            {fmt(post.likeCount)}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
                 {/* Scroll fade */}
-                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none z-10" />
               </div>
 
               {/* Bottom Nav — Instagram style */}
