@@ -674,7 +674,29 @@ export async function generateCampaignReport(
 
     videoMetricsReport = ownVideoDataFull.map(v => {
       const bm = baselineMetrics[v.videoId] || null;
-      const am = measurementMetrics[v.videoId] || null;
+      let am = measurementMetrics[v.videoId] || null;
+
+      // Fix 3d: If measurement metrics are unreliable (Instagram incomplete data),
+      // fall back to previous valid data from ownVideoData or baseline
+      if (am && (am as any).metricsReliable === false) {
+        const prevValid = bm || {
+          viewCount: v.viewCount || 0,
+          likeCount: v.likeCount || 0,
+          commentCount: v.commentCount || 0,
+          shareCount: v.shareCount || 0,
+          saveCount: v.saveCount || 0,
+        };
+        // Keep the latest viewCount but use previous valid engagement metrics
+        if (prevValid.likeCount > 0 || prevValid.commentCount > 0) {
+          am = {
+            ...am,
+            likeCount: prevValid.likeCount,
+            commentCount: prevValid.commentCount,
+            shareCount: prevValid.shareCount ?? am.shareCount,
+            saveCount: prevValid.saveCount ?? am.saveCount,
+          };
+        }
+      }
 
       const fallbackMetrics = {
         viewCount: v.viewCount || 0,
@@ -690,13 +712,14 @@ export async function generateCampaignReport(
       const beforeViews = effectiveBefore?.viewCount || 0;
       const afterViews = effectiveAfter.viewCount || 0;
 
-      // ER計算
+      // ER計算 — skip for unreliable IG metrics
       const afterLikes = effectiveAfter.likeCount || 0;
       const afterComments = effectiveAfter.commentCount || 0;
       const afterShares = effectiveAfter.shareCount || 0;
-      const er = afterViews > 0
+      const isUnreliable = am && (am as any).metricsReliable === false && afterLikes === 0 && afterComments === 0;
+      const er = isUnreliable ? 0 : (afterViews > 0
         ? Number(((afterLikes + afterComments + afterShares) / afterViews * 100).toFixed(2))
-        : 0;
+        : 0);
 
       return {
         videoId: v.videoId,

@@ -13,7 +13,7 @@ import { logBuffer } from "./logBuffer";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
-import { fetchInstagramPosts } from "./instagramScraper";
+import { fetchInstagramPosts, fetchInstagramPostsWithFallback } from "./instagramScraper";
 import { captureDailyMetrics } from "./dailyMetrics";
 import { getVideoPhase } from "./dailyMetricsScheduler";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
@@ -1709,7 +1709,7 @@ export const appRouter = router({
 
         // Instagram — 成功分のみ上書き
         if (instagramUrls.length > 0) {
-          const igPosts = await fetchInstagramPosts(instagramUrls);
+          const igPosts = await fetchInstagramPostsWithFallback(instagramUrls);
           for (const p of igPosts) {
             existingData.set(p.videoUrl, {
               platform: "instagram",

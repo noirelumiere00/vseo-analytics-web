@@ -9,7 +9,7 @@ import type { Campaign } from "../drizzle/schema";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
-import { fetchInstagramPosts } from "./instagramScraper";
+import { fetchInstagramPostsWithFallback } from "./instagramScraper";
 import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
 import { sql } from "drizzle-orm";
 
@@ -123,7 +123,7 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   // Instagram
   if (instagramUrls.length > 0) {
     try {
-      const posts = await fetchInstagramPosts(instagramUrls);
+      const posts = await fetchInstagramPostsWithFallback(instagramUrls);
 
       // Detect missing URLs that Apify didn't return
       if (posts.length < instagramUrls.length) {

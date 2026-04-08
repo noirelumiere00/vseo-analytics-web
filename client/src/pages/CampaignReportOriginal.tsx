@@ -6347,7 +6347,7 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
       v.commentCount,
       v.shareCount ?? "",
       v.saveCount ?? "",
-      v.er,
+      v.er ?? "",
       v.musicInfo?.title ? `"${(v.musicInfo.title + (v.musicInfo.artist ? ` - ${v.musicInfo.artist}` : "")).replace(/"/g, '""')}"` : "",
       v.publishedAt ? v.publishedAt.split("T")[0] : "",
     ].join(","));
@@ -6684,7 +6684,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
     ? (rank === 1 ? "bg-[#a3a3a3] text-[#0a0a0a]" : rank === 2 ? "bg-[#d4d4d4] text-[#171717]" : "bg-[#d4d4d4] text-[#9ca3af]")
     : "bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-[#D71921]/70";
 
-  const highlightValue = sortKey === "views" ? fmt(video.viewCount) : sortKey === "likes" ? fmt(video.likeCount) : sortKey === "comments" ? fmt(video.commentCount) : `${video.er}%`;
+  const highlightValue = sortKey === "views" ? fmt(video.viewCount) : sortKey === "likes" ? fmt(video.likeCount) : sortKey === "comments" ? fmt(video.commentCount) : (video.er != null ? `${video.er}%` : "-");
   const highlightLabel = sortKey === "views" ? "再生" : sortKey === "likes" ? "いいね" : sortKey === "comments" ? "コメント" : "ER";
 
   return (
@@ -6721,7 +6721,7 @@ function BestWorstVideoCard({ video, rank, type, sortKey }: {
           <span className="flex items-center gap-1"><MessageCircle className="h-3.5 w-3.5" />{fmt(video.commentCount)}</span>
           {video.shareCount != null && <span className="flex items-center gap-1"><Share2 className="h-3.5 w-3.5" />{fmt(video.shareCount)}</span>}
           {video.saveCount != null && <span className="flex items-center gap-1"><Bookmark className="h-3.5 w-3.5" />{fmt(video.saveCount)}</span>}
-          <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" />{video.er}%</span>
+          <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5" />{video.er != null ? `${video.er}%` : "-"}</span>
         </div>
         {video.publishedAt && (
           <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1">
