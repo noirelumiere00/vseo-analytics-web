@@ -2011,6 +2011,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
   const [showOwnOnly, setShowOwnOnly] = useState(false);
+  const [igIsOwnOverrides, setIgIsOwnOverrides] = useState<Record<string, boolean>>({});
   const toggleExpand = (tag: string) => setExpandedTags(prev => {
     const n = new Set(prev);
     if (n.has(tag)) n.delete(tag); else n.add(tag);
