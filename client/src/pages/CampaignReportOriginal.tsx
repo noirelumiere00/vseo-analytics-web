@@ -4733,10 +4733,11 @@ function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | nul
                 ))}
               </div>
 
-              {/* ── Video Grid ── */}
-              <div className="flex-1 overflow-hidden relative bg-[#080808]">
+              {/* ── Video Grid (scrollable) ── */}
+              <div className="flex-1 relative bg-[#080808] overflow-hidden">
+                <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                 <div className="grid grid-cols-3 gap-[1.5px]">
-                  {slots.slice(0, 9).map((slot, i) => {
+                  {slots.map((slot, i) => {
                     if (!slot) return <div key={i} className="aspect-[9/14] bg-[#0a0a0a]" />;
                     const isOwn = slot.owner === "own";
                     const isCompetitor = slot.owner === "competitor";
@@ -4746,21 +4747,22 @@ function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | nul
                         : "#D71921"
                       : isCompetitor ? "#64748b" : "";
                     const isHighlighted = isOwn || isCompetitor;
-                    // rgba overlay per account type
                     const overlayRgba = isOwn
                       ? slot.owner_detail === "official" ? "rgba(37,99,235,0.55)"
                         : slot.owner_detail === "satellite" ? "rgba(13,148,136,0.55)"
                         : "rgba(220,20,30,0.55)"
                       : "";
-                    // Genre dot color
                     const genreColorMap: Record<string, string> = {
                       recommend: "#3b82f6", howto: "#f59e0b", entertainment: "#a855f7", negative: "#D71921", other: "#9ca3af",
                     };
                     const genreDotColor = genreColorMap[slot.genre] || genreColorMap.other;
                     return (
-                      <div
+                      <a
                         key={i}
-                        className="relative aspect-[9/14] overflow-visible"
+                        href={slot.video_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative aspect-[9/14] overflow-visible block"
                         style={isHighlighted ? {
                           zIndex: 2,
                           boxShadow: `0 0 0 1.5px ${accentColor}, 0 0 6px 1px ${accentColor}66`,
@@ -4810,12 +4812,12 @@ function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | nul
                         {isHighlighted && (
                           <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4]" style={{ backgroundColor: accentColor }} />
                         )}
-                      </div>
+                      </a>
                     );
                   })}
                 </div>
-                {/* Scroll fade */}
-                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black to-transparent pointer-events-none" />
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-black to-transparent pointer-events-none z-10" />
               </div>
 
               {/* ── Bottom Nav ── */}
