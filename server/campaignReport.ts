@@ -613,16 +613,21 @@ export async function generateCampaignReport(
           const match = v.videoUrl.match(/instagram\.com\/(p|reel|reels)\/([^/?]+)/);
           if (match) ownShortcodes.add(match[2]);
         }
-        if (v.username) ownNames.push(v.username);
+        // ユーザー名はInstagram動画のみ追加（TikTok/YouTube投稿者は除外）
+        if (v.username && v.videoUrl && v.videoUrl.includes('instagram.com')) {
+          ownNames.push(v.username);
+        }
       }
 
       const hashtagResults: InstagramHashtagResult[] = [];
       const searchedTags = new Set<string>(); // 重複防止
+      console.log(`[Report] IG keywords input: ${JSON.stringify(keywords)}`);
       for (const kw of keywords) {
         // Instagram only supports hashtag search — skip keywords without #
         if (!kw.startsWith("#") && !kw.startsWith("＃")) continue;
         // 正規化して重複チェック（#Visa割 と ＃Visa割 は同一扱い）
-        const normalizedTag = kw.replace(/^[#＃]+/, "").toLowerCase();
+        const normalizedTag = kw.replace(/^[#＃]+/, "").trim().toLowerCase();
+        console.log(`[Report] IG tag check: raw="${kw}" normalized="${normalizedTag}" already=${searchedTags.has(normalizedTag)}`);
         if (searchedTags.has(normalizedTag)) continue;
         searchedTags.add(normalizedTag);
         try {
