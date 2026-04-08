@@ -1591,6 +1591,9 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
   const stageRef = useRef<HTMLDivElement>(null);
   const [revealed, setRevealed] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
+  // IG slot edit: track which slot popover is open (by position) and local isOwn overrides
+  const [igEditOpenSlot, setIgEditOpenSlot] = useState<number | null>(null);
+  const [igIsOwnOverrides, setIgIsOwnOverrides] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const el = stageRef.current;
@@ -1859,16 +1862,50 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
             {/* Horizontal slot row */}
             <div className="px-5 py-5">
               <div className="flex gap-2 overflow-x-auto pb-2 min-w-0">
-                {filteredSlotPosts.map((post, i) => (
-                  <a
-                    key={i}
-                    href={post.postUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`relative flex flex-col shrink-0 group/slot transition-all duration-200 hover:scale-110 hover:z-10 ${post.isOwn ? "w-20" : "w-16"}`}
-                  >
+                {filteredSlotPosts.map((post, i) => {
+                  const slotKey = `${selectedReport.hashtag}:${post.shortcode}`;
+                  const effectiveIsOwn = slotKey in igIsOwnOverrides ? igIsOwnOverrides[slotKey] : post.isOwn;
+                  const isEditOpen = igEditOpenSlot === post.position;
+                  return (
+                  <Popover key={i} open={isEditOpen} onOpenChange={(open) => setIgEditOpenSlot(open ? post.position : null)}>
+                  <div className={`relative flex flex-col shrink-0 group/slot transition-all duration-200 ${effectiveIsOwn ? "w-20" : "w-16"}`}>
+                    {/* 鉛筆ボタン — ホバー時に表示 */}
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                        className={`absolute -top-1.5 -right-1.5 z-40 w-5 h-5 rounded-full bg-white border border-black/8 shadow-md flex items-center justify-center
+                          transition-all duration-200 hover:bg-card hover:border-black/12 hover:border-black/15
+                          ${isEditOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/slot:opacity-100 group-hover/slot:scale-100 group-hover/slot:pointer-events-auto"}`}
+                      >
+                        <Pencil className="h-2.5 w-2.5 text-muted-foreground" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent side="top" align="center" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+                      <div className="flex flex-col gap-2 min-w-[140px]">
+                        <span className="text-[11px] font-semibold text-foreground">スロット編集</span>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-muted-foreground">施策動画</span>
+                          <Switch
+                            checked={effectiveIsOwn}
+                            onCheckedChange={(checked) => {
+                              setIgIsOwnOverrides(prev => ({ ...prev, [slotKey]: checked }));
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] text-muted-foreground/60">@{post.username} · {post.position}位</span>
+                      </div>
+                    </PopoverContent>
+
+                    <a
+                      href={post.postUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`relative flex flex-col cursor-pointer transition-all duration-200 ${isEditOpen ? "" : "hover:scale-110 hover:z-10"}`}
+                      onClick={(e) => { if (isEditOpen) { e.preventDefault(); } }}
+                    >
                     {/* Top cap: own = gradient badge */}
-                    {post.isOwn ? (
+                    {effectiveIsOwn ? (
                       <div className="text-[8px] font-bold text-center py-[2px] rounded-t-md leading-tight shrink-0 text-white"
                         style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
                         施策
@@ -1878,22 +1915,22 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                     )}
 
                     {/* Thumbnail — 9:16 aspect */}
-                    <div className={`relative w-full overflow-hidden ${post.isOwn ? `h-[142px] rounded-b-md border-2 border-[#E1306C] shadow-lg shadow-[#E1306C]/20` : "h-[114px] rounded-md border border-border/70"}`}>
+                    <div className={`relative w-full overflow-hidden ${effectiveIsOwn ? `h-[142px] rounded-b-md border-2 border-[#E1306C] shadow-lg shadow-[#E1306C]/20` : "h-[114px] rounded-md border border-border/70"}`}>
                       {/* Accent bar */}
-                      {post.isOwn && (
+                      {effectiveIsOwn && (
                         <div className="absolute top-0 left-0 bottom-0 w-[3px] z-10" style={{ background: `linear-gradient(180deg, ${IG.pink}, ${IG.purple})` }} />
                       )}
 
                       {post.coverUrl ? (
                         <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                       ) : (
-                        <div className={`w-full h-full flex items-center justify-center ${post.isOwn ? "bg-[#E1306C]/10" : "bg-slate-50"}`}>
-                          <span className={`text-lg font-bold ${post.isOwn ? "text-[#E1306C]" : "text-[#d4d4d4]"}`}>{post.position}</span>
+                        <div className={`w-full h-full flex items-center justify-center ${effectiveIsOwn ? "bg-[#E1306C]/10" : "bg-slate-50"}`}>
+                          <span className={`text-lg font-bold ${effectiveIsOwn ? "text-[#E1306C]" : "text-[#d4d4d4]"}`}>{post.position}</span>
                         </div>
                       )}
 
                       {/* Position badge */}
-                      <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${post.isOwn ? "bg-[#E1306C] text-white" : "bg-black/50 text-white"}`}>
+                      <span className={`absolute top-1 right-1 text-[9px] font-bold leading-none px-1 py-0.5 rounded z-20 ${effectiveIsOwn ? "bg-[#E1306C] text-white" : "bg-black/50 text-white"}`}>
                         {post.position}
                       </span>
 
@@ -1903,19 +1940,22 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
 
                     {/* Username with IG-style circle avatar */}
                     <div className="flex flex-col items-center gap-0.5 mt-1.5">
-                      <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 ${post.isOwn ? "ring-[1.5px] ring-[#E1306C]" : "ring-[1px] ring-slate-200"}`}>
+                      <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 ${effectiveIsOwn ? "ring-[1.5px] ring-[#E1306C]" : "ring-[1px] ring-slate-200"}`}>
                         {post.coverUrl ? (
                           <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
                           <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />
                         )}
                       </div>
-                      <span className={`text-[8px] truncate max-w-full text-center leading-none ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>
+                      <span className={`text-[8px] truncate max-w-full text-center leading-none ${effectiveIsOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>
                         @{post.username}
                       </span>
                     </div>
-                  </a>
-                ))}
+                    </a>
+                  </div>
+                  </Popover>
+                  );
+                })}
               </div>
             </div>
 
