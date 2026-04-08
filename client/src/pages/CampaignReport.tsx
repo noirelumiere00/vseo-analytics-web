@@ -889,6 +889,48 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
     return all.length > 0 ? Math.max(...all.map(s => s.view_count)) : 1;
   }, [chartData]);
 
+  // --- SOV CSV Export ---
+  const handleSovCsvExport = useCallback(() => {
+    const header = ["キーワード", "表示順位", "アカウント", "アカウントURL", "投稿URL", "区分", "詳細区分", "再生数", "いいね", "コメント", "シェア"];
+    const rows: string[] = [];
+    for (const d of chartData) {
+      const kw = d.keyword;
+      const sorted = [...d.afterSlots].sort((a, b) => a.rank - b.rank);
+      for (const slot of sorted) {
+        const platform = slot.video_url.includes("instagram.com") ? "instagram" : "tiktok";
+        const accountUrl = platform === "instagram"
+          ? `https://www.instagram.com/${slot.creator_username}/`
+          : `https://www.tiktok.com/@${slot.creator_username}`;
+        const ownerLabel = slot.owner === "own" ? "自社" : slot.owner === "competitor" ? "競合" : "その他";
+        const detailLabel = slot.owner === "own"
+          ? (slot.owner_detail === "official" ? "公式" : slot.owner_detail === "satellite" ? "サテライト" : slot.owner_detail === "campaign" ? "施策" : "")
+          : (slot.owner_name || "");
+        const acctName = slot.creator_username || "";
+        // Excel HYPERLINK for account
+        const acctCell = `"=HYPERLINK(""${accountUrl}"",""${acctName.replace(/"/g, '""')}"")"`;
+        rows.push([
+          `"${kw.replace(/"/g, '""')}"`,
+          slot.rank,
+          acctCell,
+          accountUrl,
+          slot.video_url,
+          ownerLabel,
+          `"${detailLabel.replace(/"/g, '""')}"`,
+          slot.view_count,
+          slot.like_count,
+          slot.comment_count,
+          slot.share_count,
+        ].join(","));
+      }
+    }
+    const csv = [header.join(","), ...rows].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "sov_report.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }, [chartData]);
+
   return (
     <div className="space-y-5">
       {/* ======== HeroCard ======== */}
@@ -966,7 +1008,8 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
 
       {/* ======== KwTabBar ======== */}
       {kwList.length > 0 && (
-        <div className="overflow-x-auto">
+        <div className="flex items-center gap-2">
+          <div className="overflow-x-auto flex-1">
           <div className="flex gap-2 min-w-max">
             {kwList.map(kw => {
               const isActive = kw.keyword === effectiveActiveKw;
@@ -992,6 +1035,10 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
               );
             })}
           </div>
+          </div>
+          <button onClick={handleSovCsvExport} className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium bg-muted hover:bg-muted/80 transition-colors text-muted-foreground flex-shrink-0">
+            <FileDown className="h-3.5 w-3.5" /> CSV
+          </button>
         </div>
       )}
 
