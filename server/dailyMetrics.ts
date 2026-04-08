@@ -48,7 +48,7 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
     platform: "tiktok" | "youtube" | "instagram";
     dateKey: string;
     viewCount: number; likeCount: number; commentCount: number;
-    shareCount: number; saveCount: number;
+    shareCount: number | null; saveCount: number | null;
   }> = [];
 
   // TikTok
@@ -106,7 +106,7 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
         rows.push({
           campaignId: campaign.id, videoUrl: originalUrl, platform: "youtube", dateKey,
           viewCount: v.viewCount, likeCount: v.likeCount,
-          commentCount: v.commentCount, shareCount: 0, saveCount: 0,
+          commentCount: v.commentCount, shareCount: null, saveCount: null,
         });
       }
     } catch (e) {
@@ -122,7 +122,7 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
         rows.push({
           campaignId: campaign.id, videoUrl: p.videoUrl, platform: "instagram", dateKey,
           viewCount: p.viewCount, likeCount: p.likeCount,
-          commentCount: p.commentCount, shareCount: 0, saveCount: 0,
+          commentCount: p.commentCount, shareCount: null, saveCount: null,
         });
       }
     } catch (e) {
@@ -154,14 +154,15 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
 
   for (const row of rows) {
     // GREATEST を使い、スクレイパー失敗で0が返った場合に既存の正しい値を保護
+    // shareCount/saveCount は IG/YT で null（非対応）なので COALESCE で既存値を保持
     await db.insert(campaignDailyMetrics).values(row)
       .onDuplicateKeyUpdate({
         set: {
           viewCount: sql`GREATEST(viewCount, VALUES(viewCount))`,
           likeCount: sql`GREATEST(likeCount, VALUES(likeCount))`,
           commentCount: sql`GREATEST(commentCount, VALUES(commentCount))`,
-          shareCount: sql`GREATEST(shareCount, VALUES(shareCount))`,
-          saveCount: sql`GREATEST(saveCount, VALUES(saveCount))`,
+          shareCount: sql`CASE WHEN VALUES(shareCount) IS NULL THEN shareCount ELSE GREATEST(COALESCE(shareCount, 0), VALUES(shareCount)) END`,
+          saveCount: sql`CASE WHEN VALUES(saveCount) IS NULL THEN saveCount ELSE GREATEST(COALESCE(saveCount, 0), VALUES(saveCount)) END`,
         },
       });
   }

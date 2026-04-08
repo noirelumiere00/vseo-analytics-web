@@ -11,8 +11,10 @@
  */
 
 import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
+import { fetchYouTubeVideos } from "./youtubeScraper";
+import { fetchInstagramPosts } from "./instagramScraper";
 import type { Campaign, InsertCampaignSnapshot } from "../drizzle/schema";
-import { detectPlatform } from "../shared/videoUrl";
+import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 
 // =============================
 // Types
@@ -360,15 +362,42 @@ export async function captureSnapshot(
     }
 
     // ============================
-    // D. 施策動画メトリクス（既に3並列）
+    // D. 施策動画メトリクス（全プラットフォーム）
     // ============================
     let ownVideoMetrics: NonNullable<InsertCampaignSnapshot["ownVideoMetrics"]> = {};
 
     const ownVideoUrls = (campaign as any).ownVideoUrls as string[] | undefined;
-    // TikTok URLのみスクレイプ（YouTube/InstagramはcampaignReport.tsのplatformSummaryで処理）
-    const tiktokVideoUrls = (ownVideoUrls || []).filter(u => !detectPlatform(u) || detectPlatform(u) === "tiktok");
+    const allVideoUrls = ownVideoUrls || [];
+
+    // URLをプラットフォーム別にグループ分け
+    const tiktokVideoUrls: string[] = [];
+    const youtubeVideoIds: string[] = [];
+    const youtubeUrlMap = new Map<string, string>(); // videoId -> original url
+    const instagramVideoUrls: string[] = [];
+
+    for (const url of allVideoUrls) {
+      const platform = detectPlatform(url);
+      if (platform === "youtube") {
+        const extracted = extractVideoId(url);
+        if (extracted) {
+          youtubeVideoIds.push(extracted.id);
+          youtubeUrlMap.set(extracted.id, url);
+        }
+      } else if (platform === "instagram") {
+        instagramVideoUrls.push(url);
+      } else {
+        // TikTok or unknown (default to TikTok)
+        tiktokVideoUrls.push(url);
+      }
+    }
+
+    const totalVideoCount = tiktokVideoUrls.length + youtubeVideoIds.length + instagramVideoUrls.length;
+    if (totalVideoCount > 0) {
+      report("video_metrics", `施策動画メトリクス取得中 (${totalVideoCount}本: TT:${tiktokVideoUrls.length} YT:${youtubeVideoIds.length} IG:${instagramVideoUrls.length})...`, 68);
+    }
+
+    // TikTok metrics
     if (tiktokVideoUrls.length > 0) {
-      report("video_metrics", `施策動画メトリクス取得中 (${tiktokVideoUrls.length}本)...`, 68);
       try {
         const scraped = await scrapeTikTokVideosByUrls(tiktokVideoUrls, (msg) =>
           report("video_metrics", msg, 72)
@@ -382,8 +411,57 @@ export async function captureSnapshot(
             saveCount: v.saveCount,
           };
         }
+        console.log(`[Snapshot/PhaseD] TikTok: ${scraped.size}/${tiktokVideoUrls.length} videos scraped`);
       } catch (e) {
-        console.error("Own video metrics scrape failed:", e);
+        console.error("[Snapshot/PhaseD] TikTok metrics scrape failed:", e);
+      }
+    }
+
+    // YouTube metrics
+    if (youtubeVideoIds.length > 0) {
+      try {
+        const ytVideos = await fetchYouTubeVideos(youtubeVideoIds);
+        for (const v of ytVideos) {
+          ownVideoMetrics[v.videoId] = {
+            viewCount: v.viewCount,
+            likeCount: v.likeCount,
+            commentCount: v.commentCount,
+            shareCount: 0,
+            saveCount: 0,
+          };
+        }
+        console.log(`[Snapshot/PhaseD] YouTube: ${ytVideos.length}/${youtubeVideoIds.length} videos fetched`);
+      } catch (e) {
+        console.error("[Snapshot/PhaseD] YouTube metrics fetch failed:", e);
+      }
+    }
+
+    // Instagram metrics
+    if (instagramVideoUrls.length > 0) {
+      try {
+        const igPosts = await fetchInstagramPosts(instagramVideoUrls);
+        for (const p of igPosts) {
+          ownVideoMetrics[p.videoId] = {
+            viewCount: p.viewCount,
+            likeCount: p.likeCount,
+            commentCount: p.commentCount,
+            shareCount: 0,
+            saveCount: 0,
+          };
+        }
+        console.log(`[Snapshot/PhaseD] Instagram: ${igPosts.length}/${instagramVideoUrls.length} posts fetched`);
+      } catch (e) {
+        console.error("[Snapshot/PhaseD] Instagram metrics fetch failed:", e);
+      }
+    }
+
+    // Phase D summary log
+    if (totalVideoCount > 0) {
+      const metricsCount = Object.keys(ownVideoMetrics).length;
+      if (metricsCount < totalVideoCount) {
+        console.warn(`[Snapshot/PhaseD] INCOMPLETE: ${metricsCount}/${totalVideoCount} video metrics collected`);
+      } else {
+        console.log(`[Snapshot/PhaseD] OK: ${metricsCount}/${totalVideoCount} video metrics collected`);
       }
     }
 
