@@ -13,7 +13,6 @@ export interface ProductionBrief {
   }>;
   hashtagSets: string[][];
   shootingChecklist: Array<{
-    item: string;
     recommendation: string;
     source: string;
   }>;

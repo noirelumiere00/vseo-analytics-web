@@ -157,7 +157,7 @@ function ChecklistTab({
               <span
                 className={`text-sm font-medium ${checked[i] ? "line-through text-muted-foreground" : "text-stone-900"}`}
               >
-                {item.item}
+                {item.recommendation}
               </span>
               <Badge
                 variant="outline"
@@ -166,9 +166,6 @@ function ChecklistTab({
                 {item.source}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {item.recommendation}
-            </p>
           </div>
         </label>
       ))}
