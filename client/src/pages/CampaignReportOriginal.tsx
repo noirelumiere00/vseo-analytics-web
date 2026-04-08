@@ -2023,60 +2023,75 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
   return (
     <div className="space-y-5 min-w-0">
 
-      {/* ======== Hero Card — Instagram gradient aesthetic ======== */}
-      <Card className="overflow-hidden border-0 shadow-lg">
+      {/* ======== Hero Card — TikTok SOV統一レイアウト ======== */}
+      <Card className="overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
         <CardContent className="p-0">
-          {/* Gradient header strip */}
-          <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${IG.yellow}, ${IG.orange}, ${IG.pink}, ${IG.purple})` }} />
-          <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-0 min-w-0">
-            {/* Left: SOV ring */}
-            <div className="flex flex-col items-center justify-center py-6 px-4 md:border-r border-slate-100">
+          <div className="grid grid-cols-1 md:grid-cols-[200px_1fr_1fr] gap-0 md:divide-x divide-slate-100 min-w-0">
+            {/* Left: Donut — 赤ベース（TikTokと同じスタイル） */}
+            <div className="flex flex-col items-center justify-center py-6 px-4">
               {(() => {
-                const circumference = 2 * Math.PI * 46;
+                const circumference = 2 * Math.PI * 50;
                 const fillLen = (hero.sovPct / 100) * circumference;
                 return (
                   <>
-                    <svg viewBox="0 0 120 120" className="w-32 h-32">
-                      <defs>
-                        <linearGradient id="ig-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                          <stop offset="0%" stopColor={IG.yellow} />
-                          <stop offset="33%" stopColor={IG.orange} />
-                          <stop offset="66%" stopColor={IG.pink} />
-                          <stop offset="100%" stopColor={IG.purple} />
-                        </linearGradient>
-                      </defs>
-                      <circle cx="60" cy="60" r="46" fill="none" stroke="#f1f1f1" strokeWidth="10" />
-                      <circle cx="60" cy="60" r="46" fill="none" stroke="url(#ig-ring-grad)" strokeWidth="10"
+                    <svg viewBox="0 0 120 120" className="w-28 h-28">
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="#f1f1f1" strokeWidth="12" />
+                      <circle cx="60" cy="60" r="50" fill="none" stroke="#D71921" strokeWidth="12"
                         strokeDasharray={`${fillLen} ${circumference - fillLen}`} strokeLinecap="round"
-                        transform="rotate(-90 60 60)" className="transition-all duration-700" />
-                      <text x="60" y="54" textAnchor="middle" dominantBaseline="central"
-                        className="text-[28px] font-black" fill="#171717">{hero.sovPct}<tspan className="text-[13px] font-medium" fill="#a3a3a3">%</tspan></text>
-                      <text x="60" y="76" textAnchor="middle" dominantBaseline="central"
-                        className="text-[9px] font-medium" fill="#a3a3a3">SOV ({hero.totalOwn}/{hero.totalPosts})</text>
+                        transform="rotate(-90 60 60)" className="animate-donut-fill" />
+                      <text x="60" y="55" textAnchor="middle" dominantBaseline="central" className="text-[26px] font-extrabold" fill="#0a0a0a">{hero.sovPct}<tspan className="text-[14px] font-medium" fill="#9ca3af">%</tspan></text>
+                      <text x="60" y="77" textAnchor="middle" dominantBaseline="central" className="text-[10px] font-medium" fill="#9ca3af">上位シェア ({hero.totalOwn}/{hero.totalPosts})</text>
                     </svg>
-                    <p className="text-[11px] text-[#a3a3a3] mt-1">{isOverview ? `${agg.tagCount}ハッシュタグ横断` : `#${activeTag}`}</p>
+                    <p className="text-xs text-muted-foreground mt-1.5">全{hero.totalPosts}本中 {hero.totalOwn}本が自社</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-flex items-center gap-1 text-[9px] text-muted-foreground">
+                        <span className="w-2 h-2 rounded-full bg-[#D71921]" />{hero.totalOwn}
+                      </span>
+                    </div>
                   </>
                 );
               })()}
             </div>
 
-            {/* Right: Stat grid — 2×3 */}
-            <div className="grid grid-cols-3 grid-rows-2 gap-px bg-slate-100 min-w-0">
-              {[
-                { label: "自社投稿", val: `${hero.totalOwn}`, sub: `/${hero.totalPosts}件` },
-                { label: "最高順位", val: hero.bestRank != null ? `${hero.bestRank}` : "—", sub: hero.bestRank != null ? "位" : "" },
-                { label: isOverview ? "タグ数" : "SOV率", val: isOverview ? `${agg.tagCount}` : `${hero.sovPct}`, sub: isOverview ? "タグ" : "%" },
-                { label: "総再生数", val: fmt(hero.totalViews), sub: "" },
-                { label: "自社再生数", val: fmt(hero.ownViews), sub: "" },
-                { label: "平均ER", val: `${hero.avgEr}`, sub: "%" },
-              ].map((s, i) => (
-                <div key={i} className="bg-white flex flex-col items-center justify-center py-4 px-3">
-                  <p className="text-[10px] text-[#b0b0b0] uppercase tracking-wider mb-1 font-medium">{s.label}</p>
-                  <p className="text-xl font-black text-foreground leading-none tabular-nums">
-                    {s.val}<span className="text-xs font-normal text-[#b0b0b0] ml-0.5">{s.sub}</span>
-                  </p>
+            {/* Center: 4 stat boxes（TikTokと同じ） */}
+            <div className="grid grid-cols-2 gap-px bg-[#f5f5f5] min-w-0">
+              {(isOverview ? [
+                { label: "キーワード数", value: `${agg.tagCount}`, sub: "KW" },
+                { label: "自社投稿", value: `${hero.totalOwn}`, sub: `/${hero.totalPosts}` },
+                { label: "最高順位", value: hero.bestRank != null ? `${hero.bestRank}` : "—", sub: hero.bestRank != null ? "位" : "" },
+                { label: "施策比", value: "—", sub: "" },
+              ] : [
+                { label: "上位シェア率", value: `${hero.totalOwn}`, sub: `/${hero.totalPosts}` },
+                { label: "自社投稿", value: `${hero.totalOwn}`, sub: `/${hero.totalPosts}` },
+                { label: "最高順位", value: hero.bestRank != null ? `${hero.bestRank}` : "—", sub: hero.bestRank != null ? "位" : "" },
+                { label: "順位変動", value: "—", sub: "" },
+              ]).map((stat, i) => (
+                <div key={i} className="bg-[#f5f5f5] flex flex-col items-center justify-center py-4 px-3">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{stat.label}</p>
+                  <p className="text-2xl font-extrabold text-foreground leading-none">{stat.value}<span className="text-sm font-normal text-muted-foreground ml-0.5">{stat.sub}</span></p>
                 </div>
               ))}
+            </div>
+
+            {/* Right: アカウント内訳（TikTokと同じ） */}
+            <div className="flex flex-col justify-center py-5 px-5 gap-3 min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">アカウント内訳</p>
+              {[
+                { label: "公式", count: 0, color: "bg-blue-600", textColor: "text-blue-700" },
+                { label: "サテライト", count: 0, color: "bg-teal-600", textColor: "text-teal-700" },
+                { label: "施策", count: hero.totalOwn, color: "bg-[#D71921]", textColor: "text-[#D71921]" },
+              ].map(cat => {
+                const pct = hero.totalOwn > 0 ? (cat.count / Math.max(hero.totalOwn, 1)) * 100 : 0;
+                return (
+                  <div key={cat.label} className="flex items-center gap-2">
+                    <span className={`text-[11px] font-semibold w-16 ${cat.textColor}`}>{cat.label}</span>
+                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${cat.color} rounded-full transition-all duration-700`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[11px] font-bold tabular-nums w-6 text-right">{cat.count}本</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </CardContent>
