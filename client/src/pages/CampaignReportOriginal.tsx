@@ -548,7 +548,10 @@ export default function CampaignReport() {
               <>
                 <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
                 <div className="mt-5">
-                  <VideoSection videos={videoMetrics!} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+                  <VideoSection videos={(videoMetrics || []).filter((v: any) => {
+                    const url = v.videoUrl || "";
+                    return !url.includes("instagram.com") && !url.includes("youtube.com") && !url.includes("youtu.be");
+                  })} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
                 </div>
               </>
             )}
@@ -6940,12 +6943,17 @@ function TargetAchievementSection({ videoMetrics, platformSummary, campaign, dai
     return map;
   }, [dailyMetrics]);
 
-  // TikTok: use max(dailyMetrics latest, report snapshot)
-  const tiktokViews = videoMetrics?.reduce((sum: number, v: any) => {
-    const url = v.videoUrl || "";
-    const dm = latestByUrl.get(url);
-    return sum + Math.max(dm?.viewCount || 0, v.views || v.after?.viewCount || 0);
-  }, 0) ?? 0;
+  // TikTok: use max(dailyMetrics latest, report snapshot) — filter to TikTok only
+  const tiktokViews = (videoMetrics || [])
+    .filter((v: any) => {
+      const url = v.videoUrl || "";
+      return !url.includes("instagram.com") && !url.includes("youtube.com") && !url.includes("youtu.be");
+    })
+    .reduce((sum: number, v: any) => {
+      const url = v.videoUrl || "";
+      const dm = latestByUrl.get(url);
+      return sum + Math.max(dm?.viewCount || 0, v.views || v.after?.viewCount || 0);
+    }, 0);
 
   // YouTube / Instagram: use max(dailyMetrics latest, report snapshot) per video
   const youtubeViews = (platformSummary?.youtube?.videos || []).reduce((sum: number, v: any) => {
