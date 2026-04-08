@@ -1633,9 +1633,13 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
     return () => el?.removeEventListener("keydown", handler);
   }, [navigate]);
 
+  const isOverview = activeTag === null;
+
   const PHONE_SCALE = 1.3;
-  const PHONE_H = Math.round(476 * PHONE_SCALE);
-  const PHONE_W = Math.round(220 * PHONE_SCALE);
+  const OVERVIEW_PHONE_SCALE = 1.0;
+  const activePhoneScale = isOverview ? OVERVIEW_PHONE_SCALE : PHONE_SCALE;
+  const PHONE_H = Math.round(476 * activePhoneScale);
+  const PHONE_W = Math.round(220 * activePhoneScale);
 
   const selectedReport = validReports[selectedIdx];
   const selectedTag = tagStats.find(t => t.hashtag === selectedReport?.hashtag);
@@ -1665,111 +1669,162 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
               </span>
             </div>
 
-            {/* 3D Carousel Viewport */}
-            <div
-              className="relative mx-auto overflow-hidden"
-              style={{
-                perspective: "1400px",
-                height: PHONE_H + 80,
-              }}
-            >
-              {validReports.map((report, kwIdx) => {
-                const ts = tagStats.find(t => t.hashtag === report.hashtag);
-                const ownCount = report.topPosts.filter(p => p.isOwn).length;
-                const offset = kwIdx - selectedIdx;
-                const t = isSingle
-                  ? { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 }
-                  : getIGCardTransform(offset, count);
-                const isActive = offset === 0;
-
-                return (
-                  <div
-                    key={report.hashtag}
-                    className="absolute left-1/2 top-0 flex flex-col items-center gap-2"
-                    style={{
-                      transform: isActive
-                        ? `translateX(calc(-50% + ${t.tx}px))`
-                        : `translateX(calc(-50% + ${t.tx}px)) translateZ(${t.z}px) scale(${t.scale}) rotateY(${t.rotateY}deg)`,
-                      transformStyle: isActive ? "flat" : "preserve-3d",
-                      opacity: revealed ? t.opacity : 0,
-                      zIndex: 10 - Math.abs(offset),
-                      transition: "transform 800ms var(--md-ease-emphasized-decel), opacity 600ms var(--md-ease-standard)",
-                      pointerEvents: t.opacity === 0 ? "none" : "auto",
-                      cursor: isActive ? "default" : "pointer",
-                    }}
-                    onClick={() => {
-                      if (!isActive) {
+            {/* Overview mode: all phones side by side in horizontal scroll */}
+            {isOverview ? (
+              <div className="flex gap-6 overflow-x-auto pb-4 justify-center" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "thin" }}>
+                {validReports.map((report, kwIdx) => {
+                  const ownCount = report.topPosts.filter(p => p.isOwn).length;
+                  return (
+                    <div
+                      key={report.hashtag}
+                      className="flex flex-col items-center gap-2 shrink-0 cursor-pointer hover:scale-[1.03] transition-transform duration-300"
+                      style={{
+                        opacity: revealed ? 1 : 0,
+                        transition: `opacity 600ms var(--md-ease-standard) ${kwIdx * 100}ms, transform 300ms var(--md-ease-standard)`,
+                      }}
+                      onClick={() => {
                         setSelectedIdx(kwIdx);
                         onActiveTagChange(report.hashtag);
-                      }
-                    }}
-                  >
-                    {/* Hashtag label pill */}
-                    <div className="text-center">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide text-white"
-                        style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
-                        <Hash className="w-[10px] h-[10px] opacity-80" />
-                        {report.hashtag}
-                      </span>
-                    </div>
-
-                    {/* Phone + metrics */}
-                    <div className="text-center flex flex-col items-center gap-1.5">
-                      <div className="space-y-0.5">
-                        <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block" style={{ fontFamily: "'Space Mono', monospace" }}>
-                          Current
-                        </span>
-                        <span className="text-[13px] font-semibold block" style={{ color: IG.pink }}>
-                          {ownCount}/{report.topPosts.length}枠
+                      }}
+                    >
+                      {/* Hashtag label pill */}
+                      <div className="text-center">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide text-white"
+                          style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                          <Hash className="w-[10px] h-[10px] opacity-80" />
+                          {report.hashtag}
                         </span>
                       </div>
-                      <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
-                        <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                          <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+
+                      {/* Phone + metrics */}
+                      <div className="text-center flex flex-col items-center gap-1.5">
+                        <div className="space-y-0.5">
+                          <span className="text-[12px] font-mono text-foreground font-bold tracking-wider block" style={{ fontFamily: "'Space Mono', monospace" }}>
+                            Current
+                          </span>
+                          <span className="text-[11px] font-semibold block" style={{ color: IG.pink }}>
+                            {ownCount}/{report.topPosts.length}枠
+                          </span>
+                        </div>
+                        <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
+                          <div style={{ transform: `scale(${OVERVIEW_PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
+                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Navigation arrows */}
-            {!isSingle && (
-              <>
-                <button
-                  onClick={() => navigate(-1)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
-                >
-                  <ChevronLeft className="w-4 h-4 text-secondary-foreground" />
-                </button>
-                <button
-                  onClick={() => navigate(1)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
-                >
-                  <ChevronRight className="w-4 h-4 text-secondary-foreground" />
-                </button>
-              </>
-            )}
-
-            {/* Dot indicators */}
-            {!isSingle && (
-              <div className="flex items-center gap-1.5 mt-3 justify-center">
-                {validReports.map((report, i) => {
-                  const isActiveIdx = i === selectedIdx;
-                  return (
-                    <button
-                      key={report.hashtag}
-                      onClick={() => { setSelectedIdx(i); onActiveTagChange(report.hashtag); }}
-                      className={`transition-all duration-300 rounded-full ${isActiveIdx ? "h-2 px-3" : "w-2 h-2 hover:scale-125"}`}
-                      style={isActiveIdx
-                        ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }
-                        : { background: "#d4d4d4" }
-                      }
-                    />
                   );
                 })}
               </div>
+            ) : (
+              /* Selected mode: 3D Carousel Viewport */
+              <>
+                <div
+                  className="relative mx-auto overflow-hidden"
+                  style={{
+                    perspective: "1400px",
+                    height: PHONE_H + 80,
+                  }}
+                >
+                  {validReports.map((report, kwIdx) => {
+                    const ts = tagStats.find(t => t.hashtag === report.hashtag);
+                    const ownCount = report.topPosts.filter(p => p.isOwn).length;
+                    const offset = kwIdx - selectedIdx;
+                    const t = isSingle
+                      ? { tx: 0, scale: 1, rotateY: 0, z: 10, opacity: 1 }
+                      : getIGCardTransform(offset, count);
+                    const isActive = offset === 0;
+
+                    return (
+                      <div
+                        key={report.hashtag}
+                        className="absolute left-1/2 top-0 flex flex-col items-center gap-2"
+                        style={{
+                          transform: isActive
+                            ? `translateX(calc(-50% + ${t.tx}px))`
+                            : `translateX(calc(-50% + ${t.tx}px)) translateZ(${t.z}px) scale(${t.scale}) rotateY(${t.rotateY}deg)`,
+                          transformStyle: isActive ? "flat" : "preserve-3d",
+                          opacity: revealed ? t.opacity : 0,
+                          zIndex: 10 - Math.abs(offset),
+                          transition: "transform 800ms var(--md-ease-emphasized-decel), opacity 600ms var(--md-ease-standard)",
+                          pointerEvents: t.opacity === 0 ? "none" : "auto",
+                          cursor: isActive ? "default" : "pointer",
+                        }}
+                        onClick={() => {
+                          if (!isActive) {
+                            setSelectedIdx(kwIdx);
+                            onActiveTagChange(report.hashtag);
+                          }
+                        }}
+                      >
+                        {/* Hashtag label pill */}
+                        <div className="text-center">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide text-white"
+                            style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>
+                            <Hash className="w-[10px] h-[10px] opacity-80" />
+                            {report.hashtag}
+                          </span>
+                        </div>
+
+                        {/* Phone + metrics */}
+                        <div className="text-center flex flex-col items-center gap-1.5">
+                          <div className="space-y-0.5">
+                            <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block" style={{ fontFamily: "'Space Mono', monospace" }}>
+                              Current
+                            </span>
+                            <span className="text-[13px] font-semibold block" style={{ color: IG.pink }}>
+                              {ownCount}/{report.topPosts.length}枠
+                            </span>
+                          </div>
+                          <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
+                            <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
+                              <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Navigation arrows */}
+                {!isSingle && (
+                  <>
+                    <button
+                      onClick={() => navigate(-1)}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+                    >
+                      <ChevronLeft className="w-4 h-4 text-secondary-foreground" />
+                    </button>
+                    <button
+                      onClick={() => navigate(1)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/90 border border-black/8 shadow-md flex items-center justify-center hover:bg-white hover:scale-105 transition-all duration-200"
+                    >
+                      <ChevronRight className="w-4 h-4 text-secondary-foreground" />
+                    </button>
+                  </>
+                )}
+
+                {/* Dot indicators */}
+                {!isSingle && (
+                  <div className="flex items-center gap-1.5 mt-3 justify-center">
+                    {validReports.map((report, i) => {
+                      const isActiveIdx = i === selectedIdx;
+                      return (
+                        <button
+                          key={report.hashtag}
+                          onClick={() => { setSelectedIdx(i); onActiveTagChange(report.hashtag); }}
+                          className={`transition-all duration-300 rounded-full ${isActiveIdx ? "h-2 px-3" : "w-2 h-2 hover:scale-125"}`}
+                          style={isActiveIdx
+                            ? { background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }
+                            : { background: "#d4d4d4" }
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </CardContent>
