@@ -1901,10 +1901,19 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                       <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
                     </div>
 
-                    {/* Username below */}
-                    <span className={`text-[9px] mt-1 truncate max-w-full text-center ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>
-                      @{post.username}
-                    </span>
+                    {/* Username with IG-style circle avatar */}
+                    <div className="flex flex-col items-center gap-0.5 mt-1.5">
+                      <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 ${post.isOwn ? "ring-[1.5px] ring-[#E1306C]" : "ring-[1px] ring-slate-200"}`}>
+                        {post.coverUrl ? (
+                          <img src={post.coverUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />
+                        )}
+                      </div>
+                      <span className={`text-[8px] truncate max-w-full text-center leading-none ${post.isOwn ? "font-semibold text-[#E1306C]" : "text-[#a3a3a3]"}`}>
+                        @{post.username}
+                      </span>
+                    </div>
                   </a>
                 ))}
               </div>
