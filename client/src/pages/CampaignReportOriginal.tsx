@@ -521,7 +521,10 @@ export default function CampaignReport() {
           <div id="platform" ref={el => { sectionRefs.current["platform"] = el; }} className="scroll-mt-16 section-fade-in">
             <SectionHeader number={sectionNumber("platform")} title="全媒体横断サマリー" question="全プラットフォームの合計は？" />
             <PlatformSummarySection
-              tiktokVideos={videoMetrics || []}
+              tiktokVideos={(videoMetrics || []).filter((v: any) => {
+                const url = v.videoUrl || "";
+                return !url.includes("instagram.com") && !url.includes("youtube.com") && !url.includes("youtu.be");
+              })}
               platformSummary={platformSummary || {}}
               dailyMetrics={dailyMetrics}
               hasBaseline={hasBaseline}
@@ -6281,7 +6284,14 @@ export function PlatformSummarySection({ tiktokVideos, platformSummary, dailyMet
         retention3s: (v as any).retention3s ?? null,
       });
     }
-    return vids;
+    // Dedup: same URL appearing twice
+    const seen = new Set<string>();
+    return vids.filter(v => {
+      const key = v.videoUrl;
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [tiktokVideos, ytData, igData, latestByUrl]);
 
   // === Best/Worst sorted ===
