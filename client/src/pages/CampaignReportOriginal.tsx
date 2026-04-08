@@ -1445,7 +1445,7 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
               </div>
 
               <div className="flex-1 relative bg-white overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto ig-grid-scroll" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                   <div className="grid grid-cols-3 gap-px bg-white">
                     {posts.slice(0, 30).map((post, i) => {
                       const placeholderColors = [
@@ -1458,16 +1458,14 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                       return (
                         <div
                           key={i}
-                          className={`relative aspect-square overflow-visible group ig-thumb-stagger ${post.isOwn ? "ring-2 ring-[#E1306C]" : ""}`}
-                          style={{
-                            animationDelay: `${i * 40}ms`,
-                            ...(post.isOwn ? {
-                              zIndex: 2,
-                              boxShadow: "0 0 8px 2px rgba(225,48,108,0.35)",
-                            } : {}),
-                          }}
+                          className={`relative aspect-square overflow-visible group ig-thumb-stagger`}
+                          style={{ animationDelay: `${i * 40}ms`, zIndex: post.isOwn ? 2 : 0 }}
                         >
-                          <div className="w-full h-full overflow-hidden">
+                          {/* TikTok SOV同様: 施策キャップ */}
+                          {post.isOwn && (
+                            <div className="absolute -top-[10px] left-0 right-0 z-[6] bg-[#D71921] text-white text-[5px] font-bold text-center py-[2px] leading-none rounded-t-[2px]">施策</div>
+                          )}
+                          <div className={`w-full h-full overflow-hidden ${post.isOwn ? "border-[2px] border-[#D71921]/50" : ""}`}>
                             {post.coverUrl ? (
                               <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" decoding="async" />
                             ) : (
@@ -1492,18 +1490,16 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                             )}
                           </div>
 
+                          {/* TikTok SOV同様: 赤オーバーレイ + 左アクセントバー */}
                           {post.isOwn && (
-                            <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: "rgba(225,48,108,0.10)" }} />
+                            <div className="absolute inset-0 pointer-events-none z-[1] bg-[#D71921]/15" />
+                          )}
+                          {post.isOwn && (
+                            <div className="absolute top-0 bottom-0 left-0 w-[3px] z-[4] bg-[#D71921]" />
                           )}
 
-                          {post.isOwn && (
-                            <div className="absolute bottom-[12px] right-[2px] z-[5] bg-[#E1306C] rounded-[2px] px-[3px] py-[1px]" style={{ border: "1px solid rgba(255,255,255,0.85)", boxShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
-                              <span className="text-[6px] text-white font-bold leading-none tracking-tight">{"\u65BD\u7B56"}</span>
-                            </div>
-                          )}
-
-                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[3px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/55"}`} style={{ backdropFilter: "blur(2px)" }}>
-                            <span className="text-[6px] text-white font-bold leading-none" style={{ textShadow: "0 0.5px 1px rgba(0,0,0,0.5)" }}>{post.position}</span>
+                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#D71921]" : "bg-black/50"}`}>
+                            <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
                           </div>
 
                           {(post.type === "reel" || post.type === "video") && (
@@ -1516,10 +1512,6 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                               <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
                               <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
                             </svg>
-                          )}
-
-                          {post.isOwn && (
-                            <div className="absolute top-0 bottom-0 left-0 w-[2px] z-[4] bg-[#E1306C]" />
                           )}
 
                           <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
