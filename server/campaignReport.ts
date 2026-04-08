@@ -623,15 +623,16 @@ export async function generateCampaignReport(
       const searchedTags = new Set<string>(); // 重複防止
       console.log(`[Report] IG keywords input: ${JSON.stringify(keywords)}`);
       for (const kw of keywords) {
-        // Instagram only supports hashtag search — skip keywords without #
-        if (!kw.startsWith("#") && !kw.startsWith("＃")) continue;
-        // 正規化して重複チェック（#Visa割 と ＃Visa割 は同一扱い）
+        // 正規化: #を除去してトリム→重複チェック
         const normalizedTag = kw.replace(/^[#＃]+/, "").trim().toLowerCase();
+        if (!normalizedTag) continue;
         console.log(`[Report] IG tag check: raw="${kw}" normalized="${normalizedTag}" already=${searchedTags.has(normalizedTag)}`);
         if (searchedTags.has(normalizedTag)) continue;
         searchedTags.add(normalizedTag);
+        // #がなくてもハッシュタグとして検索（Instagramは全てハッシュタグ検索）
+        const searchTag = kw.startsWith("#") || kw.startsWith("＃") ? kw : `#${kw}`;
         try {
-          const result = await searchInstagramHashtag(kw, 30, ownNames);
+          const result = await searchInstagramHashtag(searchTag, 30, ownNames);
           hashtagResults.push(result);
         } catch (e) {
           console.error(`[Report] Instagram hashtag search failed for #${kw}:`, e);
