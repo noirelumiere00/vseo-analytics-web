@@ -1409,7 +1409,6 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 </div>
               </div>
 
-              {/* Search Header — Instagram style */}
               <div className="flex items-center gap-[4px] px-[6px] pb-[3px] shrink-0">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className="shrink-0">
                   <path d="M7 1.5L3 5L7 8.5" stroke="black" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -1427,7 +1426,6 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 </div>
               </div>
 
-              {/* Tabs — Instagram hashtag page style */}
               <div className="flex items-end shrink-0 border-b border-[#dbdbdb] py-[3px]">
                 {["\u30C8\u30C3\u30D7", "\u30EA\u30FC\u30EB", "\u30A2\u30AB\u30A6\u30F3\u30C8"].map((tab) => {
                   const isActive = tab === "\u30C8\u30C3\u30D7";
@@ -1442,14 +1440,12 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 })}
               </div>
 
-              {/* Hashtag section header */}
               <div className="shrink-0 bg-white px-[8px] py-[4px]">
                 <span className="text-[7px] text-[#8e8e8e] font-medium">投稿 {posts.length > 30 ? "30" : posts.length}件</span>
               </div>
 
-              {/* Scrollable grid of square thumbnails */}
               <div className="flex-1 relative bg-white overflow-hidden">
-                <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" }}>
+                <div className="absolute inset-0 overflow-y-auto ig-grid-scroll" style={{ WebkitOverflowScrolling: "touch" }}>
                   <div className="grid grid-cols-3 gap-px bg-white">
                     {posts.slice(0, 30).map((post, i) => {
                       const placeholderColors = [
@@ -1462,11 +1458,14 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                       return (
                         <div
                           key={i}
-                          className={`relative aspect-square overflow-visible group ${post.isOwn ? "ring-2 ring-[#E1306C]" : ""}`}
-                          style={post.isOwn ? {
-                            zIndex: 2,
-                            boxShadow: "0 0 8px 2px rgba(225,48,108,0.35)",
-                          } : undefined}
+                          className={`relative aspect-square overflow-visible group ig-thumb-stagger ${post.isOwn ? "ring-2 ring-[#E1306C]" : ""}`}
+                          style={{
+                            animationDelay: `${i * 40}ms`,
+                            ...(post.isOwn ? {
+                              zIndex: 2,
+                              boxShadow: "0 0 8px 2px rgba(225,48,108,0.35)",
+                            } : {}),
+                          }}
                         >
                           <div className="w-full h-full overflow-hidden">
                             {post.coverUrl ? (
@@ -1493,24 +1492,20 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                             )}
                           </div>
 
-                          {/* Own-post overlay */}
                           {post.isOwn && (
                             <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: "rgba(225,48,108,0.10)" }} />
                           )}
 
-                          {/* Own-post "施策" badge */}
                           {post.isOwn && (
-                            <div className="absolute bottom-[10px] right-[1px] z-[5] bg-[#E1306C] rounded-[2px] px-[3px] py-[0.5px]">
-                              <span className="text-[5px] text-white font-bold leading-none tracking-tight">{"\u65BD\u7B56"}</span>
+                            <div className="absolute bottom-[12px] right-[2px] z-[5] bg-[#E1306C] rounded-[2px] px-[3px] py-[1px]" style={{ border: "1px solid rgba(255,255,255,0.85)", boxShadow: "0 1px 2px rgba(0,0,0,0.3)" }}>
+                              <span className="text-[6px] text-white font-bold leading-none tracking-tight">{"\u65BD\u7B56"}</span>
                             </div>
                           )}
 
-                          {/* Position badge */}
-                          <div className={`absolute top-[1.5px] left-[1.5px] min-w-[11px] h-[11px] rounded-[3px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/55"}`} style={{ backdropFilter: "blur(2px)" }}>
+                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[3px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#E1306C]" : "bg-black/55"}`} style={{ backdropFilter: "blur(2px)" }}>
                             <span className="text-[6px] text-white font-bold leading-none" style={{ textShadow: "0 0.5px 1px rgba(0,0,0,0.5)" }}>{post.position}</span>
                           </div>
 
-                          {/* Reel / carousel indicator */}
                           {(post.type === "reel" || post.type === "video") && (
                             <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
                               <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
@@ -1523,12 +1518,10 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                             </svg>
                           )}
 
-                          {/* Own accent bar (redundant with ring border, kept subtle) */}
                           {post.isOwn && (
                             <div className="absolute top-0 bottom-0 left-0 w-[2px] z-[4] bg-[#E1306C]" />
                           )}
 
-                          {/* Bottom gradient + engagement */}
                           <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
                           <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
                             <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
@@ -1538,7 +1531,6 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                               {fmt(post.likeCount)}
                             </span>
                           </div>
-                          {/* View count overlay */}
                           {post.viewCount > 0 && (
                             <div className="absolute bottom-[2px] right-[2px] flex items-center gap-[1px]">
                               <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.8">
@@ -1555,20 +1547,17 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                     })}
                   </div>
                 </div>
-                {/* Scroll fade */}
                 <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none z-10" />
               </div>
 
-              {/* Bottom Nav — Instagram style */}
               <div className="flex items-center justify-around px-1 pt-[4px] pb-[2px] bg-white border-t border-[#dbdbdb] shrink-0">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z" fill="black" opacity="0.7"/></svg>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5.5" cy="5" r="3.5" stroke="black" strokeWidth="1.2"/><path d="M8 8L10.5 10.5" stroke="black" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="1" width="10" height="10" rx="2" stroke="black" strokeWidth="1" opacity="0.7"/><path d="M6 4V8M4 6H8" stroke="black" strokeWidth="1" strokeLinecap="round"/></svg>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 0.5L4 4L2.5 3L1 4Z" fill="black" opacity="0.6"/><rect x="1" y="5" width="10" height="6" rx="1" stroke="black" strokeWidth="0.8" opacity="0.6"/><path d="M1 7.5H11" stroke="black" strokeWidth="0.5" opacity="0.4"/></svg>
-                <div className="w-[12px] h-[12px] rounded-full bg-gradient-to-br from-[#833AB4] via-[#E1306C] to-[#F77737]" />
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M9.005 16.545a2.997 2.997 0 0 1 2.997-2.997A2.997 2.997 0 0 1 15 16.545V22H9.005V16.545Z" fill="black"/><path d="M3 11.543l9-7.736 9 7.736V22h-5.998v-5.455a2.997 2.997 0 0 0-5.995 0V22H3V11.543Z" stroke="black" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="10.5" cy="10.5" r="7.5" stroke="black" strokeWidth="2.5"/><path d="M16.5 16.5L22 22" stroke="black" strokeWidth="2.5" strokeLinecap="round"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" stroke="black" strokeWidth="1.8"/><path d="M12 7v10M7 12h10" stroke="black" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="3" stroke="black" strokeWidth="1.8"/><path d="M2 8h20M7 2l3 6M14 2l3 6" stroke="black" strokeWidth="1.5"/><path d="M10 12.5V18l5-2.75L10 12.5Z" fill="black"/></svg>
+                <div className="w-[13px] h-[13px] rounded-full border-[1.5px] border-black bg-gradient-to-br from-gray-200 to-gray-300" />
               </div>
 
-              {/* Home indicator */}
               <div className="flex justify-center pt-[2px] pb-[4px] bg-white">
                 <div className="w-[38%] h-[2.5px] bg-black/20 rounded-full" />
               </div>
