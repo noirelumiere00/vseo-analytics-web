@@ -30,16 +30,22 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
 
   for (const url of urls) {
     const platform = detectPlatform(url);
-    if (platform === "tiktok") {
-      tiktokUrls.push(url);
-    } else if (platform === "youtube") {
+    if (platform === "youtube") {
       const extracted = extractVideoId(url);
       if (extracted) {
         youtubeIds.push(extracted.id);
         youtubeUrlMap.set(extracted.id, url);
+      } else {
+        console.warn(`[DailyMetrics] YouTube URL could not extract video ID: ${url}`);
       }
     } else if (platform === "instagram") {
       instagramUrls.push(url);
+    } else {
+      // TikTok or unknown platform — default to TikTok for backwards compatibility
+      if (!platform) {
+        console.warn(`[DailyMetrics] Unknown platform for URL, defaulting to TikTok: ${url}`);
+      }
+      tiktokUrls.push(url);
     }
   }
 
@@ -118,6 +124,16 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   if (instagramUrls.length > 0) {
     try {
       const posts = await fetchInstagramPosts(instagramUrls);
+
+      // Detect missing URLs that Apify didn't return
+      if (posts.length < instagramUrls.length) {
+        const fetchedIgUrls = new Set(posts.map((p) => p.videoUrl));
+        const missingIg = instagramUrls.filter((u) => !fetchedIgUrls.has(u) && !posts.some((p) => u.includes(p.videoId)));
+        if (missingIg.length > 0) {
+          console.warn(`[DailyMetrics] Instagram: ${missingIg.length}/${instagramUrls.length} posts not returned by Apify`);
+        }
+      }
+
       for (const p of posts) {
         rows.push({
           campaignId: campaign.id, videoUrl: p.videoUrl, platform: "instagram", dateKey,

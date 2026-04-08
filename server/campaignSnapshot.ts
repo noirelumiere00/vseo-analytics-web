@@ -13,6 +13,7 @@
 import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
 import { fetchInstagramPosts } from "./instagramScraper";
+import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
 import type { Campaign, InsertCampaignSnapshot } from "../drizzle/schema";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 
@@ -382,11 +383,16 @@ export async function captureSnapshot(
         if (extracted) {
           youtubeVideoIds.push(extracted.id);
           youtubeUrlMap.set(extracted.id, url);
+        } else {
+          console.warn(`[Snapshot/PhaseD] YouTube URL could not extract video ID: ${url}`);
         }
       } else if (platform === "instagram") {
         instagramVideoUrls.push(url);
       } else {
         // TikTok or unknown (default to TikTok)
+        if (!platform) {
+          console.warn(`[Snapshot/PhaseD] Unknown platform for URL, defaulting to TikTok: ${url}`);
+        }
         tiktokVideoUrls.push(url);
       }
     }
@@ -402,6 +408,24 @@ export async function captureSnapshot(
         const scraped = await scrapeTikTokVideosByUrls(tiktokVideoUrls, (msg) =>
           report("video_metrics", msg, 72)
         );
+
+        // Apify fallback for URLs not returned by primary scraper
+        const missingTikTok = tiktokVideoUrls.filter((u) => !scraped.has(u));
+        if (missingTikTok.length > 0) {
+          console.log(`[Snapshot/PhaseD] TikTok: ${missingTikTok.length}/${tiktokVideoUrls.length} missing, trying Apify fallback...`);
+          try {
+            const recovered = await fallbackTikTokViaApify(missingTikTok);
+            for (const [url, v] of recovered) {
+              scraped.set(url, v);
+            }
+            if (recovered.size > 0) {
+              console.log(`[Snapshot/PhaseD] TikTok Apify fallback recovered ${recovered.size} videos`);
+            }
+          } catch (fbErr) {
+            console.error("[Snapshot/PhaseD] TikTok Apify fallback failed:", fbErr);
+          }
+        }
+
         for (const [, v] of scraped) {
           ownVideoMetrics[v.videoId] = {
             viewCount: v.viewCount,
@@ -409,6 +433,7 @@ export async function captureSnapshot(
             commentCount: v.commentCount,
             shareCount: v.shareCount,
             saveCount: v.saveCount,
+            platform: "tiktok",
           };
         }
         console.log(`[Snapshot/PhaseD] TikTok: ${scraped.size}/${tiktokVideoUrls.length} videos scraped`);
@@ -421,13 +446,31 @@ export async function captureSnapshot(
     if (youtubeVideoIds.length > 0) {
       try {
         const ytVideos = await fetchYouTubeVideos(youtubeVideoIds);
+
+        // Apify fallback for IDs not returned by YouTube Data API
+        const fetchedYtIds = new Set(ytVideos.map((v) => v.videoId));
+        const missingYouTube = youtubeVideoIds.filter((id) => !fetchedYtIds.has(id));
+        if (missingYouTube.length > 0) {
+          console.log(`[Snapshot/PhaseD] YouTube: ${missingYouTube.length}/${youtubeVideoIds.length} missing, trying Apify fallback...`);
+          try {
+            const recovered = await fallbackYouTubeViaApify(missingYouTube, youtubeUrlMap);
+            ytVideos.push(...recovered);
+            if (recovered.length > 0) {
+              console.log(`[Snapshot/PhaseD] YouTube Apify fallback recovered ${recovered.length} videos`);
+            }
+          } catch (fbErr) {
+            console.error("[Snapshot/PhaseD] YouTube Apify fallback failed:", fbErr);
+          }
+        }
+
         for (const v of ytVideos) {
           ownVideoMetrics[v.videoId] = {
             viewCount: v.viewCount,
             likeCount: v.likeCount,
             commentCount: v.commentCount,
-            shareCount: 0,
-            saveCount: 0,
+            shareCount: null,
+            saveCount: null,
+            platform: "youtube",
           };
         }
         console.log(`[Snapshot/PhaseD] YouTube: ${ytVideos.length}/${youtubeVideoIds.length} videos fetched`);
@@ -445,8 +488,9 @@ export async function captureSnapshot(
             viewCount: p.viewCount,
             likeCount: p.likeCount,
             commentCount: p.commentCount,
-            shareCount: 0,
-            saveCount: 0,
+            shareCount: null,
+            saveCount: null,
+            platform: "instagram",
           };
         }
         console.log(`[Snapshot/PhaseD] Instagram: ${igPosts.length}/${instagramVideoUrls.length} posts fetched`);
@@ -455,13 +499,23 @@ export async function captureSnapshot(
       }
     }
 
-    // Phase D summary log
+    // Phase D summary log — per-platform breakdown
     if (totalVideoCount > 0) {
       const metricsCount = Object.keys(ownVideoMetrics).length;
+      const ttCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "tiktok").length;
+      const ytCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "youtube").length;
+      const igCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "instagram").length;
+
+      const summary = [
+        tiktokVideoUrls.length > 0 ? `TT:${ttCollected}/${tiktokVideoUrls.length}` : null,
+        youtubeVideoIds.length > 0 ? `YT:${ytCollected}/${youtubeVideoIds.length}` : null,
+        instagramVideoUrls.length > 0 ? `IG:${igCollected}/${instagramVideoUrls.length}` : null,
+      ].filter(Boolean).join(" ");
+
       if (metricsCount < totalVideoCount) {
-        console.warn(`[Snapshot/PhaseD] INCOMPLETE: ${metricsCount}/${totalVideoCount} video metrics collected`);
+        console.warn(`[Snapshot/PhaseD] INCOMPLETE: ${metricsCount}/${totalVideoCount} video metrics collected (${summary})`);
       } else {
-        console.log(`[Snapshot/PhaseD] OK: ${metricsCount}/${totalVideoCount} video metrics collected`);
+        console.log(`[Snapshot/PhaseD] OK: ${metricsCount}/${totalVideoCount} video metrics collected (${summary})`);
       }
     }
 

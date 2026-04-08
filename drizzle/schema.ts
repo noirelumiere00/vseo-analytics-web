@@ -585,7 +585,8 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
   // 施策動画メトリクス（Phase 1）
   ownVideoMetrics: json("ownVideoMetrics").$type<Record<string, {
     viewCount: number; likeCount: number; commentCount: number;
-    shareCount: number; saveCount: number;
+    shareCount: number | null; saveCount: number | null;
+    platform?: "tiktok" | "youtube" | "instagram";
   }>>(),
 
   // ハッシュタグSOV分析（Phase 2）
@@ -778,8 +779,8 @@ export const campaignReports = mysqlTable("campaign_reports", {
   videoMetricsReport: json("videoMetricsReport").$type<Array<{
     videoId: string; videoUrl: string; coverUrl: string; description: string;
     postedAt: string;
-    before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
-    after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
+    before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number | null; saveCount: number | null; platform?: "tiktok" | "youtube" | "instagram" } | null;
+    after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number | null; saveCount: number | null; platform?: "tiktok" | "youtube" | "instagram" } | null;
     viewsChangePct: string | null;
     music?: { id: string; title: string; authorName: string; original: boolean } | null;
   }>>(),
