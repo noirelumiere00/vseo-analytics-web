@@ -1464,11 +1464,11 @@ function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: I
                           rel="noopener noreferrer"
                           key={i}
                           className={`relative aspect-square overflow-visible group ig-thumb-stagger block`}
-                          style={{ animationDelay: `${i * 40}ms`, zIndex: effectiveIsOwn ? 2 : 0 }}
+                          style={{ animationDelay: `${i * 40}ms`, zIndex: effectiveIsOwn ? 5 : 0 }}
                         >
                           {/* TikTok SOV同様: 施策キャップ */}
                           {effectiveIsOwn && (
-                            <div className="absolute -top-[10px] left-0 right-0 z-[6] bg-[#D71921] text-white text-[5px] font-bold text-center py-[2px] leading-none rounded-t-[2px]">施策</div>
+                            <div className="absolute top-0 left-0 right-0 z-[6] bg-[#D71921] text-white text-[5px] font-bold text-center py-[2px] leading-none">施策</div>
                           )}
                           <div className={`w-full h-full overflow-hidden ${effectiveIsOwn ? "border-[2px] border-[#D71921]/50" : ""}`}>
                             {post.coverUrl ? (
