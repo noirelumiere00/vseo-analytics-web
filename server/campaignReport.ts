@@ -617,9 +617,14 @@ export async function generateCampaignReport(
       }
 
       const hashtagResults: InstagramHashtagResult[] = [];
+      const searchedTags = new Set<string>(); // 重複防止
       for (const kw of keywords) {
         // Instagram only supports hashtag search — skip keywords without #
         if (!kw.startsWith("#") && !kw.startsWith("＃")) continue;
+        // 正規化して重複チェック（#Visa割 と ＃Visa割 は同一扱い）
+        const normalizedTag = kw.replace(/^[#＃]+/, "").toLowerCase();
+        if (searchedTags.has(normalizedTag)) continue;
+        searchedTags.add(normalizedTag);
         try {
           const result = await searchInstagramHashtag(kw, 30, ownNames);
           hashtagResults.push(result);
