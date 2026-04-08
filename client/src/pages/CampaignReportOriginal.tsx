@@ -1343,7 +1343,7 @@ type IGPostData = {
   isOwn: boolean;
 };
 
-function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag: string }) {
+function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: IGPostData[]; hashtag: string; isOwnOverrides?: Record<string, boolean> }) {
   return (
     <div className="relative hover:scale-[1.02] transition-all duration-500">
       {/* iPhone 15 Pro chassis */}
@@ -1448,6 +1448,8 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                 <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                   <div className="grid grid-cols-3 gap-px bg-white">
                     {posts.slice(0, 30).map((post, i) => {
+                      const slotKey = `${hashtag}:${post.shortcode}`;
+                      const effectiveIsOwn = slotKey in isOwnOverrides ? isOwnOverrides[slotKey] : post.isOwn;
                       const placeholderColors = [
                         "from-[#f0e6ff] to-[#e0d0f0]",
                         "from-[#e6f0ff] to-[#d0e0f0]",
@@ -1462,13 +1464,13 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                           rel="noopener noreferrer"
                           key={i}
                           className={`relative aspect-square overflow-visible group ig-thumb-stagger block`}
-                          style={{ animationDelay: `${i * 40}ms`, zIndex: post.isOwn ? 2 : 0 }}
+                          style={{ animationDelay: `${i * 40}ms`, zIndex: effectiveIsOwn ? 2 : 0 }}
                         >
                           {/* TikTok SOV同様: 施策キャップ */}
-                          {post.isOwn && (
+                          {effectiveIsOwn && (
                             <div className="absolute -top-[10px] left-0 right-0 z-[6] bg-[#D71921] text-white text-[5px] font-bold text-center py-[2px] leading-none rounded-t-[2px]">施策</div>
                           )}
-                          <div className={`w-full h-full overflow-hidden ${post.isOwn ? "border-[2px] border-[#D71921]/50" : ""}`}>
+                          <div className={`w-full h-full overflow-hidden ${effectiveIsOwn ? "border-[2px] border-[#D71921]/50" : ""}`}>
                             {post.coverUrl ? (
                               <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" decoding="async" />
                             ) : (
@@ -1494,14 +1496,14 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                           </div>
 
                           {/* TikTok SOV同様: 赤オーバーレイ + 左アクセントバー */}
-                          {post.isOwn && (
+                          {effectiveIsOwn && (
                             <div className="absolute inset-0 pointer-events-none z-[1] bg-[#D71921]/15" />
                           )}
-                          {post.isOwn && (
+                          {effectiveIsOwn && (
                             <div className="absolute top-0 bottom-0 left-0 w-[3px] z-[4] bg-[#D71921]" />
                           )}
 
-                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${post.isOwn ? "bg-[#D71921]" : "bg-black/50"}`}>
+                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${effectiveIsOwn ? "bg-[#D71921]" : "bg-black/50"}`}>
                             <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
                           </div>
 
@@ -1711,7 +1713,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                         </div>
                         <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                           <div style={{ transform: `scale(${OVERVIEW_PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} isOwnOverrides={igIsOwnOverrides} />
                           </div>
                         </div>
                       </div>
@@ -2211,6 +2213,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport }: { ins
         showOwnOnly={showOwnOnly}
         onActiveTagChange={setActiveTag}
         IG={IG}
+        isOwnOverrides={igIsOwnOverrides}
       />
 
       {/* ======== Summary Table with Accordion ======== */}
