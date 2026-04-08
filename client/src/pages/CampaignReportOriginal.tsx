@@ -1456,9 +1456,12 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                         "from-[#ffe6f0] to-[#f0d0e0]",
                       ];
                       return (
-                        <div
+                        <a
+                          href={post.postUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           key={i}
-                          className={`relative aspect-square overflow-visible group ig-thumb-stagger`}
+                          className={`relative aspect-square overflow-visible group ig-thumb-stagger block`}
                           style={{ animationDelay: `${i * 40}ms`, zIndex: post.isOwn ? 2 : 0 }}
                         >
                           {/* TikTok SOV同様: 施策キャップ */}
@@ -1534,7 +1537,7 @@ function InstagramSearchMock({ posts, hashtag }: { posts: IGPostData[]; hashtag:
                               </span>
                             </div>
                           )}
-                        </div>
+                        </a>
                       );
                     })}
                   </div>

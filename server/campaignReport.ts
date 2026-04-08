@@ -618,6 +618,8 @@ export async function generateCampaignReport(
 
       const hashtagResults: InstagramHashtagResult[] = [];
       for (const kw of keywords) {
+        // Instagram only supports hashtag search — skip keywords without #
+        if (!kw.startsWith("#") && !kw.startsWith("＃")) continue;
         try {
           const result = await searchInstagramHashtag(kw, 30, ownNames);
           hashtagResults.push(result);
