@@ -21,6 +21,7 @@ export interface InstagramPostData {
   publishedAt: string;
   ownerUsername: string;
   musicInfo?: { title: string; artistName: string } | null;
+  metricsReliable?: boolean;
 }
 
 /** Apify実行のステータスを待機してポーリング */
@@ -53,18 +54,23 @@ function parseInstagramItem(item: any): InstagramPostData {
     ? { title: rawMusic.title || rawMusic.music_title || "", artistName: rawMusic.artistName || rawMusic.music_author || rawMusic.artist_name || "" }
     : null;
 
+  const viewCount = item.videoPlayCount || item.videoViewCount || 0;
+  const likesCount = (item.likesCount != null && item.likesCount >= 0) ? item.likesCount : 0;
+  const commentsCount = item.commentsCount || 0;
+
   return {
     videoId: shortcode,
     videoUrl: postUrl,
     coverUrl: item.displayUrl || item.thumbnailUrl || "",
     caption: item.caption || "",
-    viewCount: item.videoPlayCount || item.videoViewCount || 0,
+    viewCount,
     threeSecViewCount: item.videoViewCount || 0,
-    likeCount: (item.likesCount != null && item.likesCount >= 0) ? item.likesCount : 0,
-    commentCount: item.commentsCount || 0,
+    likeCount: likesCount,
+    commentCount: commentsCount,
     publishedAt: item.timestamp || "",
     ownerUsername: item.ownerUsername || "",
     musicInfo: musicInfo && (musicInfo.title || musicInfo.artistName) ? musicInfo : null,
+    metricsReliable: !(viewCount > 100 && likesCount === 0 && commentsCount === 0),
   };
 }
 
@@ -629,4 +635,139 @@ async function scrapeHashtagWithApify(
     console.error(`[Instagram Hashtag] Apify failed for #${tag}:`, e);
     return { hashtag: tag, totalFetched: 0, method: "apify", topPosts: [], ownRanks: [] };
   }
+}
+
+// ============================
+// Puppeteer fallback: 個別投稿メトリクス取得
+// ============================
+
+/**
+ * Puppeteer + sessionid を使用して単一Instagram投稿のメトリクスを取得。
+ * GraphQL APIレスポンスをインターセプトしてlike/comment数を抽出。
+ */
+async function fetchInstagramPostMetrics(
+  postUrl: string,
+): Promise<{ likeCount: number; commentCount: number } | null> {
+  const sessionId = process.env.INSTAGRAM_SESSION_ID;
+  if (!sessionId) return null;
+
+  // Extract shortcode from URL
+  const shortcodeMatch = postUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  if (!shortcodeMatch) return null;
+  const shortcode = shortcodeMatch[2];
+
+  const chromePath = findChromiumPath();
+  if (!chromePath) {
+    console.warn("[Instagram Puppeteer] Chromium not found");
+    return null;
+  }
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true,
+      args: buildChromiumArgs(),
+    });
+
+    const page = await browser.newPage();
+    await page.setCookie({
+      name: "sessionid",
+      value: sessionId,
+      domain: ".instagram.com",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+    });
+
+    let metricsData: { likeCount: number; commentCount: number } | null = null;
+
+    // Intercept GraphQL API responses to extract metrics
+    page.on("response", async (response) => {
+      try {
+        const url = response.url();
+        if (url.includes("/graphql") || url.includes("/api/v1/media/")) {
+          const text = await response.text();
+          if (text.includes(shortcode) || text.includes("edge_media_preview_like") || text.includes("like_count")) {
+            const json = JSON.parse(text);
+            // Try GraphQL format
+            const media = json?.data?.shortcode_media
+              || json?.data?.xdt_shortcode_media
+              || json?.items?.[0];
+            if (media) {
+              const likes = media.edge_media_preview_like?.count
+                ?? media.like_count
+                ?? 0;
+              const comments = media.edge_media_preview_comment?.count
+                ?? media.edge_media_to_parent_comment?.count
+                ?? media.comment_count
+                ?? 0;
+              if (likes > 0 || comments > 0) {
+                metricsData = { likeCount: likes, commentCount: comments };
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore parse errors on non-JSON responses
+      }
+    });
+
+    await page.goto(`https://www.instagram.com/p/${shortcode}/`, {
+      waitUntil: "networkidle2",
+      timeout: 30_000,
+    });
+
+    // Wait briefly for GraphQL responses to be processed
+    await new Promise((r) => setTimeout(r, 3000));
+
+    await browser.close();
+    browser = undefined;
+
+    if (metricsData) {
+      console.log(`[Instagram Puppeteer] Recovered metrics for ${shortcode}: likes=${metricsData.likeCount}, comments=${metricsData.commentCount}`);
+    }
+    return metricsData;
+  } catch (e) {
+    console.warn(`[Instagram Puppeteer] Failed to fetch metrics for ${postUrl}:`, e);
+    return null;
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch { /* ignore */ }
+    }
+  }
+}
+
+/**
+ * fetchInstagramPosts のラッパー。
+ * メトリクス不完全（viewCount > 100 かつ like/comment ともに 0）な投稿に対して
+ * Puppeteer フォールバックで正確なメトリクスの回復を試みる。
+ */
+export async function fetchInstagramPostsWithFallback(
+  urls: string[],
+): Promise<InstagramPostData[]> {
+  const results = await fetchInstagramPosts(urls);
+
+  // Find incomplete metrics
+  const incomplete = results.filter(
+    (r) => r.viewCount > 100 && r.likeCount === 0 && r.commentCount === 0,
+  );
+
+  if (incomplete.length > 0 && process.env.INSTAGRAM_SESSION_ID) {
+    console.log(`[Instagram] ${incomplete.length}/${results.length} posts have incomplete metrics, trying Puppeteer fallback...`);
+    for (const item of incomplete) {
+      try {
+        const recovered = await fetchInstagramPostMetrics(item.videoUrl);
+        if (recovered && recovered.likeCount > 0) {
+          item.likeCount = recovered.likeCount;
+          item.commentCount = recovered.commentCount;
+          item.metricsReliable = true;
+        }
+      } catch {
+        /* skip — metricsReliable remains false */
+      }
+    }
+  }
+
+  return results;
 }

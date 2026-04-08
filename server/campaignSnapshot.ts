@@ -12,7 +12,7 @@
 
 import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
-import { fetchInstagramPosts } from "./instagramScraper";
+import { fetchInstagramPostsWithFallback } from "./instagramScraper";
 import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
 import type { Campaign, InsertCampaignSnapshot } from "../drizzle/schema";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
@@ -482,7 +482,7 @@ export async function captureSnapshot(
     // Instagram metrics
     if (instagramVideoUrls.length > 0) {
       try {
-        const igPosts = await fetchInstagramPosts(instagramVideoUrls);
+        const igPosts = await fetchInstagramPostsWithFallback(instagramVideoUrls);
         for (const p of igPosts) {
           ownVideoMetrics[p.videoId] = {
             viewCount: p.viewCount,
@@ -491,6 +491,7 @@ export async function captureSnapshot(
             shareCount: null,
             saveCount: null,
             platform: "instagram",
+            metricsReliable: p.metricsReliable,
           };
         }
         console.log(`[Snapshot/PhaseD] Instagram: ${igPosts.length}/${instagramVideoUrls.length} posts fetched`);
