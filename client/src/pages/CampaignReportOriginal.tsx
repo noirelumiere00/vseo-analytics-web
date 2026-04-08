@@ -2618,8 +2618,9 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
 
   // --- Pad slots to 10 ---
   const padSlots = (slots: SlotData[]) => {
+    const maxRank = Math.max(slots.length, 10);
     const result: (SlotData | null)[] = [];
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= maxRank; i++) {
       result.push(slots.find(s => s.rank === i) || null);
     }
     return result;

@@ -198,7 +198,7 @@ function buildSlots(
   if (!resultData?.all_videos) return [];
 
   const allVideos = (resultData.all_videos as any[])
-    .filter((v: any) => v.search_rank <= 10)
+    .filter((v: any) => v.search_rank <= 30)
     .sort((a: any, b: any) => a.search_rank - b.search_rank);
 
   return allVideos.map((v: any): SovSlot => {
