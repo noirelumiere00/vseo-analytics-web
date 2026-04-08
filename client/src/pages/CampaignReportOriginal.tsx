@@ -3885,6 +3885,35 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
                     </p>
                   </div>
                 </div>
+                {/* SVGスパークライン（累積推移） */}
+                {s.data.length >= 2 && (() => {
+                  const sparkW = 200;
+                  const sparkH = 40;
+                  const vals = s.data.map((d: any) => d.value);
+                  const maxV = Math.max(...vals, 1);
+                  const minV = Math.min(...vals);
+                  const range = maxV - minV || 1;
+                  const points = vals.map((v: number, i: number) => {
+                    const x = (i / (vals.length - 1)) * sparkW;
+                    const y = sparkH - ((v - minV) / range) * (sparkH - 4) - 2;
+                    return `${x},${y}`;
+                  });
+                  const pathD = `M${points.join("L")}`;
+                  return (
+                    <div className="px-3 pb-2">
+                      <svg width="100%" height={sparkH} viewBox={`0 0 ${sparkW} ${sparkH}`} preserveAspectRatio="none" className="overflow-visible">
+                        <defs>
+                          <linearGradient id={`tt-spark-fill-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={sc} stopOpacity="0.18" />
+                            <stop offset="100%" stopColor={sc} stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        <path d={`${pathD}L${sparkW},${sparkH}L0,${sparkH}Z`} fill={`url(#tt-spark-fill-${idx})`} />
+                        <path d={pathD} fill="none" stroke={sc} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  );
+                })()}
                 {/* コンパクトメトリクス */}
                 <div className="px-3 pb-2 flex items-center gap-2 text-[9px] text-slate-400">
                   <span className="flex items-center gap-0.5"><Eye className="h-2.5 w-2.5" />{fmt(s.allMetrics.viewCount)}</span>
