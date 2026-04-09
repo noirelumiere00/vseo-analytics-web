@@ -784,36 +784,36 @@ export default function AnalysisDetail() {
               ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
               : "—";
             return (
-              <div className="grid gap-4 md:grid-cols-4">
-                <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
+              <div className="grid gap-4 md:grid-cols-4 animate-stagger">
+                <div className="stat-card flex items-center gap-3 border-l-4 border-primary rounded-sm p-4 bg-card animate-fade-slide-up">
                   <Play className="h-5 w-5 text-primary shrink-0" />
                   <div>
-                    <p className="text-2xl font-bold">{reportStats.totalVideos}</p>
+                    <p className="text-2xl font-bold font-data">{reportStats.totalVideos}</p>
                     <p className="text-xs text-muted-foreground">分析動画数</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                <div className="stat-card flex items-center gap-3 border-l-4 border-blue-500 rounded-sm p-4 bg-card animate-fade-slide-up">
                   <Search className="h-5 w-5 text-blue-500 shrink-0" />
                   <div className="flex items-center gap-1">
                     <div>
-                      <p className="text-2xl font-bold">{formatNumber(reportStats.totalViews)}</p>
+                      <p className="text-2xl font-bold font-data">{formatNumber(reportStats.totalViews)}</p>
                       <p className="text-xs text-muted-foreground">総再生数</p>
                     </div>
                     <CopyButton value={formatNumber(reportStats.totalViews)} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-emerald-500 rounded-lg p-4 bg-emerald-50 dark:bg-emerald-950/20">
+                <div className="stat-card flex items-center gap-3 border-l-4 border-emerald-500 rounded-sm p-4 bg-card animate-fade-slide-up">
                   <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />
                   <div>
-                    <p className="text-2xl font-bold">{reportStats.sentimentPercentages.positive}%</p>
+                    <p className="text-2xl font-bold font-data">{reportStats.sentimentPercentages.positive}%</p>
                     <p className="text-xs text-muted-foreground">ポジティブ率</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
+                <div className="stat-card flex items-center gap-3 border-l-4 border-amber-500 rounded-sm p-4 bg-card animate-fade-slide-up">
                   <Star className="h-5 w-5 text-amber-500 shrink-0" />
                   <div className="flex items-center gap-1">
                     <div>
-                      <p className="text-2xl font-bold">{avgER}%</p>
+                      <p className="text-2xl font-bold font-data">{avgER}%</p>
                       <p className="text-xs text-muted-foreground">平均ER</p>
                     </div>
                     <CopyButton value={`${avgER}%`} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
@@ -825,12 +825,14 @@ export default function AnalysisDetail() {
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
-            <Card className="border-2 border-blue-300">
+            <Card className="border-2 border-blue-300 animate-card-enter">
               <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold flex items-center gap-2">
-                  <Search className="h-6 w-6 text-blue-500" />
-                  重複度分析
-                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center h-8 w-8 rounded-sm bg-blue-500/10">
+                    <Search className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <h2 className="text-2xl leading-none font-semibold">重複度分析</h2>
+                </div>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* 検索結果サマリー */}
@@ -995,45 +997,47 @@ export default function AnalysisDetail() {
 
           {/* Report Section */}
           {reportStats && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-none font-semibold">📊 分析レポート</h2>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* サマリー情報 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">サマリー情報</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{reportStats.totalVideos}</div>
-                      <div className="text-xs text-black mt-2">総動画数</div>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{formatNumber(reportStats.totalViews)}</div>
-                      <div className="text-xs text-black mt-2">総再生数</div>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-black mt-2">いいね数</div>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-black mt-2">コメント数</div>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-black mt-2">シェア数</div>
-                    </div>
-                    <div className="text-center p-4 bg-slate-50 border border-slate-300 rounded-lg">
-                      <div className="text-3xl font-bold text-black">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
-                      <div className="text-xs text-black mt-2">保存数</div>
-                    </div>
+            <div className="space-y-6">
+              {/* セクションヘッダー */}
+              <div className="flex items-center gap-3 animate-page-enter">
+                <div className="h-8 w-1 rounded-full bg-primary" />
+                <h2 className="text-2xl leading-none font-semibold">分析レポート</h2>
+              </div>
+
+              {/* サマリー情報 */}
+              <section className="page-section animate-card-enter">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">サマリー</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 animate-stagger">
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{reportStats.totalVideos}</div>
+                    <div className="text-xs text-muted-foreground mt-2">総動画数</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{formatNumber(reportStats.totalViews)}</div>
+                    <div className="text-xs text-muted-foreground mt-2">総再生数</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</div>
+                    <div className="text-xs text-muted-foreground mt-2">いいね数</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{formatNumber(data?.videos?.reduce((s, v) => s + (v.commentCount || 0), 0) || 0)}</div>
+                    <div className="text-xs text-muted-foreground mt-2">コメント数</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{formatNumber(data?.videos?.reduce((s, v) => s + (v.shareCount || 0), 0) || 0)}</div>
+                    <div className="text-xs text-muted-foreground mt-2">シェア数</div>
+                  </div>
+                  <div className="text-center p-4 bg-secondary/50 border rounded-sm animate-fade-slide-up">
+                    <div className="text-3xl font-bold font-data text-foreground">{formatNumber(data?.videos?.reduce((s, v) => s + (v.saveCount || 0), 0) || 0)}</div>
+                    <div className="text-xs text-muted-foreground mt-2">保存数</div>
                   </div>
                 </div>
+              </section>
 
-                {/* センチメント構成比 ― ドーナツ + 統計カード */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">センチメント構成比</h3>
+              {/* センチメント構成比 ― ドーナツ + 統計カード */}
+              <section className="page-section animate-card-enter" style={{ animationDelay: "100ms" }}>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">センチメント構成比</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
                     {/* ドーナツチャート */}
                     <div className="relative">
@@ -1115,19 +1119,19 @@ export default function AnalysisDetail() {
                       ))}
                     </div>
                   </div>
-                </div>
 
                 {/* 自動インサイト */}
-                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                  <h3 className="text-sm font-semibold text-blue-700 mb-1 flex items-center gap-1">
-                    <Star className="h-4 w-4" /> 自動インサイト
+                <div className="p-4 rounded-sm bg-primary/5 border-l-4 border-primary">
+                  <h3 className="text-xs font-semibold text-primary mb-1 flex items-center gap-1.5 uppercase tracking-wider">
+                    <Star className="h-3.5 w-3.5" /> インサイト
                   </h3>
-                  <p className="text-sm text-blue-900 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
                 </div>
+              </section>
 
-                {/* インパクト分析（常時表示） */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">📊 インパクト分析</h3>
+              {/* インパクト分析 */}
+              <section className="page-section animate-card-enter" style={{ animationDelay: "200ms" }}>
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">インパクト分析</h3>
                   {/* 3way シェア */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {([
@@ -1155,19 +1159,19 @@ export default function AnalysisDetail() {
                       </div>
                     ))}
                   </div>
-                </div>
+              </section>
 
-                {/* 詳細分析アコーディオン */}
-                <Accordion type="multiple" defaultValue={["aspects", "micro-analysis"]} className="space-y-2">
+              {/* 詳細分析アコーディオン */}
+              <Accordion type="multiple" defaultValue={["aspects", "micro-analysis"]} className="space-y-3">
 
-                  {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
-                  {data && data.report && (
-                    <AccordionItem value="aspects" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画マクロ分析
+                {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
+                {data && data.report && (
+                  <AccordionItem value="aspects" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "250ms" }}>
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                      動画マクロ分析
                       </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <ReportSection
+                    <AccordionContent className="px-5 pb-5">
+                      <ReportSection
                           keyword={data.job?.keyword || ""}
                           date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                           videoCount={data.videos?.length || 0}
@@ -1193,13 +1197,13 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
-                  {data && data.report && (
-                    <AccordionItem value="micro-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画ミクロ分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 pt-2">
+                {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
+                {data && data.report && (
+                  <AccordionItem value="micro-analysis" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "300ms" }}>
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                      動画ミクロ分析
+                    </AccordionTrigger>
+                    <AccordionContent className="px-5 pb-5 pt-2">
                         <Tabs defaultValue="insights" className="w-full">
                           <TabsList className="w-full mb-3">
                             <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
@@ -1240,24 +1244,24 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* 検索相関分析（Google Trends × TikTok） */}
-                  {data.job?.keyword && (
-                    <AccordionItem value="search-correlation" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        🔍 検索相関分析（Google Trends × TikTok）
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                  {/* エンゲージメント詳細 */}
-                  <AccordionItem value="engagement-detail" className="border rounded-xl">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      ❤️ エンゲージメント詳細（内訳 / 平均動画時間 / ハッシュタグ）
+                {/* 検索相関分析（Google Trends × TikTok） */}
+                {data.job?.keyword && (
+                  <AccordionItem value="search-correlation" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "350ms" }}>
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                      検索相関分析（Google Trends × TikTok）
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
+                    <AccordionContent className="px-5 pb-5">
+                      <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+
+                {/* エンゲージメント詳細 */}
+                <AccordionItem value="engagement-detail" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "400ms" }}>
+                  <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                    エンゲージメント詳細
+                  </AccordionTrigger>
+                  <AccordionContent className="px-5 pb-5">
                       {/* エンゲージメント内訳 */}
                       <div className="space-y-3 pt-2">
                         {([
@@ -1351,69 +1355,71 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* 投稿最適化インサイト */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="posting-duration-hashtag" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        投稿最適化インサイト
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <Tabs defaultValue="heatmap" className="w-full">
-                          <TabsList className="w-full">
-                            <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
-                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
-                            {(data.report as any)?.hashtagStrategy && (
-                              <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
-                            )}
-                          </TabsList>
-                          <TabsContent value="heatmap" className="mt-4">
-                            <PostingTimeHeatmap videos={data.videos as any} />
-                          </TabsContent>
-                          <TabsContent value="duration" className="mt-4">
-                            <DurationAnalysis videos={data.videos as any} />
-                          </TabsContent>
+                {/* 投稿最適化インサイト */}
+                {data?.videos && data.videos.length > 0 && (
+                  <AccordionItem value="posting-duration-hashtag" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "450ms" }}>
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                      投稿最適化インサイト
+                    </AccordionTrigger>
+                    <AccordionContent className="px-5 pb-5">
+                      <Tabs defaultValue="heatmap" className="w-full">
+                        <TabsList className="w-full">
+                          <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                          <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
                           {(data.report as any)?.hashtagStrategy && (
-                            <TabsContent value="hashtag" className="mt-4">
-                              <HashtagStrategy data={(data.report as any).hashtagStrategy} />
-                            </TabsContent>
+                            <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
                           )}
-                        </Tabs>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                        </TabsList>
+                        <TabsContent value="heatmap" className="mt-4">
+                          <PostingTimeHeatmap videos={data.videos as any} />
+                        </TabsContent>
+                        <TabsContent value="duration" className="mt-4">
+                          <DurationAnalysis videos={data.videos as any} />
+                        </TabsContent>
+                        {(data.report as any)?.hashtagStrategy && (
+                          <TabsContent value="hashtag" className="mt-4">
+                            <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                          </TabsContent>
+                        )}
+                      </Tabs>
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
-                  {/* アカウント横断分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="account-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        アカウント別分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                {/* アカウント横断分析 */}
+                {data?.videos && data.videos.length > 0 && (
+                  <AccordionItem value="account-analysis" className="page-section !p-0 animate-card-enter" style={{ animationDelay: "500ms" }}>
+                    <AccordionTrigger className="px-5 py-4 hover:no-underline hover:bg-muted/30 font-semibold text-sm">
+                      アカウント別分析
+                    </AccordionTrigger>
+                    <AccordionContent className="px-5 pb-5">
+                      <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
-                </Accordion>
-
-              </CardContent>
-            </Card>
+              </Accordion>
+            </div>
           )}
 
           {/* Videos Section - Tabbed by Appearance Count */}
           {videos.length > 0 && job.status === "completed" ? (
-            <Card>
-              <CardHeader>
-                <h2 className="leading-none font-semibold flex items-center gap-2">
-                  分析対象動画 ({videos.length}件)
-                </h2>
-                <CardDescription>
-                  {tripleSearch 
-                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類` 
+            <section className="page-section animate-card-enter" style={{ animationDelay: "550ms" }}>
+              <div className="mb-5">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="h-6 w-1 rounded-full bg-primary" />
+                  <h2 className="leading-none font-semibold">
+                    分析対象動画
+                    <span className="ml-2 text-sm font-data text-muted-foreground">{videos.length}件</span>
+                  </h2>
+                </div>
+                <p className="text-xs text-muted-foreground ml-[19px]">
+                  {tripleSearch
+                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類`
                     : "収集された動画の詳細分析結果"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
+              </div>
+              <div>
                 {/* ソートコントロール */}
                 <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b">
                   <span className="text-xs text-muted-foreground font-medium">並び順:</span>
@@ -1473,14 +1479,12 @@ export default function AnalysisDetail() {
                 ) : (
                   <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} metaKeywordsMap={metaKeywordsMap} />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           ) : videos.length === 0 && job.status === "completed" && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">動画データがありません</p>
-              </CardContent>
-            </Card>
+            <section className="page-section py-12 text-center">
+              <p className="text-muted-foreground">動画データがありません</p>
+            </section>
           )}
         </div>
     </DashboardLayout>
