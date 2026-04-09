@@ -4808,7 +4808,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
     return () => el?.removeEventListener("keydown", handler);
   }, [navigate]);
 
-  const PHONE_SCALE = 1.6; // スマホ表示を1.6倍に拡大
+  const PHONE_SCALE = 1.25; // スマホ表示サイズ
   const PHONE_H = Math.round(476 * PHONE_SCALE);
   const PHONE_W = Math.round(220 * PHONE_SCALE);
   const isSingle = count <= 1;
@@ -4885,21 +4885,10 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                   </div>
                 )}
 
-                {/* Before → After 矢印コネクター */}
+                {/* Before → After 矢印 */}
                 {showBefore && (
-                  <div className="flex flex-col items-center justify-center gap-1 mx-4 self-center">
-                    <div className="flex items-center gap-1">
-                      <div className="w-8 h-[2px] bg-gradient-to-r from-[#d4d4d4] to-[#171717]" />
-                      <div className="flex items-center justify-center w-9 h-9 rounded-full bg-[#171717] shadow-lg">
-                        <ChevronRight className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="w-8 h-[2px] bg-gradient-to-r from-[#171717] to-[#3b82f6]" />
-                    </div>
-                    <span className={`text-[11px] font-bold tabular-nums mt-0.5 ${
-                      (aOwnCount - bOwnCount) > 0 ? "text-emerald-600" : (aOwnCount - bOwnCount) < 0 ? "text-[#D71921]" : "text-muted-foreground"
-                    }`}>
-                      {(aOwnCount - bOwnCount) > 0 ? "+" : ""}{aOwnCount - bOwnCount}本
-                    </span>
+                  <div className="flex items-center self-center mx-1 text-[#a3a3a3]">
+                    <span className="text-2xl">→</span>
                   </div>
                 )}
 
