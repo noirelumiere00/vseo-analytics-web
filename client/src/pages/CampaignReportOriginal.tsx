@@ -3403,8 +3403,8 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                     <div className="px-5 py-4 space-y-4">
                       {hasBaseline && beforeSlots.length > 0 ? (
                         <>
-                          {/* ===== Before → After 比較レイアウト ===== */}
-                          {/* ヘッダー行: Before → After */}
+                          {/* ===== Before → After ランク別縦ペア ===== */}
+                          {/* ヘッダー行 */}
                           <div className="flex items-center gap-3">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
                             <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -3420,14 +3420,60 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                             </span>
                           </div>
 
-                          {/* Before / After 2段 */}
-                          <div className="space-y-3">
-                            <div className="flex items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
-                              {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
-                            </div>
-                            <div className="flex items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
-                              {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
-                            </div>
+                          {/* ランク別ペア: Before(上) → ↓ → After(下) */}
+                          <div className="flex justify-between w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
+                            {Array.from({ length: 10 }, (_, i) => {
+                              const bSlot = paddedBefore[i];
+                              const aSlot = paddedAfter[i];
+                              return (
+                                <div key={i} className="flex flex-col items-center flex-1 max-w-[100px] gap-0">
+                                  {/* Rank # */}
+                                  <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
+                                  {/* Before (compact) */}
+                                  {bSlot ? (
+                                    <div className="opacity-50 w-full">
+                                      <SovSlotCell
+                                        slot={bSlot} maxViewCount={maxViewCount} keyword={activeKwData!.keyword}
+                                        phase="before" isBefore onSlotUpdate={onSlotUpdate} readOnly={readOnly}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-full h-[60px] rounded-md border border-dashed border-border/30 flex items-center justify-center">
+                                      <span className="text-[8px] text-slate-200">—</span>
+                                    </div>
+                                  )}
+                                  {/* 矢印 */}
+                                  <span className="text-[10px] text-[#c0c0c0] my-0.5">↓</span>
+                                  {/* After (full) */}
+                                  {aSlot ? (
+                                    <div className="w-full">
+                                      <SovSlotCell
+                                        slot={aSlot} maxViewCount={maxViewCount} keyword={activeKwData!.keyword}
+                                        phase="after" isBefore={false} onSlotUpdate={onSlotUpdate} readOnly={readOnly}
+                                        rankChangeLabel={getRankChange(aSlot)?.label} rankChangeBadgeColor={getRankChange(aSlot)?.color}
+                                      />
+                                      {/* Avatar + username */}
+                                      <div className="flex flex-col items-center gap-0.5 mt-1">
+                                        <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 ${aSlot.owner === "own" ? "ring-[1.5px] ring-[#D71921]" : "ring-[1px] ring-slate-200"}`}>
+                                          {aSlot.cover_url ? (
+                                            <img src={aSlot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                          ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />
+                                          )}
+                                        </div>
+                                        <span className={`text-[8px] truncate max-w-full text-center leading-none ${aSlot.owner === "own" ? "font-semibold text-[#D71921]" : "text-[#a3a3a3]"}`}>
+                                          @{aSlot.creator_username}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="w-full h-[100px] rounded-md border border-dashed border-border/30 flex items-center justify-center">
+                                      <span className="text-[9px] text-slate-200">{i + 1}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
 
                           {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
@@ -3466,7 +3512,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                               自社 {afterOwnCount}/{slotCount} ({afterPct}%)
                             </span>
                           </div>
-                          <div className="grid grid-cols-5 sm:grid-cols-10 gap-0.5">
+                          <div className="flex justify-between w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
                             {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
                           </div>
                         </div>
