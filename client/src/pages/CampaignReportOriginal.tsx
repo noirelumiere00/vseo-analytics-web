@@ -2952,9 +2952,8 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
 
   // --- Pad slots to 10 ---
   const padSlots = (slots: SlotData[]) => {
-    const maxRank = Math.max(slots.length, 10);
     const result: (SlotData | null)[] = [];
-    for (let i = 1; i <= maxRank; i++) {
+    for (let i = 1; i <= 10; i++) {
       result.push(slots.find(s => s.rank === i) || null);
     }
     return result;
@@ -3292,6 +3291,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
             </div>
           );
           const rc = !isBefore ? getRankChange(slot) : null;
+          const slotIsOwn = slot.owner === "own";
           return (
             <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
               <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
@@ -3301,11 +3301,19 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                 onSlotUpdate={onSlotUpdate} readOnly={readOnly}
                 rankChangeLabel={rc?.label} rankChangeBadgeColor={rc?.color}
               />
-              {slot.owner === "own" && (
-                <span className="mt-0.5 text-[9px] font-semibold text-foreground text-center max-w-[80px] truncate">
+              {/* Circular avatar + account name (matching IG style) */}
+              <div className="flex flex-col items-center gap-0.5 mt-1.5">
+                <div className={`w-5 h-5 rounded-full overflow-hidden shrink-0 ${slotIsOwn ? "ring-[1.5px] ring-[#D71921]" : "ring-[1px] ring-slate-200"}`}>
+                  {slot.cover_url ? (
+                    <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />
+                  )}
+                </div>
+                <span className={`text-[8px] truncate max-w-full text-center leading-none ${slotIsOwn ? "font-semibold text-[#D71921]" : "text-[#a3a3a3]"}`}>
                   @{slot.creator_username}
                 </span>
-              )}
+              </div>
             </div>
           );
         };
@@ -4755,7 +4763,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
     return () => el?.removeEventListener("keydown", handler);
   }, [navigate]);
 
-  const PHONE_SCALE = 1.3; // スマホ表示を1.3倍に拡大
+  const PHONE_SCALE = 1.6; // スマホ表示を1.6倍に拡大
   const PHONE_H = Math.round(476 * PHONE_SCALE);
   const PHONE_W = Math.round(220 * PHONE_SCALE);
   const isSingle = count <= 1;
@@ -4776,7 +4784,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
         className="relative mx-auto overflow-hidden"
         style={{
           perspective: "1400px",
-          height: PHONE_H + 130, // phone at scale + kw label + metrics pill + padding
+          height: PHONE_H + 150, // phone at scale + kw label + metrics pill + padding
         }}
       >
         {kwEntries.map((entry, kwIdx) => {
