@@ -856,3 +856,25 @@ export const campaignDailyMetrics = mysqlTable("campaign_daily_metrics", {
 
 export type CampaignDailyMetric = typeof campaignDailyMetrics.$inferSelect;
 export type InsertCampaignDailyMetric = typeof campaignDailyMetrics.$inferInsert;
+
+/**
+ * コンテキスト分析（Context Analyzer）
+ */
+export const contextAnalyses = mysqlTable("context_analyses", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productImageUrl: text("productImageUrl"),
+  status: mysqlEnum("status", ["pending", "collecting", "analyzing", "completed", "failed"]).default("pending").notNull(),
+  s1RawData: json("s1RawData"),
+  s2RawData: json("s2RawData"),
+  s3RawData: json("s3RawData"),
+  analysisResult: json("analysisResult"),
+  s3ReportKey: varchar("s3ReportKey", { length: 512 }),
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type ContextAnalysis = typeof contextAnalyses.$inferSelect;
+export type InsertContextAnalysis = typeof contextAnalyses.$inferInsert;

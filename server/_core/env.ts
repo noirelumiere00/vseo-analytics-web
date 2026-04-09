@@ -32,6 +32,9 @@ export const ENV = {
   googleAdsDeveloperToken: process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "",
   googleAdsRefreshToken: process.env.GOOGLE_ADS_REFRESH_TOKEN ?? "",
   googleAdsCustomerId: process.env.GOOGLE_ADS_CUSTOMER_ID ?? "",
+  // Google Custom Search API
+  googleSearchApiKey: process.env.GOOGLE_SEARCH_API_KEY ?? "",
+  googleSearchCx: process.env.GOOGLE_SEARCH_CX ?? "",
   // Apify
   apifyApiToken: process.env.APIFY_API_TOKEN ?? "",
   // YouTube Data API v3

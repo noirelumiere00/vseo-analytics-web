@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Clock, Compass, LayoutDashboard, LogOut, Megaphone, Search } from "lucide-react";
+import { Clock, Compass, LayoutDashboard, LogOut, Megaphone, Search, ScanSearch } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,12 +32,14 @@ const mainNav = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Clock, label: "アクティビティ", path: "/activity" },
   { icon: Megaphone, label: "施策レポート", path: "/campaigns" },
+  { icon: ScanSearch, label: "コンテキスト分析", path: "/context-analysis" },
 ];
 
 const quickActions = [
   { icon: Search, label: "新規SEO分析", path: "/analysis/new" },
   { icon: Compass, label: "トレンド発掘", path: "/trend-discovery" },
   { icon: Megaphone, label: "新規施策レポート", path: "/campaigns/new" },
+  { icon: ScanSearch, label: "新規コンテキスト分析", path: "/context-analysis" },
 ];
 
 // Combine for breadcrumb usage

@@ -2000,6 +2000,76 @@ export const appRouter = router({
         return db.getDailyMetricsByShareToken(input.token);
       }),
   }),
+
+  // ── Context Analyzer ──
+  contextAnalyzer: router({
+    // 分析ジョブを開始（非同期）
+    analyze: protectedProcedure
+      .input(z.object({
+        productName: z.string().min(1).max(255),
+        productImageUrl: z.string().url().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const analysisId = await db.createContextAnalysis({
+          userId: ctx.user.id,
+          productName: input.productName,
+          productImageUrl: input.productImageUrl || null,
+          status: "pending",
+        });
+        return { analysisId };
+      }),
+
+    // 分析ステータス確認（ポーリング用）
+    getStatus: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input }) => {
+        const row = await db.getContextAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        return { status: row.status, createdAt: row.createdAt, completedAt: row.completedAt, errorMessage: row.errorMessage };
+      }),
+
+    // 分析結果取得
+    getResult: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const row = await db.getContextAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権がありません" });
+        return {
+          id: row.id,
+          productName: row.productName,
+          status: row.status,
+          analysisResult: row.analysisResult,
+          s1RawData: row.s1RawData,
+          s2RawData: row.s2RawData,
+          s3RawData: row.s3RawData,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt,
+        };
+      }),
+
+    // 分析履歴一覧
+    list: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.number().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const items = await db.listContextAnalysesByUser(ctx.user.id, input.limit + 1, input.cursor);
+        const hasMore = items.length > input.limit;
+        const resultItems = hasMore ? items.slice(0, input.limit) : items;
+        return {
+          items: resultItems.map(r => ({
+            id: r.id,
+            productName: r.productName,
+            status: r.status,
+            createdAt: r.createdAt,
+            completedAt: r.completedAt,
+          })),
+          nextCursor: hasMore ? resultItems[resultItems.length - 1]?.id : null,
+        };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

@@ -681,7 +681,7 @@ function analyzeDuplicates(
 }
 
 // Chromium/Chrome実行パスを自動検出
-function findChromiumPath(): string {
+export function findChromiumPath(): string {
   // 環境変数で指定があればそれを優先
   if (process.env.CHROMIUM_PATH && fs.existsSync(process.env.CHROMIUM_PATH)) {
     return process.env.CHROMIUM_PATH;
@@ -757,7 +757,7 @@ function isProxyEnabled(): boolean {
 }
 
 // Chromium起動引数を一元管理（メモリ最適化 + プロキシ設定）
-function buildChromiumArgs(): string[] {
+export function buildChromiumArgs(): string[] {
   const args = [
     "--no-sandbox",
     "--disable-setuid-sandbox",

@@ -29,6 +29,8 @@ import {
   InsertCampaignSnapshot,
   InsertCampaignReport,
   InsertSubscription,
+  contextAnalyses,
+  InsertContextAnalysis,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1411,4 +1413,45 @@ export async function getLastCapturedDateByVideo(campaignId: number) {
     map.set(row.videoUrl, row.maxDate);
   }
   return map;
+}
+
+// === Context Analyzer ===
+
+export async function createContextAnalysis(data: InsertContextAnalysis) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(contextAnalyses).values(data).$returningId();
+  return result.id;
+}
+
+export async function getContextAnalysis(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select().from(contextAnalyses).where(eq(contextAnalyses.id, id)).limit(1);
+  return row || null;
+}
+
+export async function updateContextAnalysisStatus(id: number, status: string, extra?: Partial<{ s1RawData: any; s2RawData: any; s3RawData: any; analysisResult: any; errorMessage: string; completedAt: Date }>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(contextAnalyses).set({ status: status as any, ...extra }).where(eq(contextAnalyses.id, id));
+}
+
+export async function getQueuedContextAnalyses() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(contextAnalyses)
+    .where(eq(contextAnalyses.status, "pending"))
+    .orderBy(contextAnalyses.createdAt)
+    .limit(5);
+}
+
+export async function listContextAnalysesByUser(userId: number, limit: number = 20, cursor?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  let q = db.select().from(contextAnalyses)
+    .where(cursor ? and(eq(contextAnalyses.userId, userId), sql`${contextAnalyses.id} < ${cursor}`) : eq(contextAnalyses.userId, userId))
+    .orderBy(desc(contextAnalyses.id))
+    .limit(limit);
+  return q;
 }
