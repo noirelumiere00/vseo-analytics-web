@@ -427,8 +427,8 @@ export default function AnalysisDetail() {
     // keyInsights がマークダウン形式のレポートを含むと仮定
     // 実際のレポートが別フィールドに保存されている場合は調整が必要
     return (
-      <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
-        <h2 className="text-2xl font-bold mb-6" aria-label="詳細分析レポート">📊 詳細分析レポート</h2>
+      <div className="mt-8 p-6 bg-card rounded-sm border">
+        <h2 className="text-2xl font-bold mb-6" aria-label="詳細分析レポート">詳細分析レポート</h2>
         <div className="prose prose-sm max-w-none">
           <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
         </div>
@@ -1265,17 +1265,17 @@ export default function AnalysisDetail() {
                       {/* エンゲージメント内訳 */}
                       <div className="space-y-3 pt-2">
                         {([
-                          { label: "いいね",   icon: "❤️", key: "likes"    },
-                          { label: "コメント", icon: "💬", key: "comments" },
-                          { label: "シェア",   icon: "🔁", key: "shares"   },
-                          { label: "保存",     icon: "🔖", key: "saves"    },
-                        ] as const).map(({ label, icon, key }) => {
+                          { label: "いいね",   Icon: Heart,          iconCls: "text-red-500",    key: "likes"    },
+                          { label: "コメント", Icon: MessageCircle,  iconCls: "text-green-500",  key: "comments" },
+                          { label: "シェア",   Icon: Share2,         iconCls: "text-purple-500", key: "shares"   },
+                          { label: "保存",     Icon: Bookmark,       iconCls: "text-orange-500", key: "saves"    },
+                        ] as const).map(({ label, Icon, iconCls, key }) => {
                           const d = reportStats.engBreakdown[key];
                           const posShare = d.total > 0 ? (d.pos / d.total) * 100 : 0;
                           return (
-                            <div key={key} className="p-3 border rounded-lg">
+                            <div key={key} className="p-3 border rounded-sm">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium">{icon} {label}</span>
+                                <span className="text-sm font-medium flex items-center gap-1.5"><Icon className={`h-3.5 w-3.5 ${iconCls}`} />{label}</span>
                                 <span className="text-xs text-muted-foreground">合計 {formatNumber(d.total)}</span>
                               </div>
                               <div className="flex h-2.5 rounded-full overflow-hidden">

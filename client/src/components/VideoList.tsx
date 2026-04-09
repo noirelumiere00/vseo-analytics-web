@@ -7,6 +7,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Eye, Heart, TrendingUp, TrendingDown, Minus, Users, MessageCircle, Share2, Bookmark, Megaphone } from "lucide-react";
+
+const THUMB_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='64' fill='%23e5e7eb'%3E%3Crect width='96' height='64' rx='4'/%3E%3Ctext x='48' y='36' text-anchor='middle' font-size='10' fill='%239ca3af'%3ENo Image%3C/text%3E%3C/svg%3E";
 import { filterAdHashtags, isPromotionVideo } from "@shared/const";
 
 export function VideoList({ videos, getSentimentBadge, getAppearanceBadge, formatNumber, getEngagementRate, rankInfo, metaKeywordsMap }: {
@@ -31,15 +33,16 @@ export function VideoList({ videos, getSentimentBadge, getAppearanceBadge, forma
       {videos.map((video) => (
         <AccordionItem key={video.id} value={`video-${video.id}`}>
           <AccordionTrigger className="hover:no-underline">
-            <div className="flex items-center gap-4 w-full pr-4">
+            <div className="flex items-center gap-3 w-full pr-4">
               <img
-                src={video.thumbnailUrl || "https://placehold.co/120x80/8A2BE2/white?text=No+Image"}
+                src={video.thumbnailUrl || THUMB_PLACEHOLDER}
                 alt={video.title || "動画サムネイル"}
-                className="w-32 h-20 object-cover rounded flex-shrink-0"
+                className="w-24 h-16 object-cover rounded-sm flex-shrink-0 bg-muted"
                 referrerPolicy="no-referrer"
+                loading="lazy"
                 onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src =
-                    "https://placehold.co/120x80/8A2BE2/white?text=No+Image";
+                  const img = e.currentTarget as HTMLImageElement;
+                  img.src = THUMB_PLACEHOLDER;
                 }}
               />
               <div className="flex-1 text-left min-w-0">
