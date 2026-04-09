@@ -5665,7 +5665,8 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
   // Load saved sentiments from ripple data
   const savedSentiments = useMemo(() => {
     const map: Record<string, "positive" | "neutral" | "negative"> = {};
-    for (const [, tagData] of Object.entries(ripple)) {
+    for (const [key, tagData] of Object.entries(ripple)) {
+      if (key === "_communityAnalysis") continue;
       for (const v of (tagData.third_party_videos || tagData.omaage_videos || [])) {
         if (v.sentiment && v.video_url) {
           map[v.video_url] = v.sentiment;
@@ -5688,7 +5689,17 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
     }
   }, [campaignId, updateSentimentMutation]);
 
-  const entries = Object.entries(ripple);
+  // Extract community analysis from ripple data (embedded by backend)
+  const communityAnalysis = (ripple as any)?._communityAnalysis as {
+    communities: Array<{
+      label: string; summary: string; isTargeted: boolean;
+      postCount: number; totalViews: number;
+      representativeVideos: Array<{ video_url: string; creator: string; description: string; views: number; cover_url?: string }>;
+    }>;
+    unclassifiedCount: number;
+  } | undefined;
+
+  const entries = Object.entries(ripple).filter(([key]) => key !== "_communityAnalysis");
 
   if (entries.length === 0) {
     return (
@@ -5730,6 +5741,91 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
 
   return (
     <div className="space-y-5 min-w-0">
+      {/* ======== 界隈（コミュニティ）分析カード ======== */}
+      {communityAnalysis && communityAnalysis.communities.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-amber-600" />
+            <h3 className="text-sm font-bold text-foreground">リーチした界隈</h3>
+            <span className="text-xs text-muted-foreground">AIによるコミュニティ分類</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {communityAnalysis.communities.map((comm, i) => (
+              <Card key={i} className="relative overflow-hidden group hover:shadow-md transition-shadow">
+                {/* Left accent bar */}
+                <div className={`absolute top-0 left-0 h-full w-1 ${comm.isTargeted ? "bg-emerald-500" : "bg-amber-500"}`} />
+
+                <CardContent className="py-4 pl-5 pr-4 space-y-2.5">
+                  {/* Header: label + badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-foreground">{comm.label}</span>
+                    {comm.isTargeted ? (
+                      <Badge className="text-[10px] px-1.5 py-0 bg-emerald-100 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
+                        <Target className="h-2.5 w-2.5 mr-0.5" />
+                        狙い通り
+                      </Badge>
+                    ) : (
+                      <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100">
+                        <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                        予想外の発見
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="flex items-center gap-4 text-xs">
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <Play className="h-3 w-3" />
+                      <strong className="text-foreground">{comm.postCount}</strong>投稿
+                    </span>
+                    <span className="flex items-center gap-1 text-muted-foreground">
+                      <Eye className="h-3 w-3" />
+                      <strong className="text-foreground">{fmt(comm.totalViews)}</strong>再生
+                    </span>
+                  </div>
+
+                  {/* Summary */}
+                  <p className="text-xs text-muted-foreground leading-relaxed">{comm.summary}</p>
+
+                  {/* Representative video thumbnails */}
+                  {comm.representativeVideos.length > 0 && (
+                    <div className="flex gap-1.5 pt-1">
+                      {comm.representativeVideos.map((rv, j) => (
+                        <a
+                          key={j}
+                          href={rv.video_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative w-14 h-[74px] rounded overflow-hidden bg-black/5 shrink-0 group/thumb"
+                          title={`@${rv.creator} — ${fmt(rv.views)}再生`}
+                        >
+                          {rv.cover_url ? (
+                            <img src={rv.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Play className="h-4 w-4 text-muted-foreground/40" />
+                            </div>
+                          )}
+                          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/70 to-transparent px-1 py-0.5">
+                            <span className="text-[8px] text-white font-medium leading-none">{fmt(rv.views)}</span>
+                          </div>
+                          <div className="absolute inset-0 bg-black/0 group-hover/thumb:bg-black/10 transition-colors" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          {communityAnalysis.unclassifiedCount > 0 && (
+            <p className="text-[11px] text-muted-foreground text-right">
+              ※ 未分類: {communityAnalysis.unclassifiedCount}投稿
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ======== Hero KPI Row ======== */}
       <div className={`grid gap-4 ${kwSentAgg ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-3"}`}>
         {[

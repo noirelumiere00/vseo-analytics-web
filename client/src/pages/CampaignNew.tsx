@@ -67,6 +67,7 @@ export default function CampaignNew() {
   const [campaignHashtags, setCampaignHashtags] = useState("");
   const [competitors, setCompetitors] = useState("");
   const [brandKeywords, setBrandKeywords] = useState("");
+  const [targetCommunities, setTargetCommunities] = useState("");
   const [prefilled, setPrefilled] = useState(false);
 
   // Query each trendJob individually
@@ -147,6 +148,7 @@ export default function CampaignNew() {
       competitors: compList.length > 0 ? compList : undefined,
       brandKeywords: brandKeywords.split("\n").map(s => s.trim()).filter(Boolean),
       bigKeywords: bigKeywords.split("\n").map(s => s.trim()).filter(Boolean),
+      targetCommunities: targetCommunities.split("\n").map(s => s.trim()).filter(Boolean),
     });
   };
 
@@ -321,6 +323,17 @@ export default function CampaignNew() {
                   rows={3}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>ターゲット界隈（任意・1行1界隈）</Label>
+              <p className="text-xs text-muted-foreground">波及効果で「狙い通りにリーチした界隈」を判定するために使います</p>
+              <Textarea
+                value={targetCommunities}
+                onChange={e => setTargetCommunities(e.target.value)}
+                placeholder={"ポイ活界隈\n韓国コスメ好き界隈\n節約主婦界隈"}
+                rows={3}
+              />
             </div>
           </CardContent>
         </Card>

@@ -1511,6 +1511,7 @@ export const appRouter = router({
         })).optional(),
         brandKeywords: z.array(z.string()).optional(),
         bigKeywords: z.array(z.string()).optional(),
+        targetCommunities: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { extractTikTokUsername } = await import("@shared/tiktokUrl");
@@ -1545,6 +1546,7 @@ export const appRouter = router({
           competitors,
           brandKeywords: input.brandKeywords || [],
           bigKeywords: input.bigKeywords || [],
+          targetCommunities: input.targetCommunities || [],
         });
         return { id };
       }),
@@ -1580,6 +1582,7 @@ export const appRouter = router({
         })).optional(),
         brandKeywords: z.array(z.string()).optional(),
         bigKeywords: z.array(z.string()).optional(),
+        targetCommunities: z.array(z.string()).optional(),
         targetViews: z.number().int().positive().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {

@@ -1341,6 +1341,29 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
   // overviewUniqueAllをsovReportに埋め込む（独立カラム不要）
   (sovReport as any)._overviewUniqueAll = overviewUniqueAll;
 
+  // ============================
+  // 軸11: 界隈（コミュニティ）分析 — LLM
+  // ============================
+  const allThirdPartyVideos = Object.values(rippleReport).flatMap(
+    (tag: any) => tag.third_party_videos || [],
+  );
+  let communityAnalysis: CommunityAnalysisResult | undefined;
+  if (allThirdPartyVideos.length >= 3) {
+    try {
+      communityAnalysis = await generateCommunityAnalysis(
+        allThirdPartyVideos,
+        (campaign.targetCommunities as string[] | undefined) || [],
+      );
+    } catch (e) {
+      console.error("[CommunityAnalysis] Failed:", e);
+    }
+  }
+
+  // communityAnalysis を rippleReport に埋め込む
+  if (communityAnalysis) {
+    (rippleReport as any)._communityAnalysis = communityAnalysis;
+  }
+
   return {
     campaignId: campaign.id,
     baselineDate: baseline?.capturedAt ?? null,
@@ -1361,6 +1384,144 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     platformSummary,
     keywordSentimentReport,
   };
+}
+
+// ============================
+// 界隈（コミュニティ）分析
+// ============================
+
+export interface CommunityAnalysisResult {
+  communities: Array<{
+    label: string;
+    summary: string;
+    isTargeted: boolean;
+    postCount: number;
+    totalViews: number;
+    representativeVideos: Array<{
+      video_url: string;
+      creator: string;
+      description: string;
+      views: number;
+      cover_url?: string;
+    }>;
+  }>;
+  unclassifiedCount: number;
+}
+
+/**
+ * 第三者投稿をLLMで界隈（コミュニティ）ごとにクラスタリング。
+ * 投稿のキャプション + ハッシュタグから「どんな界隈の人が反応しているか」を分析。
+ */
+async function generateCommunityAnalysis(
+  thirdPartyVideos: any[],
+  targetCommunities: string[],
+): Promise<CommunityAnalysisResult> {
+  // 再生数上位30件に絞る（トークン節約）
+  const sorted = [...thirdPartyVideos]
+    .sort((a, b) => (b.views || 0) - (a.views || 0))
+    .slice(0, 30);
+
+  // LLM入力データを構築
+  const postsForLLM = sorted.map((v, i) => ({
+    id: i,
+    creator: v.creator || "unknown",
+    caption: (v.description || "").slice(0, 200),
+    hashtags: (v.hashtags || []).slice(0, 10).join(", "),
+    views: v.views || 0,
+  }));
+
+  const targetLabel = targetCommunities.length > 0
+    ? `\nターゲット界隈: ${targetCommunities.join("、")}`
+    : "";
+
+  const llmResult = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: "あなたはSNS分析の専門家です。第三者投稿をコミュニティ（界隈）ごとにグループ分けし、各界隈での語られ方を要約してください。",
+      },
+      {
+        role: "user",
+        content: `以下のTikTok第三者投稿一覧を「界隈（コミュニティ）」ごとにグループ分けしてください。
+
+界隈とは、投稿者の趣味・関心・ライフスタイルに基づくコミュニティです。
+同じハッシュタグを使っていても、キャプションの文脈が違えば異なる界隈です。
+界隈名は5〜15文字の日本語ラベルにしてください（例: ポイ活界隈、韓国コスメ好き界隈）。
+#fyp #おすすめ 等の汎用タグは界隈判定に使わないでください。
+${targetLabel}
+
+投稿一覧:
+${JSON.stringify(postsForLLM, null, 1)}
+
+以下のJSON形式で回答してください:
+{
+  "communities": [
+    {
+      "label": "界隈名",
+      "summary": "この界隈での語られ方を1-2文で（具体的なフレーズを引用）",
+      "postIds": [0, 3, 7]
+    }
+  ]
+}
+
+注意:
+- 3投稿以上ある界隈のみ出力
+- 1投稿は1つの界隈にのみ分類
+- 分類できない投稿は省略可`,
+      },
+    ],
+    responseFormat: { type: "json_object" },
+    maxTokens: 2048,
+  });
+
+  const llmText = llmResult.choices[0]?.message?.content;
+  const text = typeof llmText === "string" ? llmText : "";
+  if (!text) {
+    return { communities: [], unclassifiedCount: thirdPartyVideos.length };
+  }
+
+  const parsed = JSON.parse(text);
+  const rawCommunities: Array<{ label: string; summary: string; postIds: number[] }> = parsed.communities || [];
+
+  // ターゲット界隈との部分一致判定
+  const targetLower = targetCommunities.map(t => t.toLowerCase().replace(/界隈$/, ""));
+
+  const classifiedIds = new Set<number>();
+  const communities = rawCommunities.map(c => {
+    const labelLower = c.label.toLowerCase().replace(/界隈$/, "");
+    const isTargeted = targetLower.length > 0 && targetLower.some(t =>
+      labelLower.includes(t) || t.includes(labelLower),
+    );
+
+    const posts = (c.postIds || [])
+      .filter(id => id >= 0 && id < sorted.length)
+      .map(id => {
+        classifiedIds.add(id);
+        return sorted[id];
+      });
+
+    return {
+      label: c.label,
+      summary: c.summary,
+      isTargeted,
+      postCount: posts.length,
+      totalViews: posts.reduce((s, v) => s + (v.views || 0), 0),
+      representativeVideos: posts.slice(0, 3).map(v => ({
+        video_url: v.video_url || "",
+        creator: v.creator || "",
+        description: (v.description || "").slice(0, 100),
+        views: v.views || 0,
+        cover_url: v.cover_url || undefined,
+      })),
+    };
+  });
+
+  // 再生数順でソート（大きい界隈が先）
+  communities.sort((a, b) => b.totalViews - a.totalViews);
+
+  const unclassifiedCount = thirdPartyVideos.length - classifiedIds.size;
+
+  return { communities, unclassifiedCount };
 }
 
 // ============================

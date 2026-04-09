@@ -473,6 +473,9 @@ export const campaigns = mysqlTable("campaigns", {
   // ビッグキーワード（カテゴリ全体での露出計測用）
   bigKeywords: json("bigKeywords").$type<string[]>(),
 
+  // ターゲット界隈（波及効果の「狙い通り/予想外」判定用）
+  targetCommunities: json("targetCommunities").$type<string[]>(),
+
   // スナップショットリンク
   baselineSnapshotId: int("baselineSnapshotId"),
   measurementSnapshotId: int("measurementSnapshotId"),
