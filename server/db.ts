@@ -748,9 +748,22 @@ export async function patchCampaignReportRipple(
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+
+  // _communityAnalysis 等のメタデータを保持
+  if (!rippleReport._communityAnalysis) {
+    const existing = await db.select({ rippleReport: campaignReports.rippleReport })
+      .from(campaignReports)
+      .where(eq(campaignReports.campaignId, campaignId))
+      .limit(1);
+    const existingCommunity = (existing[0]?.rippleReport as any)?._communityAnalysis;
+    if (existingCommunity) {
+      rippleReport._communityAnalysis = existingCommunity;
+    }
+  }
+
   await db
     .update(campaignReports)
-    .set({ rippleReport: rippleReport as any })
+    .set({ rippleReport: sanitizeJsonValue(rippleReport) as any })
     .where(eq(campaignReports.campaignId, campaignId));
 }
 

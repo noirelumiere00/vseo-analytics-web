@@ -1348,11 +1348,12 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     (tag: any) => tag.third_party_videos || [],
   );
   let communityAnalysis: CommunityAnalysisResult | undefined;
-  if (allThirdPartyVideos.length >= 3) {
+  if (allThirdPartyVideos.length >= 5) {
     try {
       communityAnalysis = await generateCommunityAnalysis(
         allThirdPartyVideos,
         (campaign.targetCommunities as string[] | undefined) || [],
+        { name: campaign.name, keywords: keywords },
       );
     } catch (e) {
       console.error("[CommunityAnalysis] Failed:", e);
@@ -1394,6 +1395,7 @@ export interface CommunityAnalysisResult {
   communities: Array<{
     label: string;
     summary: string;
+    keyAngle: string;
     isTargeted: boolean;
     postCount: number;
     totalViews: number;
@@ -1415,9 +1417,14 @@ export interface CommunityAnalysisResult {
 async function generateCommunityAnalysis(
   thirdPartyVideos: any[],
   targetCommunities: string[],
+  campaignContext?: { name: string; keywords: string[] },
 ): Promise<CommunityAnalysisResult> {
-  // 再生数上位30件に絞る（トークン節約）
-  const sorted = [...thirdPartyVideos]
+  // description/hashtagsが空でない投稿を優先、再生数上位30件に絞る
+  const withContent = thirdPartyVideos.filter(v =>
+    (v.description && v.description.trim()) || (v.hashtags && v.hashtags.length > 0),
+  );
+  const pool = withContent.length >= 5 ? withContent : thirdPartyVideos;
+  const sorted = [...pool]
     .sort((a, b) => (b.views || 0) - (a.views || 0))
     .slice(0, 30);
 
@@ -1428,22 +1435,28 @@ async function generateCommunityAnalysis(
     caption: (v.description || "").slice(0, 200),
     hashtags: (v.hashtags || []).slice(0, 10).join(", "),
     views: v.views || 0,
+    likes: v.likes || 0,
+    posted_at: v.posted_at || "",
   }));
 
   const targetLabel = targetCommunities.length > 0
     ? `\nターゲット界隈: ${targetCommunities.join("、")}`
     : "";
 
+  const campaignLabel = campaignContext
+    ? `\nキャンペーン: ${campaignContext.name}\n関連キーワード: ${campaignContext.keywords.join("、")}`
+    : "";
+
   const llmResult = await invokeLLM({
     messages: [
       {
         role: "system",
-        content: "あなたはSNS分析の専門家です。第三者投稿をコミュニティ（界隈）ごとにグループ分けし、各界隈での語られ方を要約してください。",
+        content: "あなたはSNSマーケティング分析の専門家です。第三者投稿をコミュニティ（界隈）ごとにグループ分けし、各界隈での語られ方と響いた訴求切り口を分析してください。",
       },
       {
         role: "user",
         content: `以下のTikTok第三者投稿一覧を「界隈（コミュニティ）」ごとにグループ分けしてください。
-
+${campaignLabel}
 界隈とは、投稿者の趣味・関心・ライフスタイルに基づくコミュニティです。
 同じハッシュタグを使っていても、キャプションの文脈が違えば異なる界隈です。
 界隈名は5〜15文字の日本語ラベルにしてください（例: ポイ活界隈、韓国コスメ好き界隈）。
@@ -1458,16 +1471,18 @@ ${JSON.stringify(postsForLLM, null, 1)}
   "communities": [
     {
       "label": "界隈名",
-      "summary": "この界隈での語られ方を1-2文で（具体的なフレーズを引用）",
+      "summary": "投稿本文から実際のフレーズを引用しつつ、この界隈での語られ方を1-2文で要約",
+      "keyAngle": "この界隈に響いた訴求切り口（例: コスパ訴求、見た目のインパクト）",
       "postIds": [0, 3, 7]
     }
   ]
 }
 
 注意:
-- 3投稿以上ある界隈のみ出力
+- 2投稿以上ある界隈のみ出力
 - 1投稿は1つの界隈にのみ分類
-- 分類できない投稿は省略可`,
+- 分類できない投稿は省略可
+- 分類が難しい場合でも最低1つの界隈を出力してください`,
       },
     ],
     responseFormat: { type: "json_object" },
@@ -1475,13 +1490,22 @@ ${JSON.stringify(postsForLLM, null, 1)}
   });
 
   const llmText = llmResult.choices[0]?.message?.content;
-  const text = typeof llmText === "string" ? llmText : "";
+  let text = typeof llmText === "string" ? llmText : "";
+  // マークダウンフェンスを除去（LLMが```json...```で返す場合のフォールバック）
+  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) text = fenceMatch[1].trim();
   if (!text) {
     return { communities: [], unclassifiedCount: thirdPartyVideos.length };
   }
 
-  const parsed = JSON.parse(text);
-  const rawCommunities: Array<{ label: string; summary: string; postIds: number[] }> = parsed.communities || [];
+  let parsed: any;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    console.error("[CommunityAnalysis] JSON parse failed, raw text:", text.slice(0, 500));
+    return { communities: [], unclassifiedCount: thirdPartyVideos.length };
+  }
+  const rawCommunities: Array<{ label: string; summary: string; keyAngle?: string; postIds: number[] }> = parsed.communities || [];
 
   // ターゲット界隈との部分一致判定
   const targetLower = targetCommunities.map(t => t.toLowerCase().replace(/界隈$/, ""));
@@ -1503,6 +1527,7 @@ ${JSON.stringify(postsForLLM, null, 1)}
     return {
       label: c.label,
       summary: c.summary,
+      keyAngle: c.keyAngle || "",
       isTargeted,
       postCount: posts.length,
       totalViews: posts.reduce((s, v) => s + (v.views || 0), 0),

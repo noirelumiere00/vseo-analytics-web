@@ -273,14 +273,17 @@ export default function CampaignReport() {
   const videoMetrics = (report as any)?.videoMetricsReport as any[] | undefined;
 
   // 施策KW/ハッシュタグに関連するタグのみ表示（日傘等の無関係タグを除外）
+  const rawRipple = report?.rippleReport || {};
+  const rawCommunityAnalysis = (rawRipple as any)?._communityAnalysis;
+
   const ripple = useMemo(() => {
-    const rawRipple = report?.rippleReport || {};
     const kws = (campaign?.keywords || []).map((kw: string) => kw.replace(/^#/, "").toLowerCase()).filter(Boolean);
     const name = (campaign?.name || "").toLowerCase();
     const ownIds = (campaign?.ownAccountIds || []).map((id: string) => id.toLowerCase());
     if (kws.length === 0) return rawRipple;
     const filtered: Record<string, any> = {};
     for (const [tag, data] of Object.entries(rawRipple)) {
+      if (tag.startsWith("_")) continue; // skip metadata keys
       const lower = tag.toLowerCase();
       const relevant = kws.some(kw => lower.includes(kw) || kw.includes(lower))
         || (name && (lower.includes(name) || name.includes(lower)))
@@ -288,7 +291,7 @@ export default function CampaignReport() {
       if (relevant) filtered[tag] = data;
     }
     return Object.keys(filtered).length > 0 ? filtered : rawRipple;
-  }, [report, campaign]);
+  }, [rawRipple, campaign]);
 
   // 施策期間のデフォルト値（動画投稿日から算出）
   const defaultStart = useMemo(() => {
@@ -644,7 +647,7 @@ export default function CampaignReport() {
         {/* Section: Ripple */}
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
-          <RippleSection ripple={ripple} campaign={campaign} campaignId={campaignId} keywordSentimentReport={keywordSentimentReport} />
+          <RippleSection ripple={ripple} communityAnalysis={rawCommunityAnalysis} campaign={campaign} campaignId={campaignId} keywordSentimentReport={keywordSentimentReport} />
         </div>
 
         {/* Section: Cross Platform */}
@@ -5661,12 +5664,12 @@ function UgcCard({ v, vKey, sentiment: overrideSentiment, onSentimentChange }: {
 // Section 7: Ripple
 // ============================
 
-export function RippleSection({ ripple, campaign, campaignId, keywordSentimentReport }: { ripple: Record<string, any>; campaign?: any; campaignId?: number; keywordSentimentReport?: Record<string, { total: number; positive: number; neutral: number; negative: number }> }) {
+export function RippleSection({ ripple, communityAnalysis, campaign, campaignId, keywordSentimentReport }: { ripple: Record<string, any>; communityAnalysis?: { communities: Array<{ label: string; summary: string; keyAngle?: string; isTargeted: boolean; postCount: number; totalViews: number; representativeVideos: Array<{ video_url: string; creator: string; description: string; views: number; cover_url?: string }> }>; unclassifiedCount: number }; campaign?: any; campaignId?: number; keywordSentimentReport?: Record<string, { total: number; positive: number; neutral: number; negative: number }> }) {
   // Load saved sentiments from ripple data
   const savedSentiments = useMemo(() => {
     const map: Record<string, "positive" | "neutral" | "negative"> = {};
     for (const [key, tagData] of Object.entries(ripple)) {
-      if (key === "_communityAnalysis") continue;
+      if (key.startsWith("_")) continue;
       for (const v of (tagData.third_party_videos || tagData.omaage_videos || [])) {
         if (v.sentiment && v.video_url) {
           map[v.video_url] = v.sentiment;
@@ -5689,17 +5692,7 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
     }
   }, [campaignId, updateSentimentMutation]);
 
-  // Extract community analysis from ripple data (embedded by backend)
-  const communityAnalysis = (ripple as any)?._communityAnalysis as {
-    communities: Array<{
-      label: string; summary: string; isTargeted: boolean;
-      postCount: number; totalViews: number;
-      representativeVideos: Array<{ video_url: string; creator: string; description: string; views: number; cover_url?: string }>;
-    }>;
-    unclassifiedCount: number;
-  } | undefined;
-
-  const entries = Object.entries(ripple).filter(([key]) => key !== "_communityAnalysis");
+  const entries = Object.entries(ripple).filter(([key]) => !key.startsWith("_"));
 
   if (entries.length === 0) {
     return (
@@ -5787,6 +5780,13 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
                   {/* Summary */}
                   <p className="text-xs text-muted-foreground leading-relaxed">{comm.summary}</p>
 
+                  {/* Key Angle */}
+                  {comm.keyAngle && (
+                    <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                      {comm.keyAngle}
+                    </span>
+                  )}
+
                   {/* Representative video thumbnails */}
                   {comm.representativeVideos.length > 0 && (
                     <div className="flex gap-1.5 pt-1">
@@ -5824,6 +5824,13 @@ export function RippleSection({ ripple, campaign, campaignId, keywordSentimentRe
             </p>
           )}
         </div>
+      )}
+
+      {/* ======== Community analysis ran but no clusters ======== */}
+      {communityAnalysis && communityAnalysis.communities.length === 0 && (
+        <p className="text-xs text-muted-foreground text-center py-4">
+          コミュニティの傾向は検出されませんでした
+        </p>
       )}
 
       {/* ======== Hero KPI Row ======== */}

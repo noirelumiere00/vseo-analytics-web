@@ -126,7 +126,9 @@ export default function SharedReport() {
   const videoMetrics = (report as any)?.videoMetricsReport as any[] | undefined;
   const bigKeywordReport = (report as any).bigKeywordReport as any[] | undefined;
   const platformSummary = (report as any).platformSummary as any | undefined;
-  const ripple = report.rippleReport || {};
+  const rippleRaw = report.rippleReport || {};
+  const ripple = rippleRaw;
+  const sharedCommunityAnalysis = (rippleRaw as any)?._communityAnalysis;
 
   const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
@@ -281,7 +283,7 @@ export default function SharedReport() {
         {/* Ripple */}
         <div id="ripple" ref={el => { sectionRefs.current["ripple"] = el; }} className="scroll-mt-16 section-fade-in">
           <SectionHeader number={sectionNumber("ripple")} title="波及効果・オーガニック拡散" question="オーガニックにも広がった？" />
-          <RippleSection ripple={ripple} keywordSentimentReport={(report as any)?.keywordSentimentReport} />
+          <RippleSection ripple={ripple} communityAnalysis={sharedCommunityAnalysis} keywordSentimentReport={(report as any)?.keywordSentimentReport} />
         </div>
 
         {/* Cross Platform */}

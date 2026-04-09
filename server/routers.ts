@@ -2086,7 +2086,8 @@ export const appRouter = router({
 
         const rippleReport = report.rippleReport as Record<string, any>;
         let found = false;
-        for (const [, tagData] of Object.entries(rippleReport)) {
+        for (const [key, tagData] of Object.entries(rippleReport)) {
+          if (key.startsWith("_")) continue; // skip metadata keys (_communityAnalysis etc.)
           const videos: any[] = tagData.third_party_videos || tagData.omaage_videos || [];
           for (const v of videos) {
             if (v.video_url === input.videoUrl) {
