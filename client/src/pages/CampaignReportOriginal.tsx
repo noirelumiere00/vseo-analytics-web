@@ -2852,19 +2852,18 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   const sovEntries = Object.entries(sovReport);
   const chartData = sovEntries
     .map(([kw, data]) => {
-      const afterSlots = (data.after_slots || []) as SlotData[];
-      const beforeSlots = (data.before_slots || []) as SlotData[];
-      // Top10スロットベース（上位シェア率用）
-      const slotTotal = afterSlots.length;
+      // 上位10枠のみ表示
+      const afterSlots = ((data.after_slots || []) as SlotData[]).filter(s => s.rank <= 10);
+      const beforeSlots = ((data.before_slots || []) as SlotData[]).filter(s => s.rank <= 10);
       const slotOwn = afterSlots.filter(s => s.owner === "own").length;
       // 全取得動画ベース（自社動画カウント用 — 50件中のown数）
       const allOwn = (data.after as any)?.own_count ?? slotOwn;
-      const allTotal = (data.after as any)?.total_count ?? slotTotal;
+      const allTotal = (data.after as any)?.total_count ?? afterSlots.length;
       return {
         keyword: kw,
         own: slotOwn,
-        total: slotTotal,
-        pct: slotTotal > 0 ? Math.round((slotOwn / slotTotal) * 100 * 10) / 10 : 0,
+        total: afterSlots.length,
+        pct: afterSlots.length > 0 ? Math.round((slotOwn / afterSlots.length) * 100 * 10) / 10 : 0,
         allOwn,
         allTotal,
         afterSlots,
@@ -3244,15 +3243,19 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
         // SOV calculations (safe even when no sovData)
         // activeKwData is guaranteed non-null here (overview returned early above)
         const sovData = activeKwData!.sovData;
-        const afterSlots = sovData?.afterSlots || [];
-        const beforeSlots = sovData?.beforeSlots || [];
+        // 上位10枠のみ表示（30枠 → 10枠に絞る）
+        const afterSlotsAll = sovData?.afterSlots || [];
+        const beforeSlotsAll = sovData?.beforeSlots || [];
+        const afterSlots = afterSlotsAll.filter(s => s.rank <= 10);
+        const beforeSlots = beforeSlotsAll.filter(s => s.rank <= 10);
         const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
         const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
         const ownChange = afterOwnCount - beforeOwnCount;
         const paddedBefore = padSlots(beforeSlots);
         const paddedAfter = padSlots(afterSlots);
-        const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / afterSlots.length) * 100 * 10) / 10 : 0;
-        const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / beforeSlots.length) * 100 * 10) / 10 : 0;
+        const slotCount = 10;
+        const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / slotCount) * 100 * 10) / 10 : 0;
+        const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / slotCount) * 100 * 10) / 10 : 0;
         const pctChange = Number((afterPct - beforePct).toFixed(1));
 
         const countGenres = (slots: SlotData[]) => {
@@ -3385,64 +3388,90 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                   {/* Slot rows — only when sovData exists */}
                   {hasSovData && (
                     <div className="px-5 py-4 space-y-4">
-                      {/* ===== 施策前 ===== */}
-                      {hasBaseline && beforeSlots.length > 0 && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
-                            <span className="text-[11px] text-muted-foreground tabular-nums">
-                              自社 {beforeOwnCount}/{beforeSlots.length} ({beforePct}%)  ·  ネガティブ {beforeNeg}本
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
-                            {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
-                      {hasBaseline && beforeSlots.length > 0 && (
-                        <div className="flex items-center gap-1.5 overflow-x-auto py-2 -mx-1 px-1">
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f5f5f5] text-secondary-foreground whitespace-nowrap">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a] shrink-0" />
-                            施策動画
-                            <span className={`font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
-                              {beforeOwnCount}→{afterOwnCount}{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
-                            </span>
-                          </div>
-                          {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => {
-                            const bCount = beforeGenres[key] || 0;
-                            const aCount = afterGenres[key] || 0;
-                            const change = aCount - bCount;
-                            return (
-                              <div key={key} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap ${
-                                key === "negative" && change !== 0 ? "bg-red-50 text-[#D71921]" : "bg-[#f5f5f5] text-secondary-foreground"
-                              }`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${barCls} shrink-0`} />
-                                {label}
-                                <span className={`font-bold tabular-nums ${change > 0 ? "text-emerald-600" : change < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
-                                  {bCount}→{aCount}{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
+                      {hasBaseline && beforeSlots.length > 0 ? (
+                        <>
+                          {/* ===== Before → After 比較レイアウト ===== */}
+                          <div className="grid grid-cols-[1fr_auto_1fr] gap-0 items-start">
+                            {/* Before 側 */}
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                  自社 {beforeOwnCount}/{slotCount} ({beforePct}%)
                                 </span>
                               </div>
-                            );
-                          })}
+                              <div className="grid grid-cols-5 gap-0.5">
+                                {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
+                              </div>
+                            </div>
+
+                            {/* 中央の矢印コネクター */}
+                            <div className="flex flex-col items-center justify-center gap-1 px-3 pt-8">
+                              <div className="w-px h-8 bg-gradient-to-b from-transparent via-slate-300 to-slate-400" />
+                              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#171717]">
+                                <ChevronRight className="h-4 w-4 text-white" />
+                              </div>
+                              <div className={`text-[11px] font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
+                                {ownChange > 0 ? "+" : ""}{ownChange}本
+                              </div>
+                              <div className="w-px h-8 bg-gradient-to-b from-slate-400 via-slate-300 to-transparent" />
+                            </div>
+
+                            {/* After 側 */}
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">After</span>
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                  自社 {afterOwnCount}/{slotCount} ({afterPct}%)
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-5 gap-0.5">
+                                {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto py-2 -mx-1 px-1">
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f5f5f5] text-secondary-foreground whitespace-nowrap">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#0a0a0a] shrink-0" />
+                              施策動画
+                              <span className={`font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
+                                {beforeOwnCount}→{afterOwnCount}{ownChange !== 0 && ` (${ownChange > 0 ? "+" : ""}${ownChange})`}
+                              </span>
+                            </div>
+                            {Object.entries(GENRE_CONFIG).map(([key, { label, barCls }]) => {
+                              const bCount = beforeGenres[key] || 0;
+                              const aCount = afterGenres[key] || 0;
+                              const change = aCount - bCount;
+                              return (
+                                <div key={key} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap ${
+                                  key === "negative" && change !== 0 ? "bg-red-50 text-[#D71921]" : "bg-[#f5f5f5] text-secondary-foreground"
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${barCls} shrink-0`} />
+                                  {label}
+                                  <span className={`font-bold tabular-nums ${change > 0 ? "text-emerald-600" : change < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
+                                    {bCount}→{aCount}{change !== 0 && ` (${change > 0 ? "+" : ""}${change})`}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        /* ===== ベースラインなし — Current のみ ===== */
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">Current</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              自社 {afterOwnCount}/{slotCount} ({afterPct}%)
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-5 sm:grid-cols-10 gap-0.5">
+                            {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
+                          </div>
                         </div>
                       )}
-
-                      {/* ===== 施策後 / 現在 ===== */}
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">
-                            {hasBaseline && beforeSlots.length > 0 ? "After" : "Current"}
-                          </span>
-                          <span className="text-[11px] text-muted-foreground tabular-nums">
-                            自社 {afterOwnCount}/{afterSlots.length} ({afterPct}%)  ·  ネガティブ {afterNeg}本
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-end w-full gap-0.5 overflow-x-auto pb-1">
-                          {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
-                        </div>
-                      </div>
                     </div>
                   )}
 
@@ -3453,7 +3482,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       {hasBaseline && beforeSlots.length > 0 && (
                         <div className="flex justify-center gap-6 px-5 py-2.5 text-[12px] font-semibold border-b border-black/4">
                           <span className={pctChange > 0 ? "text-emerald-600" : pctChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}>
-                            上位シェア {beforeOwnCount}/{beforeSlots.length} → {afterOwnCount}/{afterSlots.length}（{ownChange > 0 ? "+" : ""}{ownChange}本）
+                            上位シェア {beforeOwnCount}/{slotCount} → {afterOwnCount}/{slotCount}（{ownChange > 0 ? "+" : ""}{ownChange}本）
                           </span>
                           <span className="text-black/10">|</span>
                           <span className={negChange < 0 ? "text-[#D71921]" : negChange > 0 ? "text-emerald-600" : "text-muted-foreground"}>
@@ -3470,7 +3499,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                           <div className="grid grid-cols-3 divide-x divide-black/4 min-w-0">
                             <div className="flex flex-col items-center gap-0.5 py-3">
                               <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">上位シェア率</span>
-                              <span className="text-xl font-black text-foreground tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-muted-foreground ml-0.5">/{afterSlots.length}</span></span>
+                              <span className="text-xl font-black text-foreground tabular-nums">{afterOwnCount}<span className="text-xs font-normal text-muted-foreground ml-0.5">/{slotCount}</span></span>
                               {hasBaseline && beforeSlots.length > 0 && <ChangeIndicator value={ownChange} suffix="本" />}
                             </div>
                             <div className="flex flex-col items-center gap-0.5 py-3">
