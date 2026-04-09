@@ -2852,26 +2852,29 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   const sovEntries = Object.entries(sovReport);
   const chartData = sovEntries
     .map(([kw, data]) => {
-      // 上位10枠のみ表示
-      const afterSlots = ((data.after_slots || []) as SlotData[]).filter(s => s.rank <= 10);
-      const beforeSlots = ((data.before_slots || []) as SlotData[]).filter(s => s.rank <= 10);
-      const slotOwn = afterSlots.filter(s => s.owner === "own").length;
+      // 全スロット保持（スマホモック用）— スロット一覧バーは別途 top10 に絞る
+      const afterSlots = (data.after_slots || []) as SlotData[];
+      const beforeSlots = (data.before_slots || []) as SlotData[];
+      // 上位10枠ベースの統計
+      const top10After = afterSlots.filter(s => s.rank <= 10);
+      const top10Before = beforeSlots.filter(s => s.rank <= 10);
+      const slotOwn = top10After.filter(s => s.owner === "own").length;
       // 全取得動画ベース（自社動画カウント用 — 50件中のown数）
       const allOwn = (data.after as any)?.own_count ?? slotOwn;
       const allTotal = (data.after as any)?.total_count ?? afterSlots.length;
       return {
         keyword: kw,
         own: slotOwn,
-        total: afterSlots.length,
-        pct: afterSlots.length > 0 ? Math.round((slotOwn / afterSlots.length) * 100 * 10) / 10 : 0,
+        total: top10After.length,
+        pct: top10After.length > 0 ? Math.round((slotOwn / top10After.length) * 100 * 10) / 10 : 0,
         allOwn,
         allTotal,
         afterSlots,
         beforeSlots,
         before: data.before || {},
         after: data.after || {},
-        beforeOwn: beforeSlots.filter(s => s.owner === "own").length,
-        beforeAllOwn: (data.before as any)?.own_count ?? beforeSlots.filter(s => s.owner === "own").length,
+        beforeOwn: top10Before.filter(s => s.owner === "own").length,
+        beforeAllOwn: (data.before as any)?.own_count ?? top10Before.filter(s => s.owner === "own").length,
         isBigKeyword: !!data._isBigKeyword,
       };
     })
@@ -2952,10 +2955,20 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
     return best < 999 ? best : null;
   }, [positionMap]);
 
-  // --- Pad slots to 10 ---
+  // --- Pad slots to 10 (スロット一覧バー用) ---
   const padSlots = (slots: SlotData[]) => {
     const result: (SlotData | null)[] = [];
     for (let i = 1; i <= 10; i++) {
+      result.push(slots.find(s => s.rank === i) || null);
+    }
+    return result;
+  };
+
+  // --- Pad slots to 30 (スマホモック用) ---
+  const padSlots30 = (slots: SlotData[]) => {
+    const maxRank = Math.max(30, ...slots.map(s => s.rank));
+    const result: (SlotData | null)[] = [];
+    for (let i = 1; i <= Math.min(maxRank, 30); i++) {
       result.push(slots.find(s => s.rank === i) || null);
     }
     return result;
@@ -3215,7 +3228,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                                       <span className="text-[14px] font-mono text-foreground font-bold tracking-wider block">Current</span>
                                       <span className="text-[13px] text-blue-600 font-semibold block">{d.own}/{d.total}枠</span>
                                     </div>
-                                    <TikTokSearchMock slots={padSlots(d.afterSlots)} keyword={d.keyword} />
+                                    <TikTokSearchMock slots={padSlots30(d.afterSlots)} keyword={d.keyword} />
                                   </div>
                                 </div>
                                 <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-[#e5e5e5] shadow-md">
@@ -3369,8 +3382,8 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       <TikTokMockStage
                         kwEntries={chartData.map(d => ({
                           keyword: d.keyword,
-                          paddedBefore: padSlots(d.beforeSlots),
-                          paddedAfter: padSlots(d.afterSlots),
+                          paddedBefore: padSlots30(d.beforeSlots),
+                          paddedAfter: padSlots30(d.afterSlots),
                           showBefore: hasBaseline && d.beforeSlots.length > 0,
                           bOwnCount: d.beforeOwn,
                           aOwnCount: d.own,
@@ -4872,12 +4885,21 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                   </div>
                 )}
 
-                {/* Mini bridge */}
+                {/* Before → After 矢印コネクター */}
                 {showBefore && (
-                  <div className="flex flex-col items-center gap-0 mx-2">
-                    <div className="w-[5px] h-[5px] rounded-full border-[1.5px] border-[#c0c0c0]" />
-                    <div className="w-[1.5px] h-[28px]" style={{ background: "linear-gradient(to bottom, #c0c0c0, #3b82f6)" }} />
-                    <div className="w-[5px] h-[5px] rounded-full bg-blue-600" />
+                  <div className="flex flex-col items-center justify-center gap-1 mx-4 self-center">
+                    <div className="flex items-center gap-1">
+                      <div className="w-8 h-[2px] bg-gradient-to-r from-[#d4d4d4] to-[#171717]" />
+                      <div className="flex items-center justify-center w-9 h-9 rounded-full bg-[#171717] shadow-lg">
+                        <ChevronRight className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="w-8 h-[2px] bg-gradient-to-r from-[#171717] to-[#3b82f6]" />
+                    </div>
+                    <span className={`text-[11px] font-bold tabular-nums mt-0.5 ${
+                      (aOwnCount - bOwnCount) > 0 ? "text-emerald-600" : (aOwnCount - bOwnCount) < 0 ? "text-[#D71921]" : "text-muted-foreground"
+                    }`}>
+                      {(aOwnCount - bOwnCount) > 0 ? "+" : ""}{aOwnCount - bOwnCount}本
+                    </span>
                   </div>
                 )}
 
