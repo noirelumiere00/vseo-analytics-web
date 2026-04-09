@@ -3404,43 +3404,29 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                       {hasBaseline && beforeSlots.length > 0 ? (
                         <>
                           {/* ===== Before → After 比較レイアウト ===== */}
-                          <div className="grid grid-cols-[1fr_auto_1fr] gap-0 items-start">
-                            {/* Before 側 */}
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
-                                <span className="text-[11px] text-muted-foreground tabular-nums">
-                                  自社 {beforeOwnCount}/{slotCount} ({beforePct}%)
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-5 gap-0.5">
-                                {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
-                              </div>
-                            </div>
+                          {/* ヘッダー行: Before → After */}
+                          <div className="flex items-center gap-3">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#f5f5f5] text-muted-foreground tracking-wide uppercase">Before</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              自社 {beforeOwnCount}/{slotCount} ({beforePct}%)
+                            </span>
+                            <span className="text-[16px] text-[#a3a3a3] mx-1">→</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">After</span>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
+                              自社 {afterOwnCount}/{slotCount} ({afterPct}%)
+                            </span>
+                            <span className={`text-[11px] font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
+                              ({ownChange > 0 ? "+" : ""}{ownChange}本)
+                            </span>
+                          </div>
 
-                            {/* 中央の矢印コネクター */}
-                            <div className="flex flex-col items-center justify-center gap-1 px-3 pt-8">
-                              <div className="w-px h-8 bg-gradient-to-b from-transparent via-slate-300 to-slate-400" />
-                              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-[#171717]">
-                                <ChevronRight className="h-4 w-4 text-white" />
-                              </div>
-                              <div className={`text-[11px] font-bold tabular-nums ${ownChange > 0 ? "text-emerald-600" : ownChange < 0 ? "text-[#D71921]" : "text-muted-foreground"}`}>
-                                {ownChange > 0 ? "+" : ""}{ownChange}本
-                              </div>
-                              <div className="w-px h-8 bg-gradient-to-b from-slate-400 via-slate-300 to-transparent" />
+                          {/* Before / After 2段 */}
+                          <div className="space-y-3">
+                            <div className="flex items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
+                              {paddedBefore.map((slot, i) => renderSlotInRow(slot, i, true))}
                             </div>
-
-                            {/* After 側 */}
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0a0a0a] text-white tracking-wide uppercase">After</span>
-                                <span className="text-[11px] text-muted-foreground tabular-nums">
-                                  自社 {afterOwnCount}/{slotCount} ({afterPct}%)
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-5 gap-0.5">
-                                {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
-                              </div>
+                            <div className="flex items-end w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
+                              {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
                             </div>
                           </div>
 
