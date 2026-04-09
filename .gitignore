@@ -125,3 +125,9 @@ mock-*
 fix-*.mjs
 *.save
 .envsudo
+
+# Manus development artifacts
+.manus/db/
+
+# npm lock file (project uses pnpm)
+package-lock.json
