@@ -580,15 +580,16 @@ export default function AnalysisDetail() {
 
   return (
     <DashboardLayout>
-      <div className="w-full min-w-0 space-y-8 -m-2 md:-m-3 p-2 md:p-3">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+      <div className="w-full min-w-0 -m-2 md:-m-3">
+        {/* Fixed Header */}
+        <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/50 px-2 md:px-3 pb-0">
+        <div className="flex items-center justify-between py-3">
           <div>
-            <h1 className="text-2xl font-bold" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace", letterSpacing: "0.08em" }}>
+            <h1 className="text-lg font-bold" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace", letterSpacing: "0.08em" }}>
               {job.keyword ? job.keyword.replace(/^#+/, "") : "手動URL分析"}
             </h1>
             {job.status === "completed" && (
-              <p className="text-sm text-muted-foreground mt-1">分析完了</p>
+              <p className="text-xs text-muted-foreground mt-0.5">分析完了</p>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -895,9 +896,9 @@ export default function AnalysisDetail() {
             </div>
           )}
 
-          {/* Sticky Section Navigation */}
+          {/* Section Navigation (inside fixed header) */}
           {job.status === "completed" && (
-            <nav className="sticky top-0 z-30 -mx-2 px-2 py-2 bg-background/80 backdrop-blur-md border-b border-border/50" style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
+            <nav className="py-1.5" style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
               <div className="overflow-x-auto min-w-0 no-scrollbar">
                 <div className="flex gap-0 min-w-max segment-control">
                   {SECTIONS.map((sec) => {
@@ -922,10 +923,14 @@ export default function AnalysisDetail() {
               </div>
             </nav>
           )}
+          </div>
+
+          {/* Content area */}
+          <div className="p-2 md:p-3 space-y-8">
 
           {/* ===== 01 AIインサイト（最上部） ===== */}
           {reportStats && job.status === "completed" && (data?.report?.autoInsight || reportStats.autoInsight) && (
-            <div id="ai-insight" className="scroll-mt-16 section-fade-in">
+            <div id="ai-insight" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">01</span>
@@ -947,7 +952,7 @@ export default function AnalysisDetail() {
               ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
               : "—";
             return (
-              <div id="summary" className="scroll-mt-16 section-fade-in">
+              <div id="summary" className="scroll-mt-32 section-fade-in">
               <div className="mb-4">
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">02</span>
@@ -1032,7 +1037,7 @@ export default function AnalysisDetail() {
             const videoMap = new Map<string, any>();
             for (const v of videos) videoMap.set((v as any).videoId, v);
             return (
-              <div id="search-mockup" className="scroll-mt-16 section-fade-in">
+              <div id="search-mockup" className="scroll-mt-32 section-fade-in">
               <div className="mb-4">
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">03</span>
@@ -1253,7 +1258,7 @@ export default function AnalysisDetail() {
 
           {/* ===== パターン戦略ガイド（勝ち + 避けるべきポイント統合） ===== */}
           {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
-            <div id="patterns" className="scroll-mt-16 section-fade-in">
+            <div id="patterns" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">04</span>
@@ -1388,7 +1393,7 @@ export default function AnalysisDetail() {
 
           {/* ===== 3. 制作ブリーフ ===== */}
           {tripleSearch && job.status === "completed" && (
-            <div id="brief" className="scroll-mt-16 section-fade-in">
+            <div id="brief" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">05</span>
@@ -1416,7 +1421,7 @@ export default function AnalysisDetail() {
 
           {/* ===== 5. 評判分析 ===== */}
           {reportStats && job.status === "completed" && (
-            <div id="reputation" className="scroll-mt-16 section-fade-in">
+            <div id="reputation" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">06</span>
@@ -1552,7 +1557,7 @@ export default function AnalysisDetail() {
 
           {/* ===== 7. データ付録 ===== */}
           {reportStats && job.status === "completed" && (
-            <div id="data" className="scroll-mt-16 section-fade-in">
+            <div id="data" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
@@ -1656,7 +1661,7 @@ export default function AnalysisDetail() {
 
           {/* ===== 8. アカウント・動画一覧 ===== */}
           {videos.length > 0 && job.status === "completed" ? (
-            <div id="videos" className="scroll-mt-16 section-fade-in">
+            <div id="videos" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
@@ -1831,6 +1836,7 @@ export default function AnalysisDetail() {
               </CardContent>
             </Card>
           )}
+        </div>
         </div>
     </DashboardLayout>
   );
