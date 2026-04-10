@@ -1019,7 +1019,7 @@ export default function AnalysisDetail() {
                 <CardContent>
                   <div className="flex justify-center gap-6 overflow-x-auto pb-4">
                     {searches.slice(0, 3).map((search: any, sessionIdx: number) => {
-                      const sessionVideos = (search.results || search.videos || []).slice(0, 9);
+                      const sessionVideos = (search.results || search.videos || []);
                       return (
                         <div key={sessionIdx} className="flex flex-col items-center gap-2 shrink-0">
                           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>
