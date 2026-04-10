@@ -261,7 +261,7 @@ function PostingScheduleTab({
 
 interface ProductionBriefProps {
   brief: ProductionBriefType | null | undefined;
-  onGenerate?: () => void;
+  onGenerate?: (extra?: { productName?: string; productUrl?: string; customPrompt?: string; imageBase64?: string }) => void;
   isGenerating?: boolean;
 }
 
@@ -270,25 +270,89 @@ export default function ProductionBrief({
   onGenerate,
   isGenerating,
 }: ProductionBriefProps) {
+  const [productName, setProductName] = useState("");
+  const [productUrl, setProductUrl] = useState("");
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showOptions, setShowOptions] = useState(false);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("5MB以下の画像を選択してください"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setImageBase64(result);
+      setImagePreview(result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGenerate = () => {
+    const extra = {
+      productName: productName || undefined,
+      productUrl: productUrl || undefined,
+      customPrompt: customPrompt || undefined,
+      imageBase64: imageBase64 || undefined,
+    };
+    onGenerate?.(Object.values(extra).some(Boolean) ? extra : undefined);
+  };
+
   if (!brief) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+      <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
         <div className="rounded-full bg-amber-100 p-4">
           <Sparkles className="h-8 w-8 text-amber-600" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-stone-700">
-            制作ブリーフが未作成です
-          </p>
-          <p className="text-xs text-muted-foreground">
-            AIが台本・ハッシュタグ・撮影チェックリストを自動生成します
-          </p>
+          <p className="text-sm font-medium text-stone-700">制作ブリーフが未作成です</p>
+          <p className="text-xs text-muted-foreground">AIが台本・ハッシュタグを自動生成します</p>
         </div>
-        <Button
-          onClick={onGenerate}
-          disabled={isGenerating}
-          className="bg-amber-600 hover:bg-amber-700 text-white rounded-sm"
-        >
+
+        {/* カスタム入力トグル */}
+        <button onClick={() => setShowOptions(!showOptions)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          {showOptions ? "▲ オプションを閉じる" : "▼ 商品情報・カスタム指示を追加"}
+        </button>
+
+        {showOptions && (
+          <div className="w-full max-w-md space-y-3 text-left">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">商品名</label>
+              <input value={productName} onChange={e => setProductName(e.target.value)} placeholder="例: キュキュット 食器用洗剤"
+                className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">商品URL</label>
+              <input value={productUrl} onChange={e => setProductUrl(e.target.value)} placeholder="https://..."
+                className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">AIへの追加指示</label>
+              <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)} placeholder="例: 20代女性向けに、コスパを強調してください"
+                className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background resize-none h-20" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">参考画像</label>
+              <div className="mt-1 flex items-center gap-3">
+                <label className="cursor-pointer px-3 py-2 text-xs border rounded-md hover:bg-muted transition-colors">
+                  📎 ファイルを選択
+                  <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+                </label>
+                {imagePreview && (
+                  <div className="relative">
+                    <img src={imagePreview} alt="" className="w-12 h-12 rounded object-cover border" />
+                    <button onClick={() => { setImageBase64(null); setImagePreview(null); }}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">×</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <Button onClick={handleGenerate} disabled={isGenerating} className="bg-amber-600 hover:bg-amber-700 text-white rounded-sm">
           {isGenerating ? (
             <span className="flex items-center gap-2">
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

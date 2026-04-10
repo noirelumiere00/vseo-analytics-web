@@ -320,7 +320,13 @@ export const appRouter = router({
 
     // 制作ブリーフ生成
     generateBrief: protectedProcedure
-      .input(z.object({ jobId: z.number() }))
+      .input(z.object({
+        jobId: z.number(),
+        productName: z.string().optional(),
+        productUrl: z.string().optional(),
+        customPrompt: z.string().optional(),
+        imageBase64: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
@@ -427,6 +433,12 @@ export const appRouter = router({
           bestDuration,
           bestPostingTimes,
           emotionWords,
+          {
+            productName: input.productName,
+            productUrl: input.productUrl,
+            customPrompt: input.customPrompt,
+            imageBase64: input.imageBase64,
+          },
         );
 
         // Save to analysisReports.productionBrief

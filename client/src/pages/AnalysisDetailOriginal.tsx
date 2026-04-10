@@ -1402,8 +1402,8 @@ export default function AnalysisDetail() {
               <CardContent>
                 <ProductionBrief
                   brief={(data.report as any)?.productionBrief ?? null}
-                  onGenerate={() => {
-                    generateBrief.mutate({ jobId });
+                  onGenerate={(extra) => {
+                    generateBrief.mutate({ jobId, ...extra });
                   }}
                   isGenerating={generateBrief.isPending}
                 />

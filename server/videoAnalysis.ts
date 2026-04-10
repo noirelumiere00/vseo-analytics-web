@@ -1777,12 +1777,19 @@ export async function generateProductionBrief(
   topHashtags: string[],
   bestDuration: { range: string; avgER: number } | null,
   bestPostingTimes: { day: string; hour: number; avgViews: number }[],
-  emotionWords: { word: string; count: number; valence: number; arousal: number }[]
+  emotionWords: { word: string; count: number; valence: number; arousal: number }[],
+  extra?: { productName?: string; productUrl?: string; customPrompt?: string; imageBase64?: string },
 ): Promise<ProductionBrief> {
+  const productContext = [
+    extra?.productName ? `商品名: ${extra.productName}` : null,
+    extra?.productUrl ? `商品URL: ${extra.productUrl}` : null,
+  ].filter(Boolean).join('\n');
+
   const prompt = `
 検索キーワード: 「${keyword}」
-
-以下の分析データに基づき、TikTok動画の制作ブリーフを生成してください。
+${productContext ? `\n【商品情報】\n${productContext}\n` : ''}
+${extra?.customPrompt ? `【追加指示】\n${extra.customPrompt}\n` : ''}
+以下の分析データに基づき、TikTok動画の制作ブリーフを生成してください。${extra?.productName ? `商品「${extra.productName}」の訴求を意識してください。` : ''}
 
 【勝ちパターン分析】
 ${winPattern ? `
@@ -1832,9 +1839,15 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
       messages: [
         {
           role: "system",
-          content: "あなたはTikTok動画のクリエイティブディレクターです。分析データに基づき、動画制作ブリーフを生成してください。日本語で回答し、JSONで出力してください。",
+          content: `あなたはTikTok動画のクリエイティブディレクターです。分析データに基づき、動画制作ブリーフを生成してください。${extra?.productName ? `商品「${extra.productName}」の訴求に特化してください。` : ''}日本語で回答し、JSONで出力してください。${extra?.imageBase64 ? '添付画像は商品の参考画像です。ビジュアルの特徴も考慮してください。' : ''}`,
         },
-        { role: "user", content: prompt },
+        { role: "user", content: extra?.imageBase64
+          ? [
+              { type: "text", text: prompt },
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: extra.imageBase64.replace(/^data:image\/\w+;base64,/, "") } },
+            ] as any
+          : prompt,
+        },
       ],
       response_format: {
         type: "json_schema",
