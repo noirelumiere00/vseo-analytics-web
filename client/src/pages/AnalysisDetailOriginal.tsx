@@ -1294,60 +1294,14 @@ export default function AnalysisDetail() {
                       </TabsTrigger>
                     </TabsList>
                     <TabsContent value="organic" className="space-y-0">
-                      <Accordion type="multiple" defaultValue={["win", "lose"]}>
-                        {tripleSearch.commonalityAnalysis && (
-                          <AccordionItem value="win" className="border-0">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-primary hover:no-underline hover:bg-muted/70">
-                              <span className="flex items-center gap-2 font-semibold text-foreground">
-                                <Star className="h-4 w-4" />勝ちパターン戦略
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                        {tripleSearch.losePatternAnalysis && (
-                          <AccordionItem value="lose" className="border-0 mt-3">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-muted-foreground/30 hover:no-underline hover:bg-muted/70">
-                              <span className="flex items-center gap-2 font-semibold text-foreground">
-                                <AlertTriangle className="h-4 w-4" />負けパターン回避
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                      </Accordion>
+                      {tripleSearch.commonalityAnalysis && (
+                        <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                      )}
                     </TabsContent>
                     <TabsContent value="ad" className="space-y-0">
-                      <Accordion type="multiple" defaultValue={["win-ad", "lose-ad"]}>
-                        {tripleSearch.commonalityAnalysisAd && (
-                          <AccordionItem value="win-ad" className="border-0">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-primary hover:no-underline hover:bg-muted/70">
-                              <span className="flex items-center gap-2 font-semibold text-foreground">
-                                <Star className="h-4 w-4" />勝ちパターン戦略
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                        {tripleSearch.losePatternAnalysisAd && (
-                          <AccordionItem value="lose-ad" className="border-0 mt-3">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-muted-foreground/30 hover:no-underline hover:bg-muted/70">
-                              <span className="flex items-center gap-2 font-semibold text-foreground">
-                                <AlertTriangle className="h-4 w-4" />負けパターン回避
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                      </Accordion>
+                      {tripleSearch.commonalityAnalysisAd && (
+                        <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                      )}
                     </TabsContent>
                   </Tabs>
                 ) : (
@@ -1361,18 +1315,6 @@ export default function AnalysisDetail() {
                         </AccordionTrigger>
                         <AccordionContent className="pt-3 pb-4">
                           <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    )}
-                    {tripleSearch.losePatternAnalysis && (
-                      <AccordionItem value="lose" className="border-0 mt-3">
-                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-muted-foreground/30 hover:no-underline hover:bg-muted/70">
-                          <span className="flex items-center gap-2 font-semibold text-foreground">
-                            <AlertTriangle className="h-4 w-4" />負けパターン回避
-                          </span>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-3 pb-4">
-                          <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
                         </AccordionContent>
                       </AccordionItem>
                     )}

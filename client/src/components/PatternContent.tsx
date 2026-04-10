@@ -1,6 +1,6 @@
 import { Anchor, FileText, Clapperboard, Hash, Lightbulb, AlertTriangle, TrendingDown } from "lucide-react";
 
-export function WinPatternContent({ analysis }: { analysis: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string } }) {
+export function WinPatternContent({ analysis }: { analysis: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string; avoidTips?: string } }) {
   return (
     <div className="space-y-4">
       <div className="p-3 bg-white rounded-lg border-l-[3px] border-l-teal-500 border border-teal-100">
@@ -38,6 +38,14 @@ export function WinPatternContent({ analysis }: { analysis: { summary: string; k
         </div>
         <p className="text-sm text-teal-900 font-medium">{analysis.vseoTips}</p>
       </div>
+      {analysis.avoidTips && (
+        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 border-l-[3px] border-l-amber-600">
+          <div className="text-xs font-semibold text-amber-700 mb-1 flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" /> 避けるべきポイント
+          </div>
+          <p className="text-sm text-amber-900 font-medium">{analysis.avoidTips}</p>
+        </div>
+      )}
     </div>
   );
 }

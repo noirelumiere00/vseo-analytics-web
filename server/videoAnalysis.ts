@@ -1174,8 +1174,8 @@ export async function analyzeWinPatternCommonality(
     return;
   }
 
-  // 上位5本に絞る（再生数順）
-  const top5Win = [...winPatternVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 5);
+  // 上位10本に絞る（再生数順）
+  const top5Win = [...winPatternVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 10);
 
   // 勝ちパターン動画のコメントを取得（オプション）
   const commentsByVideo: { [key: string]: string[] } = {};
@@ -1250,7 +1250,8 @@ ${videoSummaries.map((v, i) => `
 - センチメント: ${v.sentiment}
 `).join('')}
 
-以下の6項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+以下の7項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+最後の「avoidTips」は、これらの勝ちパターンの裏返しとして「やってはいけないこと・避けるべきポイント」を具体的に指摘してください。
 `;
 
     const response = await invokeLLM({
@@ -1290,8 +1291,12 @@ ${videoSummaries.map((v, i) => `
                 type: "string",
                 description: "このキーワードでVSEO上位を狙うための具体的なアドバイス。例: 「〇〇を冒頭に配置し、〇〇系のハッシュタグを併用すると効果的」",
               },
+              avoidTips: {
+                type: "string",
+                description: "避けるべきポイント。勝ちパターンの裏返しとして具体的に指摘。例: 「〇〇は絶対に避け、〇〇も逆効果。代わりに〇〇を意識すべき」",
+              },
             },
-            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips"],
+            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips", "avoidTips"],
             additionalProperties: false,
           },
         },
