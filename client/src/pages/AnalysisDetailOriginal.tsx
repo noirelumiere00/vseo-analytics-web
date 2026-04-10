@@ -64,7 +64,7 @@ const SECTIONS = [
   { id: "brief", label: "ブリーフ", icon: FileText },
   { id: "reputation", label: "評判", icon: Heart },
   { id: "data", label: "付録", icon: Database },
-  { id: "videos", label: "動画一覧", icon: Film },
+  { id: "videos", label: "アカウント・動画", icon: Film },
 ];
 
 export default function AnalysisDetail() {
@@ -1644,17 +1644,6 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* アカウント分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="account-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        アカウント別分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
 
                 </Accordion>
               </CardContent>
@@ -1663,25 +1652,67 @@ export default function AnalysisDetail() {
           )}
 
 
-          {/* ===== 8. 動画一覧 (Phase 3: Card Grid) ===== */}
+          {/* ===== 8. アカウント・動画一覧 ===== */}
           {videos.length > 0 && job.status === "completed" ? (
             <div id="videos" className="scroll-mt-16 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>動画一覧</h2>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>アカウント・動画一覧</h2>
               </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">収集動画の一覧</p>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">主要アカウントと収集動画</p>
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-                <p className="text-sm text-muted-foreground">
+              <CardContent className="pt-6">
+                {/* アカウントサマリーストリップ */}
+                {(() => {
+                  const accountMap = new Map<string, { id: string; name: string; avatar: string; followers: number; count: number; views: number; er: number }>();
+                  for (const v of videos as any[]) {
+                    const id = v.accountId || "unknown";
+                    if (!accountMap.has(id)) {
+                      accountMap.set(id, { id, name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: Number(v.followerCount) || 0, count: 0, views: 0, er: 0 });
+                    }
+                    const a = accountMap.get(id)!;
+                    a.count++;
+                    const views = Number(v.viewCount) || 0;
+                    a.views += views;
+                    if (views > 0) {
+                      const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
+                      a.er += (eng / views) * 100;
+                    }
+                  }
+                  const accounts = Array.from(accountMap.values())
+                    .map(a => ({ ...a, er: a.count > 0 ? Math.round((a.er / a.count) * 100) / 100 : 0 }))
+                    .sort((a, b) => b.views - a.views)
+                    .slice(0, 15);
+                  const fmtN = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`;
+                  return (
+                    <div className="mb-5">
+                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3" style={{ fontFamily: "'Space Mono', monospace" }}>主要アカウント</h3>
+                      <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+                        {accounts.map((a, i) => (
+                          <div key={a.id} className={`shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-card/60 ${i < 3 ? "border-primary/30" : "border-border/50"}`} style={{ minWidth: 180 }}>
+                            <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-muted">
+                              {a.avatar ? <img src={a.avatar} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-medium truncate">@{a.id}</p>
+                              <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                                {a.count}本 · {fmtN(a.views)}再生 · ER {a.er.toFixed(1)}%
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <p className="text-sm text-muted-foreground mb-4">
                   {videos.length}件 — {tripleSearch
                     ? `${numSessions}シークレットブラウザ検索での出現回数別に分類`
                     : "収集された動画の詳細分析結果"}
                 </p>
-              </CardHeader>
-              <CardContent>
                 {/* ソートコントロール */}
                 <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b border-border/60">
                   <span className="text-xs text-muted-foreground font-medium">並び順:</span>
