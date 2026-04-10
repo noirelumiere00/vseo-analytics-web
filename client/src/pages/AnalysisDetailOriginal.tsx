@@ -1373,7 +1373,7 @@ export default function AnalysisDetail() {
                       </TabsContent>
                       {(data.report as any)?.hashtagStrategy && (
                         <TabsContent value="hashtag" className="mt-4">
-                          <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                          <HashtagStrategy data={(data.report as any).hashtagStrategy} videos={data.videos as any[]} />
                         </TabsContent>
                       )}
                     </Tabs>
