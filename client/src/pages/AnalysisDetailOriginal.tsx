@@ -512,75 +512,71 @@ export default function AnalysisDetail() {
 
   const { job, videos, tripleSearch } = data;
 
-  // ===== コンパクトカード描画ヘルパー (2列リスト形式) =====
-  const renderVideoGrid = (vids: any[], useTripleRank = false) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-4">
-      {vids.map((video: any, vi: number) => {
-        const er = getEngagementRate(video);
-        const sentimentColor = video.sentiment === "positive" ? "text-emerald-600" : video.sentiment === "negative" ? "text-[#D71921]" : "text-muted-foreground";
-        const sentimentLabel = video.sentiment === "positive" ? "Positive" : video.sentiment === "negative" ? "Negative" : "Neutral";
-        const ri = useTripleRank ? (data?.tripleSearch as any)?.rankInfo?.[video.videoId] : null;
-        const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
-        const hashtags = (video.hashtags || []).slice(0, 4);
-        const desc = video.title || video.description?.slice(0, 80) || "";
-        const isAd = video.isAd || isPromotionVideo(video.hashtags || []);
-        return (
-          <a
-            key={video.videoId}
-            href={video.videoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex gap-3 p-2.5 border border-border/50 rounded-lg bg-card/40 hover:bg-card hover:shadow-md transition-all"
-            style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
-          >
-            {/* ランク番号 */}
-            <div className="flex items-start pt-1 shrink-0">
-              <span className="text-[13px] font-bold text-muted-foreground/60 w-5 text-center tabular-nums">{rank}</span>
-            </div>
-            {/* サムネイル */}
-            <div className="relative w-16 h-20 rounded-md overflow-hidden shrink-0 bg-muted">
-              <img
-                src={video.thumbnailUrl || "https://placehold.co/64x80/1a1a1a/666?text=No"}
-                alt="" className="w-full h-full object-cover" loading="lazy"
-              />
-              {video.duration && (
-                <span className="absolute bottom-0.5 right-0.5 text-[8px] text-white bg-black/60 px-0.5 rounded font-mono">{video.duration}秒</span>
-              )}
-            </div>
-            {/* メタ情報 */}
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              {/* タイトル / 説明 */}
-              <p className="text-[12px] font-medium leading-tight line-clamp-2 text-foreground">
-                {desc || "（タイトルなし）"}
-              </p>
-              {/* ハッシュタグ */}
-              {hashtags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {hashtags.map((tag: string, ti: number) => (
-                    <span key={ti} className="text-[10px] text-blue-500">#{tag}</span>
-                  ))}
+  // ===== コンパクトカード描画ヘルパー (2列 + もっと表示) =====
+  const [videoShowCount, setVideoShowCount] = useState(10);
+  const renderVideoGrid = (vids: any[], useTripleRank = false) => {
+    const visible = vids.slice(0, videoShowCount);
+    const hasMore = vids.length > videoShowCount;
+    return (
+      <div className="mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          {visible.map((video: any, vi: number) => {
+            const er = getEngagementRate(video);
+            const sentimentColor = video.sentiment === "positive" ? "text-emerald-600" : video.sentiment === "negative" ? "text-[#D71921]" : "text-muted-foreground";
+            const sentimentLabel = video.sentiment === "positive" ? "Positive" : video.sentiment === "negative" ? "Negative" : "Neutral";
+            const ri = useTripleRank ? (data?.tripleSearch as any)?.rankInfo?.[video.videoId] : null;
+            const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
+            const hashtags = (video.hashtags || []).slice(0, 4);
+            const desc = video.title || video.description?.slice(0, 80) || "";
+            const isAd = video.isAd || isPromotionVideo(video.hashtags || []);
+            return (
+              <a key={video.videoId} href={video.videoUrl} target="_blank" rel="noopener noreferrer"
+                className="group flex gap-3 p-2.5 border border-border/50 rounded-lg bg-card/40 hover:bg-card hover:shadow-md transition-all"
+                style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
+                <div className="flex items-start pt-1 shrink-0">
+                  <span className="text-[13px] font-bold text-muted-foreground/60 w-5 text-center tabular-nums">{rank}</span>
                 </div>
-              )}
-              {/* メトリクス行 */}
-              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
-                <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(video.likeCount)}</span>
-                <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(video.commentCount)}</span>
-                <span className="flex items-center gap-0.5"><Bookmark className="h-3 w-3" />{formatNumber(video.saveCount)}</span>
-                <span className="text-emerald-600 font-medium">↗{er.toFixed(2)}%</span>
-              </div>
-              {/* アカウント + バッジ */}
-              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-                <span>@{video.accountId || video.accountName}</span>
-                {isAd && <span className="px-1 py-0 rounded bg-amber-100 text-amber-700 text-[9px] font-medium">広告</span>}
-                <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
-              </div>
-            </div>
-          </a>
-        );
-      })}
-    </div>
-  );  return (
+                <div className="relative w-16 h-20 rounded-md overflow-hidden shrink-0 bg-muted">
+                  <img src={video.thumbnailUrl || "https://placehold.co/64x80/1a1a1a/666?text=No"} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  {video.duration && <span className="absolute bottom-0.5 right-0.5 text-[8px] text-white bg-black/60 px-0.5 rounded font-mono">{video.duration}秒</span>}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <p className="text-[12px] font-medium leading-tight line-clamp-2 text-foreground">{desc || "（タイトルなし）"}</p>
+                  {hashtags.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{hashtags.map((tag: string, ti: number) => <span key={ti} className="text-[10px] text-blue-500">#{tag}</span>)}</div>}
+                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                    <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
+                    <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(video.likeCount)}</span>
+                    <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(video.commentCount)}</span>
+                    <span className="flex items-center gap-0.5"><Bookmark className="h-3 w-3" />{formatNumber(video.saveCount)}</span>
+                    <span className="text-emerald-600 font-medium">↗{er.toFixed(2)}%</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                    <span>@{video.accountId || video.accountName}</span>
+                    {isAd && <span className="px-1 py-0 rounded bg-amber-100 text-amber-700 text-[9px] font-medium">広告</span>}
+                    <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
+                  </div>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+        {hasMore && (
+          <button onClick={() => setVideoShowCount(prev => prev + 20)}
+            className="w-full mt-4 py-2.5 text-sm font-medium text-muted-foreground hover:text-foreground border border-border/60 rounded-lg hover:bg-muted/50 transition-colors">
+            もっと表示（残り{vids.length - videoShowCount}件）
+          </button>
+        )}
+        {!hasMore && vids.length > 10 && (
+          <button onClick={() => setVideoShowCount(10)}
+            className="w-full mt-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            折りたたむ
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
     <DashboardLayout>
       <div className="w-full min-w-0 space-y-8 -m-2 md:-m-3 p-2 md:p-3">
         {/* Header */}
