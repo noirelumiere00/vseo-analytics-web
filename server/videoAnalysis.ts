@@ -941,7 +941,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 
 【重要な制約】出力トークンに上限があります。JSONが途中で切れないよう以下を厳守してください:
 - annotationsは各ワードにつき1行{word,valence,arousal}のみ。説明文は不要。
-- autoInsightは2〜3文（150文字以内）。
+- autoInsightは4〜6文（300〜500文字程度）。データに基づく具体的な分析と示唆を含めること。
 - keyInsightsは4個。各項目にtitle, description, analysis, strategicAdvice, sourceVideoIdsを含めること。
 - 全体が完結した有効なJSONで返すことを最優先してください。
 
@@ -953,8 +953,9 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
 象限の目安: 右上(喜興奮)「最高」→v:+0.9,a:+0.8 / 左上(楽穏)「癒し」→v:+0.8,a:-0.6 / 右下(怒活性)「ひどい」→v:-0.8,a:+0.7 / 左下(哀沈静)「悲しい」→v:-0.7,a:-0.4 / 中央(中立)「動画」→v:0,a:0
 対象ワード: ${wordList || "（なし）"}
 
-## タスク2: 自動インサイト（2〜3文サマリー）
-キーワード「${job?.keyword || "不明"}」の動画トレンドを日本語2〜3文で、マーケター視点で実用的にまとめてください。
+## タスク2: 自動インサイト（4〜6文の詳細サマリー）
+キーワード「${job?.keyword || "不明"}」の動画トレンドを日本語4〜6文（300〜500文字）で、マーケター視点で実用的にまとめてください。
+以下を含めること: ①市場全体の傾向 ②勝ちパターンの特徴 ③注目すべきクリエイター/フォーマット ④ネクストアクションの示唆
 データ: ${totalVideos}本 / 総再生${totalViews.toLocaleString()} / Positive ${positiveCount}本(${positivePercentage}%) Negative ${negativeCount}本(${negativePercentage}%) / 平均ER: P=${positiveAvgER}% N=${negativeAvgER}%
 Positive頻出ワード: ${positiveWords.slice(0, 5).join(", ")} / Negative頻出ワード: ${negativeWords.slice(0, 5).join(", ")}
 
