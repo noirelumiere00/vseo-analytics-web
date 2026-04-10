@@ -63,7 +63,6 @@ const SECTIONS = [
   { id: "patterns", label: "投稿戦略", icon: Star },
   { id: "brief", label: "ブリーフ", icon: FileText },
   { id: "reputation", label: "評判", icon: Heart },
-  { id: "data", label: "付録", icon: Database },
   { id: "videos", label: "アカウント・動画", icon: Film },
 ];
 
@@ -1430,149 +1429,69 @@ export default function AnalysisDetail() {
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">センチメントの構成は？</p>
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* センチメント構成比 */}
+              <CardContent className="pt-6 space-y-8">
+                {/* センチメント — 3列 Data Cards */}
                 <div>
                   <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>センチメント構成比</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    <div className="relative min-w-0">
-                      <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                          <Pie
-                            data={[
-                              { name: 'Positive', value: reportStats.sentimentCounts.positive },
-                              { name: 'Neutral',  value: reportStats.sentimentCounts.neutral  },
-                              { name: 'Negative', value: reportStats.sentimentCounts.negative },
-                            ]}
-                            cx="50%" cy="50%"
-                            innerRadius={72} outerRadius={108}
-                            startAngle={90} endAngle={-270}
-                            paddingAngle={2}
-                            animationBegin={0} animationDuration={900}
-                            labelLine={false}
-                            dataKey="value"
-                          >
-                            <Cell fill="#10b981" />
-                            <Cell fill="#9ca3af" />
-                            <Cell fill="#ef4444" />
-                          </Pie>
-                          <Tooltip formatter={(v: number) => [`${v}本`, ""]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center">
-                          <div className="text-3xl font-bold leading-none" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                            {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative
-                              ? reportStats.sentimentPercentages.positive
-                              : reportStats.sentimentPercentages.negative}%
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative ? "Positive" : "Negative"}
-                          </div>
+                  <div className="grid grid-cols-3 gap-3 animate-stagger">
+                    {([
+                      { label: "Positive", count: reportStats.sentimentCounts.positive, pct: reportStats.sentimentPercentages.positive, accent: "border-l-green-500", bg: "bg-green-500/[0.03]", textPct: "text-green-600", textCount: "text-green-700", bar: "bg-green-500", dot: "bg-green-500", isDominant: reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative },
+                      { label: "Neutral",  count: reportStats.sentimentCounts.neutral,  pct: reportStats.sentimentPercentages.neutral,  accent: "border-l-gray-300",   bg: "bg-muted/20",          textPct: "text-muted-foreground", textCount: "text-muted-foreground", bar: "bg-gray-400",  dot: "bg-gray-400",  isDominant: false },
+                      { label: "Negative", count: reportStats.sentimentCounts.negative, pct: reportStats.sentimentPercentages.negative, accent: "border-l-red-500",    bg: "bg-red-500/[0.03]",    textPct: "text-red-600",          textCount: "text-red-700",          bar: "bg-red-500",   dot: "bg-red-500",   isDominant: false },
+                    ] as const).map(row => (
+                      <div key={row.label} className={`p-4 rounded-xl border-l-4 ${row.accent} border border-border/50 ${row.bg} animate-fade-slide-up`}>
+                        <div className="flex items-center gap-2 mb-3">
+                          <span className={`w-2 h-2 rounded-full ${row.dot}`} />
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{row.label}</span>
+                          {row.isDominant && <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600">dominant</span>}
+                        </div>
+                        <div className={`text-3xl md:text-4xl font-black leading-none ${row.textPct}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                          {row.pct}<span className="text-lg">%</span>
+                        </div>
+                        <div className={`text-sm font-bold mt-1 ${row.textCount}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                          {row.count}<span className="text-xs font-normal ml-0.5">本</span>
+                        </div>
+                        <div className="mt-3 h-1 rounded-full bg-black/[0.04] overflow-hidden">
+                          <div className={`h-full rounded-full ${row.bar}`} style={{ width: `${row.pct}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
                         </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      {([
-                        {
-                          label: "Positive", count: reportStats.sentimentCounts.positive,
-                          pct: reportStats.sentimentPercentages.positive,
-                          border: "border-green-500/30", bg: "bg-green-500/5",
-                          numCls: "text-green-700", pctCls: "text-green-500",
-                          bar: "bg-green-500",
-                        },
-                        {
-                          label: "Neutral", count: reportStats.sentimentCounts.neutral,
-                          pct: reportStats.sentimentPercentages.neutral,
-                          border: "border-border", bg: "bg-muted/30",
-                          numCls: "text-muted-foreground", pctCls: "text-muted-foreground",
-                          bar: "bg-gray-400",
-                        },
-                        {
-                          label: "Negative", count: reportStats.sentimentCounts.negative,
-                          pct: reportStats.sentimentPercentages.negative,
-                          border: "border-red-500/30", bg: "bg-red-500/5",
-                          numCls: "text-red-700", pctCls: "text-red-500",
-                          bar: "bg-red-500",
-                        },
-                      ] as const).map(row => (
-                        <div key={row.label} className={`p-4 rounded-xl border ${row.border} ${row.bg}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-xs font-bold uppercase tracking-wider ${row.numCls}`} style={{ fontFamily: "'Space Mono', monospace" }}>{row.label}</span>
-                            <span className={`text-2xl font-black ${row.pctCls}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{row.pct}%</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xl font-bold ${row.numCls}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{row.count}<span className="text-xs font-normal ml-1">本</span></span>
-                            <div className="flex-1 h-2 bg-white/60 rounded-full overflow-hidden">
-                              <div className={`h-full ${row.bar} rounded-full`} style={{ width: `${row.pct}%`, transition: `width 700ms var(--md-ease-emphasized-decel)` }} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* インパクト分析（評判セクション内） */}
+                {/* インパクト — コンパクトスタックバー */}
                 {reportStats && (
                   <div>
                     <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>インパクト分析</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="p-4 rounded-xl border border-border/50 bg-card/40 space-y-4">
                       {([
                         { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
                         { title: "総再生数シェア",           data: reportStats.threeWay.views       },
                         { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
                       ] as const).map(({ title, data }) => (
-                        <div key={title} className="p-4 border border-border/60 rounded-lg bg-card/40">
-                          <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
-                          <div className="space-y-3">
-                            {([
-                              { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
-                              { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
-                              { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
-                            ] as const).map(row => (
-                              <div key={row.label}>
-                                <div className="flex justify-between items-center mb-1">
-                                  <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                  <span className="font-bold text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{row.pct}%</span>
-                                </div>
-                                <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
-                              </div>
-                            ))}
+                        <div key={title}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-medium text-muted-foreground">{title}</span>
+                            <div className="flex gap-3 text-[10px] font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                              <span className="text-green-600">{data.positive}%</span>
+                              <span className="text-muted-foreground">{data.neutral}%</span>
+                              <span className="text-red-500">{data.negative}%</span>
+                            </div>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden flex">
+                            <div className="bg-green-500 transition-all" style={{ width: `${data.positive}%`, transitionDuration: '600ms', transitionTimingFunction: 'var(--md-ease-emphasized-decel)' }} />
+                            <div className="bg-gray-300 transition-all" style={{ width: `${data.neutral}%`, transitionDuration: '600ms', transitionTimingFunction: 'var(--md-ease-emphasized-decel)' }} />
+                            <div className="bg-red-500 transition-all" style={{ width: `${data.negative}%`, transitionDuration: '600ms', transitionTimingFunction: 'var(--md-ease-emphasized-decel)' }} />
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-            </div>
-          )}
 
-
-
-          {/* ===== 7. データ付録 ===== */}
-          {reportStats && job.status === "completed" && (
-            <div id="data" className="scroll-mt-32 section-fade-in">
-            <div className="mb-4">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>付録</h2>
-              </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">詳細データ</p>
-            </div>
-            <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-              </CardHeader>
-              <CardContent>
-                <Accordion type="multiple" className="space-y-2">
-
-                  {/* マクロ分析 */}
-                  {data && data.report && (
+                {/* マクロ・ミクロ分析（アコーディオン） */}
+                {data && data.report && (
+                  <Accordion type="multiple" className="space-y-2">
                     <AccordionItem value="aspects" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                         動画マクロ分析
@@ -1602,10 +1521,6 @@ export default function AnalysisDetail() {
                         />
                       </AccordionContent>
                     </AccordionItem>
-                  )}
-
-                  {/* ミクロ分析 */}
-                  {data && data.report && (
                     <AccordionItem value="micro-analysis" className="border rounded-xl">
                       <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
                         動画ミクロ分析
@@ -1620,27 +1535,11 @@ export default function AnalysisDetail() {
                             <MicroAnalysisSection
                               proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
                                 const cat = insight.category;
-                                const priority =
-                                  cat === "avoid" || cat === "risk" ? "回避" :
-                                  cat === "caution" || cat === "urgent" ? "注意" : "活用";
-                                const icon =
-                                  cat === "avoid" || cat === "risk" ? "🚫" :
-                                  cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
-                                return {
-                                  area: insight.title,
-                                  action: insight.description,
-                                  priority: priority as "回避" | "注意" | "活用",
-                                  icon,
-                                  analysis: insight.analysis,
-                                  strategicAdvice: insight.strategicAdvice,
-                                  sourceVideoIds: insight.sourceVideoIds,
-                                };
+                                const priority = cat === "avoid" || cat === "risk" ? "回避" : cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                                const icon = cat === "avoid" || cat === "risk" ? "🚫" : cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                                return { area: insight.title, action: insight.description, priority: priority as "回避" | "注意" | "活用", icon, analysis: insight.analysis, strategicAdvice: insight.strategicAdvice, sourceVideoIds: insight.sourceVideoIds };
                               })}
-                              videos={(data.videos || [])
-                                .slice()
-                                .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
-                                .slice(0, 15)
-                                .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
+                              videos={(data.videos || []).slice().sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 15).map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
                             />
                           </TabsContent>
                           <TabsContent value="seo-keywords">
@@ -1649,14 +1548,15 @@ export default function AnalysisDetail() {
                         </Tabs>
                       </AccordionContent>
                     </AccordionItem>
-                  )}
-
-
-                </Accordion>
+                  </Accordion>
+                )}
               </CardContent>
             </Card>
             </div>
           )}
+
+
+
 
 
           {/* ===== 8. アカウント・動画一覧 ===== */}
@@ -1664,7 +1564,7 @@ export default function AnalysisDetail() {
             <div id="videos" className="scroll-mt-32 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
                 <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>アカウント・動画一覧</h2>
               </div>
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">主要アカウントと収集動画</p>
