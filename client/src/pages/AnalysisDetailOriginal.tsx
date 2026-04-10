@@ -61,7 +61,6 @@ const SECTIONS = [
   { id: "search-mockup", label: "検索結果" },
   { id: "patterns", label: "パターン" },
   { id: "brief", label: "ブリーフ" },
-  { id: "reference", label: "参考動画" },
   { id: "reputation", label: "評判" },
   { id: "optimization", label: "最適化" },
   { id: "data", label: "付録" },
@@ -1404,78 +1403,6 @@ export default function AnalysisDetail() {
             </Card>
           )}
 
-          {/* ===== 4. 参考動画 ===== */}
-          {videos.length > 0 && job.status === "completed" && (() => {
-            const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
-            const referenceVideos = [...videos]
-              .filter((v: any) => {
-                const ri = rankInfo[v.videoId];
-                return ri && ri.appearanceCount >= numSessions;
-              })
-              .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
-              .slice(0, 5);
-            if (referenceVideos.length === 0) return null;
-            return (
-              <Card id="reference" className="bg-card/60 backdrop-blur-sm">
-                <CardHeader>
-                  <h2 className="text-xl leading-tight uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
-                    <Film className="h-5 w-5" />
-                    参考動画
-                  </h2>
-                  <p className="text-sm text-muted-foreground">全{numSessions}セッションに出現した上位動画 — 真似すべきポイント付き</p>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {referenceVideos.map((video: any) => (
-                      <div key={video.videoId} className="border border-border/60 rounded-lg overflow-hidden bg-card/40 hover:shadow-md transition-shadow" style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
-                        <div className="relative aspect-video bg-muted">
-                          <img
-                            src={video.thumbnailUrl || "https://placehold.co/320x180/1a1a1a/666?text=No+Image"}
-                            alt={video.title || "動画サムネイル"}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                          {video.duration && (
-                            <span className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                              {video.duration}秒
-                            </span>
-                          )}
-                        </div>
-                        <div className="p-3 space-y-2">
-                          <p className="text-sm font-medium line-clamp-2 leading-snug">
-                            {video.title || video.description?.slice(0, 60) || "（タイトルなし）"}
-                          </p>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-muted-foreground flex items-center gap-0.5" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                              <Eye className="h-3 w-3" />{formatNumber(video.viewCount)}
-                            </span>
-                            <span className="text-xs text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                              ER {getEngagementRate(video).toFixed(2)}%
-                            </span>
-                            {getSentimentBadge(video.sentiment)}
-                          </div>
-                          {video.keyHook && (
-                            <div className="p-2 rounded bg-muted/60 border border-border/60">
-                              <p className="text-[11px] font-semibold text-foreground mb-0.5">真似すべきポイント</p>
-                              <p className="text-xs text-foreground/70 leading-relaxed">{video.keyHook}</p>
-                            </div>
-                          )}
-                          <a
-                            href={video.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />動画を見る
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
 
 
           {/* ===== 5. 評判分析 ===== */}
