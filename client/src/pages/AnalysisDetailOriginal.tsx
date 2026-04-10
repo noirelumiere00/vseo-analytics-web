@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink, Heart, MessageCircle, Bookmark } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -497,10 +497,76 @@ export default function AnalysisDetail() {
   }
 
   const { job, videos, tripleSearch } = data;
-  
 
-
-  return (
+  // ===== コンパクトカード描画ヘルパー (2列リスト形式) =====
+  const renderVideoGrid = (vids: any[], useTripleRank = false) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-4">
+      {vids.map((video: any, vi: number) => {
+        const er = getEngagementRate(video);
+        const sentimentColor = video.sentiment === "positive" ? "text-emerald-600" : video.sentiment === "negative" ? "text-[#D71921]" : "text-muted-foreground";
+        const sentimentLabel = video.sentiment === "positive" ? "Positive" : video.sentiment === "negative" ? "Negative" : "Neutral";
+        const ri = useTripleRank ? (data?.tripleSearch as any)?.rankInfo?.[video.videoId] : null;
+        const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
+        const hashtags = (video.hashtags || []).slice(0, 4);
+        const desc = video.title || video.description?.slice(0, 80) || "";
+        const isAd = video.isAd || isPromotionVideo(video.hashtags || []);
+        return (
+          <a
+            key={video.videoId}
+            href={video.videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group flex gap-3 p-2.5 border border-border/50 rounded-lg bg-card/40 hover:bg-card hover:shadow-md transition-all"
+            style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
+          >
+            {/* ランク番号 */}
+            <div className="flex items-start pt-1 shrink-0">
+              <span className="text-[13px] font-bold text-muted-foreground/60 w-5 text-center tabular-nums">{rank}</span>
+            </div>
+            {/* サムネイル */}
+            <div className="relative w-16 h-20 rounded-md overflow-hidden shrink-0 bg-muted">
+              <img
+                src={video.thumbnailUrl || "https://placehold.co/64x80/1a1a1a/666?text=No"}
+                alt="" className="w-full h-full object-cover" loading="lazy"
+              />
+              {video.duration && (
+                <span className="absolute bottom-0.5 right-0.5 text-[8px] text-white bg-black/60 px-0.5 rounded font-mono">{video.duration}秒</span>
+              )}
+            </div>
+            {/* メタ情報 */}
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              {/* タイトル / 説明 */}
+              <p className="text-[12px] font-medium leading-tight line-clamp-2 text-foreground">
+                {desc || "（タイトルなし）"}
+              </p>
+              {/* ハッシュタグ */}
+              {hashtags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {hashtags.map((tag: string, ti: number) => (
+                    <span key={ti} className="text-[10px] text-blue-500">#{tag}</span>
+                  ))}
+                </div>
+              )}
+              {/* メトリクス行 */}
+              <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
+                <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(video.likeCount)}</span>
+                <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(video.commentCount)}</span>
+                <span className="flex items-center gap-0.5"><Bookmark className="h-3 w-3" />{formatNumber(video.saveCount)}</span>
+                <span className="text-emerald-600 font-medium">↗{er.toFixed(2)}%</span>
+              </div>
+              {/* アカウント + バッジ */}
+              <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                <span>@{video.accountId || video.accountName}</span>
+                {isAd && <span className="px-1 py-0 rounded bg-amber-100 text-amber-700 text-[9px] font-medium">広告</span>}
+                <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
+              </div>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  );  return (
     <DashboardLayout>
       <div className="w-full min-w-0 space-y-8">
         {/* Header */}
@@ -1903,139 +1969,16 @@ export default function AnalysisDetail() {
                       const vids = sortedCategorizedVideos[c] ?? [];
                       return (
                         <TabsContent key={c} value={`count-${c}`}>
-                          {/* Card Grid */}
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
-                            {vids.map((video: any, vi: number) => {
-                              const er = getEngagementRate(video);
-                              const sentimentDotColor = video.sentiment === "positive" ? "bg-green-500" : video.sentiment === "negative" ? "bg-red-500" : "bg-gray-400";
-                              const ri = (data?.tripleSearch as any)?.rankInfo?.[video.videoId];
-                              const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
-                              return (
-                                <a
-                                  key={video.videoId}
-                                  href={video.videoUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="group block border border-border/60 rounded-lg overflow-hidden bg-card/40 hover:shadow-lg transition-all"
-                                  style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
-                                >
-                                  <div className="relative aspect-[9/14] bg-muted">
-                                    <img
-                                      src={video.thumbnailUrl || "https://placehold.co/180x280/1a1a1a/666?text=No+Image"}
-                                      alt={video.title || ""}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                    />
-                                    {/* Rank badge */}
-                                    <div className="absolute top-1.5 left-1.5 min-w-[20px] h-[20px] rounded bg-black/70 flex items-center justify-center px-1">
-                                      <span className="text-[10px] text-white font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{rank}</span>
-                                    </div>
-                                    {/* Sentiment dot */}
-                                    <div className={`absolute top-1.5 right-1.5 w-3 h-3 rounded-full ${sentimentDotColor} border border-white/30`} />
-                                    {/* Bottom gradient */}
-                                    <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
-                                    {video.duration && (
-                                      <span className="absolute bottom-1.5 right-1.5 text-[10px] text-white/90 font-mono bg-black/50 px-1 rounded" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                                        {video.duration}秒
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Metrics row */}
-                                  <div className="p-2 flex items-center justify-between text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                                    <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
-                                    <span>ER {er.toFixed(1)}%</span>
-                                  </div>
-                                </a>
-                              );
-                            })}
-                          </div>
+                          {renderVideoGrid(vids, true)}
                         </TabsContent>
                       );
                     })}
                     <TabsContent value="all">
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
-                        {sortedVideos.map((video: any, vi: number) => {
-                          const er = getEngagementRate(video);
-                          const sentimentDotColor = (video as any).sentiment === "positive" ? "bg-green-500" : (video as any).sentiment === "negative" ? "bg-red-500" : "bg-gray-400";
-                          const ri = (data?.tripleSearch as any)?.rankInfo?.[(video as any).videoId];
-                          const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
-                          return (
-                            <a
-                              key={(video as any).videoId}
-                              href={(video as any).videoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="group block border border-border/60 rounded-lg overflow-hidden bg-card/40 hover:shadow-lg transition-all"
-                              style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
-                            >
-                              <div className="relative aspect-[9/14] bg-muted">
-                                <img
-                                  src={(video as any).thumbnailUrl || "https://placehold.co/180x280/1a1a1a/666?text=No+Image"}
-                                  alt={(video as any).title || ""}
-                                  className="w-full h-full object-cover"
-                                  loading="lazy"
-                                />
-                                <div className="absolute top-1.5 left-1.5 min-w-[20px] h-[20px] rounded bg-black/70 flex items-center justify-center px-1">
-                                  <span className="text-[10px] text-white font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{rank}</span>
-                                </div>
-                                <div className={`absolute top-1.5 right-1.5 w-3 h-3 rounded-full ${sentimentDotColor} border border-white/30`} />
-                                <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
-                                {(video as any).duration && (
-                                  <span className="absolute bottom-1.5 right-1.5 text-[10px] text-white/90 font-mono bg-black/50 px-1 rounded" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                                    {(video as any).duration}秒
-                                  </span>
-                                )}
-                              </div>
-                              <div className="p-2 flex items-center justify-between text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                                <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber((video as any).viewCount)}</span>
-                                <span>ER {er.toFixed(1)}%</span>
-                              </div>
-                            </a>
-                          );
-                        })}
-                      </div>
+                      {renderVideoGrid(sortedVideos, true)}
                     </TabsContent>
                   </Tabs>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
-                    {sortedVideos.map((video: any, vi: number) => {
-                      const er = getEngagementRate(video);
-                      const sentimentDotColor = video.sentiment === "positive" ? "bg-green-500" : video.sentiment === "negative" ? "bg-red-500" : "bg-gray-400";
-                      return (
-                        <a
-                          key={video.videoId}
-                          href={video.videoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group block border border-border/60 rounded-lg overflow-hidden bg-card/40 hover:shadow-lg transition-all"
-                          style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
-                        >
-                          <div className="relative aspect-[9/14] bg-muted">
-                            <img
-                              src={video.thumbnailUrl || "https://placehold.co/180x280/1a1a1a/666?text=No+Image"}
-                              alt={video.title || ""}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                            <div className="absolute top-1.5 left-1.5 min-w-[20px] h-[20px] rounded bg-black/70 flex items-center justify-center px-1">
-                              <span className="text-[10px] text-white font-bold" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{vi + 1}</span>
-                            </div>
-                            <div className={`absolute top-1.5 right-1.5 w-3 h-3 rounded-full ${sentimentDotColor} border border-white/30`} />
-                            <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
-                            {video.duration && (
-                              <span className="absolute bottom-1.5 right-1.5 text-[10px] text-white/90 font-mono bg-black/50 px-1 rounded" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                                {video.duration}秒
-                              </span>
-                            )}
-                          </div>
-                          <div className="p-2 flex items-center justify-between text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                            <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
-                            <span>ER {er.toFixed(1)}%</span>
-                          </div>
-                        </a>
-                      );
-                    })}
-                  </div>
+                  renderVideoGrid(sortedVideos, false)
                 )}
               </CardContent>
             </Card>
