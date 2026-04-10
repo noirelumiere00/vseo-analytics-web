@@ -76,6 +76,7 @@ export default function AnalysisDetail() {
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
   const [videoShowCount, setVideoShowCount] = useState(10);
+  const [accountSortTab, setAccountSortTab] = useState<"views" | "videos" | "er">("views");
 
   const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
     enabled: user !== undefined,
@@ -1664,45 +1665,86 @@ export default function AnalysisDetail() {
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="pt-6">
-                {/* アカウントサマリーストリップ */}
+                {/* アカウント分析 — ドーナツ + テーブル */}
                 {(() => {
+                  const ACCOLORS = ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316","#3b82f6","#84cc16","#a855f7","#06b6d4","#e11d48","#22c55e","#eab308"];
                   const accountMap = new Map<string, { id: string; name: string; avatar: string; followers: number; count: number; views: number; er: number }>();
                   for (const v of videos as any[]) {
                     const id = v.accountId || "unknown";
-                    if (!accountMap.has(id)) {
-                      accountMap.set(id, { id, name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: Number(v.followerCount) || 0, count: 0, views: 0, er: 0 });
-                    }
+                    if (!accountMap.has(id)) accountMap.set(id, { id, name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: Number(v.followerCount) || 0, count: 0, views: 0, er: 0 });
                     const a = accountMap.get(id)!;
                     a.count++;
                     const views = Number(v.viewCount) || 0;
                     a.views += views;
-                    if (views > 0) {
-                      const eng = (Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0);
-                      a.er += (eng / views) * 100;
-                    }
+                    if (views > 0) a.er += ((Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0)) / views * 100;
                   }
-                  const accounts = Array.from(accountMap.values())
-                    .map(a => ({ ...a, er: a.count > 0 ? Math.round((a.er / a.count) * 100) / 100 : 0 }))
-                    .sort((a, b) => b.views - a.views)
-                    .slice(0, 15);
+                  const allAccounts = Array.from(accountMap.values()).map(a => ({ ...a, er: a.count > 0 ? Math.round((a.er / a.count) * 100) / 100 : 0 }));
+                  const sorted = [...allAccounts].sort((a, b) => accountSortTab === "videos" ? b.count - a.count : accountSortTab === "er" ? b.er - a.er : b.views - a.views);
+                  const top = sorted.slice(0, 15);
+                  const pieKey = accountSortTab === "videos" ? "count" : accountSortTab === "er" ? "er" : "views";
+                  const pieData = top.map((a, i) => ({ name: `@${a.id}`, value: a[pieKey], color: ACCOLORS[i % ACCOLORS.length] }));
                   const fmtN = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`;
                   return (
-                    <div className="mb-5">
-                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3" style={{ fontFamily: "'Space Mono', monospace" }}>主要アカウント</h3>
-                      <div className="flex gap-2 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
-                        {accounts.map((a, i) => (
-                          <div key={a.id} className={`shrink-0 flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-card/60 ${i < 3 ? "border-primary/30" : "border-border/50"}`} style={{ minWidth: 180 }}>
-                            <div className="w-7 h-7 rounded-full overflow-hidden shrink-0 bg-muted">
-                              {a.avatar ? <img src={a.avatar} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[11px] font-medium truncate">@{a.id}</p>
-                              <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                                {a.count}本 · {fmtN(a.views)}再生 · ER {a.er.toFixed(1)}%
-                              </p>
+                    <div className="mb-6 pb-6 border-b border-border/60">
+                      {/* ソートタブ */}
+                      <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit mb-4">
+                        {([{ key: "views", label: "再生数" }, { key: "videos", label: "投稿数" }, { key: "er", label: "ER%" }] as const).map(tab => (
+                          <button key={tab.key} onClick={() => setAccountSortTab(tab.key)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${accountSortTab === tab.key ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* ドーナツ + テーブル */}
+                      <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-4 items-start">
+                        <div className="relative mx-auto">
+                          <ResponsiveContainer width={180} height={180}>
+                            <PieChart>
+                              <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} startAngle={90} endAngle={-270} paddingAngle={1} dataKey="value">
+                                {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                              </Pie>
+                            </PieChart>
+                          </ResponsiveContainer>
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="text-center">
+                              <div className="text-lg font-bold">{allAccounts.length}</div>
+                              <div className="text-[9px] text-muted-foreground">アカウント</div>
                             </div>
                           </div>
-                        ))}
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-[10px] text-muted-foreground border-b" style={{ fontFamily: "'Space Mono', monospace" }}>
+                                <th className="text-left py-1.5 w-6"></th>
+                                <th className="text-left py-1.5">アカウント</th>
+                                <th className="text-right py-1.5">動画</th>
+                                <th className="text-right py-1.5">再生数</th>
+                                <th className="text-right py-1.5">ER%</th>
+                                <th className="text-right py-1.5">フォロワー</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {top.map((a, i) => (
+                                <tr key={a.id} className="border-b border-border/20 hover:bg-muted/30 transition-colors">
+                                  <td className="py-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ACCOLORS[i % ACCOLORS.length] }} /></td>
+                                  <td className="py-1.5">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-muted">
+                                        {a.avatar ? <img src={a.avatar} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />}
+                                      </div>
+                                      <span className="font-medium truncate max-w-[120px]">@{a.id}</span>
+                                    </div>
+                                  </td>
+                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{a.count}</td>
+                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtN(a.views)}</td>
+                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{a.er.toFixed(1)}%</td>
+                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtN(a.followers)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   );
