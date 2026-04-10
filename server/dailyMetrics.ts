@@ -4,14 +4,14 @@
  */
 
 import { getDb } from "./db";
-import { campaignDailyMetrics } from "../drizzle/schema";
+import { campaignDailyMetrics, campaignSnapshots } from "../drizzle/schema";
 import type { Campaign } from "../drizzle/schema";
 import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
 import { fetchInstagramPostsWithFallback } from "./instagramScraper";
 import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 /**
  * キャンペーンの全施策動画の最新メトリクスを取得してDB保存
@@ -168,7 +168,43 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   const db = await getDb();
   if (!db) return { captured: 0 };
 
+  // スナップショットのownVideoMetricsをフロア値として取得
+  // dailyMetricsの値がスナップショット値より低い場合はスナップショット値を採用
+  let snapshotFloor = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>();
+  try {
+    const snapshots = await db.select({ ownVideoMetrics: campaignSnapshots.ownVideoMetrics })
+      .from(campaignSnapshots)
+      .where(eq(campaignSnapshots.campaignId, campaign.id));
+    for (const snap of snapshots) {
+      const metrics = snap.ownVideoMetrics as Record<string, any> | null;
+      if (!metrics) continue;
+      for (const [url, m] of Object.entries(metrics)) {
+        const existing = snapshotFloor.get(url);
+        const vc = Number(m?.viewCount) || 0;
+        const lc = Number(m?.likeCount) || 0;
+        const cc = Number(m?.commentCount) || 0;
+        const sc = Number(m?.shareCount) || 0;
+        const svc = Number(m?.saveCount) || 0;
+        if (!existing || vc > existing.viewCount) {
+          snapshotFloor.set(url, { viewCount: vc, likeCount: lc, commentCount: cc, shareCount: sc, saveCount: svc });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[DailyMetrics] Failed to load snapshot floor values:", e);
+  }
+
   for (const row of rows) {
+    // スナップショット値をフロアとして適用
+    const floor = snapshotFloor.get(row.videoUrl);
+    if (floor) {
+      row.viewCount = Math.max(row.viewCount ?? 0, floor.viewCount);
+      row.likeCount = Math.max(row.likeCount ?? 0, floor.likeCount);
+      row.commentCount = Math.max(row.commentCount ?? 0, floor.commentCount);
+      if (row.shareCount != null) row.shareCount = Math.max(row.shareCount, floor.shareCount);
+      if (row.saveCount != null) row.saveCount = Math.max(row.saveCount, floor.saveCount);
+    }
+
     // GREATEST を使い、スクレイパー失敗で0が返った場合に既存の正しい値を保護
     // shareCount/saveCount は IG/YT で null（非対応）なので COALESCE で既存値を保持
     await db.insert(campaignDailyMetrics).values(row)
