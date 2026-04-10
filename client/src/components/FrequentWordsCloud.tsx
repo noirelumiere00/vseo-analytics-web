@@ -122,16 +122,16 @@ const CustomTooltip = ({
     sadPassive:  "ネガティブ × 落ち着き",
   };
   return (
-    <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-md text-sm">
-      <div className="font-bold text-gray-800">{d.word}</div>
-      <div className="text-gray-500 mt-0.5">出現数: {d.count}件</div>
-      <div className="text-gray-500">ポジ/ネガ度: {d.valence > 0 ? "+" : ""}{d.valence.toFixed(1)}</div>
-      <div className="text-gray-500">テンション: {d.arousal > 0 ? "+" : ""}{d.arousal.toFixed(1)}</div>
+    <div className="bg-card border border-border rounded-sm px-3 py-2 shadow-md text-sm">
+      <div className="font-bold text-foreground">{d.word}</div>
+      <div className="text-muted-foreground mt-0.5">出現数: {d.count}件</div>
+      <div className="text-muted-foreground">ポジ/ネガ度: {d.valence > 0 ? "+" : ""}{d.valence.toFixed(1)}</div>
+      <div className="text-muted-foreground">テンション: {d.arousal > 0 ? "+" : ""}{d.arousal.toFixed(1)}</div>
       <div className="mt-1 text-xs font-semibold" style={{ color: BUBBLE_COLORS[quadrant] }}>
         {labels[quadrant]}
       </div>
       {d.sources && d.sources.length > 0 && (
-        <div className="text-xs text-gray-400 mt-0.5">
+        <div className="text-xs text-muted-foreground/70 mt-0.5">
           出典: {d.sources.join(", ")}
         </div>
       )}
@@ -150,8 +150,8 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="text-base font-semibold text-gray-700">頻出ワード 感情マップ</h3>
-        <div className="flex gap-3 text-xs text-gray-500 flex-wrap">
+        <h3 className="text-base font-semibold text-foreground">頻出ワード 感情マップ</h3>
+        <div className="flex gap-3 text-xs text-muted-foreground flex-wrap">
           {[
             { key: "joyExcited",   label: "ポジティブ × 盛り上がり" },
             { key: "calmPleasure", label: "ポジティブ × 落ち着き" },
@@ -166,17 +166,17 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
               {label}
             </span>
           ))}
-          <span className="text-gray-400">丸が大きい = よく出るワード</span>
+          <span className="text-muted-foreground/60">丸が大きい = よく出るワード</span>
         </div>
       </div>
 
       {/* 軸ラベル */}
       <div className="relative">
-        <div className="text-xs text-gray-400 text-center mb-1">
+        <div className="text-xs text-muted-foreground/60 text-center mb-1">
           ↑ ポジティブ（好き・嬉しい・感動）
         </div>
         <div className="flex items-center gap-1">
-          <div className="text-xs text-gray-400 writing-vertical-rl" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap" }}>
+          <div className="text-xs text-muted-foreground/60 writing-vertical-rl" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap" }}>
             落ち着き ← テンション → 盛り上がり
           </div>
           <div className="flex-1" style={{ minHeight: 380 }}>
@@ -221,12 +221,12 @@ function EmotionWordMap({ words }: { words: EmotionWord[] }) {
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="text-xs text-gray-400 text-center mt-1">
+        <div className="text-xs text-muted-foreground/60 text-center mt-1">
           ↓ ネガティブ（不満・批判・残念）
         </div>
       </div>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted-foreground/60">
         ※ 動画のキーワード・OCR・音声から頻出ワードを抽出し、AIが感情スコアを付与。丸が大きいほどよく出現するワード。
       </p>
     </div>
@@ -278,7 +278,7 @@ function LegacyWordCloud({
                 );
               })
             ) : (
-              <span className="text-gray-400">データなし</span>
+              <span className="text-muted-foreground">データなし</span>
             )}
           </div>
         </div>
@@ -313,7 +313,7 @@ function LegacyWordCloud({
                 );
               })
             ) : (
-              <span className="text-gray-400">データなし</span>
+              <span className="text-muted-foreground">データなし</span>
             )}
           </div>
         </div>

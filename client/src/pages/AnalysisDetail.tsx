@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Heart, MessageCircle, Bookmark } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -38,12 +38,12 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { handleTrpcError } from "@/lib/error-handler";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FacetAnalysis } from "@/components/FacetAnalysis";
 import { ReportSection, MicroAnalysisSection, SeoMetaKeywordsSection } from '@/components/ReportSection';
 import { isPromotionVideo } from "@shared/const";
 import PostingTimeHeatmap from "@/components/PostingTimeHeatmap";
+import SearchCorrelationChart from "@/components/SearchCorrelationChart";
 import DurationAnalysis from "@/components/DurationAnalysis";
 import AccountAnalysis from "@/components/AccountAnalysis";
 import HashtagStrategy from "@/components/HashtagStrategy";
@@ -54,7 +54,6 @@ import { VideoList } from "@/components/VideoList";
 import { useReportStats } from "@/hooks/useReportStats";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { CopyButton } from "@/components/CopyButton";
-import ProductionBrief from "@/components/ProductionBrief";
 
 export default function AnalysisDetail() {
   const { user } = useAuth();
@@ -137,15 +136,9 @@ export default function AnalysisDetail() {
       toast.success("キャンセルリクエストを送信しました");
       refetchProgress();
     },
-    onError: handleTrpcError,
-  });
-
-  const generateBrief = trpc.analysis.generateBrief.useMutation({
-    onSuccess: () => {
-      toast.success("ブリーフを生成しました");
-      refetch();
+    onError: (error) => {
+      toast.error(error.message);
     },
-    onError: handleTrpcError,
   });
 
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -434,8 +427,8 @@ export default function AnalysisDetail() {
     // keyInsights がマークダウン形式のレポートを含むと仮定
     // 実際のレポートが別フィールドに保存されている場合は調整が必要
     return (
-      <div className="mt-8 p-6 bg-white rounded-lg border border-gray-200">
-        <h2 className="text-2xl font-bold mb-6" aria-label="詳細分析レポート">📊 詳細分析レポート</h2>
+      <div className="mt-8 p-6 bg-card rounded-sm border">
+        <h2 className="text-2xl font-bold mb-6" aria-label="詳細分析レポート">詳細分析レポート</h2>
         <div className="prose prose-sm max-w-none">
           <pre className="whitespace-pre-wrap">{JSON.stringify(data.report.keyInsights, null, 2)}</pre>
         </div>
@@ -470,7 +463,7 @@ export default function AnalysisDetail() {
 
   return (
     <DashboardLayout>
-      <div className="w-full min-w-0 space-y-8">
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -791,39 +784,40 @@ export default function AnalysisDetail() {
               ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
               : "—";
             return (
-              <div className="grid gap-4 md:grid-cols-4">
-                <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-primary/5">
-                  <Play className="h-5 w-5 text-primary shrink-0" />
+              <div className="grid gap-1.5 grid-cols-2 md:grid-cols-5">
+                <div className="flex items-center gap-2 border-l-2 border-primary rounded-sm p-2 bg-card">
+                  <Play className="h-3.5 w-3.5 text-primary shrink-0" />
                   <div>
-                    <p className="text-2xl font-bold">{reportStats.totalVideos}</p>
-                    <p className="text-xs text-muted-foreground">分析動画数</p>
+                    <p className="text-sm font-bold font-data">{reportStats.totalVideos}</p>
+                    <p className="text-[10px] text-muted-foreground">分析動画数</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-blue-500 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
-                  <Search className="h-5 w-5 text-blue-500 shrink-0" />
-                  <div className="flex items-center gap-1">
-                    <div>
-                      <p className="text-2xl font-bold">{formatNumber(reportStats.totalViews)}</p>
-                      <p className="text-xs text-muted-foreground">総再生数</p>
-                    </div>
-                    <CopyButton value={formatNumber(reportStats.totalViews)} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 border-l-4 border-emerald-500 rounded-lg p-4 bg-emerald-50 dark:bg-emerald-950/20">
-                  <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />
+                <div className="flex items-center gap-2 border-l-2 border-blue-500 rounded-sm p-2 bg-card">
+                  <Search className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                   <div>
-                    <p className="text-2xl font-bold">{reportStats.sentimentPercentages.positive}%</p>
-                    <p className="text-xs text-muted-foreground">ポジティブ率</p>
+                    <p className="text-sm font-bold font-data">{formatNumber(reportStats.totalViews)}</p>
+                    <p className="text-[10px] text-muted-foreground">総再生数</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
-                  <Star className="h-5 w-5 text-amber-500 shrink-0" />
-                  <div className="flex items-center gap-1">
-                    <div>
-                      <p className="text-2xl font-bold">{avgER}%</p>
-                      <p className="text-xs text-muted-foreground">平均ER</p>
-                    </div>
-                    <CopyButton value={`${avgER}%`} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
+                <div className="flex items-center gap-2 border-l-2 border-emerald-500 rounded-sm p-2 bg-card">
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold font-data">{reportStats.sentimentPercentages.positive}%</p>
+                    <p className="text-[10px] text-muted-foreground">ポジティブ率</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 border-l-2 border-amber-500 rounded-sm p-2 bg-card">
+                  <Star className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold font-data">{avgER}%</p>
+                    <p className="text-[10px] text-muted-foreground">平均ER</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 border-l-2 border-red-400 rounded-sm p-2 bg-card">
+                  <Heart className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold font-data">{formatNumber(data?.videos?.reduce((s, v) => s + (v.likeCount || 0), 0) || 0)}</p>
+                    <p className="text-[10px] text-muted-foreground">いいね</p>
                   </div>
                 </div>
               </div>
@@ -832,14 +826,14 @@ export default function AnalysisDetail() {
 
           {/* Triple Search Overlap Analysis - 1枚カード統合 */}
           {tripleSearch && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight flex items-center gap-2">
-                  <Search className="h-6 w-6 text-blue-500" />
-                  重複度分析
-                </h2>
+            <Card className="border border-blue-300">
+              <CardHeader className="pb-2 pt-3 px-4">
+                <div className="flex items-center gap-2">
+                  <Search className="h-3.5 w-3.5 text-blue-500" />
+                  <h2 className="text-sm leading-none font-semibold">重複度分析</h2>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className="space-y-3 px-4 pb-4">
                 {/* 検索結果サマリー */}
                 <div className={`grid gap-3 max-w-2xl mx-auto`} style={{ gridTemplateColumns: `repeat(${Math.min(tripleSearch.searches.length, 5)}, 1fr)` }}>
                   {tripleSearch.searches.map((search: any, i: number) => (
@@ -924,588 +918,205 @@ export default function AnalysisDetail() {
                     }
                   </p>
 
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ===== 1. エグゼクティブサマリー ===== */}
-          {reportStats && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight">概要</h2>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* 自動インサイト */}
-                <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                  <h3 className="text-sm font-semibold text-blue-700 mb-1 flex items-center gap-1">
-                    <Star className="h-4 w-4" /> 自動インサイト
-                  </h3>
-                  <p className="text-sm text-blue-900 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
-                </div>
-
-                {/* インパクト分析 */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">インパクト分析</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {([
-                      { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
-                      { title: "総再生数シェア",           data: reportStats.threeWay.views       },
-                      { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
-                    ] as const).map(({ title, data }) => (
-                      <div key={title} className="p-4 border rounded-lg">
-                        <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
-                        <div className="space-y-3">
-                          {([
-                            { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
-                            { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
-                            { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
-                          ] as const).map(row => (
-                            <div key={row.label}>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                <span className="font-bold text-xs">{row.pct}%</span>
-                              </div>
-                              <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ===== 2. 評判環境・リスクマップ ===== */}
-          {reportStats && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight">評判分析</h2>
-              </CardHeader>
-              <CardContent className="space-y-8">
-                {/* センチメント構成比 ― ドーナツ + 統計カード */}
-                <div>
-                  <h3 className="text-lg font-semibold mb-4">センチメント構成比</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-                    {/* ドーナツチャート */}
-                    <div className="relative min-w-0">
-                      <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                          <Pie
-                            data={[
-                              { name: 'Positive', value: reportStats.sentimentCounts.positive },
-                              { name: 'Neutral',  value: reportStats.sentimentCounts.neutral  },
-                              { name: 'Negative', value: reportStats.sentimentCounts.negative },
-                            ]}
-                            cx="50%" cy="50%"
-                            innerRadius={72} outerRadius={108}
-                            startAngle={90} endAngle={-270}
-                            paddingAngle={2}
-                            animationBegin={0} animationDuration={900}
-                            labelLine={false}
-                            dataKey="value"
-                          >
-                            <Cell fill="#10b981" />
-                            <Cell fill="#9ca3af" />
-                            <Cell fill="#ef4444" />
-                          </Pie>
-                          <Tooltip formatter={(v: number) => [`${v}本`, ""]} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      {/* 中心ラベル */}
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="text-center">
-                          <div className="text-3xl font-bold leading-none">
-                            {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative
-                              ? reportStats.sentimentPercentages.positive
-                              : reportStats.sentimentPercentages.negative}%
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative ? "Positive" : "Negative"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 3センチメント統計カード */}
-                    <div className="space-y-3">
-                      {([
-                        {
-                          label: "Positive", count: reportStats.sentimentCounts.positive,
-                          pct: reportStats.sentimentPercentages.positive,
-                          border: "border-green-200", bg: "bg-green-50",
-                          numCls: "text-green-700", pctCls: "text-green-400",
-                          bar: "bg-green-500",
-                        },
-                        {
-                          label: "Neutral", count: reportStats.sentimentCounts.neutral,
-                          pct: reportStats.sentimentPercentages.neutral,
-                          border: "border-gray-200", bg: "bg-gray-50",
-                          numCls: "text-gray-600", pctCls: "text-gray-400",
-                          bar: "bg-gray-400",
-                        },
-                        {
-                          label: "Negative", count: reportStats.sentimentCounts.negative,
-                          pct: reportStats.sentimentPercentages.negative,
-                          border: "border-red-200", bg: "bg-red-50",
-                          numCls: "text-red-700", pctCls: "text-red-400",
-                          bar: "bg-red-500",
-                        },
-                      ] as const).map(row => (
-                        <div key={row.label} className={`p-4 rounded-xl border ${row.border} ${row.bg}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-xs font-bold uppercase tracking-wider ${row.numCls}`}>{row.label}</span>
-                            <span className={`text-2xl font-black ${row.pctCls}`}>{row.pct}%</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <span className={`text-xl font-bold ${row.numCls}`}>{row.count}<span className="text-xs font-normal ml-1">本</span></span>
-                            <div className="flex-1 h-2 bg-white/60 rounded-full overflow-hidden">
-                              <div className={`h-full ${row.bar} rounded-full transition-all duration-700`} style={{ width: `${row.pct}%` }} />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* ファセット分析 */}
-                {data && data.report?.facets && data.report.facets.length > 0 && (
-                  <FacetAnalysis facets={(data.report.facets as any[]).map((f: any) => ({
-                    aspect: f.aspect || f.name || "",
-                    positive_percentage: f.positive_percentage || f.pos || 0,
-                    negative_percentage: f.negative_percentage || f.neg || 0,
-                  }))} />
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ===== 3. パターン戦略ガイド（勝ち + 負け統合） ===== */}
-          {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight flex items-center gap-2">
-                  <Star className="h-6 w-6 text-teal-500" />
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  勝ち・負けパターン
-                </h2>
-              </CardHeader>
-              <CardContent>
-                {(tripleSearch.commonalityAnalysisAd || tripleSearch.losePatternAnalysisAd) ? (
-                  <Tabs defaultValue="organic" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 mb-4">
-                      <TabsTrigger value="organic">オーガニック</TabsTrigger>
-                      <TabsTrigger value="ad" className="flex items-center gap-1">
-                        <Megaphone className="h-3 w-3" />Ad投稿
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="organic" className="space-y-0">
-                      <Accordion type="multiple" defaultValue={["win", "lose"]}>
-                        {tripleSearch.commonalityAnalysis && (
-                          <AccordionItem value="win" className="border-0">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
-                              <span className="flex items-center gap-2 font-semibold text-teal-800">
-                                <Star className="h-4 w-4" />勝ちパターン戦略
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
+                  {/* LLM共通点分析 - アコーディオン */}
+                  {tripleSearch.commonalityAnalysis && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="commonality" className="border-blue-200">
+                        <AccordionTrigger className="text-sm font-semibold text-blue-800 hover:no-underline py-2">
+                          <span className="flex items-center gap-2">
+                            <Star className="h-4 w-4 text-blue-500" />
+                            勝ちパターン動画の共通点分析
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {tripleSearch.commonalityAnalysisAd ? (
+                            <Tabs defaultValue="organic" className="w-full pt-2">
+                              <TabsList className="grid w-full grid-cols-2 mb-3">
+                                <TabsTrigger value="organic">オーガニック</TabsTrigger>
+                                <TabsTrigger value="ad" className="flex items-center gap-1">
+                                  <Megaphone className="h-3 w-3" />Ad投稿
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="organic">
+                                <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                              </TabsContent>
+                              <TabsContent value="ad">
+                                <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                              </TabsContent>
+                            </Tabs>
+                          ) : (
+                            <div className="pt-2">
                               <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                        {tripleSearch.losePatternAnalysis && (
-                          <AccordionItem value="lose" className="border-0 mt-3">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
-                              <span className="flex items-center gap-2 font-semibold text-amber-800">
-                                <AlertTriangle className="h-4 w-4" />負けパターン回避
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+
+                  {/* 負けパターン分析 - 赤/オレンジ系アコーディオン */}
+                  {tripleSearch.losePatternAnalysis && (
+                    <Accordion type="single" collapsible className="w-full">
+                      <AccordionItem value="losePattern" className="border-red-200">
+                        <AccordionTrigger className="text-sm font-semibold text-red-800 hover:no-underline py-2">
+                          <span className="flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            負けパターン動画のBadポイント分析
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {tripleSearch.losePatternAnalysisAd ? (
+                            <Tabs defaultValue="organic" className="w-full pt-2">
+                              <TabsList className="grid w-full grid-cols-2 mb-3">
+                                <TabsTrigger value="organic">オーガニック</TabsTrigger>
+                                <TabsTrigger value="ad" className="flex items-center gap-1">
+                                  <Megaphone className="h-3 w-3" />Ad投稿
+                                </TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="organic">
+                                <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
+                              </TabsContent>
+                              <TabsContent value="ad">
+                                <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
+                              </TabsContent>
+                            </Tabs>
+                          ) : (
+                            <div className="pt-2">
                               <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                      </Accordion>
-                    </TabsContent>
-                    <TabsContent value="ad" className="space-y-0">
-                      <Accordion type="multiple" defaultValue={["win-ad", "lose-ad"]}>
-                        {tripleSearch.commonalityAnalysisAd && (
-                          <AccordionItem value="win-ad" className="border-0">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
-                              <span className="flex items-center gap-2 font-semibold text-teal-800">
-                                <Star className="h-4 w-4" />勝ちパターン戦略
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                        {tripleSearch.losePatternAnalysisAd && (
-                          <AccordionItem value="lose-ad" className="border-0 mt-3">
-                            <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
-                              <span className="flex items-center gap-2 font-semibold text-amber-800">
-                                <AlertTriangle className="h-4 w-4" />負けパターン回避
-                              </span>
-                            </AccordionTrigger>
-                            <AccordionContent className="pt-3 pb-4">
-                              <LosePatternContent analysis={tripleSearch.losePatternAnalysisAd} />
-                            </AccordionContent>
-                          </AccordionItem>
-                        )}
-                      </Accordion>
-                    </TabsContent>
-                  </Tabs>
-                ) : (
-                  <Accordion type="multiple" defaultValue={["win", "lose"]}>
-                    {tripleSearch.commonalityAnalysis && (
-                      <AccordionItem value="win" className="border-0">
-                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-teal-50 border-l-4 border-teal-500 hover:no-underline hover:bg-teal-100/80">
-                          <span className="flex items-center gap-2 font-semibold text-teal-800">
-                            <Star className="h-4 w-4" />勝ちパターン戦略
-                          </span>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-3 pb-4">
-                          <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    )}
-                    {tripleSearch.losePatternAnalysis && (
-                      <AccordionItem value="lose" className="border-0 mt-3">
-                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-amber-50 border-l-4 border-amber-500 hover:no-underline hover:bg-amber-100/80">
-                          <span className="flex items-center gap-2 font-semibold text-amber-800">
-                            <AlertTriangle className="h-4 w-4" />負けパターン回避
-                          </span>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-3 pb-4">
-                          <LosePatternContent analysis={tripleSearch.losePatternAnalysis} />
-                        </AccordionContent>
-                      </AccordionItem>
-                    )}
-                  </Accordion>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ===== 4. 参考動画キュレーション ===== */}
-          {videos.length > 0 && job.status === "completed" && (() => {
-            const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
-            // Filter: appeared in all sessions, then sort by dominance score
-            const referenceVideos = [...videos]
-              .filter((v: any) => {
-                const ri = rankInfo[v.videoId];
-                return ri && ri.appearanceCount >= numSessions;
-              })
-              .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
-              .slice(0, 5);
-            if (referenceVideos.length === 0) return null;
-            return (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-2xl leading-tight flex items-center gap-2">
-                    <Film className="h-6 w-6 text-violet-500" />
-                    参考動画
-                  </h2>
-                  <p className="text-sm text-muted-foreground">全{numSessions}セッションに出現した上位動画 — 真似すべきポイント付き</p>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {referenceVideos.map((video: any) => (
-                      <div key={video.videoId} className="border rounded-lg overflow-hidden bg-white hover:shadow-md transition-shadow">
-                        {/* Thumbnail */}
-                        <div className="relative aspect-video bg-muted">
-                          <img
-                            src={video.thumbnailUrl || "https://placehold.co/320x180/8A2BE2/white?text=No+Image"}
-                            alt={video.title || "動画サムネイル"}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                          {video.duration && (
-                            <span className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
-                              {video.duration}秒
-                            </span>
-                          )}
-                        </div>
-                        <div className="p-3 space-y-2">
-                          {/* Title */}
-                          <p className="text-sm font-medium line-clamp-2 leading-snug">
-                            {video.title || video.description?.slice(0, 60) || "（タイトルなし）"}
-                          </p>
-                          {/* Metrics row */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs text-muted-foreground flex items-center gap-0.5">
-                              <Eye className="h-3 w-3" />{formatNumber(video.viewCount)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              ER {getEngagementRate(video).toFixed(2)}%
-                            </span>
-                            {getSentimentBadge(video.sentiment)}
-                          </div>
-                          {/* Key Hook annotation */}
-                          {video.keyHook && (
-                            <div className="p-2 rounded bg-violet-50 border border-violet-200">
-                              <p className="text-[11px] font-semibold text-violet-700 mb-0.5">真似すべきポイント</p>
-                              <p className="text-xs text-violet-900 leading-relaxed">{video.keyHook}</p>
                             </div>
                           )}
-                          {/* Link */}
-                          <a
-                            href={video.videoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />動画を見る
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* ===== 5. 動画構成の深掘り ===== */}
-          {videos.length > 0 && job.status === "completed" && (() => {
-            const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
-            const topVideos = [...videos]
-              .filter((v: any) => {
-                const ri = rankInfo[v.videoId];
-                return ri && ri.appearanceCount >= numSessions;
-              })
-              .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
-              .slice(0, 3);
-            if (topVideos.length === 0) return null;
-            const hasAnyData = topVideos.some((v: any) =>
-              (v.ocrResults && v.ocrResults.length > 0) || v.transcription?.fullText
-            );
-            if (!hasAnyData) return null;
-            return (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-2xl leading-tight flex items-center gap-2">
-                    <Eye className="h-6 w-6 text-cyan-500" />
-                    動画構成の深掘り
-                  </h2>
-                  <p className="text-sm text-muted-foreground">上位参考動画のOCRタイムラインと音声文字起こし</p>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {topVideos.map((video: any) => {
-                    const ocrEntries = (video.ocrResults || [])
-                      .slice()
-                      .sort((a: any, b: any) => (a.frameTimestamp ?? 0) - (b.frameTimestamp ?? 0));
-                    const transcriptionText = video.transcription?.fullText;
-                    const hasOcr = ocrEntries.length > 0;
-                    const hasTranscription = !!transcriptionText;
-                    return (
-                      <div key={video.videoId} className="border rounded-lg overflow-hidden">
-                        {/* Video header */}
-                        <div className="flex items-center gap-3 p-3 bg-muted/40">
-                          <img
-                            src={video.thumbnailUrl || "https://placehold.co/80x60/8A2BE2/white?text=No+Image"}
-                            alt=""
-                            className="w-16 h-12 rounded object-cover shrink-0"
-                            loading="lazy"
-                          />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{video.title || video.description?.slice(0, 50) || "（タイトルなし）"}</p>
-                            <p className="text-xs text-muted-foreground">{video.duration ? `${video.duration}秒` : ""} {video.accountId ? `@${video.accountId}` : ""}</p>
-                          </div>
-                        </div>
-                        <div className="p-3 space-y-3">
-                          {/* OCR Timeline */}
-                          {hasOcr ? (
-                            <div>
-                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">OCR タイムライン</h4>
-                              <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                                {ocrEntries.map((ocr: any, idx: number) => (
-                                  <div key={idx} className="flex items-start gap-2 text-xs">
-                                    <span className="shrink-0 w-12 text-right font-mono text-cyan-600 font-semibold">
-                                      {ocr.frameTimestamp != null ? `${ocr.frameTimestamp}s` : "—"}
-                                    </span>
-                                    <span className="text-foreground leading-relaxed">{ocr.extractedText || "（テキストなし）"}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">OCRデータなし</p>
-                          )}
-                          {/* Transcription */}
-                          {hasTranscription ? (
-                            <Accordion type="single" collapsible>
-                              <AccordionItem value="transcript" className="border-0">
-                                <AccordionTrigger className="py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide hover:no-underline">
-                                  音声文字起こし
-                                </AccordionTrigger>
-                                <AccordionContent>
-                                  <p className="text-xs leading-relaxed whitespace-pre-wrap bg-slate-50 p-3 rounded max-h-40 overflow-y-auto">
-                                    {transcriptionText}
-                                  </p>
-                                </AccordionContent>
-                              </AccordionItem>
-                            </Accordion>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">音声文字起こしデータなし</p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* ===== 6. 制作ブリーフ（台本テンプレート） ===== */}
-          {tripleSearch && job.status === "completed" && (
-            <Card className="border-l-4 border-primary">
-              <CardHeader>
-                <h2 className="text-2xl leading-tight flex items-center gap-2">
-                  <FileText className="h-6 w-6 text-amber-500" />
-                  制作ブリーフ
-                </h2>
-              </CardHeader>
-              <CardContent>
-                <ProductionBrief
-                  brief={(data.report as any)?.productionBrief ?? null}
-                  onGenerate={() => {
-                    generateBrief.mutate({ jobId });
-                  }}
-                  isGenerating={generateBrief.isPending}
-                />
+                        </AccordionContent>
+                      </AccordionItem>
+                    </Accordion>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {/* ===== 7. タイムライン付きコンテ ===== */}
-          {job.status === "completed" && (() => {
-            const brief = (data.report as any)?.productionBrief;
-            const caption = brief?.appealAxes?.[0]?.captionTemplate;
-            // Determine best duration from videos or default to 30
-            const avgDuration = videos.length > 0
-              ? Math.round(videos.reduce((s: number, v: any) => s + (v.duration || 0), 0) / videos.filter((v: any) => v.duration && v.duration > 0).length) || 30
-              : 30;
-            const totalDur = avgDuration;
-            // Proportional segments for a typical short-form video
-            const segments = [
-              { label: "フック", ratio: 0.10, color: "bg-red-400", desc: caption?.hook || "注意を引くオープニング" },
-              { label: "共感", ratio: 0.17, color: "bg-amber-400", desc: caption?.empathy || "視聴者の悩み・共感ポイント" },
-              { label: "商品紹介", ratio: 0.26, color: "bg-blue-400", desc: caption?.product || "商品・サービスの説明" },
-              { label: "ベネフィット", ratio: 0.30, color: "bg-emerald-400", desc: caption?.benefit || "得られるメリット・効果" },
-              { label: "CTA", ratio: 0.17, color: "bg-violet-400", desc: caption?.cta || "行動喚起（フォロー・購入など）" },
-            ];
-            let elapsed = 0;
-            const timeline = segments.map((seg) => {
-              const start = Math.round(elapsed);
-              const dur = Math.round(totalDur * seg.ratio);
-              elapsed += totalDur * seg.ratio;
-              const end = Math.round(elapsed);
-              return { ...seg, start, end, dur };
-            });
-
-            return (
-              <Card>
-                <CardHeader>
-                  <h2 className="text-2xl leading-tight flex items-center gap-2">
-                    <Clock className="h-6 w-6 text-orange-500" />
-                    タイムライン付きコンテ
-                  </h2>
-                  <p className="text-sm text-muted-foreground">推奨動画尺 {totalDur}秒 の秒数配分</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Visual timeline bar */}
-                  <div className="flex h-6 rounded-full overflow-hidden">
-                    {timeline.map((seg, i) => (
-                      <div
-                        key={i}
-                        className={`${seg.color} flex items-center justify-center text-[10px] text-white font-bold`}
-                        style={{ width: `${seg.ratio * 100}%` }}
-                        title={`${seg.label}: ${seg.start}-${seg.end}秒`}
-                      >
-                        {seg.dur >= 3 ? seg.label : ""}
-                      </div>
-                    ))}
-                  </div>
-                  {/* Detailed breakdown */}
-                  <div className="space-y-2">
-                    {timeline.map((seg, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 border rounded-lg">
-                        <div className={`${seg.color} text-white text-xs font-bold px-2 py-1 rounded shrink-0 min-w-[80px] text-center`}>
-                          {seg.start}-{seg.end}秒
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold">{seg.label}</p>
-                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{seg.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {!caption && (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      制作ブリーフを生成すると、各パートに具体的な台本テンプレートが反映されます
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })()}
-
-          {/* 負けパターンは §3 パターン戦略ガイドに統合済み */}
-
-          {/* ===== 9. 投稿最適化ガイド ===== */}
-          {data?.videos && data.videos.length > 0 && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight">投稿最適化</h2>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="heatmap" className="w-full">
-                  <TabsList className="w-full">
-                    <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
-                    <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
-                    {(data.report as any)?.hashtagStrategy && (
-                      <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
-                    )}
-                  </TabsList>
-                  <TabsContent value="heatmap" className="mt-4">
-                    <PostingTimeHeatmap videos={data.videos as any} />
-                  </TabsContent>
-                  <TabsContent value="duration" className="mt-4">
-                    <DurationAnalysis videos={data.videos as any} />
-                  </TabsContent>
-                  {(data.report as any)?.hashtagStrategy && (
-                    <TabsContent value="hashtag" className="mt-4">
-                      <HashtagStrategy data={(data.report as any).hashtagStrategy} />
-                    </TabsContent>
-                  )}
-                </Tabs>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* ===== 10. データ付録 ===== */}
+          {/* Report Section */}
           {reportStats && job.status === "completed" && (
-            <Card>
-              <CardHeader>
-                <h2 className="text-2xl leading-tight">データ付録</h2>
-              </CardHeader>
-              <CardContent>
-                <Accordion type="multiple" className="space-y-2">
+            <div className="space-y-3">
+              {/* セクションヘッダー */}
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-0.5 rounded-full bg-primary" />
+                <h2 className="text-base leading-none font-semibold">分析レポート</h2>
+              </div>
 
-                  {/* マクロ分析 */}
-                  {data && data.report && (
-                    <AccordionItem value="aspects" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画マクロ分析
+              {/* センチメント構成比 ― ドーナツ + 統計カード */}
+              <div className="border rounded-sm p-3">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">センチメント構成比</h3>
+                <div className="grid grid-cols-[140px_1fr] md:grid-cols-[160px_1fr] gap-3 items-center">
+                  {/* ドーナツチャート（コンパクト） */}
+                  <div className="relative">
+                    <ResponsiveContainer width="100%" height={140}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Pos', value: reportStats.sentimentCounts.positive },
+                            { name: 'Neu', value: reportStats.sentimentCounts.neutral },
+                            { name: 'Neg', value: reportStats.sentimentCounts.negative },
+                          ]}
+                          cx="50%" cy="50%"
+                          innerRadius={40} outerRadius={60}
+                          startAngle={90} endAngle={-270}
+                          paddingAngle={2}
+                          animationBegin={0} animationDuration={600}
+                          labelLine={false}
+                          dataKey="value"
+                        >
+                          <Cell fill="#10b981" />
+                          <Cell fill="#9ca3af" />
+                          <Cell fill="#ef4444" />
+                        </Pie>
+                        <Tooltip formatter={(v: number) => [`${v}本`, ""]} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="text-center">
+                        <div className="text-lg font-bold font-data leading-none">
+                          {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative
+                            ? reportStats.sentimentPercentages.positive
+                            : reportStats.sentimentPercentages.negative}%
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative ? "Pos" : "Neg"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3センチメント横並び */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { label: "Positive", count: reportStats.sentimentCounts.positive, pct: reportStats.sentimentPercentages.positive, border: "border-green-200", bg: "bg-green-50 dark:bg-green-950/20", numCls: "text-green-700 dark:text-green-400", bar: "bg-green-500" },
+                      { label: "Neutral",  count: reportStats.sentimentCounts.neutral,  pct: reportStats.sentimentPercentages.neutral,  border: "border-gray-200",  bg: "bg-gray-50 dark:bg-gray-800/30",   numCls: "text-gray-600 dark:text-gray-400",  bar: "bg-gray-400" },
+                      { label: "Negative", count: reportStats.sentimentCounts.negative, pct: reportStats.sentimentPercentages.negative, border: "border-red-200",   bg: "bg-red-50 dark:bg-red-950/20",     numCls: "text-red-700 dark:text-red-400",    bar: "bg-red-500" },
+                    ] as const).map(row => (
+                      <div key={row.label} className={`p-2 rounded-md border ${row.border} ${row.bg}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-[10px] font-bold uppercase ${row.numCls}`}>{row.label}</span>
+                          <span className={`text-sm font-bold font-data ${row.numCls}`}>{row.pct}%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-semibold font-data ${row.numCls}`}>{row.count}本</span>
+                          <div className="flex-1 h-1.5 bg-white/60 dark:bg-white/10 rounded-full overflow-hidden">
+                            <div className={`h-full ${row.bar} rounded-full`} style={{ width: `${row.pct}%` }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* インサイト */}
+                <div className="mt-2 p-2 rounded-sm bg-primary/5 border-l-2 border-primary">
+                  <p className="text-xs text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+                </div>
+              </div>
+
+              {/* インパクト分析 */}
+              <div className="border rounded-sm p-3">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">インパクト分析</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { title: "投稿数",           data: reportStats.threeWay.posts       },
+                    { title: "再生数",           data: reportStats.threeWay.views       },
+                    { title: "エンゲージメント", data: reportStats.threeWay.engagement  },
+                  ] as const).map(({ title, data }) => (
+                    <div key={title} className="p-2 border rounded-sm">
+                      <h4 className="font-semibold mb-2 text-[10px] text-muted-foreground uppercase">{title}</h4>
+                      <div className="space-y-1.5">
+                        {([
+                          { label: "Pos", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100" },
+                          { label: "Neu", pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100" },
+                          { label: "Neg", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100" },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className="text-[10px] text-muted-foreground">{row.label}</span>
+                              <span className="font-bold text-[10px] font-data">{row.pct}%</span>
+                            </div>
+                            <Progress value={Number(row.pct)} className={`h-1 ${row.bgCls} [&>div]:${row.barCls}`} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 詳細分析アコーディオン */}
+              <Accordion type="multiple" defaultValue={["aspects", "micro-analysis"]} className="space-y-2">
+
+                {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
+                {data && data.report && (
+                  <AccordionItem value="aspects" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "250ms" }}>
+                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                      動画マクロ分析
                       </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <ReportSection
+                    <AccordionContent className="px-3 pb-3">
+                      <ReportSection
                           keyword={data.job?.keyword || ""}
                           date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
                           videoCount={data.videos?.length || 0}
@@ -1531,13 +1142,13 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* ミクロ分析 */}
-                  {data && data.report && (
-                    <AccordionItem value="micro-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画ミクロ分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 pt-2">
+                {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
+                {data && data.report && (
+                  <AccordionItem value="micro-analysis" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "300ms" }}>
+                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                      動画ミクロ分析
+                    </AccordionTrigger>
+                    <AccordionContent className="px-5 pb-5 pt-2">
                         <Tabs defaultValue="insights" className="w-full">
                           <TabsList className="w-full mb-3">
                             <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
@@ -1578,25 +1189,38 @@ export default function AnalysisDetail() {
                     </AccordionItem>
                   )}
 
-                  {/* エンゲージメント詳細 */}
-                  <AccordionItem value="engagement-detail" className="border rounded-xl">
-                    <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                      エンゲージメント詳細（内訳 / 平均動画時間 / ハッシュタグ）
+                {/* 検索相関分析（Google Trends × TikTok） */}
+                {data.job?.keyword && (
+                  <AccordionItem value="search-correlation" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "350ms" }}>
+                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                      検索相関分析（Google Trends × TikTok）
                     </AccordionTrigger>
-                    <AccordionContent className="px-4 pb-4">
+                    <AccordionContent className="px-3 pb-3">
+                      <SearchCorrelationChart jobId={jobId} keyword={data.job?.keyword} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+
+                {/* エンゲージメント詳細 */}
+                <AccordionItem value="engagement-detail" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "400ms" }}>
+                  <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                    エンゲージメント詳細
+                  </AccordionTrigger>
+                  <AccordionContent className="px-3 pb-3">
+                      {/* エンゲージメント内訳 */}
                       <div className="space-y-3 pt-2">
                         {([
-                          { label: "いいね",   icon: "❤️", key: "likes"    },
-                          { label: "コメント", icon: "💬", key: "comments" },
-                          { label: "シェア",   icon: "🔁", key: "shares"   },
-                          { label: "保存",     icon: "🔖", key: "saves"    },
-                        ] as const).map(({ label, icon, key }) => {
+                          { label: "いいね",   Icon: Heart,          iconCls: "text-red-500",    key: "likes"    },
+                          { label: "コメント", Icon: MessageCircle,  iconCls: "text-green-500",  key: "comments" },
+                          { label: "シェア",   Icon: Share2,         iconCls: "text-purple-500", key: "shares"   },
+                          { label: "保存",     Icon: Bookmark,       iconCls: "text-orange-500", key: "saves"    },
+                        ] as const).map(({ label, Icon, iconCls, key }) => {
                           const d = reportStats.engBreakdown[key];
                           const posShare = d.total > 0 ? (d.pos / d.total) * 100 : 0;
                           return (
-                            <div key={key} className="p-3 border rounded-lg">
+                            <div key={key} className="p-3 border rounded-sm">
                               <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium">{icon} {label}</span>
+                                <span className="text-sm font-medium flex items-center gap-1.5"><Icon className={`h-3.5 w-3.5 ${iconCls}`} />{label}</span>
                                 <span className="text-xs text-muted-foreground">合計 {formatNumber(d.total)}</span>
                               </div>
                               <div className="flex h-2.5 rounded-full overflow-hidden">
@@ -1676,38 +1300,71 @@ export default function AnalysisDetail() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {/* アカウント分析 */}
-                  {data?.videos && data.videos.length > 0 && (
-                    <AccordionItem value="account-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        アカウント別分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+                {/* 投稿最適化インサイト */}
+                {data?.videos && data.videos.length > 0 && (
+                  <AccordionItem value="posting-duration-hashtag" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "450ms" }}>
+                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                      投稿最適化インサイト
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 pb-3">
+                      <Tabs defaultValue="heatmap" className="w-full">
+                        <TabsList className="w-full">
+                          <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                          <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
+                          {(data.report as any)?.hashtagStrategy && (
+                            <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
+                          )}
+                        </TabsList>
+                        <TabsContent value="heatmap" className="mt-4">
+                          <PostingTimeHeatmap videos={data.videos as any} />
+                        </TabsContent>
+                        <TabsContent value="duration" className="mt-4">
+                          <DurationAnalysis videos={data.videos as any} />
+                        </TabsContent>
+                        {(data.report as any)?.hashtagStrategy && (
+                          <TabsContent value="hashtag" className="mt-4">
+                            <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                          </TabsContent>
+                        )}
+                      </Tabs>
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
 
-                </Accordion>
-              </CardContent>
-            </Card>
+                {/* アカウント横断分析 */}
+                {data?.videos && data.videos.length > 0 && (
+                  <AccordionItem value="account-analysis" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "500ms" }}>
+                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
+                      アカウント別分析
+                    </AccordionTrigger>
+                    <AccordionContent className="px-3 pb-3">
+                      <AccountAnalysis videos={data.videos as any} rankInfo={(data?.tripleSearch as any)?.rankInfo} numSessions={numSessions} />
+                    </AccordionContent>
+                  </AccordionItem>
+                )}
+
+              </Accordion>
+            </div>
           )}
 
-          {/* ===== 11. 動画一覧 ===== */}
           {/* Videos Section - Tabbed by Appearance Count */}
           {videos.length > 0 && job.status === "completed" ? (
-            <Card>
-              <CardHeader>
-                <h2 className="leading-none font-semibold flex items-center gap-2">
-                  分析対象動画 ({videos.length}件)
-                </h2>
-                <CardDescription>
-                  {tripleSearch 
-                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類` 
+            <section className="border rounded-sm bg-card p-3">
+              <div className="mb-3">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <div className="h-4 w-0.5 rounded-full bg-primary" />
+                  <h2 className="text-sm leading-none font-semibold">
+                    分析対象動画
+                    <span className="ml-1.5 text-xs font-data text-muted-foreground">{videos.length}件</span>
+                  </h2>
+                </div>
+                <p className="text-[10px] text-muted-foreground ml-[14px]">
+                  {tripleSearch
+                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類`
                     : "収集された動画の詳細分析結果"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+                </p>
+              </div>
+              <div>
                 {/* ソートコントロール */}
                 <div className="flex flex-wrap items-center gap-2 mb-4 pb-4 border-b">
                   <span className="text-xs text-muted-foreground font-medium">並び順:</span>
@@ -1767,14 +1424,12 @@ export default function AnalysisDetail() {
                 ) : (
                   <VideoList videos={sortedVideos} getSentimentBadge={getSentimentBadge} getAppearanceBadge={getAppearanceBadge} formatNumber={formatNumber} getEngagementRate={getEngagementRate} rankInfo={(data?.tripleSearch as any)?.rankInfo} metaKeywordsMap={metaKeywordsMap} />
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           ) : videos.length === 0 && job.status === "completed" && (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground">動画データがありません</p>
-              </CardContent>
-            </Card>
+            <section className="page-section py-12 text-center">
+              <p className="text-muted-foreground">動画データがありません</p>
+            </section>
           )}
         </div>
     </DashboardLayout>
