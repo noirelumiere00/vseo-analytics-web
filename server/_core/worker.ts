@@ -18,6 +18,7 @@ import {
   type ProgressInfo,
 } from "../jobExecutor";
 import { startDailyMetricsScheduler } from "../dailyMetricsScheduler";
+import { executeContextAnalysis } from "../services/contextAnalyzer";
 
 const POLL_INTERVAL_MS = 3000;
 const jobLimit = pLimit(2);
@@ -44,11 +45,12 @@ export async function startWorker() {
     if (shuttingDown) return;
 
     try {
-      // 全3テーブルから queued ジョブを取得
-      const [analysisJobs, trendJobs, campaignSnapshots] = await Promise.all([
+      // 全4テーブルから queued ジョブを取得
+      const [analysisJobs, trendJobs, campaignSnapshots, contextJobs] = await Promise.all([
         db.getQueuedAnalysisJobs(),
         db.getQueuedTrendDiscoveryJobs(),
         db.getQueuedCampaignSnapshots(),
+        db.getQueuedContextAnalyses(),
       ]);
 
       // Analysis jobs
@@ -144,6 +146,42 @@ export async function startWorker() {
             await executeCampaignSnapshot(snapshot.id, onProgress);
           } catch (error) {
             console.error(`[Worker] Campaign snapshot ${snapshot.id} error:`, error instanceof Error ? error.message : error);
+          } finally {
+            runningJobs.delete(jobKey);
+          }
+        });
+      }
+      // Context Analysis jobs
+      for (const ctxJob of contextJobs) {
+        if (shuttingDown) break;
+        const jobKey = `context:${ctxJob.id}`;
+        if (runningJobs.has(jobKey)) continue;
+
+        runningJobs.add(jobKey);
+
+        jobLimit(async () => {
+          try {
+            await db.updateContextAnalysisStatus(ctxJob.id, "collecting");
+
+            const result = await executeContextAnalysis(
+              ctxJob.productName,
+              async (progress) => {
+                await db.updateContextAnalysisStatus(ctxJob.id, progress.phase || "collecting");
+              },
+            );
+
+            await db.updateContextAnalysisStatus(ctxJob.id, "completed", {
+              s1RawData: result.s1RawData,
+              s2RawData: result.s2RawData,
+              s3RawData: result.s3RawData,
+              analysisResult: result.analysisResult,
+              completedAt: new Date(),
+            });
+          } catch (error) {
+            console.error(`[Worker] Context analysis ${ctxJob.id} error:`, error instanceof Error ? error.message : error);
+            await db.updateContextAnalysisStatus(ctxJob.id, "failed", {
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+            });
           } finally {
             runningJobs.delete(jobKey);
           }
