@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink, Heart, MessageCircle, Bookmark } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink, Heart, MessageCircle, Bookmark, Lightbulb } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -58,7 +58,10 @@ import ProductionBrief from "@/components/ProductionBrief";
 
 const SECTIONS = [
   { id: "summary", label: "概要" },
+  { id: "overlap", label: "重複度" },
   { id: "search-mockup", label: "検索結果" },
+  { id: "ai-insight", label: "AIインサイト" },
+  { id: "impact", label: "インパクト" },
   { id: "patterns", label: "パターン" },
   { id: "brief", label: "ブリーフ" },
   { id: "reputation", label: "評判" },
@@ -952,50 +955,45 @@ export default function AnalysisDetail() {
             );
           })()}
 
-          {/* ===== 1. 概要 (autoInsight + impact analysis) ===== */}
-          {reportStats && job.status === "completed" && (
-            <Card id="summary" className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>概要</h2>
+          {/* ===== 重複度分析 (promoted from データ付録) ===== */}
+          {tripleSearch && job.status === "completed" && (
+            <Card id="overlap" className="bg-card/60 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>重複度分析</h2>
+                <p className="text-sm text-muted-foreground">{numSessions}セッション間の検索結果の安定性</p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* 自動インサイト */}
-                <div className="p-4 rounded-lg bg-muted/50 border border-border/60">
-                  <h3 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1">
-                    <Star className="h-4 w-4" /> 自動インサイト
-                  </h3>
-                  <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
-                </div>
-
-                {/* インパクト分析 */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>インパクト分析</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {([
-                      { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
-                      { title: "総再生数シェア",           data: reportStats.threeWay.views       },
-                      { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
-                    ] as const).map(({ title, data }) => (
-                      <div key={title} className="p-4 border border-border/60 rounded-lg bg-card/40">
-                        <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
-                        <div className="space-y-3">
-                          {([
-                            { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
-                            { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
-                            { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
-                          ] as const).map(row => (
-                            <div key={row.label}>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
-                                <span className="font-bold text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{row.pct}%</span>
-                              </div>
-                              <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
-                            </div>
-                          ))}
-                        </div>
+              <CardContent className="space-y-4">
+                {/* N回出現カウント */}
+                <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
+                  {Array.from({ length: numSessions }, (_, i) => {
+                    const count = numSessions - i;
+                    const ids = appearanceCountMap[count] ?? [];
+                    const isAll = count === numSessions;
+                    const label = isAll ? `${count}回全出現` : count === 1 ? "1回のみ" : `${count}回出現`;
+                    const stats = groupStats?.[count];
+                    return (
+                      <div key={count} className="text-center p-3 rounded-lg bg-muted/50 border border-border/60">
+                        <div className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{ids.length}</div>
+                        <div className="text-[10px] text-muted-foreground mt-0.5">{label}</div>
+                        {stats && (
+                          <div className="text-[10px] text-muted-foreground mt-1 space-y-0.5" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                            <div>avg {formatNumber(Math.round(stats.avgViews))}再生</div>
+                            <div>ER {stats.avgEngagementRate.toFixed(1)}%</div>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
+                </div>
+                {/* 重複率サマリー */}
+                <div className="p-3 bg-muted/40 border-l-4 border-primary rounded text-sm">
+                  <strong>重複率 {tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</strong> — {" "}
+                  {tripleSearch.duplicateAnalysis.overlapRate >= 80
+                    ? "非常に高い重複率。アルゴリズムが一貫した結果を返しており上位表示は安定。"
+                    : tripleSearch.duplicateAnalysis.overlapRate >= 50
+                    ? "中程度。一部は安定的に上位表示されるが、パーソナライズの影響も見られる。"
+                    : "低い重複率。パーソナライズの影響が大きく、ユーザーごとに異なる結果が表示される。"
+                  }
                 </div>
               </CardContent>
             </Card>
@@ -1222,7 +1220,58 @@ export default function AnalysisDetail() {
           })()}
 
 
-          {/* ===== 2. パターン戦略ガイド（勝ち + 負け統合） with Thumbnail Reel ===== */}
+          {/* ===== AIインサイト ===== */}
+          {reportStats && job.status === "completed" && (data?.report?.autoInsight || reportStats.autoInsight) && (
+            <Card id="ai-insight" className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+              <CardHeader className="pb-2">
+                <h2 className="text-xl leading-tight uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
+                  <Lightbulb className="h-5 w-5" /> AIインサイト
+                </h2>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ===== インパクト分析 ===== */}
+          {reportStats && job.status === "completed" && (
+            <Card id="impact" className="bg-card/60 backdrop-blur-sm">
+              <CardHeader className="pb-3">
+                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>インパクト分析</h2>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {([
+                    { title: "投稿数シェア",             data: reportStats.threeWay.posts       },
+                    { title: "総再生数シェア",           data: reportStats.threeWay.views       },
+                    { title: "総エンゲージメントシェア", data: reportStats.threeWay.engagement  },
+                  ] as const).map(({ title, data }) => (
+                    <div key={title} className="p-4 border border-border/60 rounded-lg bg-card/40">
+                      <h4 className="font-semibold mb-3 text-xs text-muted-foreground uppercase tracking-wide">{title}</h4>
+                      <div className="space-y-3">
+                        {([
+                          { label: "Positive", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100", icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" /> },
+                          { label: "Neutral",  pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100",  icon: <Minus className="h-3.5 w-3.5 text-gray-400" /> },
+                          { label: "Negative", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100",   icon: <TrendingDown className="h-3.5 w-3.5 text-red-500" /> },
+                        ] as const).map(row => (
+                          <div key={row.label}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs flex items-center gap-1">{row.icon}{row.label}</span>
+                              <span className="font-bold text-xs" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{row.pct}%</span>
+                            </div>
+                            <Progress value={Number(row.pct)} className={`h-1.5 ${row.bgCls} [&>div]:${row.barCls}`} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ===== パターン戦略ガイド（勝ち + 避けるべきポイント統合） ===== */}
           {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
             <Card id="patterns" className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
@@ -1489,95 +1538,6 @@ export default function AnalysisDetail() {
               </CardHeader>
               <CardContent>
                 <Accordion type="multiple" className="space-y-2">
-
-                  {/* 重複度分析 */}
-                  {tripleSearch && (
-                    <AccordionItem value="overlap" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        重複度分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 space-y-6">
-                        {/* 検索結果サマリー */}
-                        <div className={`grid gap-3 max-w-2xl mx-auto`} style={{ gridTemplateColumns: `repeat(${Math.min(tripleSearch.searches.length, 5)}, 1fr)` }}>
-                          {tripleSearch.searches.map((search: any, i: number) => (
-                            <div key={i} className="text-center p-3 bg-muted/50 rounded-lg">
-                              <div className="text-sm font-medium mb-1">アカウント {i + 1}</div>
-                              <div className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{search.totalFetched}</div>
-                              <div className="text-xs text-muted-foreground">件取得</div>
-                            </div>
-                          ))}
-                        </div>
-
-                        {/* 重複度分析結果 */}
-                        <div className={`grid gap-3 max-w-2xl mx-auto`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
-                          {Array.from({ length: numSessions }, (_, i) => {
-                            const count = numSessions - i;
-                            const ids = appearanceCountMap[count] ?? [];
-                            const isAll = count === numSessions;
-                            const isOne = count === 1;
-                            const Icon = isAll ? Star : isOne ? Search : Repeat;
-                            const label = isAll ? `${count}回全出現` : count === 1 ? "1回のみ" : `${count}回出現`;
-                            const sublabel = isAll ? "(勝ちパターン)" : isOne ? "(パーソナライズ)" : "(準勝ち)";
-                            return (
-                              <div key={count} className="text-center p-3 rounded-lg bg-muted/50 border border-border/60">
-                                <Icon className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                                <div className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{ids.length}</div>
-                                <div className="text-xs text-muted-foreground mt-1">{label}<br/>{sublabel}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* グループ別統計比較 */}
-                        {groupStats && (
-                          <div className="w-full">
-                            <div className="text-sm font-semibold text-muted-foreground py-2">グループ別統計比較</div>
-                            <div className={`grid gap-3`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
-                              {Array.from({ length: numSessions }, (_, i) => {
-                                const count = numSessions - i;
-                                const stats = groupStats[count];
-                                if (!stats) return null;
-                                const isAll = count === numSessions;
-                                const label = isAll ? `${count}回出現` : count === 1 ? "1回のみ" : `${count}回出現`;
-                                return (
-                                  <div key={count} className="p-3 rounded-lg border border-border/60 bg-card/40">
-                                    <div className="text-xs font-bold mb-2 text-muted-foreground">{label}（{stats.count}件）</div>
-                                    <div className="space-y-1.5 text-xs">
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">平均再生数</span>
-                                        <span className="font-semibold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{formatNumber(Math.round(stats.avgViews))}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">平均ER%</span>
-                                        <span className="font-semibold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{stats.avgEngagementRate.toFixed(2)}%</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">平均スコア</span>
-                                        <span className="font-semibold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{stats.avgScore.toFixed(0)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 重複率サマリー */}
-                        <div className="p-4 bg-muted/40 border-l-4 border-primary rounded space-y-3">
-                          <p className="text-sm">
-                            <strong>重複率 {tripleSearch.duplicateAnalysis.overlapRate.toFixed(1)}%</strong> - 
-                            {tripleSearch.duplicateAnalysis.overlapRate >= 80 
-                              ? "非常に高い重複率です。TikTokのアルゴリズムがこのキーワードに対して一貫した検索結果を返しており、上位表示動画は安定しています。"
-                              : tripleSearch.duplicateAnalysis.overlapRate >= 50
-                              ? "中程度の重複率です。一部の動画はアルゴリズムにより安定的に上位表示されていますが、パーソナライズの影響も見られます。"
-                              : "低い重複率です。パーソナライズの影響が大きく、ユーザーごとに異なる検索結果が表示される傾向があります。"
-                            }
-                          </p>
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
 
                   {/* マクロ分析 */}
                   {data && data.report && (
