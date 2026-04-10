@@ -57,10 +57,9 @@ import { CopyButton } from "@/components/CopyButton";
 import ProductionBrief from "@/components/ProductionBrief";
 
 const SECTIONS = [
-  { id: "summary", label: "概要", icon: BarChart3 },
-  { id: "overlap", label: "重複度", icon: Layers },
-  { id: "search-mockup", label: "検索結果", icon: Smartphone },
   { id: "ai-insight", label: "AIインサイト", icon: Lightbulb },
+  { id: "summary", label: "概要", icon: BarChart3 },
+  { id: "search-mockup", label: "検索結果", icon: Smartphone },
   { id: "impact", label: "インパクト", icon: Target },
   { id: "patterns", label: "パターン", icon: Star },
   { id: "brief", label: "ブリーフ", icon: FileText },
@@ -928,13 +927,39 @@ export default function AnalysisDetail() {
             </nav>
           )}
 
-          {/* KPIサマリーバナー */}
+          {/* ===== 01 AIインサイト（最上部） ===== */}
+          {reportStats && job.status === "completed" && (data?.report?.autoInsight || reportStats.autoInsight) && (
+            <div id="ai-insight" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">01</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>AIインサイト</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">データから何が読み取れるか？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+              <CardContent className="pt-6">
+                <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+              </CardContent>
+            </Card>
+            </div>
+          )}
+
+          {/* ===== 02 概要（KPIサマリー + 重複度） ===== */}
           {job.status === "completed" && reportStats && (() => {
             const avgER = reportStats.totalViews > 0
               ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
               : "—";
             return (
-              <div id="summary" className="scroll-mt-16 section-fade-in grid gap-4 md:grid-cols-4">
+              <div id="summary" className="scroll-mt-16 section-fade-in">
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">02</span>
+                  <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>概要</h2>
+                </div>
+                <p className="text-xs text-muted-foreground ml-9 mt-0.5">主要KPIと検索の安定性</p>
+              </div>
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-card/60 backdrop-blur-sm">
                   <Play className="h-5 w-5 text-primary shrink-0" />
                   <div>
@@ -970,23 +995,13 @@ export default function AnalysisDetail() {
                   </div>
                 </div>
               </div>
-            );
-          })()}
-
-          {/* ===== 重複度分析 (promoted from データ付録) ===== */}
-          {tripleSearch && job.status === "completed" && (
-            <div id="overlap" className="scroll-mt-16 section-fade-in">
-            <div className="mb-4">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">01</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>重複度分析</h2>
-              </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">検索結果はどれだけ安定しているか？</p>
-            </div>
-            <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader className="pb-3">
-              </CardHeader>
-              <CardContent className="space-y-4">
+              {/* 重複度（概要セクション内） */}
+              {tripleSearch && (
+              <Card className="bg-card/60 backdrop-blur-sm mt-4">
+                <CardHeader className="pb-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>重複度</h3>
+                </CardHeader>
+                <CardContent className="space-y-4">
                 {/* N回出現カウント */}
                 <div className={`grid gap-2`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions, 5)}, 1fr)` }}>
                   {Array.from({ length: numSessions }, (_, i) => {
@@ -1021,11 +1036,13 @@ export default function AnalysisDetail() {
                 </div>
               </CardContent>
             </Card>
-            </div>
-          )}
+              )}
+              </div>
+            );
+          })()}
 
 
-          {/* ===== Phone Mockups — Search Result Visualization ===== */}
+          {/* ===== 03 検索結果 ===== */}
           {tripleSearch && job.status === "completed" && videos.length > 0 && (() => {
             const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
             const searches = tripleSearch.searches || [];
@@ -1037,7 +1054,7 @@ export default function AnalysisDetail() {
               <div id="search-mockup" className="scroll-mt-16 section-fade-in">
               <div className="mb-4">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">02</span>
+                  <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">03</span>
                   <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>検索結果</h2>
                 </div>
                 <p className="text-xs text-muted-foreground ml-9 mt-0.5">TikTokでどう表示されているか？</p>
@@ -1253,25 +1270,7 @@ export default function AnalysisDetail() {
           })()}
 
 
-          {/* ===== AIインサイト ===== */}
-          {reportStats && job.status === "completed" && (data?.report?.autoInsight || reportStats.autoInsight) && (
-            <div id="ai-insight" className="scroll-mt-16 section-fade-in">
-            <div className="mb-4">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">03</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>AIインサイト</h2>
-              </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">データから何が読み取れるか？</p>
-            </div>
-            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
-              <CardContent className="pt-6">
-                <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
-              </CardContent>
-            </Card>
-            </div>
-          )}
-
-          {/* ===== インパクト分析 ===== */}
+          {/* ===== 04 インパクト分析 ===== */}
           {reportStats && job.status === "completed" && (
             <div id="impact" className="scroll-mt-16 section-fade-in">
             <div className="mb-4">
