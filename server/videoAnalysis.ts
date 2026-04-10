@@ -1175,7 +1175,7 @@ export async function analyzeWinPatternCommonality(
   }
 
   // 上位10本に絞る（再生数順）
-  const top5Win = [...winPatternVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 10);
+  const top5Win = [...winPatternVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 12);
 
   // 勝ちパターン動画のコメントを取得（オプション）
   const commentsByVideo: { [key: string]: string[] } = {};
