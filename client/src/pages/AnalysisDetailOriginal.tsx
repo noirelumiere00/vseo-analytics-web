@@ -934,7 +934,7 @@ export default function AnalysisDetail() {
               ? ((reportStats.totalEngagement / reportStats.totalViews) * 100).toFixed(2)
               : "—";
             return (
-              <div className="grid gap-4 md:grid-cols-4">
+              <div id="summary" className="scroll-mt-16 section-fade-in grid gap-4 md:grid-cols-4">
                 <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-card/60 backdrop-blur-sm">
                   <Play className="h-5 w-5 text-primary shrink-0" />
                   <div>
@@ -1034,9 +1034,16 @@ export default function AnalysisDetail() {
             const videoMap = new Map<string, any>();
             for (const v of videos) videoMap.set((v as any).videoId, v);
             return (
-              <Card id="search-mockup" className="bg-card/60 backdrop-blur-sm">
+              <div id="search-mockup" className="scroll-mt-16 section-fade-in">
+              <div className="mb-4">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">02</span>
+                  <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>検索結果</h2>
+                </div>
+                <p className="text-xs text-muted-foreground ml-9 mt-0.5">TikTokでどう表示されているか？</p>
+              </div>
+              <Card className="bg-card/60 backdrop-blur-sm">
                 <CardHeader>
-                  <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>検索結果</h2>
                   <p className="text-sm text-muted-foreground">{numSessions}セッションの TikTok 検索結果比較</p>
                 </CardHeader>
                 <CardContent>
@@ -1241,29 +1248,41 @@ export default function AnalysisDetail() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             );
           })()}
 
 
           {/* ===== AIインサイト ===== */}
           {reportStats && job.status === "completed" && (data?.report?.autoInsight || reportStats.autoInsight) && (
-            <Card id="ai-insight" className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
-              <CardHeader className="pb-2">
-                <h2 className="text-xl leading-tight uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
-                  <Lightbulb className="h-5 w-5" /> AIインサイト
-                </h2>
-              </CardHeader>
-              <CardContent>
+            <div id="ai-insight" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">03</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>AIインサイト</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">データから何が読み取れるか？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+              <CardContent className="pt-6">
                 <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {/* ===== インパクト分析 ===== */}
           {reportStats && job.status === "completed" && (
-            <Card id="impact" className="bg-card/60 backdrop-blur-sm">
+            <div id="impact" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">04</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>インパクト分析</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">ポジ/ネガのバランスは？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader className="pb-3">
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>インパクト分析</h2>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1294,15 +1313,21 @@ export default function AnalysisDetail() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
           {/* ===== パターン戦略ガイド（勝ち + 避けるべきポイント統合） ===== */}
           {tripleSearch && (tripleSearch.commonalityAnalysis || tripleSearch.losePatternAnalysis) && job.status === "completed" && (
-            <Card id="patterns" className="bg-card/60 backdrop-blur-sm">
+            <div id="patterns" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">05</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>パターン戦略</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">勝ちパターンの共通点は？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
-                  パターン
-                </h2>
               </CardHeader>
               <CardContent>
                 {/* Phase 2: Win Pattern Thumbnail Reel */}
@@ -1396,16 +1421,21 @@ export default function AnalysisDetail() {
                 )}
               </CardContent>
             </Card>
+            </div>
           )}
 
           {/* ===== 3. 制作ブリーフ ===== */}
           {tripleSearch && job.status === "completed" && (
-            <Card id="brief" className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+            <div id="brief" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">06</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>ブリーフ</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">どう動画を作るべきか？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider flex items-center gap-2" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
-                  <FileText className="h-5 w-5" />
-                  ブリーフ
-                </h2>
               </CardHeader>
               <CardContent>
                 <ProductionBrief
@@ -1417,15 +1447,23 @@ export default function AnalysisDetail() {
                 />
               </CardContent>
             </Card>
+            </div>
           )}
 
 
 
           {/* ===== 5. 評判分析 ===== */}
           {reportStats && job.status === "completed" && (
-            <Card id="reputation" className="bg-card/60 backdrop-blur-sm">
+            <div id="reputation" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>評判分析</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">センチメントの構成は？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>評判分析</h2>
               </CardHeader>
               <CardContent className="space-y-8">
                 {/* センチメント構成比 */}
@@ -1521,13 +1559,21 @@ export default function AnalysisDetail() {
                 )}
               </CardContent>
             </Card>
+            </div>
           )}
 
           {/* ===== 6. 投稿最適化 ===== */}
           {data?.videos && data.videos.length > 0 && job.status === "completed" && (
-            <Card id="optimization" className="bg-card/60 backdrop-blur-sm">
+            <div id="optimization" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>最適化</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">いつ何秒の動画を投稿すべきか？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>投稿最適化</h2>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="heatmap" className="w-full">
@@ -1552,14 +1598,22 @@ export default function AnalysisDetail() {
                 </Tabs>
               </CardContent>
             </Card>
+            </div>
           )}
 
 
           {/* ===== 7. データ付録 ===== */}
           {reportStats && job.status === "completed" && (
-            <Card id="data" className="bg-card/60 backdrop-blur-sm">
+            <div id="data" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">09</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>付録</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">詳細データ</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>データ付録</h2>
               </CardHeader>
               <CardContent>
                 <Accordion type="multiple" className="space-y-2">
@@ -1757,21 +1811,27 @@ export default function AnalysisDetail() {
                 </Accordion>
               </CardContent>
             </Card>
+            </div>
           )}
 
 
           {/* ===== 8. 動画一覧 (Phase 3: Card Grid) ===== */}
           {videos.length > 0 && job.status === "completed" ? (
-            <Card id="videos" className="bg-card/60 backdrop-blur-sm">
+            <div id="videos" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">10</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>動画一覧</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">収集動画の一覧</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>
-                  動画一覧 ({videos.length}件)
-                </h2>
-                <CardDescription>
-                  {tripleSearch 
-                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類` 
+                <p className="text-sm text-muted-foreground">
+                  {videos.length}件 — {tripleSearch
+                    ? `${numSessions}シークレットブラウザ検索での出現回数別に分類`
                     : "収集された動画の詳細分析結果"}
-                </CardDescription>
+                </p>
               </CardHeader>
               <CardContent>
                 {/* ソートコントロール */}
@@ -1836,6 +1896,7 @@ export default function AnalysisDetail() {
                 )}
               </CardContent>
             </Card>
+            </div>
           ) : videos.length === 0 && job.status === "completed" && (
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="py-12 text-center">
