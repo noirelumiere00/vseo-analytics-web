@@ -1332,12 +1332,12 @@ export default function AnalysisDetail() {
                     </TabsList>
                     <TabsContent value="organic" className="space-y-0">
                       {tripleSearch.commonalityAnalysis && (
-                        <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: tripleSearch.commonalityAnalysis.avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
                       )}
                     </TabsContent>
                     <TabsContent value="ad" className="space-y-0">
                       {tripleSearch.commonalityAnalysisAd && (
-                        <WinPatternContent analysis={tripleSearch.commonalityAnalysisAd} />
+                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysisAd, avoidTips: tripleSearch.commonalityAnalysisAd.avoidTips || tripleSearch.losePatternAnalysisAd?.avoidTips }} />
                       )}
                     </TabsContent>
                   </Tabs>
@@ -1351,7 +1351,7 @@ export default function AnalysisDetail() {
                           </span>
                         </AccordionTrigger>
                         <AccordionContent className="pt-3 pb-4">
-                          <WinPatternContent analysis={tripleSearch.commonalityAnalysis} />
+                          <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: tripleSearch.commonalityAnalysis.avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
                         </AccordionContent>
                       </AccordionItem>
                     )}
