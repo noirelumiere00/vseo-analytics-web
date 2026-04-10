@@ -1833,9 +1833,7 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
    悩み起点型, 効果実感型, 成分・ロジック型, 比較・ランキング型, 購買後押し型, 生活シーン型, 共感・あるある型, 習慣化・ルーティン型, 気分価値・感情訴求型, 時短・ラク型
    各軸にtype, titleIdea, captionTemplate（hook/empathy/product/benefit/ctaの5パート）, rationaleを含めてください。
 2. hashtagSets: 3セットの推奨ハッシュタグ（コピペでそのまま使える形式）
-3. shootingChecklist: 撮影・編集チェックリスト（recommendation と source）
-4. ngList: やってはいけないことリスト（item, reason, evidence）
-5. postingSchedule: 推奨投稿スケジュール（top3の推奨時間帯と避けるべき時間帯）
+3. postingSchedule: 推奨投稿スケジュール（top3の推奨時間帯と避けるべき時間帯）
 `;
 
   try {
@@ -1897,33 +1895,6 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
                   items: { type: "string" },
                 },
               },
-              shootingChecklist: {
-                type: "array",
-                description: "撮影・編集チェックリスト",
-                items: {
-                  type: "object",
-                  properties: {
-                    recommendation: { type: "string", description: "推奨事項" },
-                    source: { type: "string", description: "根拠となるデータソース" },
-                  },
-                  required: ["recommendation", "source"],
-                  additionalProperties: false,
-                },
-              },
-              ngList: {
-                type: "array",
-                description: "やってはいけないことリスト",
-                items: {
-                  type: "object",
-                  properties: {
-                    item: { type: "string", description: "NGアクション" },
-                    reason: { type: "string", description: "NG理由" },
-                    evidence: { type: "string", description: "根拠データ" },
-                  },
-                  required: ["item", "reason", "evidence"],
-                  additionalProperties: false,
-                },
-              },
               postingSchedule: {
                 type: "object",
                 description: "推奨投稿スケジュール",
@@ -1961,7 +1932,7 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
                 additionalProperties: false,
               },
             },
-            required: ["appealAxes", "hashtagSets", "shootingChecklist", "ngList", "postingSchedule"],
+            required: ["appealAxes", "hashtagSets", "postingSchedule"],
             additionalProperties: false,
           },
         },
