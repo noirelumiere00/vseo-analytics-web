@@ -1274,7 +1274,7 @@ export default function AnalysisDetail() {
                       return ri && ri.appearanceCount >= numSessions;
                     })
                     .sort((a: any, b: any) => (rankInfo[b.videoId]?.dominanceScore ?? 0) - (rankInfo[a.videoId]?.dominanceScore ?? 0))
-                    .slice(0, 5);
+                    .slice(0, 10);
                   if (reelVideos.length === 0) return null;
                   return (
                     <div className="mb-6">
