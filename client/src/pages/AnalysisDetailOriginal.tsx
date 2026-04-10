@@ -11,7 +11,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink, Heart, MessageCircle, Bookmark, Lightbulb } from "lucide-react";
+import { Loader2, Play, TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Search, Repeat, Star, Download, GitCompare, Megaphone, ChevronDown, XCircle, FileText, Compass, Share2, Film, Eye, Clock, ExternalLink, Heart, MessageCircle, Bookmark, Lightbulb, BarChart3, Layers, Smartphone, Target, Database } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -57,17 +57,17 @@ import { CopyButton } from "@/components/CopyButton";
 import ProductionBrief from "@/components/ProductionBrief";
 
 const SECTIONS = [
-  { id: "summary", label: "概要" },
-  { id: "overlap", label: "重複度" },
-  { id: "search-mockup", label: "検索結果" },
-  { id: "ai-insight", label: "AIインサイト" },
-  { id: "impact", label: "インパクト" },
-  { id: "patterns", label: "パターン" },
-  { id: "brief", label: "ブリーフ" },
-  { id: "reputation", label: "評判" },
-  { id: "optimization", label: "最適化" },
-  { id: "data", label: "付録" },
-  { id: "videos", label: "動画一覧" },
+  { id: "summary", label: "概要", icon: BarChart3 },
+  { id: "overlap", label: "重複度", icon: Layers },
+  { id: "search-mockup", label: "検索結果", icon: Smartphone },
+  { id: "ai-insight", label: "AIインサイト", icon: Lightbulb },
+  { id: "impact", label: "インパクト", icon: Target },
+  { id: "patterns", label: "パターン", icon: Star },
+  { id: "brief", label: "ブリーフ", icon: FileText },
+  { id: "reputation", label: "評判", icon: Heart },
+  { id: "optimization", label: "最適化", icon: Clock },
+  { id: "data", label: "付録", icon: Database },
+  { id: "videos", label: "動画一覧", icon: Film },
 ];
 
 export default function AnalysisDetail() {
@@ -182,6 +182,21 @@ export default function AnalysisDetail() {
       observers.push(obs);
     }
     return () => observers.forEach(o => o.disconnect());
+  }, [data]);
+
+  // ANIM: Section fade-in on scroll
+  useEffect(() => {
+    const fadeObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) entry.target.classList.add("is-visible");
+        }
+      },
+      { threshold: 0.1 },
+    );
+    const els = document.querySelectorAll(".section-fade-in");
+    els.forEach(el => fadeObserver.observe(el));
+    return () => fadeObserver.disconnect();
   }, [data]);
 
   // キャンセル後にfailed状態になったらrefetch
@@ -570,7 +585,7 @@ export default function AnalysisDetail() {
     </div>
   );  return (
     <DashboardLayout>
-      <div className="w-full min-w-0 space-y-8">
+      <div className="w-full min-w-0 space-y-8 -m-2 md:-m-3 p-2 md:p-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -888,24 +903,27 @@ export default function AnalysisDetail() {
           {/* Sticky Section Navigation */}
           {job.status === "completed" && (
             <nav className="sticky top-0 z-30 -mx-2 px-2 py-2 bg-background/80 backdrop-blur-md border-b border-border/50" style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                {SECTIONS.map((sec) => (
-                  <button
-                    key={sec.id}
-                    onClick={() => {
-                      const el = document.getElementById(sec.id);
-                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-                    }}
-                    className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      activeSection === sec.id
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                    style={{ fontFamily: "'Space Mono', monospace", letterSpacing: "0.04em", transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}
-                  >
-                    {sec.label}
-                  </button>
-                ))}
+              <div className="overflow-x-auto min-w-0 no-scrollbar">
+                <div className="flex gap-0 min-w-max segment-control">
+                  {SECTIONS.map((sec) => {
+                    const Icon = sec.icon;
+                    return (
+                      <button
+                        key={sec.id}
+                        onClick={() => {
+                          const el = document.getElementById(sec.id);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className={`flex items-center gap-1 segment-item ${
+                          activeSection === sec.id ? "active" : ""
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {sec.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </nav>
           )}
@@ -957,10 +975,16 @@ export default function AnalysisDetail() {
 
           {/* ===== 重複度分析 (promoted from データ付録) ===== */}
           {tripleSearch && job.status === "completed" && (
-            <Card id="overlap" className="bg-card/60 backdrop-blur-sm">
+            <div id="overlap" className="scroll-mt-16 section-fade-in">
+            <div className="mb-4">
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">01</span>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>重複度分析</h2>
+              </div>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">検索結果はどれだけ安定しているか？</p>
+            </div>
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader className="pb-3">
-                <h2 className="text-xl leading-tight uppercase tracking-wider" style={{ fontFamily: "'Space Mono', 'JetBrains Mono', monospace" }}>重複度分析</h2>
-                <p className="text-sm text-muted-foreground">{numSessions}セッション間の検索結果の安定性</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* N回出現カウント */}
@@ -997,6 +1021,7 @@ export default function AnalysisDetail() {
                 </div>
               </CardContent>
             </Card>
+            </div>
           )}
 
 
