@@ -1817,7 +1817,7 @@ ${bestPostingTimes.length > 0 ? bestPostingTimes.map(t => `${t.day} ${t.hour}時
 ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}回, 感情価${w.valence.toFixed(2)}, 覚醒度${w.arousal.toFixed(2)}）`).join(', ') : '（データなし）'}
 
 以下の項目を生成してください:
-1. appealAxes: TOP3の訴求軸。以下の10種から選定:
+1. appealAxes: 10個の訴求軸。以下の10種すべてを使用:
    悩み起点型, 効果実感型, 成分・ロジック型, 比較・ランキング型, 購買後押し型, 生活シーン型, 共感・あるある型, 習慣化・ルーティン型, 気分価値・感情訴求型, 時短・ラク型
    各軸にtype, titleIdea, captionTemplate（hook/empathy/product/benefit/ctaの5パート）, rationaleを含めてください。
 2. hashtagSets: 3セットの推奨ハッシュタグ（コピペでそのまま使える形式）
@@ -1828,7 +1828,7 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
 
   try {
     const response = await invokeLLM({
-      maxTokens: 4096,
+      maxTokens: 8192,
       messages: [
         {
           role: "system",

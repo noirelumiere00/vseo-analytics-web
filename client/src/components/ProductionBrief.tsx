@@ -316,14 +316,6 @@ export default function ProductionBrief({
           <Hash className="h-3.5 w-3.5" />
           ハッシュタグセット
         </TabsTrigger>
-        <TabsTrigger value="checklist" className="rounded-sm text-xs gap-1.5">
-          <Camera className="h-3.5 w-3.5" />
-          チェックリスト
-        </TabsTrigger>
-        <TabsTrigger value="ng" className="rounded-sm text-xs gap-1.5">
-          <AlertTriangle className="h-3.5 w-3.5" />
-          NG集
-        </TabsTrigger>
         <TabsTrigger value="schedule" className="rounded-sm text-xs gap-1.5">
           <Clock className="h-3.5 w-3.5" />
           投稿スケジュール
@@ -338,13 +330,6 @@ export default function ProductionBrief({
         <HashtagSetsTab sets={brief.hashtagSets} />
       </TabsContent>
 
-      <TabsContent value="checklist" className="mt-4">
-        <ChecklistTab items={brief.shootingChecklist} />
-      </TabsContent>
-
-      <TabsContent value="ng" className="mt-4">
-        <NgListTab items={brief.ngList} />
-      </TabsContent>
 
       <TabsContent value="schedule" className="mt-4">
         <PostingScheduleTab schedule={brief.postingSchedule} />
