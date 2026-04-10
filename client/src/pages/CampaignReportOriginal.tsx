@@ -908,9 +908,9 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
       if (sorted.length >= 2) {
         const prev = sorted[sorted.length - 2];
         dailyIncrement = {
-          views: last.viewCount - prev.viewCount,
-          likes: last.likeCount - prev.likeCount,
-          comments: last.commentCount - prev.commentCount,
+          views: Math.max(0, last.viewCount - prev.viewCount),
+          likes: Math.max(0, last.likeCount - prev.likeCount),
+          comments: Math.max(0, last.commentCount - prev.commentCount),
         };
       }
 
@@ -940,11 +940,11 @@ function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyM
       for (let i = Math.max(1, sorted.length - 3); i < sorted.length; i++) {
         const cur = sorted[i];
         const prev = sorted[i - 1];
-        const dv = cur.viewCount - prev.viewCount;
-        const dl = cur.likeCount - prev.likeCount;
-        const dc = cur.commentCount - prev.commentCount;
+        const dv = Math.max(0, cur.viewCount - prev.viewCount);
+        const dl = Math.max(0, cur.likeCount - prev.likeCount);
+        const dc = Math.max(0, cur.commentCount - prev.commentCount);
         const dEr = dv > 0 ? Number(((dl + dc) / dv * 100).toFixed(2)) : 0;
-        recentDeltas.push({ dateKey: cur.dateKey, views: Math.max(0, dv), likes: Math.max(0, dl), comments: Math.max(0, dc), er: dEr });
+        recentDeltas.push({ dateKey: cur.dateKey, views: dv, likes: dl, comments: dc, er: dEr });
       }
 
       result.push({
@@ -4244,12 +4244,13 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
       if (allSorted.length >= 2) {
         const last = allSorted[allSorted.length - 1];
         const prev = allSorted[allSorted.length - 2];
+        // マイナス差分は0にクランプ（スクレイパーが一時的に低い値を返す場合の保護）
         dailyIncrement = {
-          views: last.viewCount - prev.viewCount,
-          likes: last.likeCount - prev.likeCount,
-          comments: last.commentCount - prev.commentCount,
-          shares: last.shareCount - prev.shareCount,
-          saves: last.saveCount - prev.saveCount,
+          views: Math.max(0, last.viewCount - prev.viewCount),
+          likes: Math.max(0, last.likeCount - prev.likeCount),
+          comments: Math.max(0, last.commentCount - prev.commentCount),
+          shares: Math.max(0, last.shareCount - prev.shareCount),
+          saves: Math.max(0, last.saveCount - prev.saveCount),
         };
       }
 
@@ -4290,11 +4291,11 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
       for (let i = Math.max(1, allSorted.length - 3); i < allSorted.length; i++) {
         const cur = allSorted[i];
         const prev = allSorted[i - 1];
-        const dv = cur.viewCount - prev.viewCount;
-        const dl = cur.likeCount - prev.likeCount;
-        const dc = cur.commentCount - prev.commentCount;
-        const ds = cur.shareCount - prev.shareCount;
-        const dsv = cur.saveCount - prev.saveCount;
+        const dv = Math.max(0, cur.viewCount - prev.viewCount);
+        const dl = Math.max(0, cur.likeCount - prev.likeCount);
+        const dc = Math.max(0, cur.commentCount - prev.commentCount);
+        const ds = Math.max(0, cur.shareCount - prev.shareCount);
+        const dsv = Math.max(0, cur.saveCount - prev.saveCount);
         const dEr = dv > 0 ? Number(((dl + dc + ds) / dv * 100).toFixed(2)) : 0;
         recentDeltas.push({ dateKey: cur.dateKey, views: Math.max(0, dv), likes: Math.max(0, dl), comments: Math.max(0, dc), shares: Math.max(0, ds), saves: Math.max(0, dsv), er: dEr });
       }
