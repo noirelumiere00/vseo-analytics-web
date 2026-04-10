@@ -370,6 +370,7 @@ export default function ProductionBrief({
   }
 
   return (
+    <>
     <Tabs defaultValue="script" className="w-full">
       <TabsList className="w-full justify-start overflow-x-auto rounded-sm bg-stone-100">
         <TabsTrigger value="script" className="rounded-sm text-xs gap-1.5">
@@ -399,5 +400,60 @@ export default function ProductionBrief({
         <PostingScheduleTab schedule={brief.postingSchedule} />
       </TabsContent>
     </Tabs>
+
+    {/* 再生成フォーム */}
+    <div className="mt-6 pt-4 border-t border-border/60">
+      <button onClick={() => setShowOptions(!showOptions)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+        {showOptions ? "▲ 再生成オプションを閉じる" : "▼ 商品情報を追加して再生成"}
+      </button>
+      {showOptions && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">商品名</label>
+              <input value={productName} onChange={e => setProductName(e.target.value)} placeholder="例: キュキュット 食器用洗剤"
+                className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background" />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground">商品URL</label>
+              <input value={productUrl} onChange={e => setProductUrl(e.target.value)} placeholder="https://..."
+                className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background" />
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-muted-foreground">AIへの追加指示</label>
+            <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)} placeholder="例: 20代女性向けに、コスパを強調してください"
+              className="w-full mt-1 px-3 py-2 text-sm border rounded-md bg-background resize-none h-16" />
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="cursor-pointer px-3 py-2 text-xs border rounded-md hover:bg-muted transition-colors">
+              📎 画像添付
+              <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
+            </label>
+            {imagePreview && (
+              <div className="relative">
+                <img src={imagePreview} alt="" className="w-10 h-10 rounded object-cover border" />
+                <button onClick={() => { setImageBase64(null); setImagePreview(null); }}
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">×</button>
+              </div>
+            )}
+            <Button onClick={handleGenerate} disabled={isGenerating} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-sm ml-auto">
+              {isGenerating ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  再生成中…
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  再生成
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+    </>
   );
 }
