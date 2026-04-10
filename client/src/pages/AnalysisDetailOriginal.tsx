@@ -77,6 +77,7 @@ export default function AnalysisDetail() {
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
   const [videoShowCount, setVideoShowCount] = useState(10);
   const [accountSortTab, setAccountSortTab] = useState<"views" | "videos" | "er">("views");
+  const [accountShowAll, setAccountShowAll] = useState(false);
 
   const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
     enabled: user !== undefined,
@@ -1665,87 +1666,92 @@ export default function AnalysisDetail() {
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="pt-6">
-                {/* アカウント分析 — ドーナツ + テーブル */}
+                {/* アカウント分析 — アコーディオン形式 */}
                 {(() => {
-                  const ACCOLORS = ["#6366f1","#f59e0b","#10b981","#ef4444","#8b5cf6","#ec4899","#14b8a6","#f97316","#3b82f6","#84cc16","#a855f7","#06b6d4","#e11d48","#22c55e","#eab308"];
-                  const accountMap = new Map<string, { id: string; name: string; avatar: string; followers: number; count: number; views: number; er: number }>();
+                  const accountMap = new Map<string, { id: string; name: string; avatar: string; followers: number; count: number; views: number; er: number; vids: any[] }>();
                   for (const v of videos as any[]) {
                     const id = v.accountId || "unknown";
-                    if (!accountMap.has(id)) accountMap.set(id, { id, name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: Number(v.followerCount) || 0, count: 0, views: 0, er: 0 });
+                    if (!accountMap.has(id)) accountMap.set(id, { id, name: v.accountName || id, avatar: v.accountAvatarUrl || "", followers: Number(v.followerCount) || 0, count: 0, views: 0, er: 0, vids: [] });
                     const a = accountMap.get(id)!;
                     a.count++;
+                    a.vids.push(v);
                     const views = Number(v.viewCount) || 0;
                     a.views += views;
                     if (views > 0) a.er += ((Number(v.likeCount)||0) + (Number(v.commentCount)||0) + (Number(v.shareCount)||0) + (Number(v.saveCount)||0)) / views * 100;
                   }
                   const allAccounts = Array.from(accountMap.values()).map(a => ({ ...a, er: a.count > 0 ? Math.round((a.er / a.count) * 100) / 100 : 0 }));
                   const sorted = [...allAccounts].sort((a, b) => accountSortTab === "videos" ? b.count - a.count : accountSortTab === "er" ? b.er - a.er : b.views - a.views);
-                  const top = sorted.slice(0, 15);
-                  const pieKey = accountSortTab === "videos" ? "count" : accountSortTab === "er" ? "er" : "views";
-                  const pieData = top.map((a, i) => ({ name: `@${a.id}`, value: a[pieKey], color: ACCOLORS[i % ACCOLORS.length] }));
                   const fmtN = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : `${n}`;
                   return (
                     <div className="mb-6 pb-6 border-b border-border/60">
                       {/* ソートタブ */}
-                      <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1 w-fit mb-4">
-                        {([{ key: "views", label: "再生数" }, { key: "videos", label: "投稿数" }, { key: "er", label: "ER%" }] as const).map(tab => (
-                          <button key={tab.key} onClick={() => setAccountSortTab(tab.key)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${accountSortTab === tab.key ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-                            {tab.label}
-                          </button>
-                        ))}
-                      </div>
-                      {/* ドーナツ + テーブル */}
-                      <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-4 items-start">
-                        <div className="relative mx-auto">
-                          <ResponsiveContainer width={180} height={180}>
-                            <PieChart>
-                              <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} startAngle={90} endAngle={-270} paddingAngle={1} dataKey="value">
-                                {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                              </Pie>
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="text-center">
-                              <div className="text-lg font-bold">{allAccounts.length}</div>
-                              <div className="text-[9px] text-muted-foreground">アカウント</div>
-                            </div>
-                          </div>
+                      <div className="flex items-center gap-3 mb-4">
+                        <span className="text-xs text-muted-foreground font-medium">{allAccounts.length}アカウント</span>
+                        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+                          {([{ key: "views", label: "再生数" }, { key: "videos", label: "投稿数" }, { key: "er", label: "ER%" }] as const).map(tab => (
+                            <button key={tab.key} onClick={() => setAccountSortTab(tab.key)}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${accountSortTab === tab.key ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                              {tab.label}
+                            </button>
+                          ))}
                         </div>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="text-[10px] text-muted-foreground border-b" style={{ fontFamily: "'Space Mono', monospace" }}>
-                                <th className="text-left py-1.5 w-6"></th>
-                                <th className="text-left py-1.5">アカウント</th>
-                                <th className="text-right py-1.5">動画</th>
-                                <th className="text-right py-1.5">再生数</th>
-                                <th className="text-right py-1.5">ER%</th>
-                                <th className="text-right py-1.5">フォロワー</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {top.map((a, i) => (
-                                <tr key={a.id} className="border-b border-border/20 hover:bg-muted/30 transition-colors">
-                                  <td className="py-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ACCOLORS[i % ACCOLORS.length] }} /></td>
-                                  <td className="py-1.5">
-                                    <div className="flex items-center gap-2">
-                                      <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-muted">
-                                        {a.avatar ? <img src={a.avatar} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />}
-                                      </div>
-                                      <span className="font-medium truncate max-w-[120px]">@{a.id}</span>
+                      </div>
+                      {/* アカウントアコーディオン */}
+                      <Accordion type="single" collapsible className="space-y-1">
+                        {sorted.slice(0, accountShowAll ? 20 : 5).map((a, i) => (
+                          <AccordionItem key={a.id} value={`acc-${a.id}`} className="border rounded-lg overflow-hidden">
+                            <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30">
+                              <div className="flex items-center gap-3 w-full pr-2">
+                                <span className="text-[11px] font-bold text-muted-foreground/50 w-5 text-center tabular-nums">{i + 1}</span>
+                                <div className="w-8 h-8 rounded-full overflow-hidden shrink-0 bg-muted">
+                                  {a.avatar ? <img src={a.avatar} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300" />}
+                                </div>
+                                <div className="flex-1 min-w-0 text-left">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium">@{a.id}</span>
+                                    {a.name !== a.id && <span className="text-xs text-muted-foreground truncate">{a.name}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                                    <span>{a.count}本</span>
+                                    <span>{fmtN(a.views)}再生</span>
+                                    <span>ER {a.er.toFixed(1)}%</span>
+                                    <span>{fmtN(a.followers)}フォロワー</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </AccordionTrigger>
+                            <AccordionContent className="px-3 pb-3">
+                              <div className="space-y-1.5 pt-1">
+                                {a.vids.sort((x: any, y: any) => (Number(y.viewCount)||0) - (Number(x.viewCount)||0)).map((v: any, vi: number) => (
+                                  <a key={vi} href={v.videoUrl} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/40 transition-colors">
+                                    <div className="relative w-10 h-14 rounded overflow-hidden shrink-0 bg-muted">
+                                      {v.thumbnailUrl && <img src={v.thumbnailUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
+                                      {v.duration && <span className="absolute bottom-0 right-0 text-[7px] text-white bg-black/60 px-0.5 rounded-tl font-mono">{v.duration}s</span>}
                                     </div>
-                                  </td>
-                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{a.count}</td>
-                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtN(a.views)}</td>
-                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{a.er.toFixed(1)}%</td>
-                                  <td className="text-right py-1.5 tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{fmtN(a.followers)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-[11px] line-clamp-1 text-foreground">{v.title || v.description?.slice(0, 60) || "（タイトルなし）"}</p>
+                                      <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                                        <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(v.viewCount)}</span>
+                                        <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(v.likeCount)}</span>
+                                        <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(v.commentCount)}</span>
+                                        <span className="text-emerald-600 font-medium">ER {(Number(v.viewCount) > 0 ? ((Number(v.likeCount)||0)+(Number(v.commentCount)||0)+(Number(v.shareCount)||0)) / Number(v.viewCount) * 100 : 0).toFixed(1)}%</span>
+                                      </div>
+                                    </div>
+                                    <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                                  </a>
+                                ))}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                      {sorted.length > 5 && (
+                        <button onClick={() => setAccountShowAll(!accountShowAll)}
+                          className="w-full mt-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                          {accountShowAll ? "折りたたむ" : `もっと見る（残り${sorted.length - 5}アカウント）`}
+                        </button>
+                      )}
                     </div>
                   );
                 })()}
