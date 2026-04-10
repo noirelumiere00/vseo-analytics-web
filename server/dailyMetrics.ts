@@ -169,24 +169,47 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
   if (!db) return { captured: 0 };
 
   // スナップショットのownVideoMetricsをフロア値として取得
-  // dailyMetricsの値がスナップショット値より低い場合はスナップショット値を採用
+  // ownVideoMetricsのキーはvideoId、dailyMetricsのキーはvideoUrl — マッピング必要
   let snapshotFloor = new Map<string, { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number }>();
   try {
+    // videoId → videoUrl マッピングを構築
+    const ownVideoData = (campaign.ownVideoData || []) as Array<{ videoId: string; videoUrl: string }>;
+    const idToUrl = new Map<string, string>();
+    for (const v of ownVideoData) {
+      if (v.videoId && v.videoUrl) idToUrl.set(v.videoId, v.videoUrl);
+    }
+    // ownVideoUrls からもvideoIdを抽出してマッピング
+    for (const url of urls) {
+      const vid = extractVideoId(url);
+      if (vid) idToUrl.set(vid.id, url);
+    }
+
     const snapshots = await db.select({ ownVideoMetrics: campaignSnapshots.ownVideoMetrics })
       .from(campaignSnapshots)
       .where(eq(campaignSnapshots.campaignId, campaign.id));
     for (const snap of snapshots) {
       const metrics = snap.ownVideoMetrics as Record<string, any> | null;
       if (!metrics) continue;
-      for (const [url, m] of Object.entries(metrics)) {
-        const existing = snapshotFloor.get(url);
+      for (const [key, m] of Object.entries(metrics)) {
+        // key は videoId — videoUrl に変換
+        const url = idToUrl.get(key) || key;
         const vc = Number(m?.viewCount) || 0;
         const lc = Number(m?.likeCount) || 0;
         const cc = Number(m?.commentCount) || 0;
         const sc = Number(m?.shareCount) || 0;
         const svc = Number(m?.saveCount) || 0;
-        if (!existing || vc > existing.viewCount) {
+        // 全スナップショットからメトリクスごとの最大値を取る (Bug #9 fix)
+        const existing = snapshotFloor.get(url);
+        if (!existing) {
           snapshotFloor.set(url, { viewCount: vc, likeCount: lc, commentCount: cc, shareCount: sc, saveCount: svc });
+        } else {
+          snapshotFloor.set(url, {
+            viewCount: Math.max(existing.viewCount, vc),
+            likeCount: Math.max(existing.likeCount, lc),
+            commentCount: Math.max(existing.commentCount, cc),
+            shareCount: Math.max(existing.shareCount, sc),
+            saveCount: Math.max(existing.saveCount, svc),
+          });
         }
       }
     }

@@ -709,6 +709,13 @@ export async function generateCampaignReport(
       const effectiveBefore = baseline ? (bm || fallbackMetrics) : null;
       const effectiveAfter = am || fallbackMetrics;
 
+      // 再生数等の単調増加メトリクスはbefore値をフロアとして適用
+      if (effectiveBefore) {
+        effectiveAfter.viewCount = Math.max(effectiveAfter.viewCount || 0, effectiveBefore.viewCount || 0);
+        effectiveAfter.likeCount = Math.max(effectiveAfter.likeCount || 0, effectiveBefore.likeCount || 0);
+        effectiveAfter.commentCount = Math.max(effectiveAfter.commentCount || 0, effectiveBefore.commentCount || 0);
+      }
+
       const beforeViews = effectiveBefore?.viewCount || 0;
       const afterViews = effectiveAfter.viewCount || 0;
 
@@ -1101,18 +1108,21 @@ ${JSON.stringify(reportDataForLLM, null, 2)}
     const bMetrics = baseline?.ownVideoMetrics || {};
     for (const v of ownVideoDataFull) {
       const am = mMetrics[v.videoId];
-      totalViewsAfter += am?.viewCount || v.viewCount || 0;
-      totalLikesAfter += am?.likeCount || v.likeCount || 0;
-      totalCommentsAfter += am?.commentCount || v.commentCount || 0;
-      totalSharesAfter += am?.shareCount || v.shareCount || 0;
-      if (baseline) {
-        const bm = bMetrics[v.videoId];
-        if (bm) {
-          totalViewsBefore += bm.viewCount || 0;
-          totalLikesBefore += bm.likeCount || 0;
-          totalCommentsBefore += bm.commentCount || 0;
-          totalSharesBefore += bm.shareCount || 0;
-        }
+      const bm = baseline ? bMetrics[v.videoId] : null;
+      // after値はbefore値をフロアとして適用（単調増加メトリクス保護）
+      const bvc = bm?.viewCount || 0;
+      const blc = bm?.likeCount || 0;
+      const bcc = bm?.commentCount || 0;
+      const bsc = bm?.shareCount || 0;
+      totalViewsAfter += Math.max(am?.viewCount || v.viewCount || 0, bvc);
+      totalLikesAfter += Math.max(am?.likeCount || v.likeCount || 0, blc);
+      totalCommentsAfter += Math.max(am?.commentCount || v.commentCount || 0, bcc);
+      totalSharesAfter += Math.max(am?.shareCount || v.shareCount || 0, bsc);
+      if (baseline && bm) {
+        totalViewsBefore += bvc;
+        totalLikesBefore += blc;
+        totalCommentsBefore += bcc;
+        totalSharesBefore += bsc;
       }
     }
   }

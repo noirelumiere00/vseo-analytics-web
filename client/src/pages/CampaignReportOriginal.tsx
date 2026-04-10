@@ -4207,7 +4207,7 @@ function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric
       // Fallback: synthesize from before/after snapshots
       if (sorted.length < 2) {
         const bVal = Number(v.before?.[metricKey]) || 0;
-        const aVal = Number(v.after?.[metricKey]) || 0;
+        const aVal = Math.max(Number(v.after?.[metricKey]) || 0, bVal); // 単調増加保護
         if (v.before && v.after) {
           sorted = [{ dateKey: "before", value: bVal }, { dateKey: "after", value: aVal }];
         } else if (!hasBaseline && aVal > 0 && v.postedAt) {

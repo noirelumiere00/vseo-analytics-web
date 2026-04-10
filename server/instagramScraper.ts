@@ -54,7 +54,9 @@ function parseInstagramItem(item: any): InstagramPostData {
     ? { title: rawMusic.title || rawMusic.music_title || "", artistName: rawMusic.artistName || rawMusic.music_author || rawMusic.artist_name || "" }
     : null;
 
-  const viewCount = item.videoPlayCount || item.videoViewCount || 0;
+  // videoPlayCount と videoViewCount のどちらか大きい方を採用
+  // Apifyのバージョンにより返されるフィールドが異なるため安定化
+  const viewCount = Math.max(item.videoPlayCount || 0, item.videoViewCount || 0);
   const likesCount = (item.likesCount != null && item.likesCount >= 0) ? item.likesCount : 0;
   const commentsCount = item.commentsCount || 0;
 
