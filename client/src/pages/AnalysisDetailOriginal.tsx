@@ -75,6 +75,7 @@ export default function AnalysisDetail() {
   const [videoSortKey, setVideoSortKey] = useState<"dominance" | "views" | "engagementRate" | "sentiment" | "promotion">("dominance");
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const [selectedCompareId, setSelectedCompareId] = useState<number | null>(null);
+  const [videoShowCount, setVideoShowCount] = useState(10);
 
   const { data: jobList } = trpc.analysis.list.useQuery(undefined, {
     enabled: user !== undefined,
@@ -513,7 +514,6 @@ export default function AnalysisDetail() {
   const { job, videos, tripleSearch } = data;
 
   // ===== コンパクトカード描画ヘルパー (2列 + もっと表示) =====
-  const [videoShowCount, setVideoShowCount] = useState(10);
   const renderVideoGrid = (vids: any[], useTripleRank = false) => {
     const visible = vids.slice(0, videoShowCount);
     const hasMore = vids.length > videoShowCount;
