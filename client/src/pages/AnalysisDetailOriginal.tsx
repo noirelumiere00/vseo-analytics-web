@@ -939,8 +939,8 @@ export default function AnalysisDetail() {
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">データから何が読み取れるか？</p>
             </div>
             <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
-              <CardContent className="pt-6 pb-6 flex items-center justify-center min-h-[80px]">
-                <p className="text-sm text-foreground/80 leading-relaxed text-center max-w-3xl">{data?.report?.autoInsight || reportStats.autoInsight}</p>
+              <CardContent className="py-5 px-6">
+                <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
               </CardContent>
             </Card>
             </div>
