@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ショート動画事業の効率化ツール 開発費用の承認について</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: #1a1a1a;
+    color: #1a1a1a;
+  }
+
+  .slide {
+    width: 960px;
+    height: 540px;
+    margin: 40px auto;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Title bar */
+  .slide-header {
+    background: #1a1a1a;
+    color: white;
+    padding: 20px 48px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .slide-header .page-num {
+    background: #c44b2f;
+    color: white;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .slide-body {
+    flex: 1;
+    padding: 36px 48px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Slide 1: Cover */
+  .cover-slide .slide-body {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, #fef7f5 0%, #fff 50%, #f5f5f3 100%);
+  }
+
+  .cover-slide h1 {
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+  }
+
+  .cover-slide h1 span {
+    color: #c44b2f;
+  }
+
+  .cover-slide .subtitle {
+    margin-top: 16px;
+    font-size: 16px;
+    color: #666;
+    font-weight: 400;
+  }
+
+  .cover-slide .meta-line {
+    margin-top: 40px;
+    font-size: 13px;
+    color: #999;
+  }
+
+  .cover-slide .accent-line {
+    width: 60px;
+    height: 3px;
+    background: #c44b2f;
+    margin: 24px auto;
+  }
+
+  /* Content slides */
+  .slide h2 {
+    font-size: 22px;
+    font-weight: 900;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .slide h2 .accent {
+    width: 4px;
+    height: 24px;
+    background: #c44b2f;
+    border-radius: 2px;
+  }
+
+  .slide h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #666;
+    margin: 16px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .slide p {
+    font-size: 15px;
+    line-height: 1.7;
+    color: #444;
+  }
+
+  .slide ul {
+    padding-left: 0;
+    list-style: none;
+  }
+
+  .slide li {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #333;
+    padding: 6px 0 6px 20px;
+    position: relative;
+  }
+
+  .slide li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 8px;
+    height: 8px;
+    background: #c44b2f;
+    border-radius: 50%;
+  }
+
+  /* Grid layouts */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* Cards */
+  .card {
+    background: #f8f8f6;
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid #e8e8e6;
+  }
+
+  .card.primary {
+    background: #fef7f5;
+    border-color: #f0d0c8;
+  }
+
+  .card.dark {
+    background: #1a1a1a;
+    color: white;
+    border: none;
+  }
+
+  .card.dark .card-label { color: #c44b2f; }
+  .card.dark .card-value { color: white; }
+  .card.dark .card-desc { color: #aaa; }
+
+  .card.green {
+    background: #f0faf7;
+    border-color: #a8d8c8;
+  }
+
+  .card-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+  }
+
+  .card-value {
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+
+  .card-value.small { font-size: 20px; }
+
+  .card-desc {
+    font-size: 12px;
+    color: #666;
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  /* Table */
+  .s-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .s-table th {
+    text-align: left;
+    padding: 8px 12px;
+    background: #f5f5f3;
+    font-size: 11px;
+    font-weight: 700;
+    color: #999;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e5e5e5;
+  }
+
+  .s-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+
+  .s-table .r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* Big number */
+  .big-number {
+    text-align: center;
+    padding: 16px 0;
+  }
+
+  .big-number .num {
+    font-size: 56px;
+    font-weight: 900;
+    color: #c44b2f;
+    line-height: 1;
+  }
+
+  .big-number .unit {
+    font-size: 20px;
+    font-weight: 700;
+    color: #666;
+    margin-top: 8px;
+  }
+
+  /* Arrow */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #c44b2f;
+    padding: 8px 0;
+  }
+
+  /* Phase bar */
+  .phase-bar {
+    display: flex;
+    gap: 2px;
+    margin-top: 16px;
+  }
+
+  .phase-bar .phase {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 12px;
+  }
+
+  .phase-bar .phase.current {
+    background: #c44b2f;
+    color: white;
+  }
+
+  .phase-bar .phase.next {
+    background: #f5f5f3;
+    color: #666;
+  }
+
+  .phase-bar .phase strong {
+    display: block;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+
+  /* Footer */
+  .slide-footer {
+    padding: 12px 48px;
+    font-size: 10px;
+    color: #ccc;
+    text-align: right;
+    border-top: 1px solid #f0f0f0;
+  }
+
+  @media print {
+    body { background: white; }
+    .slide { box-shadow: none; margin: 0; page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Cover -->
+<div class="slide cover-slide">
+  <div class="slide-body">
+    <h1>ショート動画事業の<br><span>効率化ツール</span>について</h1>
+    <div class="accent-line"></div>
+    <div class="subtitle">開発費用の承認のお願い</div>
+    <div class="meta-line">2026年4月 ｜ 稟議資料</div>
+  </div>
+</div>
+
+<!-- Slide 2: Agenda -->
+<div class="slide">
+  <div class="slide-header">
+    <span>AGENDA</span>
+    <div class="page-num">2</div>
+  </div>
+  <div class="slide-body" style="justify-content: center;">
+    <div class="grid-2" style="gap: 12px;">
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:28px;font-weight:900;color:#c44b2f;">01</div>
+        <div><strong>背景</strong><br><span style="font-size:13px;color:#666;">ショート動画事業の課題</span></div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:28px;font-weight:900;color:#c44b2f;">02</div>
+        <div><strong>ツール概要</strong><br><span style="font-size:13px;color:#666;">3つの主要機能</span></div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:28px;font-weight:900;color:#c44b2f;">03</div>
+        <div><strong>導入効果</strong><br><span style="font-size:13px;color:#666;">業務効率化の実績</span></div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:28px;font-weight:900;color:#c44b2f;">04</div>
+        <div><strong>費用</strong><br><span style="font-size:13px;color:#666;">費用対効果</span></div>
+      </div>
+      <div class="card" style="display:flex;align-items:center;gap:16px;">
+        <div style="font-size:28px;font-weight:900;color:#c44b2f;">05</div>
+        <div><strong>今後の展開</strong><br><span style="font-size:13px;color:#666;">ロードマップ</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 3: Background -->
+<div class="slide">
+  <div class="slide-header">
+    <span>01 背景</span>
+    <div class="page-num">3</div>
+  </div>
+  <div class="slide-body">
+    <h2><div class="accent"></div>ショート動画事業における課題</h2>
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-label">課題 1</div>
+        <div class="card-value small">リサーチ工数の肥大化</div>
+        <div class="card-desc">トレンド調査・競合分析・勝ちパターンの抽出を毎案件手作業で実施。1案件あたり3時間以上を消費</div>
+      </div>
+      <div class="card">
+        <div class="card-label">課題 2</div>
+        <div class="card-value small">属人化</div>
+        <div class="card-desc">「何が回るか」の判断がプランナー個人の経験と勘に依存。再現性がない</div>
+      </div>
+      <div class="card">
+        <div class="card-label">課題 3</div>
+        <div class="card-value small">効果測定が困難</div>
+        <div class="card-desc">クライアントへの報告時にBefore/Afterの数値比較を手動で集計している</div>
+      </div>
+    </div>
+    <p style="margin-top:24px;font-size:14px;color:#666;">→ これらの課題を解決するため、データ分析ツールを個人規模で開発。現在は実務で使えるレベルまで整備が進んでいます。</p>
+  </div>
+</div>
+
+<!-- Slide 4: Tool Overview -->
+<div class="slide">
+  <div class="slide-header">
+    <span>02 ツール概要</span>
+    <div class="page-num">4</div>
+  </div>
+  <div class="slide-body">
+    <h2><div class="accent"></div>VSEO Analytics — 3つの主要機能</h2>
+    <div class="grid-3" style="margin-top:8px;">
+      <div class="card dark">
+        <div class="card-label">機能 1</div>
+        <div class="card-value small" style="color:white;">トレンド分析</div>
+        <div class="card-desc">市場調査・提案の素案作成</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #333;font-size:11px;color:#888;">使用者: プランナー</div>
+      </div>
+      <div class="card dark">
+        <div class="card-label">機能 2</div>
+        <div class="card-value small" style="color:white;">VSEO分析</div>
+        <div class="card-desc">勝ちパターン分析・制作ブリーフ自動生成</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #333;font-size:11px;color:#888;">使用者: 制作チーム / 運用者</div>
+      </div>
+      <div class="card dark">
+        <div class="card-label">機能 3</div>
+        <div class="card-value small" style="color:white;">施策レポート</div>
+        <div class="card-desc">Before/After効果測定・クライアント報告</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #333;font-size:11px;color:#888;">使用者: プランナー</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;">
+      <h3>技術のポイント</h3>
+      <div class="grid-2" style="gap:8px;margin-top:8px;">
+        <div style="font-size:13px;color:#444;padding:6px 0;">✓ 300+動画を3つの独立ブラウザで自動収集</div>
+        <div style="font-size:13px;color:#444;padding:6px 0;">✓ AIが勝ち/負けパターンを自動解析</div>
+        <div style="font-size:13px;color:#444;padding:6px 0;">✓ 台本・チェックリスト・NG集を自動生成</div>
+        <div style="font-size:13px;color:#444;padding:6px 0;">✓ 検索順位・SOVのBefore/After比較</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 5: Impact -->
+<div class="slide">
+  <div class="slide-header">
+    <span>03 導入効果</span>
+    <div class="page-num">5</div>
+  </div>
+  <div class="slide-body">
+    <h2><div class="accent"></div>制作チームの工数削減</h2>
+    <div class="grid-2" style="margin-top:8px;">
+      <div class="card">
+        <div class="card-label">Before（手作業）</div>
+        <div class="card-value">約3.5時間<span style="font-size:16px;font-weight:400;color:#666;">/案件</span></div>
+        <div class="card-desc">リサーチ → 企画 → 台本 → チェックリスト → ハッシュタグ選定 → 投稿時間決定</div>
+      </div>
+      <div class="card green">
+        <div class="card-label">After（ツール導入後）</div>
+        <div class="card-value" style="color:#059669;">約40分<span style="font-size:16px;font-weight:400;color:#666;">/案件</span></div>
+        <div class="card-desc">ブリーフ確認 → 台本微調整 → コピペ → カレンダー登録</div>
+      </div>
+    </div>
+    <div class="big-number" style="margin-top:16px;">
+      <div class="num">80%</div>
+      <div class="unit">工数削減（1案件あたり約3時間）</div>
+    </div>
+    <div class="card primary" style="text-align:center;padding:12px;">
+      <span style="font-size:14px;font-weight:700;">月10案件で30時間削減 = 人件費換算で<span style="color:#c44b2f;">月15〜20万円</span>相当の効率化</span>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 6: Cost -->
+<div class="slide">
+  <div class="slide-header">
+    <span>04 費用と費用対効果</span>
+    <div class="page-num">6</div>
+  </div>
+  <div class="slide-body">
+    <h2><div class="accent"></div>承認をお願いしたい費用</h2>
+    <div class="grid-2" style="gap:24px;">
+      <div>
+        <div class="card dark" style="text-align:center;padding:32px 20px;">
+          <div class="card-label">月額費用</div>
+          <div style="font-size:48px;font-weight:900;color:white;line-height:1;">$350</div>
+          <div style="font-size:16px;color:#aaa;margin-top:8px;">約5万円/月（年間約60万円）</div>
+          <div style="font-size:12px;color:#666;margin-top:12px;">サーバー・AI分析エンジン・開発環境</div>
+        </div>
+      </div>
+      <div>
+        <table class="s-table">
+          <thead><tr><th>項目</th><th class="r">金額/月</th></tr></thead>
+          <tbody>
+            <tr><td>ツール開発・運用コスト</td><td class="r">約5万円</td></tr>
+            <tr><td>工数削減効果（月10案件）</td><td class="r" style="color:#059669;">約15〜20万円</td></tr>
+            <tr style="border-top:2px solid #1a1a1a;"><td><strong>差し引き効果</strong></td><td class="r" style="color:#c44b2f;font-size:18px;"><strong>+10〜15万円</strong></td></tr>
+          </tbody>
+        </table>
+        <div class="card primary" style="margin-top:16px;text-align:center;">
+          <div style="font-size:14px;font-weight:700;">投資の<span style="color:#c44b2f;font-size:20px;">3〜4倍</span>のリターン</div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">＋提案品質向上による受注率改善（別途）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 7: Roadmap -->
+<div class="slide">
+  <div class="slide-header">
+    <span>05 今後の展開</span>
+    <div class="page-num">7</div>
+  </div>
+  <div class="slide-body">
+    <h2><div class="accent"></div>ロードマップ</h2>
+    <div class="phase-bar">
+      <div class="phase current">
+        <strong>現在</strong>
+        社内ツールとして運用中<br>Beta版テスト含む
+      </div>
+      <div class="phase next">
+        <strong>Phase 1 — Q2</strong>
+        Beta版レポートの本番化<br>社内全チームへ展開
+      </div>
+      <div class="phase next">
+        <strong>Phase 2 — Q3</strong>
+        クライアント向け<br>レポート共有機能の強化
+      </div>
+      <div class="phase next">
+        <strong>Phase 3 — Q4〜</strong>
+        外部SaaS化の検討<br>（新規事業の可能性）
+      </div>
+    </div>
+    <div style="margin-top:32px;">
+      <h3>営業・提案への貢献</h3>
+      <div class="grid-2" style="gap:12px;margin-top:8px;">
+        <div class="card" style="padding:14px 16px;">
+          <div style="font-size:14px;"><strong>提案スピード向上</strong></div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">トレンド分析→提案素案までの時間を大幅短縮</div>
+        </div>
+        <div class="card" style="padding:14px 16px;">
+          <div style="font-size:14px;"><strong>データドリブンな提案</strong></div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">「感覚」ではなく定量データに基づく企画提案が可能</div>
+        </div>
+        <div class="card" style="padding:14px 16px;">
+          <div style="font-size:14px;"><strong>施策の説得力向上</strong></div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">Before/Afterの数値比較でクライアント報告品質向上</div>
+        </div>
+        <div class="card" style="padding:14px 16px;">
+          <div style="font-size:14px;"><strong>競合動向の可視化</strong></div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">競合の投稿数・KOL起用を定量提示し継続受注に貢献</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 8: Summary -->
+<div class="slide cover-slide">
+  <div class="slide-body" style="background:linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);">
+    <h1 style="color:white;font-size:28px;">月額 <span>$350（約5万円）</span>で<br>制作工数を<span>80%</span>削減</h1>
+    <div class="accent-line"></div>
+    <div class="subtitle" style="color:#aaa;font-size:14px;">ご承認のほど、よろしくお願いいたします</div>
+    <div class="meta-line" style="color:#666;">VSEO Analytics — ショート動画時代のデータドリブンPR</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -11,12 +11,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Loader2, RefreshCw, TrendingUp, TrendingDown, BarChart3, Search, Info, ChevronDown, ChevronUp, Play, ArrowUpDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 interface Props {
   jobId: number;
   keyword?: string | null;
+  /** trueの場合、AccordionItemでラップして返す。相関が弱ければnullを返す */
+  asAccordionItem?: boolean;
 }
 
 interface CorrelationInfo {
@@ -65,7 +68,7 @@ function formatNumber(n: number): string {
 type SortKey = "postedAt" | "viewCount";
 type SortDir = "asc" | "desc";
 
-export default function SearchCorrelationChart({ jobId, keyword }: Props) {
+export default function SearchCorrelationChart({ jobId, keyword, asAccordionItem }: Props) {
   const [metric, setMetric] = useState<"postCount" | "views">("postCount");
   const [showVideoList, setShowVideoList] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("viewCount");
@@ -114,8 +117,23 @@ export default function SearchCorrelationChart({ jobId, keyword }: Props) {
     }
   };
 
-  if (isLoading) {
+  // ラッパー: asAccordionItem時はAccordionItemで包む
+  const wrapContent = (content: React.ReactNode) => {
+    if (!asAccordionItem) return content;
     return (
+      <AccordionItem value="search-correlation" className="border rounded-xl">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+          🔍 検索相関分析（Google Trends × TikTok）
+        </AccordionTrigger>
+        <AccordionContent className="px-4 pb-4">
+          {content}
+        </AccordionContent>
+      </AccordionItem>
+    );
+  };
+
+  if (isLoading) {
+    return wrapContent(
       <div className="flex flex-col items-center justify-center py-12 space-y-3">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         <div className="text-center">
@@ -126,31 +144,19 @@ export default function SearchCorrelationChart({ jobId, keyword }: Props) {
     );
   }
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center py-10">
-        <div className="p-4 rounded-lg bg-red-50 border border-red-200 max-w-md text-center space-y-2">
-          <p className="text-sm text-red-600 font-medium">データ取得に失敗しました</p>
-          <p className="text-xs text-red-500">{error.message}</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="mt-2">
-            <RefreshCw className="h-4 w-4 mr-1" />
-            再試行
-          </Button>
-        </div>
-      </div>
-    );
+  if (error || !data || (data.trendsData.length === 0 && data.videoStats.length === 0)) {
+    return null;
   }
 
-  if (!data || (data.trendsData.length === 0 && data.videoStats.length === 0)) {
-    return (
-      <div className="flex flex-col items-center justify-center py-10 space-y-2">
-        <Search className="h-8 w-8 text-muted-foreground/50" />
-        <p className="text-sm font-medium text-muted-foreground">表示可能なデータがありません</p>
-        <p className="text-xs text-muted-foreground">
-          Google Trendsデータまたは投稿データが見つかりませんでした。分析完了後に再度お試しください。
-        </p>
-      </div>
-    );
+  // 相関が無い場合（データ不足 or |r| < 0.2）はセクション自体を非表示
+  const corrPost = data.correlationPostCount;
+  const corrViews = data.correlationViews;
+  const maxCorr = Math.max(
+    corrPost != null ? Math.abs(corrPost) : 0,
+    corrViews != null ? Math.abs(corrViews) : 0,
+  );
+  if (maxCorr < 0.2) {
+    return null;
   }
 
   // 日付でデータを統合
@@ -176,7 +182,7 @@ export default function SearchCorrelationChart({ jobId, keyword }: Props) {
 
   const tiktokLabel = metric === "postCount" ? "TikTok投稿数" : "TikTok再生数";
 
-  return (
+  return wrapContent(
     <div className="space-y-4 pt-2">
       {/* 1. インサイト（最初に結論を見せる） */}
       {correlation !== null && (
@@ -468,3 +474,4 @@ export default function SearchCorrelationChart({ jobId, keyword }: Props) {
     </div>
   );
 }
+

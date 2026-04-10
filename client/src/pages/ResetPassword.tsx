@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PublicLayout from "@/components/PublicLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { toast } from "sonner";
 
 export default function ResetPassword() {
@@ -17,7 +16,6 @@ export default function ResetPassword() {
   const [error, setError] = useState("");
   const [, setLocation] = useLocation();
 
-  // Extract token from URL
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
 
@@ -61,73 +59,93 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <PublicLayout>
-        <Card className="w-full max-w-sm border-0 shadow-none lg:border lg:shadow-sm">
-          <CardContent className="pt-6 text-center">
-            <p className="text-destructive">無効なリセットリンクです</p>
-            <a href="/login" className="text-primary hover:underline text-sm mt-4 inline-block">
-              ログインに戻る
-            </a>
-          </CardContent>
-        </Card>
+        <div className="space-y-4 text-center py-8">
+          <p className="text-destructive text-sm">無効なリセットリンクです</p>
+          <Link href="/login" className="text-primary hover:text-primary/80 text-sm transition-colors">
+            ログインに戻る
+          </Link>
+        </div>
       </PublicLayout>
     );
   }
 
   return (
     <PublicLayout>
-      <Card className="w-full max-w-sm border-0 shadow-none lg:border lg:shadow-sm">
-        <CardHeader className="text-center space-y-2">
-          <div className="lg:hidden mb-4 flex flex-col items-center gap-3">
-            <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
-          </div>
-          <CardTitle className="text-xl font-semibold">新しいパスワード設定</CardTitle>
+      <div className="lg:hidden mb-8 flex flex-col items-center gap-3">
+        <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-1.5">
+          <h2
+            className="text-2xl tracking-tight"
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
+          >
+            新しいパスワード設定
+          </h2>
           <p className="text-sm text-muted-foreground">
             新しいパスワードを入力してください
           </p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">新しいパスワード</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="8文字以上"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                autoFocus
-              />
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+              新しいパスワード
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="8文字以上"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              autoFocus
+              className="h-11 bg-secondary/50 border-border/60 focus:bg-background transition-colors duration-200"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="passwordConfirm" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+              パスワード（確認）
+            </Label>
+            <Input
+              id="passwordConfirm"
+              type="password"
+              placeholder="再入力"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              disabled={loading}
+              className="h-11 bg-secondary/50 border-border/60 focus:bg-background transition-colors duration-200"
+            />
+          </div>
+          {error && (
+            <div
+              className="px-4 py-3 rounded-md border text-sm animate-in fade-in slide-in-from-top-1 duration-200"
+              style={{
+                background: "rgba(215, 25, 33, 0.06)",
+                borderColor: "rgba(215, 25, 33, 0.15)",
+                color: "var(--destructive)",
+              }}
+            >
+              {error}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="passwordConfirm">パスワード（確認）</Label>
-              <Input
-                id="passwordConfirm"
-                type="password"
-                placeholder="もう一度入力"
-                value={passwordConfirm}
-                onChange={(e) => setPasswordConfirm(e.target.value)}
-                disabled={loading}
-              />
-            </div>
-            {error && (
-              <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                <p className="text-sm text-destructive">{error}</p>
-              </div>
+          )}
+          <Button
+            type="submit"
+            className="w-full h-11 bg-primary text-primary-foreground font-medium transition-all duration-200 hover:shadow-md"
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                更新中...
+              </>
+            ) : (
+              "パスワードを更新"
             )}
-            <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  更新中...
-                </>
-              ) : (
-                "パスワードを更新"
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </Button>
+        </form>
+      </div>
     </PublicLayout>
   );
 }

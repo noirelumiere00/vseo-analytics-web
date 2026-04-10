@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import PublicLayout from "@/components/PublicLayout";
@@ -41,71 +40,94 @@ export default function ForgotPassword() {
 
   return (
     <PublicLayout>
-      <Card className="w-full max-w-sm border-0 shadow-none lg:border lg:shadow-sm">
-        <CardHeader className="text-center space-y-2">
-          <div className="lg:hidden mb-4 flex flex-col items-center gap-3">
-            <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
-          </div>
-          <CardTitle className="text-xl font-semibold">パスワードリセット</CardTitle>
+      {/* Mobile branding */}
+      <div className="lg:hidden mb-8 flex flex-col items-center gap-3">
+        <img src="/favicon.png" alt="VSEO Analytics" className="h-14 w-14 object-contain logo-blend" />
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-1.5">
+          <h2
+            className="text-2xl tracking-tight"
+            style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace', fontWeight: 700 }}
+          >
+            パスワードリセット
+          </h2>
           <p className="text-sm text-muted-foreground">
             登録メールアドレスにリセットリンクを送信します
           </p>
-        </CardHeader>
-        <CardContent>
-          {sent ? (
-            <div className="space-y-4 text-center">
-              <div className="mx-auto h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                <Mail className="h-6 w-6 text-primary" />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                メールを送信しました。受信トレイを確認し、リセットリンクをクリックしてください。
-              </p>
-              <Link href="/login">
-                <Button variant="outline" className="w-full mt-4">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  ログインに戻る
-                </Button>
-              </Link>
+        </div>
+
+        {sent ? (
+          <div className="space-y-5 text-center py-4">
+            <div
+              className="mx-auto h-14 w-14 rounded-full flex items-center justify-center"
+              style={{ background: "rgba(10, 10, 10, 0.06)" }}
+            >
+              <Mail className="h-6 w-6 text-primary" />
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">メールアドレス</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="例: user@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                  autoFocus
-                />
-              </div>
-              {error && (
-                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <p className="text-sm text-destructive">{error}</p>
-                </div>
-              )}
-              <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading}>
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    送信中...
-                  </>
-                ) : (
-                  "リセットメールを送信"
-                )}
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              メールを送信しました。<br />受信トレイを確認し、リセットリンクをクリックしてください。
+            </p>
+            <Link href="/login">
+              <Button variant="outline" className="w-full h-11 border-border/60 mt-2">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                ログインに戻る
               </Button>
-              <p className="text-center text-sm text-muted-foreground">
-                <Link href="/login" className="text-primary hover:underline">
-                  <ArrowLeft className="inline mr-1 h-3 w-3" />
-                  ログインに戻る
-                </Link>
-              </p>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+            </Link>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-xs font-medium tracking-wide uppercase text-muted-foreground">
+                メールアドレス
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="user@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
+                autoFocus
+                className="h-11 bg-secondary/50 border-border/60 focus:bg-background transition-colors duration-200"
+              />
+            </div>
+            {error && (
+              <div
+                className="px-4 py-3 rounded-md border text-sm animate-in fade-in slide-in-from-top-1 duration-200"
+                style={{
+                  background: "rgba(215, 25, 33, 0.06)",
+                  borderColor: "rgba(215, 25, 33, 0.15)",
+                  color: "var(--destructive)",
+                }}
+              >
+                {error}
+              </div>
+            )}
+            <Button
+              type="submit"
+              className="w-full h-11 bg-primary text-primary-foreground font-medium transition-all duration-200 hover:shadow-md"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  送信中...
+                </>
+              ) : (
+                "リセットメールを送信"
+              )}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              <Link href="/login" className="text-primary hover:text-primary/80 transition-colors inline-flex items-center gap-1">
+                <ArrowLeft className="h-3 w-3" />
+                ログインに戻る
+              </Link>
+            </p>
+          </form>
+        )}
+      </div>
     </PublicLayout>
   );
 }

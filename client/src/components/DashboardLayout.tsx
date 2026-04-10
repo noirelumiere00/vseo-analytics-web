@@ -155,9 +155,9 @@ function DashboardLayoutContent({
 
   const isActive = (path: string) => {
     if (path === "/dashboard") return location === path;
-    if (path === "/activity") return location === path || (location.startsWith("/analysis/") && location !== "/analysis/new") || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?") || location.startsWith("/trend-insights");
+    if (path === "/activity") return location === path || (location.startsWith("/analysis/") && !location.startsWith("/analysis/new")) || location.startsWith("/compare") || location === "/trend" || location.startsWith("/trend?") || location.startsWith("/trend-insights");
     if (path === "/campaigns/new") return location === path;
-    if (path === "/campaigns") return location.startsWith("/campaigns") && location !== "/campaigns/new";
+    if (path === "/campaigns") return location.startsWith("/campaigns") && !location.startsWith("/campaigns/new");
     if (path === "/analysis/new") return location === path;
     if (path === "/trend-discovery") return location.startsWith("/trend-discovery");
     return location === path;
@@ -167,7 +167,7 @@ function DashboardLayoutContent({
 
   return (
     <>
-      <div className="relative" ref={sidebarRef}>
+      <div className="relative shrink-0" ref={sidebarRef}>
         <Sidebar collapsible="icon" className="border-r-0" disableTransition={isResizing}>
           {/* Brand */}
           <SidebarHeader className="h-14 justify-center">
@@ -305,7 +305,7 @@ function DashboardLayoutContent({
             <PageBreadcrumb />
           </div>
         )}
-        <main className="flex-1 overflow-y-auto p-2 md:p-3">{children}</main>
+        <main className="flex-1 min-w-0 p-2 md:p-3">{children}</main>
       </SidebarInset>
     </>
   );

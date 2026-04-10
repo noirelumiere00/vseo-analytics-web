@@ -91,7 +91,7 @@ const CustomDot = ({ cx = 0, cy = 0, payload }: CustomDotProps) => {
         textAnchor="middle"
         dominantBaseline="middle"
         fontSize={fontSize}
-        fill="#fff"
+        fill="currentColor"
         fontWeight="600"
         style={{ pointerEvents: "none" }}
       >

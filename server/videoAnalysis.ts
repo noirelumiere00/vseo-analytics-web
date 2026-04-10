@@ -173,12 +173,13 @@ export async function analyzeVideoFromTikTok(
     });
   }
 
-  // 3. 音声文字起こし - 説明文をベースに推定
+  // 3. 音声文字起こし - Whisper APIまたは説明文ベースのフォールバック
   console.log(`[Analysis] Performing transcription for video ${tiktokVideo.id}...`);
-  const transcription = await performTranscriptionFromDesc(tiktokVideo.desc);
+  const transcription = await performTranscription(tiktokVideo.playUrl, tiktokVideo.desc);
   await db.createTranscription({
     videoId,
     fullText: transcription.fullText,
+    segments: transcription.segments,
     language: transcription.language,
   });
 
@@ -306,12 +307,43 @@ async function performOcrFromDescription(
 }
 
 /**
- * 説明文ベースの文字起こし推定
+ * 音声文字起こし（Whisper API）
+ * playUrlが利用可能でWhisper APIが設定されていれば実際の音声認識を行い、
+ * それ以外の場合は説明文ベースのフォールバックを使用
  */
-async function performTranscriptionFromDesc(
+async function performTranscription(
+  playUrl: string | undefined,
   desc: string
-): Promise<{ fullText: string; language: string }> {
-  // ハッシュタグを除去した説明文を文字起こしテキストとして使用
+): Promise<{ fullText: string; segments?: Array<{ start: number; end: number; text: string }>; language: string }> {
+  // Try real transcription if playUrl is available
+  if (playUrl) {
+    try {
+      console.log(`[Analysis] Attempting real audio transcription via Whisper API...`);
+      const result = await transcribeAudio({ audioUrl: playUrl });
+
+      // Check if it's an error response
+      if ("error" in result) {
+        console.warn(`[Analysis] Whisper transcription failed: ${result.error} (${result.code})${result.details ? ` - ${result.details}` : ""}. Falling back to description-based transcription.`);
+      } else {
+        console.log(`[Analysis] Real transcription succeeded (language: ${result.language}, duration: ${result.duration}s, segments: ${result.segments?.length ?? 0})`);
+        return {
+          fullText: result.text,
+          segments: result.segments?.map((s) => ({
+            start: s.start,
+            end: s.end,
+            text: s.text,
+          })),
+          language: result.language,
+        };
+      }
+    } catch (err) {
+      console.warn(`[Analysis] Whisper transcription threw an error: ${err instanceof Error ? err.message : String(err)}. Falling back to description-based transcription.`);
+    }
+  } else {
+    console.log(`[Analysis] No playUrl available, using description-based transcription fallback.`);
+  }
+
+  // Fallback: description-based transcription
   const cleanText = desc
     .replace(/[#＃][^\s]+/g, "")
     .replace(/\s+/g, " ")
@@ -1142,10 +1174,13 @@ export async function analyzeWinPatternCommonality(
     return;
   }
 
+  // 上位10本に絞る（再生数順）
+  const top5Win = [...winPatternVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 10);
+
   // 勝ちパターン動画のコメントを取得（オプション）
   const commentsByVideo: { [key: string]: string[] } = {};
-  
-  for (const video of winPatternVideos) {
+
+  for (const video of top5Win) {
     try {
       const videoUrl = video.videoUrl || `https://www.tiktok.com/@${video.accountId}/video/${video.videoId}`;
       // const comments = await scrapeTikTokComments(videoUrl); // TODO: Implement comment scraping
@@ -1159,11 +1194,23 @@ export async function analyzeWinPatternCommonality(
     }
   }
 
+  // 文字起こしデータを並列取得
+  const transcriptionMap = new Map<string, string>();
+  const transcriptionResults = await Promise.all(
+    top5Win.map(v => db.getTranscriptionByVideoId(v.id))
+  );
+  top5Win.forEach((v, i) => {
+    const transcription = transcriptionResults[i];
+    if (transcription?.fullText) {
+      transcriptionMap.set(v.videoId, transcription.fullText);
+    }
+  });
+
   // TikTokメタキーワードを取得
-  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, winPatternVideos);
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, top5Win);
 
   // 広告ハッシュタグを除外した上で動画情報を構築
-  const videoSummaries = winPatternVideos.map(v => {
+  const videoSummaries = top5Win.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);
     return {
       author: v.accountName || "不明",
@@ -1178,15 +1225,17 @@ export async function analyzeWinPatternCommonality(
       keyHook: v.keyHook || "",
       sentiment: v.sentiment || "neutral",
       metaKeywords: metaKwMap.get(v.videoId) || [],
+      transcriptionText: transcriptionMap.get(v.videoId) || "",
     };
   });
 
   try {
     const prompt = `
-あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「勝ちパターン動画」${winPatternVideos.length}本のデータです。
+あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「勝ちパターン動画」${top5Win.length}本のデータです。
 
 これらの動画がなぜTikTokのアルゴリズムに選ばれているのか、共通点を分析してください。
 「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との関連性に注目してください。
+「音声文字起こし」は動画内で話されている内容です。話し方やワードチョイスの共通点にも注目してください。
 
 【勝ちパターン動画データ】
 ${videoSummaries.map((v, i) => `
@@ -1194,13 +1243,15 @@ ${videoSummaries.map((v, i) => `
 - 説明: ${v.description}
 - ハッシュタグ: ${v.hashtags.join(', ')}
 - TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 音声文字起こし: ${v.transcriptionText ? v.transcriptionText.slice(0, 300) : '（文字起こしなし）'}
 - 動画長: ${v.duration}秒
 - 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
 - キーフック: ${v.keyHook}
 - センチメント: ${v.sentiment}
 `).join('')}
 
-以下の6項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+以下の7項目について、具体的かつ簡潔に分析してください。各項目は1〜3文で。
+最後の「avoidTips」は、これらの勝ちパターンの裏返しとして「やってはいけないこと・避けるべきポイント」を具体的に指摘してください。
 `;
 
     const response = await invokeLLM({
@@ -1240,8 +1291,12 @@ ${videoSummaries.map((v, i) => `
                 type: "string",
                 description: "このキーワードでVSEO上位を狙うための具体的なアドバイス。例: 「〇〇を冒頭に配置し、〇〇系のハッシュタグを併用すると効果的」",
               },
+              avoidTips: {
+                type: "string",
+                description: "避けるべきポイント。勝ちパターンの裏返しとして具体的に指摘。例: 「〇〇は絶対に避け、〇〇も逆効果。代わりに〇〇を意識すべき」",
+              },
             },
-            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips"],
+            required: ["summary", "keyHook", "contentTrend", "formatFeatures", "hashtagStrategy", "vseoTips", "avoidTips"],
             additionalProperties: false,
           },
         },
@@ -1307,11 +1362,26 @@ export async function analyzeLosePatternCommonality(
 
   console.log(`[Analysis] Found ${losePatternVideos.length} lose pattern videos (avg views: ${Math.round(avgViews)})`);
 
+  // 下位5本に絞る（再生数昇順）
+  const bottom5Lose = [...losePatternVideos].sort((a, b) => (a.viewCount || 0) - (b.viewCount || 0)).slice(0, 5);
+
+  // 文字起こしデータを並列取得
+  const transcriptionMap = new Map<string, string>();
+  const transcriptionResults = await Promise.all(
+    bottom5Lose.map(v => db.getTranscriptionByVideoId(v.id))
+  );
+  bottom5Lose.forEach((v, i) => {
+    const transcription = transcriptionResults[i];
+    if (transcription?.fullText) {
+      transcriptionMap.set(v.videoId, transcription.fullText);
+    }
+  });
+
   // TikTokメタキーワードを取得
-  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, bottom5Lose);
 
   // 広告ハッシュタグを除外した上で動画情報を構築
-  const videoSummaries = losePatternVideos.map(v => {
+  const videoSummaries = bottom5Lose.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);
     return {
       author: v.accountName || "不明",
@@ -1327,16 +1397,18 @@ export async function analyzeLosePatternCommonality(
       sentiment: v.sentiment || "neutral",
       er: v.er,
       metaKeywords: metaKwMap.get(v.videoId) || [],
+      transcriptionText: transcriptionMap.get(v.videoId) || "",
     };
   });
 
   try {
     const prompt = `
-あなたはTikTok VSEOの厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、再生数・エンゲージメント率ともに中央値以下だった「負けパターン動画」${losePatternVideos.length}本のデータです。
+あなたはTikTok VSEOの厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、再生数・エンゲージメント率ともに中央値以下だった「負けパターン動画」${bottom5Lose.length}本のデータです。
 
 これらの動画がなぜパフォーマンスが低いのか、SNSマーケターのプロ視点でBadポイントを厳しく指摘してください。
 改善のために「避けるべきポイント」を明確にすることが目的です。
 「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との乖離や不足に注目してください。
+「音声文字起こし」は動画内で話されている内容です。話し方やワードチョイスの問題点にも注目してください。
 
 【負けパターン動画データ】
 ${videoSummaries.map((v, i) => `
@@ -1344,6 +1416,7 @@ ${videoSummaries.map((v, i) => `
 - 説明: ${v.description}
 - ハッシュタグ: ${v.hashtags.join(', ')}
 - TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 音声文字起こし: ${v.transcriptionText ? v.transcriptionText.slice(0, 300) : '（文字起こしなし）'}
 - 動画長: ${v.duration}秒
 - 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
 - エンゲージメント率: ${(v.er * 100).toFixed(2)}%
@@ -1442,10 +1515,25 @@ export async function analyzeWinPatternCommonalityAd(
     return;
   }
 
-  // TikTokメタキーワードを取得
-  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, adWinVideos);
+  // 上位5本に絞る（再生数順）
+  const top5AdWin = [...adWinVideos].sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 5);
 
-  const videoSummaries = adWinVideos.map(v => {
+  // 文字起こしデータを並列取得
+  const transcriptionMap = new Map<string, string>();
+  const transcriptionResults = await Promise.all(
+    top5AdWin.map(v => db.getTranscriptionByVideoId(v.id))
+  );
+  top5AdWin.forEach((v, i) => {
+    const transcription = transcriptionResults[i];
+    if (transcription?.fullText) {
+      transcriptionMap.set(v.videoId, transcription.fullText);
+    }
+  });
+
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, top5AdWin);
+
+  const videoSummaries = top5AdWin.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);
     return {
       author: v.accountName || "不明",
@@ -1460,16 +1548,18 @@ export async function analyzeWinPatternCommonalityAd(
       keyHook: v.keyHook || "",
       sentiment: v.sentiment || "neutral",
       metaKeywords: metaKwMap.get(v.videoId) || [],
+      transcriptionText: transcriptionMap.get(v.videoId) || "",
     };
   });
 
   try {
     const prompt = `
-あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「広告/プロモーション動画」${adWinVideos.length}本のデータです。
+あなたはTikTok VSEOの専門家です。以下は「${keyword}」で検索した際に、3つの独立したシークレットブラウザ全てで上位表示された「広告/プロモーション動画」${top5AdWin.length}本のデータです。
 
 これらの広告動画がなぜオーガニック検索結果でも上位に表示されているのか、共通点を分析してください。
 広告費をかけているにもかかわらずオーガニック検索でも評価されている理由に注目してください。
 「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との関連性に注目してください。
+「音声文字起こし」は動画内で話されている内容です。話し方やワードチョイスの共通点にも注目してください。
 
 【Ad勝ちパターン動画データ】
 ${videoSummaries.map((v, i) => `
@@ -1477,6 +1567,7 @@ ${videoSummaries.map((v, i) => `
 - 説明: ${v.description}
 - ハッシュタグ: ${v.hashtags.join(', ')}
 - TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 音声文字起こし: ${v.transcriptionText ? v.transcriptionText.slice(0, 300) : '（文字起こしなし）'}
 - 動画長: ${v.duration}秒
 - 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
 - キーフック: ${v.keyHook}
@@ -1567,10 +1658,25 @@ export async function analyzeLosePatternCommonalityAd(
 
   console.log(`[Analysis] Found ${losePatternVideos.length} Ad lose pattern videos (avg views: ${Math.round(avgViews)})`);
 
-  // TikTokメタキーワードを取得
-  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, losePatternVideos);
+  // 下位5本に絞る（再生数昇順）
+  const bottom5AdLose = [...losePatternVideos].sort((a, b) => (a.viewCount || 0) - (b.viewCount || 0)).slice(0, 5);
 
-  const videoSummaries = losePatternVideos.map(v => {
+  // 文字起こしデータを並列取得
+  const transcriptionMap = new Map<string, string>();
+  const transcriptionResults = await Promise.all(
+    bottom5AdLose.map(v => db.getTranscriptionByVideoId(v.id))
+  );
+  bottom5AdLose.forEach((v, i) => {
+    const transcription = transcriptionResults[i];
+    if (transcription?.fullText) {
+      transcriptionMap.set(v.videoId, transcription.fullText);
+    }
+  });
+
+  // TikTokメタキーワードを取得
+  const metaKwMap = await fetchMetaKeywordsForVideos(jobId, bottom5AdLose);
+
+  const videoSummaries = bottom5AdLose.map(v => {
     const cleanHashtags = filterAdHashtags(v.hashtags || []);
     return {
       author: v.accountName || "不明",
@@ -1586,16 +1692,18 @@ export async function analyzeLosePatternCommonalityAd(
       sentiment: v.sentiment || "neutral",
       er: v.er,
       metaKeywords: metaKwMap.get(v.videoId) || [],
+      transcriptionText: transcriptionMap.get(v.videoId) || "",
     };
   });
 
   try {
     const prompt = `
-あなたはTikTok広告運用の厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、広告費をかけているにもかかわらず再生数・エンゲージメント率ともに中央値以下だった「Ad負けパターン動画」${losePatternVideos.length}本のデータです。
+あなたはTikTok広告運用の厳しいプロコンサルタントです。以下は「${keyword}」で検索した際に、広告費をかけているにもかかわらず再生数・エンゲージメント率ともに中央値以下だった「Ad負けパターン動画」${bottom5AdLose.length}本のデータです。
 
 広告費をかけたのにパフォーマンスが低い理由を、SNSマーケターのプロ視点で厳しく指摘してください。
 「広告費の無駄遣い」という観点で、具体的に何が悪いのかを明確にすることが目的です。
 「TikTokメタキーワード」はTikTokが動画ページに自動付与したSEOキーワードです。検索キーワード「${keyword}」との乖離がある場合、広告費の無駄の根拠として指摘してください。
+「音声文字起こし」は動画内で話されている内容です。話し方やワードチョイスの問題点にも注目してください。
 
 【Ad負けパターン動画データ】
 ${videoSummaries.map((v, i) => `
@@ -1603,6 +1711,7 @@ ${videoSummaries.map((v, i) => `
 - 説明: ${v.description}
 - ハッシュタグ: ${v.hashtags.join(', ')}
 - TikTokメタキーワード: ${v.metaKeywords.length > 0 ? v.metaKeywords.join(', ') : '（取得なし）'}
+- 音声文字起こし: ${v.transcriptionText ? v.transcriptionText.slice(0, 300) : '（文字起こしなし）'}
 - 動画長: ${v.duration}秒
 - 再生数: ${v.views.toLocaleString()} / いいね: ${v.likes.toLocaleString()} / コメント: ${v.comments.toLocaleString()} / シェア: ${v.shares.toLocaleString()}
 - エンゲージメント率: ${(v.er * 100).toFixed(2)}%

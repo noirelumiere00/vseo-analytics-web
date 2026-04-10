@@ -11,8 +11,11 @@
  */
 
 import { searchTikTokVideos, scrapeTikTokVideosByUrls, type TikTokVideo } from "./tiktokScraper";
+import { fetchYouTubeVideos } from "./youtubeScraper";
+import { fetchInstagramPostsWithFallback } from "./instagramScraper";
+import { fallbackTikTokViaApify, fallbackYouTubeViaApify } from "./apifyFallback";
 import type { Campaign, InsertCampaignSnapshot } from "../drizzle/schema";
-import { detectPlatform } from "../shared/videoUrl";
+import { detectPlatform, extractVideoId } from "../shared/videoUrl";
 
 // =============================
 // Types
@@ -97,15 +100,17 @@ async function batchSearch(
   concurrency: number,
   sleepMs: number,
   onProgress?: (completed: number, total: number) => void,
-): Promise<Map<string, TikTokVideo[]>> {
-  const result = new Map<string, TikTokVideo[]>();
+  count: number = 30,
+): Promise<Map<string, TikTokVideo[]> & { _failedQueries?: string[] }> {
+  const result = new Map<string, TikTokVideo[]>() as Map<string, TikTokVideo[]> & { _failedQueries?: string[] };
+  const failedQueries = new Set<string>();
   const batches = chunk(queries, concurrency);
 
   let completed = 0;
   for (const batch of batches) {
     const settled = await Promise.allSettled(
       batch.map(async (q) => {
-        const r = await searchTikTokVideos(q, 30);
+        const r = await searchTikTokVideos(q, count);
         return { query: q, videos: r.videos };
       }),
     );
@@ -117,6 +122,7 @@ async function batchSearch(
         const failedQuery = batch[settled.indexOf(s)];
         console.error(`Search failed for "${failedQuery}":`, s.reason);
         result.set(failedQuery, []);
+        failedQueries.add(failedQuery);
       }
       completed++;
     }
@@ -142,13 +148,14 @@ async function batchSearch(
     for (const batch of retryBatches) {
       const settled = await Promise.allSettled(
         batch.map(async (q) => {
-          const r = await searchTikTokVideos(q, 30);
+          const r = await searchTikTokVideos(q, count);
           return { query: q, videos: r.videos };
         }),
       );
       for (const s of settled) {
         if (s.status === "fulfilled" && s.value.videos.length > 0) {
           result.set(s.value.query, s.value.videos);
+          failedQueries.delete(s.value.query); // リトライ成功 → 失敗リストから除外
           console.log(`[batchSearch] Retry success: "${s.value.query}" got ${s.value.videos.length} results`);
         }
       }
@@ -156,6 +163,12 @@ async function batchSearch(
         await sleep(sleepMs + Math.random() * 1000);
       }
     }
+  }
+
+  // APIエラーで失敗したクエリをメタデータとして付与
+  if (failedQueries.size > 0) {
+    result._failedQueries = [...failedQueries];
+    console.warn(`[batchSearch] ${failedQueries.size} queries failed after retries: ${[...failedQueries].join(", ")}`);
   }
 
   return result;
@@ -209,8 +222,15 @@ export async function captureSnapshot(
     report("search", `KW検索中 (${keywords.length}件)...`, 5);
 
     const kwResults = await batchSearch(keywords, 3, 2000, (done, total) =>
-      report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30))
+      report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30)),
+      60,
     );
+
+    // 失敗したクエリ情報をスナップショットに記録
+    const failedSearchQueries = (kwResults as any)._failedQueries as string[] | undefined;
+    if (failedSearchQueries && failedSearchQueries.length > 0) {
+      console.warn(`[captureSnapshot] ${failedSearchQueries.length} keywords had search failures: ${failedSearchQueries.join(", ")}`);
+    }
 
     for (let i = 0; i < keywords.length; i++) {
       const kw = keywords[i];
@@ -343,19 +363,69 @@ export async function captureSnapshot(
     }
 
     // ============================
-    // D. 施策動画メトリクス（既に3並列）
+    // D. 施策動画メトリクス（全プラットフォーム）
     // ============================
     let ownVideoMetrics: NonNullable<InsertCampaignSnapshot["ownVideoMetrics"]> = {};
 
     const ownVideoUrls = (campaign as any).ownVideoUrls as string[] | undefined;
-    // TikTok URLのみスクレイプ（YouTube/InstagramはcampaignReport.tsのplatformSummaryで処理）
-    const tiktokVideoUrls = (ownVideoUrls || []).filter(u => !detectPlatform(u) || detectPlatform(u) === "tiktok");
+    const allVideoUrls = ownVideoUrls || [];
+
+    // URLをプラットフォーム別にグループ分け
+    const tiktokVideoUrls: string[] = [];
+    const youtubeVideoIds: string[] = [];
+    const youtubeUrlMap = new Map<string, string>(); // videoId -> original url
+    const instagramVideoUrls: string[] = [];
+
+    for (const url of allVideoUrls) {
+      const platform = detectPlatform(url);
+      if (platform === "youtube") {
+        const extracted = extractVideoId(url);
+        if (extracted) {
+          youtubeVideoIds.push(extracted.id);
+          youtubeUrlMap.set(extracted.id, url);
+        } else {
+          console.warn(`[Snapshot/PhaseD] YouTube URL could not extract video ID: ${url}`);
+        }
+      } else if (platform === "instagram") {
+        instagramVideoUrls.push(url);
+      } else {
+        // TikTok or unknown (default to TikTok)
+        if (!platform) {
+          console.warn(`[Snapshot/PhaseD] Unknown platform for URL, defaulting to TikTok: ${url}`);
+        }
+        tiktokVideoUrls.push(url);
+      }
+    }
+
+    const totalVideoCount = tiktokVideoUrls.length + youtubeVideoIds.length + instagramVideoUrls.length;
+    if (totalVideoCount > 0) {
+      report("video_metrics", `施策動画メトリクス取得中 (${totalVideoCount}本: TT:${tiktokVideoUrls.length} YT:${youtubeVideoIds.length} IG:${instagramVideoUrls.length})...`, 68);
+    }
+
+    // TikTok metrics
     if (tiktokVideoUrls.length > 0) {
-      report("video_metrics", `施策動画メトリクス取得中 (${tiktokVideoUrls.length}本)...`, 68);
       try {
         const scraped = await scrapeTikTokVideosByUrls(tiktokVideoUrls, (msg) =>
           report("video_metrics", msg, 72)
         );
+
+        // Apify fallback for URLs not returned by primary scraper
+        const missingTikTok = tiktokVideoUrls.filter((u) => !scraped.has(u));
+        if (missingTikTok.length > 0) {
+          console.log(`[Snapshot/PhaseD] TikTok: ${missingTikTok.length}/${tiktokVideoUrls.length} missing, trying Apify fallback...`);
+          try {
+            const recovered = await fallbackTikTokViaApify(missingTikTok);
+            for (const [url, v] of recovered) {
+              scraped.set(url, v);
+            }
+            if (recovered.size > 0) {
+              console.log(`[Snapshot/PhaseD] TikTok Apify fallback recovered ${recovered.size} videos`);
+            }
+          } catch (fbErr) {
+            console.error("[Snapshot/PhaseD] TikTok Apify fallback failed:", fbErr);
+          }
+        }
+
         for (const [, v] of scraped) {
           ownVideoMetrics[v.videoId] = {
             viewCount: v.viewCount,
@@ -363,10 +433,90 @@ export async function captureSnapshot(
             commentCount: v.commentCount,
             shareCount: v.shareCount,
             saveCount: v.saveCount,
+            platform: "tiktok",
           };
         }
+        console.log(`[Snapshot/PhaseD] TikTok: ${scraped.size}/${tiktokVideoUrls.length} videos scraped`);
       } catch (e) {
-        console.error("Own video metrics scrape failed:", e);
+        console.error("[Snapshot/PhaseD] TikTok metrics scrape failed:", e);
+      }
+    }
+
+    // YouTube metrics
+    if (youtubeVideoIds.length > 0) {
+      try {
+        const ytVideos = await fetchYouTubeVideos(youtubeVideoIds);
+
+        // Apify fallback for IDs not returned by YouTube Data API
+        const fetchedYtIds = new Set(ytVideos.map((v) => v.videoId));
+        const missingYouTube = youtubeVideoIds.filter((id) => !fetchedYtIds.has(id));
+        if (missingYouTube.length > 0) {
+          console.log(`[Snapshot/PhaseD] YouTube: ${missingYouTube.length}/${youtubeVideoIds.length} missing, trying Apify fallback...`);
+          try {
+            const recovered = await fallbackYouTubeViaApify(missingYouTube, youtubeUrlMap);
+            ytVideos.push(...recovered);
+            if (recovered.length > 0) {
+              console.log(`[Snapshot/PhaseD] YouTube Apify fallback recovered ${recovered.length} videos`);
+            }
+          } catch (fbErr) {
+            console.error("[Snapshot/PhaseD] YouTube Apify fallback failed:", fbErr);
+          }
+        }
+
+        for (const v of ytVideos) {
+          ownVideoMetrics[v.videoId] = {
+            viewCount: v.viewCount,
+            likeCount: v.likeCount,
+            commentCount: v.commentCount,
+            shareCount: null,
+            saveCount: null,
+            platform: "youtube",
+          };
+        }
+        console.log(`[Snapshot/PhaseD] YouTube: ${ytVideos.length}/${youtubeVideoIds.length} videos fetched`);
+      } catch (e) {
+        console.error("[Snapshot/PhaseD] YouTube metrics fetch failed:", e);
+      }
+    }
+
+    // Instagram metrics
+    if (instagramVideoUrls.length > 0) {
+      try {
+        const igPosts = await fetchInstagramPostsWithFallback(instagramVideoUrls);
+        for (const p of igPosts) {
+          ownVideoMetrics[p.videoId] = {
+            viewCount: p.viewCount,
+            likeCount: p.likeCount,
+            commentCount: p.commentCount,
+            shareCount: null,
+            saveCount: null,
+            platform: "instagram",
+            metricsReliable: p.metricsReliable,
+          };
+        }
+        console.log(`[Snapshot/PhaseD] Instagram: ${igPosts.length}/${instagramVideoUrls.length} posts fetched`);
+      } catch (e) {
+        console.error("[Snapshot/PhaseD] Instagram metrics fetch failed:", e);
+      }
+    }
+
+    // Phase D summary log — per-platform breakdown
+    if (totalVideoCount > 0) {
+      const metricsCount = Object.keys(ownVideoMetrics).length;
+      const ttCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "tiktok").length;
+      const ytCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "youtube").length;
+      const igCollected = Object.values(ownVideoMetrics).filter(m => m.platform === "instagram").length;
+
+      const summary = [
+        tiktokVideoUrls.length > 0 ? `TT:${ttCollected}/${tiktokVideoUrls.length}` : null,
+        youtubeVideoIds.length > 0 ? `YT:${ytCollected}/${youtubeVideoIds.length}` : null,
+        instagramVideoUrls.length > 0 ? `IG:${igCollected}/${instagramVideoUrls.length}` : null,
+      ].filter(Boolean).join(" ");
+
+      if (metricsCount < totalVideoCount) {
+        console.warn(`[Snapshot/PhaseD] INCOMPLETE: ${metricsCount}/${totalVideoCount} video metrics collected (${summary})`);
+      } else {
+        console.log(`[Snapshot/PhaseD] OK: ${metricsCount}/${totalVideoCount} video metrics collected (${summary})`);
       }
     }
 
@@ -490,6 +640,7 @@ export async function captureSnapshot(
     ownVideoMetrics,
     detectedCompetitors,
     bigKeywordResults: Object.keys(bigKeywordResults).length > 0 ? bigKeywordResults : undefined,
+    failedSearchQueries: failedSearchQueries && failedSearchQueries.length > 0 ? failedSearchQueries : undefined,
     capturedAt: new Date(),
   };
 }

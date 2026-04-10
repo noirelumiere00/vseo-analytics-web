@@ -6,8 +6,8 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
 import { useMemo, useState } from "react";
-import { toast } from "sonner";
 import { useLocation, useSearch } from "wouter";
+import { handleTrpcError } from "@/lib/error-handler";
 import { Compass, Hash, Loader2, Sparkles, TrendingUp } from "lucide-react";
 
 const STEPS = [
@@ -27,9 +27,7 @@ export default function TrendDiscovery() {
     onSuccess: (data) => {
       setLocation(`/trend-discovery/${data.jobId}`);
     },
-    onError: (error) => {
-      toast.error(error.message);
-    },
+    onError: handleTrpcError,
   });
 
   const handleSubmit = (e: React.FormEvent) => {

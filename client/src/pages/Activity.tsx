@@ -34,6 +34,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { useState, useEffect, useMemo } from "react";
 import { usePageTitle } from "@/hooks/usePageTitle";
+import { handleTrpcError } from "@/lib/error-handler";
 
 type FilterType = "all" | "seo" | "trend";
 type EditMode = "normal" | "compare" | "delete";
@@ -41,7 +42,7 @@ type SortType = "date-desc" | "date-asc" | "videos-desc";
 
 export default function Activity() {
   usePageTitle("アクティビティ");
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchString = useSearch();
   const params = useMemo(() => new URLSearchParams(searchString), [searchString]);
   const utils = trpc.useUtils();
@@ -77,7 +78,7 @@ export default function Activity() {
       toast.success("分析ジョブを削除しました");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const retryAnalysis = trpc.analysis.retry.useMutation({
@@ -85,7 +86,7 @@ export default function Activity() {
       toast.success("再実行を開始します");
       setLocation(`/analysis/${data.jobId}`);
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const deleteTrend = trpc.trendDiscovery.delete.useMutation({
@@ -93,7 +94,7 @@ export default function Activity() {
       toast.success("トレンド発掘ジョブを削除しました");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const retryTrend = trpc.trendDiscovery.execute.useMutation({
@@ -101,7 +102,7 @@ export default function Activity() {
       toast.success("再実行を開始します");
       utils.analysis.allActivity.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const bulkDeleteAnalysis = trpc.analysis.bulkDelete.useMutation({
@@ -111,7 +112,7 @@ export default function Activity() {
       setSelectedIds(new Set());
       setEditMode("normal");
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const bulkDeleteTrend = trpc.trendDiscovery.bulkDelete.useMutation({
@@ -121,7 +122,7 @@ export default function Activity() {
       setSelectedIds(new Set());
       setEditMode("normal");
     },
-    onError: (e) => toast.error(e.message),
+    onError: handleTrpcError,
   });
 
   const filtered = useMemo(() => {
@@ -199,12 +200,15 @@ export default function Activity() {
     }
   };
 
+  const isBeta = location.startsWith("/beta");
+  const pathPrefix = isBeta ? "/beta" : "";
+
   const handleClick = (item: typeof filtered[0]) => {
     if (editMode === "normal") {
       if (item.type === "seo") {
-        setLocation(`/analysis/${item.id}`);
+        setLocation(`${pathPrefix}/analysis/${item.id}`);
       } else {
-        setLocation(`/trend-discovery/${item.id}`);
+        setLocation(`${pathPrefix}/trend-discovery/${item.id}`);
       }
       return;
     }
@@ -468,6 +472,11 @@ export default function Activity() {
                         >
                           {item.type === "seo" ? "SEO" : "トレンド"}
                         </Badge>
+                        {location.startsWith("/beta") && (
+                          <Badge variant="secondary" className="shrink-0 text-xs px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            Beta
+                          </Badge>
+                        )}
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">

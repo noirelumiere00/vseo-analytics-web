@@ -250,6 +250,29 @@ export const analysisReports = mysqlTable("analysis_reports", {
     fetchedAt: string;
   }>(),
 
+  // 制作ブリーフ（LLM生成）
+  productionBrief: json("productionBrief").$type<{
+    appealAxes: Array<{
+      type: string;
+      titleIdea: string;
+      captionTemplate: {
+        hook: string;
+        empathy: string;
+        product: string;
+        benefit: string;
+        cta: string;
+      };
+      rationale: string;
+    }>;
+    hashtagSets: string[][];
+    shootingChecklist: Array<{ recommendation: string; source: string }>;
+    ngList: Array<{ item: string; reason: string; evidence: string }>;
+    postingSchedule: {
+      top3: Array<{ day: string; hour: number; reason: string }>;
+      avoid: Array<{ day: string; hour: number; reason: string }>;
+    };
+  }>(),
+
   // Google Ads Keyword Planner キャッシュ（検索ボリューム）
   googleAdsKeywordCache: json("googleAdsKeywordCache").$type<{
     keywords: Array<{
@@ -450,12 +473,18 @@ export const campaigns = mysqlTable("campaigns", {
   // ビッグキーワード（カテゴリ全体での露出計測用）
   bigKeywords: json("bigKeywords").$type<string[]>(),
 
+  // ターゲット界隈（波及効果の「狙い通り/予想外」判定用）
+  targetCommunities: json("targetCommunities").$type<string[]>(),
+
   // スナップショットリンク
   baselineSnapshotId: int("baselineSnapshotId"),
   measurementSnapshotId: int("measurementSnapshotId"),
 
   // 定期観測
   trackingEnabled: boolean("trackingEnabled").default(true),
+
+  // 目標再生数
+  targetViews: bigint("targetViews", { mode: "number" }),
 
   status: mysqlEnum("status", ["draft", "baseline_captured", "measurement_captured", "report_ready"]).default("draft").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -559,7 +588,8 @@ export const campaignSnapshots = mysqlTable("campaign_snapshots", {
   // 施策動画メトリクス（Phase 1）
   ownVideoMetrics: json("ownVideoMetrics").$type<Record<string, {
     viewCount: number; likeCount: number; commentCount: number;
-    shareCount: number; saveCount: number;
+    shareCount: number | null; saveCount: number | null;
+    platform?: "tiktok" | "youtube" | "instagram";
   }>>(),
 
   // ハッシュタグSOV分析（Phase 2）
@@ -752,8 +782,8 @@ export const campaignReports = mysqlTable("campaign_reports", {
   videoMetricsReport: json("videoMetricsReport").$type<Array<{
     videoId: string; videoUrl: string; coverUrl: string; description: string;
     postedAt: string;
-    before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
-    after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number; saveCount: number } | null;
+    before: { viewCount: number; likeCount: number; commentCount: number; shareCount: number | null; saveCount: number | null; platform?: "tiktok" | "youtube" | "instagram" } | null;
+    after: { viewCount: number; likeCount: number; commentCount: number; shareCount: number | null; saveCount: number | null; platform?: "tiktok" | "youtube" | "instagram" } | null;
     viewsChangePct: string | null;
     music?: { id: string; title: string; authorName: string; original: boolean } | null;
   }>>(),
@@ -824,9 +854,41 @@ export const campaignReports = mysqlTable("campaign_reports", {
     };
   }>(),
 
+  // KW検索センチメント分析
+  keywordSentimentReport: json("keywordSentimentReport").$type<Record<string, {
+    total: number; positive: number; neutral: number; negative: number;
+  }>>(),
+
+  // Instagram ハッシュタグ検索順位
+  instagramHashtagReport: json("instagramHashtagReport").$type<Array<{
+    hashtag: string;
+    totalFetched: number;
+    method: "puppeteer" | "apify";
+    topPosts: Array<{
+      position: number;
+      shortcode: string;
+      username: string;
+      type: "reel" | "image" | "video" | "carousel";
+      likeCount: number;
+      commentCount: number;
+      viewCount: number;
+      caption: string;
+      coverUrl: string;
+      postUrl: string;
+      isOwn: boolean;
+      owner?: "own" | "competitor" | "other";
+      owner_detail?: "official" | "satellite" | "campaign";
+      owner_name?: string;
+      genre?: "recommend" | "howto" | "entertainment" | "negative" | "other";
+      ig_labels?: Array<"promotion" | "paid_partnership" | "aigc">;
+    }>;
+    ownRanks: number[];
+  }>>(),
+
   // 共有リンク
   shareToken: varchar("shareToken", { length: 64 }).unique(),
   shareEnabled: boolean("shareEnabled").default(false),
+  shareExpiresAt: timestamp("shareExpiresAt"),
 
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -717,6 +717,8 @@ export function computeCrossAnalysis(
       er: Math.round(er * 100) / 100,
       coverUrl: v.coverUrl,
       hashtags: v.hashtags,
+      createTime: v.createTime,
+      queryCount: videoQueries.get(v.videoId)?.size ?? 1,
     };
   });
   // 各指標の上位20を和集合で取得（重複排除）

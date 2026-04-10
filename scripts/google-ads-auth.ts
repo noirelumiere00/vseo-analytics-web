@@ -44,10 +44,10 @@ if (command === "exchange") {
 
     if (data.refresh_token) {
       console.log("\n✅ 取得成功！以下を .env に追加してください:\n");
-      console.log(`GOOGLE_ADS_DEVELOPER_TOKEN=REDACTED_DEV_TOKEN`);
+      console.log(`GOOGLE_ADS_DEVELOPER_TOKEN=<your-developer-token>`);
       console.log(`GOOGLE_ADS_REFRESH_TOKEN=${data.refresh_token}`);
-      console.log(`GOOGLE_ADS_CUSTOMER_ID=REDACTED_CUSTOMER_ID`);
-      console.log("");
+      console.log(`GOOGLE_ADS_CUSTOMER_ID=<your-customer-id>`);
+      console.log("\n※ Developer TokenとCustomer IDはGoogle Ads管理画面で確認してください。");
     } else {
       console.error("\n❌ エラー:", JSON.stringify(data, null, 2));
     }

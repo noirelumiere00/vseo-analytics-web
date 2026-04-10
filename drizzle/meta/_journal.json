@@ -162,6 +162,34 @@
       "when": 1774589700203,
       "tag": "0022_sudden_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1775034353095,
+      "tag": "0023_purple_bulldozer",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1775200000000,
+      "tag": "0024_keyword_sentiment",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1775444350152,
+      "tag": "0025_woozy_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1775469785620,
+      "tag": "0026_hesitant_shiva",
+      "breakpoints": true
     }
   ]
 }
