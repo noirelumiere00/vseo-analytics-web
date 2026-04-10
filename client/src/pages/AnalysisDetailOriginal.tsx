@@ -60,10 +60,9 @@ const SECTIONS = [
   { id: "ai-insight", label: "AIインサイト", icon: Lightbulb },
   { id: "summary", label: "概要", icon: BarChart3 },
   { id: "search-mockup", label: "検索結果", icon: Smartphone },
-  { id: "patterns", label: "パターン", icon: Star },
+  { id: "patterns", label: "投稿戦略", icon: Star },
   { id: "brief", label: "ブリーフ", icon: FileText },
   { id: "reputation", label: "評判", icon: Heart },
-  { id: "optimization", label: "最適化", icon: Clock },
   { id: "data", label: "付録", icon: Database },
   { id: "videos", label: "動画一覧", icon: Film },
 ];
@@ -1260,9 +1259,9 @@ export default function AnalysisDetail() {
             <div className="mb-4">
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">04</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>パターン戦略</h2>
+                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>投稿戦略</h2>
               </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">勝ちパターンの共通点は？</p>
+              <p className="text-xs text-muted-foreground ml-9 mt-0.5">勝ちパターンと最適な投稿タイミング</p>
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
@@ -1332,12 +1331,12 @@ export default function AnalysisDetail() {
                     </TabsList>
                     <TabsContent value="organic" className="space-y-0">
                       {tripleSearch.commonalityAnalysis && (
-                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: tripleSearch.commonalityAnalysis.avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
+                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: (tripleSearch.commonalityAnalysis as any).avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
                       )}
                     </TabsContent>
                     <TabsContent value="ad" className="space-y-0">
                       {tripleSearch.commonalityAnalysisAd && (
-                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysisAd, avoidTips: tripleSearch.commonalityAnalysisAd.avoidTips || tripleSearch.losePatternAnalysisAd?.avoidTips }} />
+                        <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysisAd, avoidTips: (tripleSearch.commonalityAnalysisAd as any).avoidTips || tripleSearch.losePatternAnalysisAd?.avoidTips }} />
                       )}
                     </TabsContent>
                   </Tabs>
@@ -1351,11 +1350,38 @@ export default function AnalysisDetail() {
                           </span>
                         </AccordionTrigger>
                         <AccordionContent className="pt-3 pb-4">
-                          <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: tripleSearch.commonalityAnalysis.avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
+                          <WinPatternContent analysis={{ ...tripleSearch.commonalityAnalysis, avoidTips: (tripleSearch.commonalityAnalysis as any).avoidTips || tripleSearch.losePatternAnalysis?.avoidTips }} />
                         </AccordionContent>
                       </AccordionItem>
                     )}
                   </Accordion>
+                )}
+
+                {/* 投稿最適化（ヒートマップ・動画尺・ハッシュタグ） */}
+                {data?.videos && data.videos.length > 0 && (
+                  <div className="mt-6 pt-6 border-t border-border/40">
+                    <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>投稿最適化</h3>
+                    <Tabs defaultValue="heatmap" className="w-full">
+                      <TabsList className="w-full">
+                        <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                        <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
+                        {(data.report as any)?.hashtagStrategy && (
+                          <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
+                        )}
+                      </TabsList>
+                      <TabsContent value="heatmap" className="mt-4">
+                        <PostingTimeHeatmap videos={data.videos as any} />
+                      </TabsContent>
+                      <TabsContent value="duration" className="mt-4">
+                        <DurationAnalysis videos={data.videos as any} />
+                      </TabsContent>
+                      {(data.report as any)?.hashtagStrategy && (
+                        <TabsContent value="hashtag" className="mt-4">
+                          <HashtagStrategy data={(data.report as any).hashtagStrategy} />
+                        </TabsContent>
+                      )}
+                    </Tabs>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1524,44 +1550,6 @@ export default function AnalysisDetail() {
             </div>
           )}
 
-          {/* ===== 6. 投稿最適化 ===== */}
-          {data?.videos && data.videos.length > 0 && job.status === "completed" && (
-            <div id="optimization" className="scroll-mt-16 section-fade-in">
-            <div className="mb-4">
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
-                <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>最適化</h2>
-              </div>
-              <p className="text-xs text-muted-foreground ml-9 mt-0.5">いつ何秒の動画を投稿すべきか？</p>
-            </div>
-            <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-              </CardHeader>
-              <CardContent>
-                <Tabs defaultValue="heatmap" className="w-full">
-                  <TabsList className="w-full">
-                    <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
-                    <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
-                    {(data.report as any)?.hashtagStrategy && (
-                      <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
-                    )}
-                  </TabsList>
-                  <TabsContent value="heatmap" className="mt-4">
-                    <PostingTimeHeatmap videos={data.videos as any} />
-                  </TabsContent>
-                  <TabsContent value="duration" className="mt-4">
-                    <DurationAnalysis videos={data.videos as any} />
-                  </TabsContent>
-                  {(data.report as any)?.hashtagStrategy && (
-                    <TabsContent value="hashtag" className="mt-4">
-                      <HashtagStrategy data={(data.report as any).hashtagStrategy} />
-                    </TabsContent>
-                  )}
-                </Tabs>
-              </CardContent>
-            </Card>
-            </div>
-          )}
 
 
           {/* ===== 7. データ付録 ===== */}
@@ -1569,7 +1557,7 @@ export default function AnalysisDetail() {
             <div id="data" className="scroll-mt-16 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">07</span>
                 <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>付録</h2>
               </div>
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">詳細データ</p>
@@ -1782,7 +1770,7 @@ export default function AnalysisDetail() {
             <div id="videos" className="scroll-mt-16 section-fade-in">
             <div className="mb-4">
               <div className="flex items-center gap-3">
-                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">09</span>
+                <span className="font-mono text-[#D71921] text-xs font-bold tracking-widest">08</span>
                 <h2 className="text-sm font-bold tracking-[0.08em] uppercase" style={{ fontFamily: '"Space Mono", "JetBrains Mono", monospace' }}>動画一覧</h2>
               </div>
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">収集動画の一覧</p>
