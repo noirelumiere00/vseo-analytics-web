@@ -25,13 +25,16 @@ export default function HashtagStrategy({ data, videos }: { data: HashtagStrateg
   const maxViews = Math.max(...(data.topCombinations || []).map(c => c.avgER), 1);
 
   // タグ組み合わせに該当する動画を検索
-  const findMatchingVideos = (tags: string[]) => {
+  const findMatchingVideos = (tags: string[], maxCount?: number) => {
     if (!videos || videos.length === 0) return [];
     const lowerTags = tags.map(t => t.toLowerCase());
-    return videos.filter((v: any) => {
+    const matched = videos.filter((v: any) => {
       const vTags = ((v.hashtags || []) as string[]).map((h: string) => h.toLowerCase());
       return lowerTags.every(t => vTags.includes(t));
-    }).slice(0, 10);
+    });
+    // 再生数順でソートし、元データのcount数まで表示
+    matched.sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0));
+    return matched.slice(0, maxCount || 10);
   };
 
   return (
@@ -39,7 +42,7 @@ export default function HashtagStrategy({ data, videos }: { data: HashtagStrateg
       <h4 className="text-sm font-semibold mb-2">高再生 ハッシュタグ組み合わせ TOP10</h4>
       <Accordion type="single" collapsible className="space-y-1.5">
         {data.topCombinations.map((combo, i) => {
-          const matching = findMatchingVideos(combo.tags);
+          const matching = findMatchingVideos(combo.tags, combo.count);
           return (
             <AccordionItem key={i} value={`combo-${i}`} className="border rounded-lg overflow-hidden">
               <AccordionTrigger className="px-3 py-2 hover:no-underline hover:bg-muted/40">
