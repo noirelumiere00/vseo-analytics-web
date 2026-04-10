@@ -1824,6 +1824,10 @@ ${bestPostingTimes.length > 0 ? bestPostingTimes.map(t => `${t.day} ${t.hour}時
 【感情ワード分析】
 ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}回, 感情価${w.valence.toFixed(2)}, 覚醒度${w.arousal.toFixed(2)}）`).join(', ') : '（データなし）'}
 
+【重要なアウトプット方針】
+- 企業広告感を排除し、徹底して「リアルなクチコミ（UGC）」感を追求すること。
+- 抽象表現を避け、映像イメージやテロップの言いまわしを具体化すること。
+
 以下の項目を生成してください:
 1. appealAxes: 10個の訴求軸。以下の10種すべてを使用:
    悩み起点型, 効果実感型, 成分・ロジック型, 比較・ランキング型, 購買後押し型, 生活シーン型, 共感・あるある型, 習慣化・ルーティン型, 気分価値・感情訴求型, 時短・ラク型
@@ -1840,7 +1844,7 @@ ${emotionWords.length > 0 ? emotionWords.map(w => `${w.word}（出現${w.count}�
       messages: [
         {
           role: "system",
-          content: `あなたはTikTok動画のクリエイティブディレクターです。分析データに基づき、動画制作ブリーフを生成してください。${extra?.productName ? `商品「${extra.productName}」の訴求に特化してください。` : ''}日本語で回答し、JSONで出力してください。${extra?.imageBase64 ? '添付画像は商品の参考画像です。ビジュアルの特徴も考慮してください。' : ''}`,
+          content: `あなたはプロのPRプランナーです。分析データとクライアント（ユーザー）からの指示を汲み取りショート動画ブリーフを生成してください。${extra?.productName ? `商品「${extra.productName}」の訴求に特化してください。` : ''}日本語で回答し、JSONで出力してください。${extra?.imageBase64 ? '添付画像は商品の参考画像です。ビジュアルの特徴も考慮してください。' : ''}`,
         },
         { role: "user", content: extra?.imageBase64
           ? [
