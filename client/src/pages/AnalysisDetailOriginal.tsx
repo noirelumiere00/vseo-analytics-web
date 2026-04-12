@@ -1443,7 +1443,7 @@ export default function AnalysisDetail() {
                         <div className="flex items-center gap-2 mb-3">
                           <span className={`w-2 h-2 rounded-full ${row.dot}`} />
                           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{row.label}</span>
-                          {row.isDominant && <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600">dominant</span>}
+                          {row.isDominant && <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#171717]/5 text-[#171717]">dominant</span>}
                         </div>
                         <div className={`text-3xl md:text-4xl font-black leading-none ${row.textPct}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
                           {row.pct}<span className="text-lg">%</span>
@@ -1465,19 +1465,19 @@ export default function AnalysisDetail() {
                     <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>インパクト分析</h3>
                     <div className="grid grid-cols-3 gap-3 animate-stagger">
                       {([
-                        { title: "投稿数シェア",             abbr: "Posts",      data: reportStats.threeWay.posts,      accent: "border-l-blue-500",   bg: "bg-blue-500/[0.03]",   textHero: "text-blue-600",   dot: "bg-blue-500" },
-                        { title: "総再生数シェア",           abbr: "Views",      data: reportStats.threeWay.views,      accent: "border-l-indigo-500", bg: "bg-indigo-500/[0.03]", textHero: "text-indigo-600", dot: "bg-indigo-500" },
-                        { title: "総エンゲージメントシェア", abbr: "Engagement", data: reportStats.threeWay.engagement, accent: "border-l-violet-500", bg: "bg-violet-500/[0.03]", textHero: "text-violet-600", dot: "bg-violet-500" },
+                        { title: "投稿数シェア",             abbr: "Posts",      data: reportStats.threeWay.posts      },
+                        { title: "総再生数シェア",           abbr: "Views",      data: reportStats.threeWay.views      },
+                        { title: "総エンゲージメントシェア", abbr: "Engagement", data: reportStats.threeWay.engagement },
                       ] as const).map(row => {
                         const dominant = Math.max(Number(row.data.positive), Number(row.data.neutral), Number(row.data.negative));
                         const dominantLabel = dominant === Number(row.data.positive) ? "Pos" : dominant === Number(row.data.negative) ? "Neg" : "Neu";
                         return (
-                          <div key={row.abbr} className={`p-4 rounded-xl border-l-4 ${row.accent} border border-border/50 ${row.bg} animate-fade-slide-up`}>
+                          <div key={row.abbr} className="p-4 rounded-xl border-l-4 border-l-[#171717] border border-border/50 bg-[#fafafa] animate-fade-slide-up">
                             <div className="flex items-center gap-2 mb-3">
-                              <span className={`w-2 h-2 rounded-full ${row.dot}`} />
+                              <span className="w-2 h-2 rounded-full bg-[#171717]" />
                               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{row.abbr}</span>
                             </div>
-                            <div className={`text-3xl md:text-4xl font-black leading-none ${row.textHero}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                            <div className="text-3xl md:text-4xl font-black leading-none text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
                               {dominant.toFixed(1)}<span className="text-lg">%</span>
                             </div>
                             <div className="text-[10px] font-medium text-muted-foreground mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
