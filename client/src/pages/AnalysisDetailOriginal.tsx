@@ -1435,136 +1435,140 @@ export default function AnalysisDetail() {
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="pt-6 space-y-8">
-                {/* センチメント — 3列 Data Cards */}
+                {/* センチメント構成比 ― 3カラム (Positive / Negative / Neutral) */}
                 <div>
                   <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>センチメント構成比</h3>
                   <div className="grid grid-cols-3 gap-3 animate-stagger">
                     {([
-                      { label: "Positive", count: reportStats.sentimentCounts.positive, pct: reportStats.sentimentPercentages.positive, accent: "border-l-green-500", bg: "bg-green-500/[0.03]", textPct: "text-green-600", textCount: "text-green-700", bar: "bg-green-500", dot: "bg-green-500", isDominant: reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative },
-                      { label: "Neutral",  count: reportStats.sentimentCounts.neutral,  pct: reportStats.sentimentPercentages.neutral,  accent: "border-l-gray-300",   bg: "bg-muted/20",          textPct: "text-muted-foreground", textCount: "text-muted-foreground", bar: "bg-gray-400",  dot: "bg-gray-400",  isDominant: false },
-                      { label: "Negative", count: reportStats.sentimentCounts.negative, pct: reportStats.sentimentPercentages.negative, accent: "border-l-red-500",    bg: "bg-red-500/[0.03]",    textPct: "text-red-600",          textCount: "text-red-700",          bar: "bg-red-500",   dot: "bg-red-500",   isDominant: false },
-                    ] as const).map(row => (
-                      <div key={row.label} className={`p-4 rounded-xl border-l-4 ${row.accent} border border-border/50 ${row.bg} animate-fade-slide-up`}>
-                        <div className="flex items-center gap-2 mb-3">
-                          <span className={`w-2 h-2 rounded-full ${row.dot}`} />
-                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{row.label}</span>
-                          {row.isDominant && <span className="ml-auto text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#171717]/5 text-[#171717]">dominant</span>}
+                      {
+                        label: "Positive",
+                        count: reportStats.sentimentCounts.positive,
+                        pct: reportStats.sentimentPercentages.positive,
+                        views: reportStats.threeWay.views.positive,
+                        engagement: reportStats.threeWay.engagement.positive,
+                        accent: "border-l-green-500", bg: "bg-green-500/[0.03]",
+                        textPct: "text-green-600", textCount: "text-green-700",
+                        bar: "bg-green-500", dot: "bg-green-500",
+                      },
+                      {
+                        label: "Negative",
+                        count: reportStats.sentimentCounts.negative,
+                        pct: reportStats.sentimentPercentages.negative,
+                        views: reportStats.threeWay.views.negative,
+                        engagement: reportStats.threeWay.engagement.negative,
+                        accent: "border-l-red-500", bg: "bg-red-500/[0.03]",
+                        textPct: "text-red-600", textCount: "text-red-700",
+                        bar: "bg-red-500", dot: "bg-red-500",
+                      },
+                      {
+                        label: "Neutral",
+                        count: reportStats.sentimentCounts.neutral,
+                        pct: reportStats.sentimentPercentages.neutral,
+                        views: reportStats.threeWay.views.neutral,
+                        engagement: reportStats.threeWay.engagement.neutral,
+                        accent: "border-l-gray-300", bg: "bg-muted/20",
+                        textPct: "text-muted-foreground", textCount: "text-muted-foreground",
+                        bar: "bg-gray-400", dot: "bg-gray-400",
+                      },
+                    ] as const).map(col => (
+                      <div key={col.label} className={`rounded-xl border-l-4 ${col.accent} border border-border/50 ${col.bg} animate-fade-slide-up overflow-hidden`}>
+                        <div className="p-4 pb-3">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className={`w-2 h-2 rounded-full ${col.dot}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{col.label}</span>
+                          </div>
+                          <div className={`text-3xl md:text-4xl font-black leading-none ${col.textPct}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                            {col.pct}<span className="text-lg">%</span>
+                          </div>
+                          <div className={`text-sm font-bold mt-1 ${col.textCount}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                            {col.count}<span className="text-xs font-normal ml-0.5">本</span>
+                          </div>
                         </div>
-                        <div className={`text-3xl md:text-4xl font-black leading-none ${row.textPct}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                          {row.pct}<span className="text-lg">%</span>
-                        </div>
-                        <div className={`text-sm font-bold mt-1 ${row.textCount}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                          {row.count}<span className="text-xs font-normal ml-0.5">本</span>
-                        </div>
-                        <div className="mt-3 h-1 rounded-full bg-black/[0.04] overflow-hidden">
-                          <div className={`h-full rounded-full ${row.bar}`} style={{ width: `${row.pct}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
+                        <div className="px-4 pb-4 pt-2 space-y-2.5 border-t border-border/30">
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>再生数</span>
+                              <span className="text-xs font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{col.views}%</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-black/[0.04] overflow-hidden">
+                              <div className={`h-full rounded-full ${col.bar}`} style={{ width: `${col.views}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>エンゲージメント</span>
+                              <span className="text-xs font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{col.engagement}%</span>
+                            </div>
+                            <div className="h-1 rounded-full bg-black/[0.04] overflow-hidden">
+                              <div className={`h-full rounded-full ${col.bar}`} style={{ width: `${col.engagement}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* インパクト分析 — 3列 Data Cards */}
-                {reportStats && (
-                  <div>
-                    <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>インパクト分析</h3>
-                    <div className="grid grid-cols-3 gap-3 animate-stagger">
-                      {([
-                        { title: "投稿数シェア",             abbr: "Posts",      data: reportStats.threeWay.posts      },
-                        { title: "総再生数シェア",           abbr: "Views",      data: reportStats.threeWay.views      },
-                        { title: "総エンゲージメントシェア", abbr: "Engagement", data: reportStats.threeWay.engagement },
-                      ] as const).map(row => {
-                        const dominant = Math.max(Number(row.data.positive), Number(row.data.neutral), Number(row.data.negative));
-                        const dominantLabel = dominant === Number(row.data.positive) ? "Pos" : dominant === Number(row.data.negative) ? "Neg" : "Neu";
-                        return (
-                          <div key={row.abbr} className="p-4 rounded-xl border-l-4 border-l-[#171717] border border-border/50 bg-[#fafafa] animate-fade-slide-up">
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="w-2 h-2 rounded-full bg-[#171717]" />
-                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>{row.abbr}</span>
-                            </div>
-                            <div className="text-3xl md:text-4xl font-black leading-none text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                              {dominant.toFixed(1)}<span className="text-lg">%</span>
-                            </div>
-                            <div className="text-[10px] font-medium text-muted-foreground mt-1" style={{ fontFamily: "'Space Mono', monospace" }}>
-                              {dominantLabel} dominant
-                            </div>
-                            <div className="mt-3 h-1.5 rounded-full overflow-hidden flex">
-                              <div className="bg-green-500" style={{ width: `${row.data.positive}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
-                              <div className="bg-gray-300" style={{ width: `${row.data.neutral}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
-                              <div className="bg-red-500" style={{ width: `${row.data.negative}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
-                            </div>
-                            <div className="flex justify-between mt-1.5 text-[10px] font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                              <span className="text-green-600">{row.data.positive}%</span>
-                              <span className="text-muted-foreground">{row.data.neutral}%</span>
-                              <span className="text-red-500">{row.data.negative}%</span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                {/* 動画マクロ分析 */}
+                {data && data.report && (
+                  <div className="space-y-6">
+                    <div className="border rounded-xl p-4 animate-fade-slide-up">
+                      <div className="flex items-center gap-2.5 mb-4">
+                        <div className="h-5 w-1 rounded-full bg-[#171717]" />
+                        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画マクロ分析</h3>
+                      </div>
+                      <ReportSection
+                        keyword={data.job?.keyword || ""}
+                        date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
+                        videoCount={data.videos?.length || 0}
+                        platform="TikTok"
+                        aspects={(data.report?.facets || []).map((f: any) => ({
+                          name: f.aspect || f.name || "",
+                          pos: f.positive_percentage || f.pos || 0,
+                          neg: f.negative_percentage || f.neg || 0,
+                          desc: f.description || f.desc || ""
+                        }))}
+                        proposals={[]}
+                        sentimentData={{
+                          positive: reportStats.sentimentCounts.positive || 0,
+                          negative: reportStats.sentimentCounts.negative || 0,
+                          neutral: reportStats.sentimentCounts.neutral || 0,
+                        }}
+                        positiveWords={reportStats.positiveWords}
+                        negativeWords={reportStats.negativeWords}
+                        emotionWords={(data.report as any)?.emotionWords ?? undefined}
+                        videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined}
+                      />
+                    </div>
+
+                    {/* 動画ミクロ分析 */}
+                    <div className="border rounded-xl p-4 animate-fade-slide-up">
+                      <div className="flex items-center gap-2.5 mb-4">
+                        <div className="h-5 w-1 rounded-full bg-[#171717]" />
+                        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画ミクロ分析</h3>
+                      </div>
+                      <Tabs defaultValue="insights" className="w-full">
+                        <TabsList className="w-full mb-3">
+                          <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
+                          <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="insights">
+                          <MicroAnalysisSection
+                            proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
+                              const cat = insight.category;
+                              const priority = cat === "avoid" || cat === "risk" ? "回避" : cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                              const icon = cat === "avoid" || cat === "risk" ? "🚫" : cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                              return { area: insight.title, action: insight.description, priority: priority as "回避" | "注意" | "活用", icon, analysis: insight.analysis, strategicAdvice: insight.strategicAdvice, sourceVideoIds: insight.sourceVideoIds };
+                            })}
+                            videos={(data.videos || []).slice().sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 15).map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
+                          />
+                        </TabsContent>
+                        <TabsContent value="seo-keywords">
+                          <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
+                        </TabsContent>
+                      </Tabs>
                     </div>
                   </div>
-                )}
-
-                {/* マクロ・ミクロ分析（アコーディオン） */}
-                {data && data.report && (
-                  <Accordion type="multiple" className="space-y-2">
-                    <AccordionItem value="aspects" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画マクロ分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <ReportSection
-                          keyword={data.job?.keyword || ""}
-                          date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
-                          videoCount={data.videos?.length || 0}
-                          platform="TikTok"
-                          aspects={(data.report?.facets || []).map((f: any) => ({
-                            name: f.aspect || f.name || "",
-                            pos: f.positive_percentage || f.pos || 0,
-                            neg: f.negative_percentage || f.neg || 0,
-                            desc: f.description || f.desc || ""
-                          }))}
-                          proposals={[]}
-                          sentimentData={{
-                            positive: reportStats.sentimentCounts.positive || 0,
-                            negative: reportStats.sentimentCounts.negative || 0,
-                            neutral: reportStats.sentimentCounts.neutral || 0,
-                          }}
-                          positiveWords={reportStats.positiveWords}
-                          negativeWords={reportStats.negativeWords}
-                          emotionWords={(data.report as any)?.emotionWords ?? undefined}
-                          videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined}
-                        />
-                      </AccordionContent>
-                    </AccordionItem>
-                    <AccordionItem value="micro-analysis" className="border rounded-xl">
-                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
-                        動画ミクロ分析
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4 pt-2">
-                        <Tabs defaultValue="insights" className="w-full">
-                          <TabsList className="w-full mb-3">
-                            <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
-                            <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
-                          </TabsList>
-                          <TabsContent value="insights">
-                            <MicroAnalysisSection
-                              proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
-                                const cat = insight.category;
-                                const priority = cat === "avoid" || cat === "risk" ? "回避" : cat === "caution" || cat === "urgent" ? "注意" : "活用";
-                                const icon = cat === "avoid" || cat === "risk" ? "🚫" : cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
-                                return { area: insight.title, action: insight.description, priority: priority as "回避" | "注意" | "活用", icon, analysis: insight.analysis, strategicAdvice: insight.strategicAdvice, sourceVideoIds: insight.sourceVideoIds };
-                              })}
-                              videos={(data.videos || []).slice().sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0)).slice(0, 15).map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
-                            />
-                          </TabsContent>
-                          <TabsContent value="seo-keywords">
-                            <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
-                          </TabsContent>
-                        </Tabs>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
                 )}
               </CardContent>
             </Card>
