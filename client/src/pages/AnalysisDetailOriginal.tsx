@@ -937,7 +937,7 @@ export default function AnalysisDetail() {
               </div>
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">データから何が読み取れるか？</p>
             </div>
-            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardContent className="py-5 px-6">
                 <p className="text-sm text-foreground/80 leading-relaxed">{data?.report?.autoInsight || reportStats.autoInsight}</p>
               </CardContent>
@@ -960,14 +960,14 @@ export default function AnalysisDetail() {
                 <p className="text-xs text-muted-foreground ml-9 mt-0.5">主要KPIと検索の安定性</p>
               </div>
               <div className="grid gap-4 md:grid-cols-4">
-                <div className="flex items-center gap-3 border-l-4 border-primary rounded-lg p-4 bg-card/60 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
                   <Play className="h-5 w-5 text-primary shrink-0" />
                   <div>
                     <p className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{reportStats.totalVideos}</p>
                     <p className="text-xs text-muted-foreground">分析動画数</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-primary/60 rounded-lg p-4 bg-card/60 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
                   <Search className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="flex items-center gap-1">
                     <div>
@@ -977,14 +977,14 @@ export default function AnalysisDetail() {
                     <CopyButton value={formatNumber(reportStats.totalViews)} className="h-6 w-6 [&_svg]:h-3 [&_svg]:w-3" />
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-primary/40 rounded-lg p-4 bg-card/60 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
                   <TrendingUp className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div>
                     <p className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{reportStats.sentimentPercentages.positive}%</p>
                     <p className="text-xs text-muted-foreground">ポジティブ率</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 border-l-4 border-primary/20 rounded-lg p-4 bg-card/60 backdrop-blur-sm">
+                <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
                   <Star className="h-5 w-5 text-muted-foreground shrink-0" />
                   <div className="flex items-center gap-1">
                     <div>
@@ -998,7 +998,7 @@ export default function AnalysisDetail() {
               {/* 重複度（KPIと同じカード形式） */}
               {tripleSearch && (
                 <div className={`grid gap-4 mt-4`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions + 1, 5)}, 1fr)` }}>
-                  <div className="flex items-center gap-3 border-l-4 border-amber-500 rounded-lg p-4 bg-card/60 backdrop-blur-sm">
+                  <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
                     <Layers className="h-5 w-5 text-amber-500 shrink-0" />
                     <div>
                       <p className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{tripleSearch.duplicateAnalysis.overlapRate.toFixed(0)}%</p>
@@ -1012,7 +1012,7 @@ export default function AnalysisDetail() {
                     const label = isAll ? `${count}回全出現` : count === 1 ? "1回のみ" : `${count}回出現`;
                     const borderOpacity = isAll ? "" : count === 2 ? "/60" : "/30";
                     return (
-                      <div key={count} className={`flex items-center gap-3 border-l-4 border-amber-500${borderOpacity} rounded-lg p-4 bg-card/60 backdrop-blur-sm`}>
+                      <div key={count} className={`flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50`}>
                         <div>
                           <p className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{ids.length}</p>
                           <p className="text-xs text-muted-foreground">{label}</p>
@@ -1377,7 +1377,7 @@ export default function AnalysisDetail() {
                   <Accordion type="multiple" defaultValue={["win", "lose"]}>
                     {tripleSearch.commonalityAnalysis && (
                       <AccordionItem value="win" className="border-0">
-                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 border-l-4 border-primary hover:no-underline hover:bg-muted/70">
+                        <AccordionTrigger className="px-4 py-3 rounded-lg bg-muted/50 hover:no-underline hover:bg-muted/70">
                           <span className="flex items-center gap-2 font-semibold text-foreground">
                             <Star className="h-4 w-4" />勝ちパターン戦略
                           </span>
@@ -1405,7 +1405,7 @@ export default function AnalysisDetail() {
               </div>
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">どう動画を作るべきか？</p>
             </div>
-            <Card className="bg-card/60 backdrop-blur-sm border-l-4 border-primary">
+            <Card className="bg-card/60 backdrop-blur-sm">
               <CardHeader>
               </CardHeader>
               <CardContent>
