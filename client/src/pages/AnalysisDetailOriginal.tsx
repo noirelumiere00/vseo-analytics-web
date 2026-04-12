@@ -407,11 +407,11 @@ export default function AnalysisDetail() {
     if (!sentiment) return <Badge variant="outline">未分析</Badge>;
     switch (sentiment) {
       case "positive":
-        return <Badge className="bg-green-500"><TrendingUp className="h-3 w-3 mr-1" />Positive</Badge>;
+        return <Badge className="bg-green-600/10 text-green-700 border border-green-600/20 hover:bg-green-600/15">Positive</Badge>;
       case "negative":
-        return <Badge className="bg-red-500"><TrendingDown className="h-3 w-3 mr-1" />Negative</Badge>;
+        return <Badge className="bg-red-600/10 text-red-700 border border-red-600/20 hover:bg-red-600/15">Negative</Badge>;
       case "neutral":
-        return <Badge className="bg-gray-500"><Minus className="h-3 w-3 mr-1" />Neutral</Badge>;
+        return <Badge variant="outline">Neutral</Badge>;
       default:
         return <Badge variant="outline">{sentiment}</Badge>;
     }
@@ -422,12 +422,12 @@ export default function AnalysisDetail() {
     const rankInfoItem = (data.tripleSearch as any).rankInfo?.[videoId];
     const count = rankInfoItem?.appearanceCount ?? 0;
     if (count >= numSessions) {
-      return <Badge className="bg-yellow-500 text-black"><Star className="h-3 w-3 mr-1" />{numSessions}回出現</Badge>;
+      return <Badge className="bg-foreground text-background">{numSessions}/{numSessions}</Badge>;
     }
     if (count >= 2) {
-      return <Badge className="bg-blue-500"><Repeat className="h-3 w-3 mr-1" />{count}回出現</Badge>;
+      return <Badge variant="outline">{count}/{numSessions}</Badge>;
     }
-    return <Badge variant="outline">1回のみ</Badge>;
+    return <Badge variant="outline" className="opacity-50">1/{numSessions}</Badge>;
   }, [data?.tripleSearch, numSessions]);
 
   const formatNumber = useCallback((num: number | bigint | null | undefined) => {
@@ -523,7 +523,7 @@ export default function AnalysisDetail() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {visible.map((video: any, vi: number) => {
             const er = getEngagementRate(video);
-            const sentimentColor = video.sentiment === "positive" ? "text-emerald-600" : video.sentiment === "negative" ? "text-[#D71921]" : "text-muted-foreground";
+            const sentimentColor = video.sentiment === "positive" ? "text-green-600" : video.sentiment === "negative" ? "text-[#D71921]" : "text-muted-foreground";
             const sentimentLabel = video.sentiment === "positive" ? "Positive" : video.sentiment === "negative" ? "Negative" : "Neutral";
             const ri = useTripleRank ? (data?.tripleSearch as any)?.rankInfo?.[video.videoId] : null;
             const rank = ri?.avgRank ? Math.round(ri.avgRank) : vi + 1;
@@ -543,17 +543,17 @@ export default function AnalysisDetail() {
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
                   <p className="text-[12px] font-medium leading-tight line-clamp-2 text-foreground">{desc || "（タイトルなし）"}</p>
-                  {hashtags.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{hashtags.map((tag: string, ti: number) => <span key={ti} className="text-[10px] text-blue-500">#{tag}</span>)}</div>}
+                  {hashtags.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{hashtags.map((tag: string, ti: number) => <span key={ti} className="text-[10px] text-muted-foreground">#{tag}</span>)}</div>}
                   <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
                     <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(video.viewCount)}</span>
                     <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(video.likeCount)}</span>
                     <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(video.commentCount)}</span>
                     <span className="flex items-center gap-0.5"><Bookmark className="h-3 w-3" />{formatNumber(video.saveCount)}</span>
-                    <span className="text-emerald-600 font-medium">↗{er.toFixed(2)}%</span>
+                    <span className="text-green-600 font-medium">{er.toFixed(2)}%</span>
                   </div>
                   <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
                     <span>@{video.accountId || video.accountName}</span>
-                    {isAd && <span className="px-1 py-0 rounded bg-amber-100 text-amber-700 text-[9px] font-medium">広告</span>}
+                    {isAd && <span className="px-1 py-0 rounded bg-foreground/[0.06] text-foreground/60 text-[9px] font-medium border border-border/50">広告</span>}
                     <span className={`font-medium ${sentimentColor}`}>{sentimentLabel}</span>
                   </div>
                 </div>
@@ -736,10 +736,9 @@ export default function AnalysisDetail() {
                       {/* メインステータス */}
                       <div className="flex flex-col items-center gap-3 text-center">
                         <div className="relative">
-                          <div className="h-20 w-20 rounded-full p-[3px] bg-gradient-to-r from-primary via-purple-500 to-primary animate-spin-slow">
-                            <div className="h-full w-full rounded-full bg-background flex items-center justify-center">
-                              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            </div>
+                          <div className="h-20 w-20 rounded-full border-2 border-border border-t-foreground animate-spin-slow" />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin text-foreground/60" />
                           </div>
                         </div>
                         <div>
@@ -775,11 +774,11 @@ export default function AnalysisDetail() {
                           const isActive = pct >= step.startAt && !isDone;
                           return (
                             <div key={i} className={`flex items-start gap-3 p-3 rounded-lg transition-colors ${isActive ? "bg-primary/5 border border-primary/20" : isDone ? "opacity-60" : "opacity-40"}`} style={{ transition: `all var(--md-dur-medium2) var(--md-ease-emphasized-decel)` }}>
-                              <div className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 ${isDone ? "bg-green-500" : isActive ? "bg-primary" : "bg-muted"}`}>
+                              <div className={`mt-0.5 h-5 w-5 rounded-full flex items-center justify-center shrink-0 border ${isDone ? "bg-foreground border-foreground" : isActive ? "border-foreground bg-foreground" : "border-border bg-transparent"}`}>
                                 {isDone ? (
-                                  <CheckCircle className="h-3.5 w-3.5 text-white" />
+                                  <CheckCircle className="h-3.5 w-3.5 text-background" />
                                 ) : isActive ? (
-                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                  <Loader2 className="h-3 w-3 animate-spin text-background" />
                                 ) : (
                                   <span className="text-[10px] text-muted-foreground font-bold">{i + 1}</span>
                                 )}
@@ -999,7 +998,7 @@ export default function AnalysisDetail() {
               {tripleSearch && (
                 <div className={`grid gap-4 mt-4`} style={{ gridTemplateColumns: `repeat(${Math.min(numSessions + 1, 5)}, 1fr)` }}>
                   <div className="flex items-center gap-3 rounded-lg p-4 bg-card/60 backdrop-blur-sm border border-border/50">
-                    <Layers className="h-5 w-5 text-amber-500 shrink-0" />
+                    <Layers className="h-5 w-5 text-muted-foreground shrink-0" />
                     <div>
                       <p className="text-2xl font-bold" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{tripleSearch.duplicateAnalysis.overlapRate.toFixed(0)}%</p>
                       <p className="text-xs text-muted-foreground">重複率</p>
@@ -1245,8 +1244,8 @@ export default function AnalysisDetail() {
                   </div>
                   {/* Legend */}
                   <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-yellow-500" /> 全セッション出現</span>
-                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-blue-500" /> 2セッション出現</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm bg-foreground" /> 全セッション出現</span>
+                    <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded-sm border-2 border-foreground/40" /> 2セッション出現</span>
                   </div>
                 </CardContent>
               </Card>
@@ -1648,7 +1647,7 @@ export default function AnalysisDetail() {
                                         <span className="flex items-center gap-0.5"><Eye className="h-3 w-3" />{formatNumber(v.viewCount)}</span>
                                         <span className="flex items-center gap-0.5"><Heart className="h-3 w-3" />{formatNumber(v.likeCount)}</span>
                                         <span className="flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{formatNumber(v.commentCount)}</span>
-                                        <span className="text-emerald-600 font-medium">ER {(Number(v.viewCount) > 0 ? ((Number(v.likeCount)||0)+(Number(v.commentCount)||0)+(Number(v.shareCount)||0)) / Number(v.viewCount) * 100 : 0).toFixed(1)}%</span>
+                                        <span className="text-green-600 font-medium">ER {(Number(v.viewCount) > 0 ? ((Number(v.likeCount)||0)+(Number(v.commentCount)||0)+(Number(v.shareCount)||0)) / Number(v.viewCount) * 100 : 0).toFixed(1)}%</span>
                                       </div>
                                     </div>
                                     <ExternalLink className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
@@ -1705,7 +1704,7 @@ export default function AnalysisDetail() {
                         const isOne = c === 1;
                         const label = isAll ? "勝ちパターン" : isOne ? "1回のみ" : `${c}回出現`;
                         const Icon = isAll ? Star : isOne ? undefined : Repeat;
-                        const iconColor = isAll ? "text-yellow-500" : "text-blue-500";
+                        const iconColor = isAll ? "text-foreground" : "text-muted-foreground";
                         return (
                           <TabsTrigger key={c} value={`count-${c}`} className="text-xs sm:text-sm">
                             {Icon && <Icon className={`h-3 w-3 mr-1 ${iconColor}`} />}
