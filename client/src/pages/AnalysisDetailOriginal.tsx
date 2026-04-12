@@ -1266,9 +1266,7 @@ export default function AnalysisDetail() {
               <p className="text-xs text-muted-foreground ml-9 mt-0.5">勝ちパターンと最適な投稿タイミング</p>
             </div>
             <Card className="bg-card/60 backdrop-blur-sm">
-              <CardHeader>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4 pb-4">
                 {/* Phase 2: Win Pattern Thumbnail Reel */}
                 {(() => {
                   const rankInfo = (tripleSearch as any)?.rankInfo ?? {};
@@ -1281,7 +1279,7 @@ export default function AnalysisDetail() {
                     .slice(0, 12);
                   if (reelVideos.length === 0) return null;
                   return (
-                    <div className="mb-6">
+                    <div className="mb-3">
                       <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>全セッション出現動画</p>
                       <div className="flex overflow-x-auto gap-3 pb-2 no-scrollbar">
                         {reelVideos.map((video: any) => (
