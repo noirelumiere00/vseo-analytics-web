@@ -263,7 +263,7 @@ export function EngagementStatsTable({ stats, extremeVideos }: {
                     <td className="py-2 pr-3 font-medium">{label}</td>
                     <td className="py-2 pr-3 text-right">
                       {minLink ? (
-                        <a href={minLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline" title="この動画をTikTokで開く">
+                        <a href={minLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-foreground/60 hover:text-foreground hover:underline" title="この動画をTikTokで開く">
                           {fmt(data.min)}
                           <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                         </a>
@@ -275,7 +275,7 @@ export function EngagementStatsTable({ stats, extremeVideos }: {
                     <td className="py-2 pr-3 text-right">{fmt(data.p75)}</td>
                     <td className="py-2 text-right">
                       {maxLink ? (
-                        <a href={maxLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-blue-600 dark:text-blue-400 hover:underline" title="この動画をTikTokで開く">
+                        <a href={maxLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-0.5 text-foreground/60 hover:text-foreground hover:underline" title="この動画をTikTokで開く">
                           {fmt(data.max)}
                           <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                         </a>
@@ -419,38 +419,38 @@ function getFreshnessSignal(score: number): FreshnessSignal {
   if (score >= 80) return {
     text: "急上昇",
     subtext: "今まさに需要が集中",
-    badgeClass: "bg-red-500 text-white",
-    gaugeColor: "#ef4444",
-    borderClass: "border-l-red-500",
-    glowClass: "shadow-red-100 dark:shadow-red-950/40",
-    icon: "🔥",
+    badgeClass: "bg-foreground text-background",
+    gaugeColor: "#171717",
+    borderClass: "border-foreground",
+    glowClass: "",
+    icon: "",
   };
   if (score >= 60) return {
     text: "トレンド中",
     subtext: "活発な投稿が続いている",
-    badgeClass: "bg-orange-500 text-white",
-    gaugeColor: "#f97316",
-    borderClass: "border-l-orange-500",
-    glowClass: "shadow-orange-100 dark:shadow-orange-950/30",
-    icon: "📈",
+    badgeClass: "bg-foreground/80 text-background",
+    gaugeColor: "#404040",
+    borderClass: "border-foreground/60",
+    glowClass: "",
+    icon: "",
   };
   if (score >= 35) return {
     text: "安定需要",
     subtext: "継続的な関心がある",
-    badgeClass: "bg-blue-500 text-white",
-    gaugeColor: "#3b82f6",
-    borderClass: "border-l-blue-500",
+    badgeClass: "bg-foreground/50 text-background",
+    gaugeColor: "#737373",
+    borderClass: "border-foreground/40",
     glowClass: "",
-    icon: "〜",
+    icon: "",
   };
   return {
     text: "低調・定番",
     subtext: "新規投稿が少ない",
-    badgeClass: "bg-gray-400 text-white dark:bg-gray-600",
+    badgeClass: "bg-muted text-muted-foreground",
     gaugeColor: "#9ca3af",
-    borderClass: "border-l-gray-400",
+    borderClass: "border-border",
     glowClass: "",
-    icon: "↓",
+    icon: "",
   };
 }
 
@@ -598,8 +598,8 @@ export function QueryFreshnessChart({ data }: { data: NonNullable<TrendStatistic
           <div className="flex flex-wrap gap-1.5 items-center">
             {[
               { label: "急上昇", color: "bg-red-500" },
-              { label: "トレンド中", color: "bg-orange-500" },
-              { label: "安定需要", color: "bg-blue-500" },
+              { label: "トレンド中", color: "bg-foreground/60" },
+              { label: "安定需要", color: "bg-foreground/40" },
               { label: "低調・定番", color: "bg-gray-400" },
             ].map(l => (
               <span key={l.label} className="flex items-center gap-1 text-[10px] text-muted-foreground">
@@ -715,47 +715,47 @@ export function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["
     hot: {
       verdict: "広告主の投資が非常に活発",
       sub: "収益化チャンス大 — ブランドがこの市場に積極投資中",
-      dot: "bg-amber-500",
-      heroBg: "bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/30 border-amber-300 dark:border-amber-600",
-      heroText: "text-amber-700 dark:text-amber-300",
-      heroSubText: "text-amber-600/80 dark:text-amber-400/80",
-      barFill: "bg-gradient-to-r from-amber-400 to-yellow-400 dark:from-amber-500 dark:to-yellow-500",
+      dot: "bg-foreground",
+      heroBg: "bg-foreground/[0.04] border-foreground/20",
+      heroText: "text-foreground",
+      heroSubText: "text-foreground/70",
+      barFill: "bg-foreground",
     },
     active: {
       verdict: "広告主の投資が活発なジャンル",
       sub: "スポンサー案件を狙えるニッチ",
-      dot: "bg-amber-400",
-      heroBg: "bg-amber-50/70 dark:bg-amber-950/25 border-amber-200 dark:border-amber-700",
-      heroText: "text-amber-700 dark:text-amber-300",
-      heroSubText: "text-amber-600/70 dark:text-amber-400/70",
-      barFill: "bg-gradient-to-r from-amber-400 to-amber-500 dark:from-amber-500 dark:to-amber-600",
+      dot: "bg-foreground/70",
+      heroBg: "bg-foreground/[0.03] border-foreground/15",
+      heroText: "text-foreground",
+      heroSubText: "text-foreground/60",
+      barFill: "bg-foreground/80",
     },
     moderate: {
       verdict: "一定のPR需要あり",
       sub: "新興市場または特定ブランドが参入中",
-      dot: "bg-blue-400",
-      heroBg: "bg-blue-50/60 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800",
-      heroText: "text-blue-700 dark:text-blue-300",
-      heroSubText: "text-blue-600/70 dark:text-blue-400/70",
-      barFill: "bg-gradient-to-r from-blue-400 to-blue-500 dark:from-blue-500 dark:to-blue-600",
+      dot: "bg-foreground/50",
+      heroBg: "bg-muted/50 border-border",
+      heroText: "text-foreground",
+      heroSubText: "text-muted-foreground",
+      barFill: "bg-foreground/50",
     },
     low: {
       verdict: "PR少数 — オーガニック中心",
       sub: "クリエイター主導の市場。広告参入余地あり",
-      dot: "bg-gray-400",
-      heroBg: "bg-gray-50 dark:bg-gray-900/30 border-gray-200 dark:border-gray-700",
-      heroText: "text-gray-700 dark:text-gray-300",
-      heroSubText: "text-gray-500 dark:text-gray-500",
-      barFill: "bg-gray-400 dark:bg-gray-500",
+      dot: "bg-foreground/30",
+      heroBg: "bg-muted/30 border-border/60",
+      heroText: "text-muted-foreground",
+      heroSubText: "text-muted-foreground/70",
+      barFill: "bg-foreground/30",
     },
     none: {
       verdict: "PR動画なし — 完全オーガニック",
       sub: "ブランド未参入。先行者優位を狙える可能性",
-      dot: "bg-gray-300",
-      heroBg: "bg-gray-50 dark:bg-gray-900/20 border-gray-200 dark:border-gray-700",
-      heroText: "text-gray-600 dark:text-gray-400",
-      heroSubText: "text-gray-400 dark:text-gray-600",
-      barFill: "bg-gray-300",
+      dot: "bg-foreground/20",
+      heroBg: "bg-muted/20 border-border/40",
+      heroText: "text-muted-foreground",
+      heroSubText: "text-muted-foreground/60",
+      barFill: "bg-foreground/20",
     },
   };
 
@@ -849,28 +849,28 @@ export function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["
           {/* Column header row */}
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-muted/50 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             <span>指標</span>
-            <span className="text-right text-amber-600 dark:text-amber-400 w-16">PR/Ad</span>
+            <span className="text-right text-foreground/60 w-16">PR/Ad</span>
             <span className="text-right text-slate-500 dark:text-slate-400 w-16">オーガニック</span>
             <span className="text-right w-14">差分</span>
           </div>
           {/* ER */}
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
             <span className="text-muted-foreground">平均ER</span>
-            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{comparison.ad.avgER}%</span>
+            <span className="font-bold text-right w-16 text-foreground">{comparison.ad.avgER}%</span>
             <span className="font-medium text-right w-16">{comparison.organic.avgER}%</span>
             <span className={`font-bold text-right w-14 ${erDiffColor}`}>{erDiffStr}</span>
           </div>
           {/* Plays */}
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
             <span className="text-muted-foreground">平均再生数</span>
-            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{formatCount(comparison.ad.avgPlayCount)}</span>
+            <span className="font-bold text-right w-16 text-foreground">{formatCount(comparison.ad.avgPlayCount)}</span>
             <span className="font-medium text-right w-16">{formatCount(comparison.organic.avgPlayCount)}</span>
             <span className={`font-bold text-right w-14 ${playDiffColor}`}>{playDiffStr}</span>
           </div>
           {/* Age */}
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 items-center px-3 py-2 text-xs border-t border-border/50">
             <span className="text-muted-foreground">中央値投稿日数</span>
-            <span className="font-bold text-right w-16 text-amber-700 dark:text-amber-300">{Math.round(comparison.ad.medianAgeDays)}日</span>
+            <span className="font-bold text-right w-16 text-foreground">{Math.round(comparison.ad.medianAgeDays)}日</span>
             <span className="font-medium text-right w-16">{Math.round(comparison.organic.medianAgeDays)}日</span>
             <span className="text-right w-14 text-muted-foreground text-[10px]">—</span>
           </div>
@@ -884,10 +884,10 @@ export function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["
               // Three visual weight tiers: strong / mid / faint
               const badgeCls =
                 intensity >= 0.66
-                  ? "bg-amber-200 dark:bg-amber-800/70 border-amber-400 dark:border-amber-600 text-amber-900 dark:text-amber-200"
+                  ? "bg-foreground/15 border-foreground/30 text-foreground"
                   : intensity >= 0.33
-                  ? "bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300"
-                  : "bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400";
+                  ? "bg-foreground/10 border-foreground/20 text-foreground/80"
+                  : "bg-foreground/5 border-foreground/10 text-foreground/60";
               return (
                 <span
                   key={h.tag}
@@ -897,7 +897,7 @@ export function AdInsightSection({ data }: { data: NonNullable<TrendStatistics["
                   <span className="opacity-50">#</span>
                   <span>{h.tag}</span>
                   {/* Count bubble */}
-                  <span className="ml-0.5 bg-amber-500/25 dark:bg-amber-400/20 text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  <span className="ml-0.5 bg-foreground/15 text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
                     {h.count}
                   </span>
                   {/* ER chip */}
@@ -924,8 +924,8 @@ function round2Fmt(v: number): string {
 export function TrendSeoMetaKeywordsSection({ data }: { data: NonNullable<TrendStatistics["seoMetaKeywords"]> }) {
   const [videoDataOpen, setVideoDataOpen] = useState(false);
   const CLUSTER_BORDER_COLORS = [
-    "border-l-blue-400", "border-l-violet-400", "border-l-emerald-400", "border-l-amber-400",
-    "border-l-rose-400", "border-l-cyan-400", "border-l-fuchsia-400", "border-l-lime-400",
+    "border-l-foreground/70", "border-l-foreground/55", "border-l-foreground/40", "border-l-foreground/30",
+    "border-l-foreground/20", "border-l-foreground/15", "border-l-foreground/10", "border-l-foreground/[0.06]",
   ];
 
   return (
@@ -947,13 +947,13 @@ export function TrendSeoMetaKeywordsSection({ data }: { data: NonNullable<TrendS
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-semibold truncate">{cluster.label}</span>
                     <div className="flex items-center gap-2 text-[11px] text-muted-foreground shrink-0">
-                      <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium">{cluster.videoCount}本</span>
+                      <span className="px-1.5 py-0.5 rounded bg-foreground/10 text-foreground font-medium">{cluster.videoCount}本</span>
                       <span>{cluster.totalMentions}回</span>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {cluster.keywords.slice(0, 6).map((kw, ki) => (
-                      <span key={kw} className={`px-1.5 py-0.5 rounded text-[11px] border ${ki === 0 ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700 font-medium" : "bg-background border-border"}`}>
+                      <span key={kw} className={`px-1.5 py-0.5 rounded text-[11px] border ${ki === 0 ? "bg-foreground/[0.06] border-foreground/20 font-medium" : "bg-background border-border"}`}>
                         {kw}
                       </span>
                     ))}
@@ -1006,14 +1006,14 @@ export function TrendSeoMetaKeywordsSection({ data }: { data: NonNullable<TrendS
                     href={`https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5"
+                    className="text-foreground/60 hover:text-foreground hover:underline inline-flex items-center gap-0.5"
                   >
                     @{v.authorUniqueId}/{v.videoId.slice(-6)}
                     <svg className="w-2.5 h-2.5 opacity-60 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                   </a>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {v.keywords.map((kw, i) => (
-                      <span key={i} className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[10px]">
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-foreground/[0.04] border border-foreground/15 text-[10px]">
                         {kw}
                       </span>
                     ))}
@@ -1103,7 +1103,7 @@ export function HashtagPerformanceChart({ data, globalMedianER }: {
           <p className="text-xs font-medium mb-2 text-muted-foreground">TikTok総投稿数</p>
           <div className="flex flex-wrap gap-2">
             {chartData.filter(d => d.totalPostCount != null).map(d => (
-              <span key={d.tag} className="inline-flex items-center gap-1 text-xs bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 px-2 py-1 rounded">
+              <span key={d.tag} className="inline-flex items-center gap-1 text-xs bg-foreground/[0.04] border border-foreground/15 px-2 py-1 rounded">
                 <span className="font-medium">{d.tag}</span>
                 <span className="text-muted-foreground">{formatCount(d.totalPostCount!)}本</span>
               </span>
@@ -1166,7 +1166,7 @@ export function DurationBandsChart({ data, globalMedianER }: {
       </ResponsiveContainer>
       <div className="grid grid-cols-3 gap-2 text-xs mt-2">
         {data.map(d => (
-          <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800" : "bg-muted/50"}`}>
+          <div key={d.label} className={`p-2 rounded text-center ${d.isOptimal ? "bg-foreground/[0.04] border border-foreground/15" : "bg-muted/50"}`}>
             <div className="font-medium">{d.label} {d.isOptimal && "★"}</div>
             <div className="text-muted-foreground">{d.videoCount}本</div>
             <div className="text-muted-foreground">ER {d.avgER}% / {formatCount(d.avgPlayCount)}再生</div>
@@ -1196,9 +1196,9 @@ export function TrendPostingTimeHeatmap({ grid, bestSlots }: {
   }
 
   const colorSchemes = {
-    er:    { colors: ["bg-teal-100", "bg-teal-200", "bg-teal-400", "bg-teal-600 text-white"] },
-    count: { colors: ["bg-blue-100", "bg-blue-200", "bg-blue-400", "bg-blue-600 text-white"] },
-    plays: { colors: ["bg-amber-100", "bg-amber-200", "bg-amber-400", "bg-amber-600 text-white"] },
+    er:    { colors: ["bg-foreground/10", "bg-foreground/20", "bg-foreground/40", "bg-foreground/70 text-background"] },
+    count: { colors: ["bg-foreground/10", "bg-foreground/20", "bg-foreground/40", "bg-foreground/70 text-background"] },
+    plays: { colors: ["bg-foreground/10", "bg-foreground/20", "bg-foreground/40", "bg-foreground/70 text-background"] },
   };
 
   const getColor = (day: number, hour: number) => {
@@ -1284,7 +1284,7 @@ export function TrendPostingTimeHeatmap({ grid, bestSlots }: {
           <p className="text-xs font-medium mb-1">おすすめ投稿タイミング（ER上位）</p>
           <div className="flex flex-wrap gap-2">
             {bestSlots.map((s, i) => (
-              <span key={i} className="text-xs bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 px-2 py-1 rounded">
+              <span key={i} className="text-xs bg-foreground/[0.04] border border-foreground/15 px-2 py-1 rounded">
                 {DAYS[s.day]}曜 {s.hour}時 (ER {s.avgER}%, {s.videoCount}本)
               </span>
             ))}

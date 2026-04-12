@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Sparkles, AlertTriangle, Clock, Camera, Hash } from "lucide-react";
+import { Sparkles, AlertTriangle, Clock, Hash } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,15 +41,13 @@ function AppealAxesTab({
         const fullCaption = formatCaptionText(axis.captionTemplate);
 
         return (
-          <Card key={i} className="relative overflow-hidden">
-            <div className="absolute top-0 left-0 h-full w-1 bg-amber-500/70" />
-
+          <Card key={i} className="overflow-hidden">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <Badge
-                    variant="secondary"
-                    className="shrink-0 bg-amber-100 text-amber-800 border-amber-200"
+                    variant="outline"
+                    className="shrink-0"
                   >
                     {axis.type}
                   </Badge>
@@ -63,16 +61,16 @@ function AppealAxesTab({
 
             <CardContent className="space-y-3">
               {/* キャプション構成 */}
-              <div className="rounded-sm border border-stone-200 bg-stone-50/60 divide-y divide-stone-200">
+              <div className="rounded-sm border border-border divide-y divide-border">
                 {CAPTION_SECTIONS.map(({ key, label }, si) => (
                   <div key={key} className="flex gap-3 px-3 py-2 text-sm">
-                    <span className="shrink-0 w-20 font-medium text-stone-500">
+                    <span className="shrink-0 w-20 font-medium text-muted-foreground">
                       {si > 0 && (
-                        <span className="text-stone-300 mr-1">→</span>
+                        <span className="text-border mr-1">&rarr;</span>
                       )}
                       {label}
                     </span>
-                    <span className="text-stone-800">
+                    <span className="text-foreground">
                       {axis.captionTemplate[key]}
                     </span>
                   </div>
@@ -115,8 +113,8 @@ function HashtagSetsTab({
               {tags.map((tag) => (
                 <Badge
                   key={tag}
-                  variant="secondary"
-                  className="text-xs bg-stone-100 text-stone-700 border-stone-200"
+                  variant="outline"
+                  className="text-xs"
                 >
                   {tag}
                 </Badge>
@@ -143,7 +141,7 @@ function ChecklistTab({
       {items.map((item, i) => (
         <label
           key={i}
-          className="flex items-start gap-3 rounded-sm border border-stone-200 bg-white px-4 py-3 cursor-pointer transition-colors hover:bg-stone-50"
+          className="flex items-start gap-3 rounded-sm border border-border bg-card px-4 py-3 cursor-pointer transition-colors hover:bg-muted/30"
         >
           <Checkbox
             checked={checked[i] ?? false}
@@ -155,13 +153,13 @@ function ChecklistTab({
           <div className="flex-1 min-w-0 space-y-1">
             <div className="flex items-center gap-2">
               <span
-                className={`text-sm font-medium ${checked[i] ? "line-through text-muted-foreground" : "text-stone-900"}`}
+                className={`text-sm font-medium ${checked[i] ? "line-through text-muted-foreground" : "text-foreground"}`}
               >
                 {item.recommendation}
               </span>
               <Badge
                 variant="outline"
-                className="text-[10px] px-1.5 py-0 text-stone-400 border-stone-200"
+                className="text-[10px] px-1.5 py-0"
               >
                 {item.source}
               </Badge>
@@ -181,18 +179,17 @@ function NgListTab({ items }: { items: ProductionBriefType["ngList"] }) {
       {items.map((ng, i) => (
         <Card
           key={i}
-          className="relative overflow-hidden border-amber-200 bg-amber-50/40"
+          className="overflow-hidden border-[#D71921]/15 bg-[#D71921]/[0.03]"
         >
-          <div className="absolute top-0 left-0 h-full w-1 bg-amber-500" />
           <CardContent className="py-4 space-y-1.5">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <span className="text-sm font-semibold text-amber-900">
+              <AlertTriangle className="h-4 w-4 text-[#D71921]/70 shrink-0" />
+              <span className="text-sm font-semibold text-foreground">
                 {ng.item}
               </span>
             </div>
-            <p className="text-sm text-stone-700 pl-6">{ng.reason}</p>
-            <p className="text-xs text-muted-foreground pl-6 italic">
+            <p className="text-sm text-muted-foreground pl-6">{ng.reason}</p>
+            <p className="text-xs text-muted-foreground/70 pl-6 italic">
               根拠: {ng.evidence}
             </p>
           </CardContent>
@@ -217,11 +214,11 @@ function PostingScheduleTab({
           <Card key={i} className="text-center">
             <CardContent className="py-5 space-y-2">
               <div className="flex items-center justify-center gap-1.5">
-                <Clock className="h-4 w-4 text-amber-600" />
-                <span className="text-lg font-bold tracking-tight text-stone-900">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-lg font-bold tracking-tight text-foreground">
                   {slot.day}
                 </span>
-                <span className="text-lg font-bold text-amber-600">
+                <span className="text-lg font-bold text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                   {formatHour(slot.hour)}
                 </span>
               </div>
@@ -244,7 +241,7 @@ function PostingScheduleTab({
               <Badge
                 key={i}
                 variant="outline"
-                className="text-xs text-stone-400 border-stone-200"
+                className="text-xs"
                 title={slot.reason}
               >
                 {slot.day} {formatHour(slot.hour)}
@@ -303,11 +300,11 @@ export default function ProductionBrief({
   if (!brief) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-10 text-center">
-        <div className="rounded-full bg-amber-100 p-4">
-          <Sparkles className="h-8 w-8 text-amber-600" />
+        <div className="rounded-full bg-muted p-4">
+          <Sparkles className="h-8 w-8 text-foreground/60" />
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-stone-700">制作ブリーフが未作成です</p>
+          <p className="text-sm font-medium text-foreground">制作ブリーフが未作成です</p>
           <p className="text-xs text-muted-foreground">AIが台本・ハッシュタグを自動生成します</p>
         </div>
 
@@ -337,14 +334,14 @@ export default function ProductionBrief({
               <label className="text-[11px] font-medium text-muted-foreground">参考画像</label>
               <div className="mt-1 flex items-center gap-3">
                 <label className="cursor-pointer px-3 py-2 text-xs border rounded-md hover:bg-muted transition-colors">
-                  📎 ファイルを選択
+                  ファイルを選択
                   <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
                 </label>
                 {imagePreview && (
                   <div className="relative">
                     <img src={imagePreview} alt="" className="w-12 h-12 rounded object-cover border" />
                     <button onClick={() => { setImageBase64(null); setImagePreview(null); }}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">×</button>
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-foreground text-background rounded-full text-[10px] flex items-center justify-center">&times;</button>
                   </div>
                 )}
               </div>
@@ -352,10 +349,10 @@ export default function ProductionBrief({
           </div>
         )}
 
-        <Button onClick={handleGenerate} disabled={isGenerating} className="bg-amber-600 hover:bg-amber-700 text-white rounded-sm">
+        <Button onClick={handleGenerate} disabled={isGenerating} className="rounded-sm">
           {isGenerating ? (
             <span className="flex items-center gap-2">
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
               生成中…
             </span>
           ) : (
@@ -372,7 +369,7 @@ export default function ProductionBrief({
   return (
     <>
     <Tabs defaultValue="script" className="w-full">
-      <TabsList className="w-full justify-start overflow-x-auto rounded-sm bg-stone-100">
+      <TabsList className="w-full justify-start overflow-x-auto rounded-sm">
         <TabsTrigger value="script" className="rounded-sm text-xs gap-1.5">
           <Sparkles className="h-3.5 w-3.5" />
           台本テンプレート
@@ -427,20 +424,20 @@ export default function ProductionBrief({
           </div>
           <div className="flex items-center gap-3">
             <label className="cursor-pointer px-3 py-2 text-xs border rounded-md hover:bg-muted transition-colors">
-              📎 画像添付
+              画像添付
               <input type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
             </label>
             {imagePreview && (
               <div className="relative">
                 <img src={imagePreview} alt="" className="w-10 h-10 rounded object-cover border" />
                 <button onClick={() => { setImageBase64(null); setImagePreview(null); }}
-                  className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center">×</button>
+                  className="absolute -top-1 -right-1 w-4 h-4 bg-foreground text-background rounded-full text-[10px] flex items-center justify-center">&times;</button>
               </div>
             )}
-            <Button onClick={handleGenerate} disabled={isGenerating} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white rounded-sm ml-auto">
+            <Button onClick={handleGenerate} disabled={isGenerating} size="sm" className="rounded-sm ml-auto">
               {isGenerating ? (
                 <span className="flex items-center gap-2">
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-background border-t-transparent" />
                   再生成中…
                 </span>
               ) : (
