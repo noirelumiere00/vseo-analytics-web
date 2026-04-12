@@ -1500,11 +1500,11 @@ export default function AnalysisDetail() {
 
                 {/* 動画マクロ分析 */}
                 {data && data.report && (
-                  <div className="space-y-6">
-                    <div className="border rounded-xl p-4 animate-fade-slide-up">
-                      <div className="flex items-center gap-2.5 mb-4">
-                        <div className="h-5 w-1 rounded-full bg-[#171717]" />
-                        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画マクロ分析</h3>
+                  <div className="space-y-3">
+                    <div className="border rounded-xl p-3 animate-fade-slide-up">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-4 w-0.5 rounded-full bg-[#171717]" />
+                        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画マクロ分析</h3>
                       </div>
                       <ReportSection
                         keyword={data.job?.keyword || ""}
@@ -1531,13 +1531,13 @@ export default function AnalysisDetail() {
                     </div>
 
                     {/* 動画ミクロ分析 */}
-                    <div className="border rounded-xl p-4 animate-fade-slide-up">
-                      <div className="flex items-center gap-2.5 mb-4">
-                        <div className="h-5 w-1 rounded-full bg-[#171717]" />
-                        <h3 className="text-sm font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画ミクロ分析</h3>
+                    <div className="border rounded-xl p-3 animate-fade-slide-up">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-4 w-0.5 rounded-full bg-[#171717]" />
+                        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画ミクロ分析</h3>
                       </div>
                       <Tabs defaultValue="insights" className="w-full">
-                        <TabsList className="w-full mb-3">
+                        <TabsList className="w-full h-8 mb-2">
                           <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
                           <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
                         </TabsList>

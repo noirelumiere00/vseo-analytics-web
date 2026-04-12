@@ -51,23 +51,23 @@ function AspectRow({ aspect }: { aspect: Aspect }) {
   const total = aspect.pos + aspect.neg;
   const posWidth = total > 0 ? (aspect.pos / total) * 100 : 50;
   return (
-    <div className="py-3 border-b border-border/40 last:border-b-0">
-      <div className="flex items-baseline justify-between mb-1.5">
-        <span className="font-semibold text-sm">{aspect.name}</span>
-        <div className="flex items-center gap-3" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-          <span className="text-xs font-bold text-foreground">{aspect.pos}%</span>
-          <span className="text-[10px] text-muted-foreground/60">/</span>
-          <span className="text-xs font-medium text-muted-foreground">{aspect.neg}%</span>
+    <div className="py-1.5 border-b border-border/30 last:border-b-0">
+      <div className="flex items-baseline justify-between mb-0.5">
+        <span className="font-semibold text-[13px]">{aspect.name}</span>
+        <div className="flex items-center gap-2" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+          <span className="text-[11px] font-bold text-foreground">{aspect.pos}%</span>
+          <span className="text-[9px] text-muted-foreground/40">/</span>
+          <span className="text-[11px] font-medium text-muted-foreground/60">{aspect.neg}%</span>
         </div>
       </div>
-      <div className="h-1 rounded-full overflow-hidden bg-black/[0.04] flex">
+      <div className="h-[3px] rounded-full overflow-hidden bg-black/[0.04] flex">
         <div
           className="h-full bg-foreground/80 rounded-full"
           style={{ width: `${posWidth}%`, transition: 'width 600ms var(--md-ease-emphasized-decel)' }}
         />
       </div>
       {aspect.desc && (
-        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{aspect.desc}</p>
+        <p className="text-[11px] text-muted-foreground/70 mt-0.5 leading-snug line-clamp-1">{aspect.desc}</p>
       )}
     </div>
   );
@@ -80,7 +80,7 @@ function PriorityBadge({ priority }: { priority: "回避" | "注意" | "活用" 
     活用: "bg-foreground/[0.06] text-foreground/70 border border-transparent",
   }[priority];
   return (
-    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${cls}`} style={{ fontFamily: "'Space Mono', monospace" }}>
+    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-sm ${cls}`} style={{ fontFamily: "'Space Mono', monospace" }}>
       {priority}
     </span>
   );
@@ -104,29 +104,31 @@ export function ReportSection({
   const cleanKeyword = keyword.replace(/^#+/, "");
 
   return (
-    <div className="pt-2">
+    <div>
       <Tabs defaultValue="facets" className="w-full">
-        <TabsList className="w-full">
-          <TabsTrigger value="facets" className="flex-1 text-xs">側面分析</TabsTrigger>
-          <TabsTrigger value="words" className="flex-1 text-xs">頻出ワード分析</TabsTrigger>
+        <TabsList className="w-full h-8">
+          <TabsTrigger value="facets" className="flex-1 text-xs py-1">側面分析</TabsTrigger>
+          <TabsTrigger value="words" className="flex-1 text-xs py-1">頻出ワード分析</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="facets" className="mt-4">
-          <p className="text-xs text-muted-foreground mb-3">
-            {platform}上の {cleanKeyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
-          </p>
-          <div className="flex gap-4 mb-4 text-[10px] uppercase tracking-wider text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-[3px] rounded-full bg-foreground/80" />Positive
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-[3px] rounded-full bg-foreground/15" />Negative
-            </span>
+        <TabsContent value="facets" className="mt-2">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[11px] text-muted-foreground">
+              {cleanKeyword} — {videoCount}本分析
+            </p>
+            <div className="flex gap-3 text-[9px] uppercase tracking-wider text-muted-foreground/60" style={{ fontFamily: "'Space Mono', monospace" }}>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-[2px] rounded-full bg-foreground/80" />Pos
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-2.5 h-[2px] rounded-full bg-foreground/15" />Neg
+              </span>
+            </div>
           </div>
 
           {strengths.length > 0 && (
-            <div className="mb-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+            <div className="mb-2">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-foreground/40 mb-0.5" style={{ fontFamily: "'Space Mono', monospace" }}>
                 Strengths
               </div>
               {strengths.map((a) => (
@@ -137,7 +139,7 @@ export function ReportSection({
 
           {improvements.length > 0 && (
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-foreground/40 mb-0.5" style={{ fontFamily: "'Space Mono', monospace" }}>
                 Needs Improvement
               </div>
               {improvements.map((a) => (
@@ -147,13 +149,13 @@ export function ReportSection({
           )}
 
           {aspects.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+            <p className="text-xs text-muted-foreground text-center py-3">
+              分析データがありません
             </p>
           )}
         </TabsContent>
 
-        <TabsContent value="words" className="mt-4">
+        <TabsContent value="words" className="mt-2">
           <FrequentWordsCloud
             emotionWords={emotionWords}
             positiveWords={positiveWords}
@@ -172,13 +174,10 @@ interface VideoRef {
   title?: string | null;
 }
 
-// 動画ミクロ分析（施策提案）を独立コンポーネントとしてエクスポート
+// 動画ミクロ分析（施策提案）
 export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposal[]; videos?: VideoRef[] }) {
-  // videoId → 参照番号マップ
   const refMap = new Map<string, number>((videos ?? []).map((v, i) => [v.videoId, i + 1]));
-  // videoId → accountId マップ（テキスト中の[videoId]をアカウント名に置換用）
   const accountMap = new Map<string, string>((videos ?? []).map(v => [v.videoId, v.accountId]));
-  // テキスト中の 動画[videoId] や [videoId] をアカウント名に置換
   const replaceVideoIds = (text: string): string => {
     return text.replace(/動画\[(\d+)\]|\[(\d+)\]/g, (_match, id1, id2) => {
       const vid = id1 || id2;
@@ -187,7 +186,7 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
     });
   };
   return (
-    <div className="space-y-px">
+    <div>
       {proposals.map((p, i) => {
         const refs = (p.sourceVideoIds ?? [])
           .map(id => ({ id, num: refMap.get(id), video: (videos ?? []).find(v => v.videoId === id) }))
@@ -195,36 +194,36 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
         return (
           <div
             key={i}
-            className="border-b border-border/40 last:border-b-0 py-3"
+            className="border-b border-border/30 last:border-b-0 py-2"
           >
-            <div className="flex items-start gap-3">
-              <span className="text-[10px] font-bold text-muted-foreground/40 mt-0.5 shrink-0 w-5 text-center tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            <div className="flex items-start gap-2">
+              <span className="text-[9px] font-bold text-muted-foreground/30 mt-0.5 shrink-0 w-4 text-right tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 {String(i + 1).padStart(2, '0')}
               </span>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-semibold">{p.area}</span>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[13px] font-semibold leading-tight">{p.area}</span>
                   <PriorityBadge priority={p.priority} />
                 </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{p.action}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{p.action}</p>
               </div>
             </div>
 
             {p.analysis && (
-              <div className="pl-8 mt-2">
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.analysis)}</p>
-              </div>
+              <p className="text-[11px] text-muted-foreground/70 leading-snug pl-6 mt-1 line-clamp-2">{replaceVideoIds(p.analysis)}</p>
             )}
 
             {p.strategicAdvice && (
-              <div className="ml-8 mt-2 pl-3 border-l-2 border-foreground/10">
-                <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>Strategic Advice</div>
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.strategicAdvice)}</p>
-              </div>
+              <details className="pl-6 mt-1">
+                <summary className="text-[9px] font-bold uppercase tracking-widest text-foreground/30 cursor-pointer hover:text-foreground/50 transition-colors select-none" style={{ fontFamily: "'Space Mono', monospace" }}>
+                  Strategic Advice
+                </summary>
+                <p className="text-[11px] text-muted-foreground/70 leading-snug mt-0.5 pl-3 border-l border-foreground/10">{replaceVideoIds(p.strategicAdvice)}</p>
+              </details>
             )}
 
             {refs.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pl-8 mt-2">
+              <div className="flex flex-wrap gap-1 pl-6 mt-1">
                 {refs.map(r => (
                   <a
                     key={r.id}
@@ -232,7 +231,7 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
                     target="_blank"
                     rel="noopener noreferrer"
                     title={r.video?.title || r.id}
-                    className="text-[10px] font-medium text-foreground/40 hover:text-foreground transition-colors"
+                    className="text-[9px] font-medium text-foreground/30 hover:text-foreground/60 transition-colors"
                     style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
                     [{r.num}]
@@ -244,8 +243,8 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
         );
       })}
       {proposals.length === 0 && (
-        <p className="text-xs text-muted-foreground text-center py-4">
-          分析データを取得できませんでした。LLMのトークン上限に達した可能性があります。後日再度お試しください。
+        <p className="text-xs text-muted-foreground text-center py-3">
+          分析データがありません
         </p>
       )}
     </div>
@@ -255,41 +254,41 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
 export function SeoMetaKeywordsSection({ videoMetaKeywords }: { videoMetaKeywords?: Array<{ videoUrl: string; videoId: string; accountId: string; keywords: string[] }> }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground mb-3">
-        再生数上位5動画のページから取得した、TikTokが自動生成するSEOメタキーワード（生データ）。
+      <p className="text-[11px] text-muted-foreground mb-2">
+        再生数上位動画のTikTok自動生成SEOメタキーワード
       </p>
       {videoMetaKeywords && videoMetaKeywords.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-1.5">
           {videoMetaKeywords.map((vm) => (
-            <div key={vm.videoId || vm.videoUrl} className="rounded-lg border bg-muted/20 p-3">
-              <div className="flex items-center gap-2 mb-2">
+            <div key={vm.videoId || vm.videoUrl} className="rounded-md border border-border/40 p-2">
+              <div className="flex items-center gap-2 mb-1.5">
                 <a
                   href={vm.videoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs font-semibold text-blue-600 hover:underline"
+                  className="text-[11px] font-semibold text-foreground/60 hover:text-foreground transition-colors"
                 >
                   @{vm.accountId || "unknown"}
                 </a>
-                <span className="text-[10px] text-muted-foreground">{vm.videoId}</span>
+                <span className="text-[9px] text-muted-foreground/40" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{vm.videoId}</span>
               </div>
               {vm.keywords.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {vm.keywords.map((kw, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs font-normal">
+                    <span key={i} className="text-[10px] px-1.5 py-px rounded bg-foreground/[0.04] text-foreground/60 border border-border/30">
                       {kw}
-                    </Badge>
+                    </span>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">キーワードなし</p>
+                <p className="text-[11px] text-muted-foreground/50">—</p>
               )}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground text-center py-4">
-          メタキーワードデータがありません。新規分析を実行すると取得されます。
+        <p className="text-xs text-muted-foreground text-center py-3">
+          メタキーワードデータがありません
         </p>
       )}
     </div>
