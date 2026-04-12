@@ -50,23 +50,21 @@ interface ReportSectionProps {
 function AspectRow({ aspect }: { aspect: Aspect }) {
   const total = aspect.pos + aspect.neg;
   const posWidth = total > 0 ? (aspect.pos / total) * 100 : 50;
-  const negWidth = total > 0 ? (aspect.neg / total) * 100 : 50;
   return (
-    <div className="py-3 border-b last:border-b-0">
-      <span className="font-semibold text-sm">{aspect.name}</span>
-      <div className="flex items-center gap-2 mt-2">
-        <span className="text-green-600 font-bold text-xs w-10 text-right shrink-0">{aspect.pos}%</span>
-        <div className="flex-1 h-2.5 rounded-full overflow-hidden bg-muted flex">
-          <div
-            className="h-full bg-green-500 transition-all duration-700"
-            style={{ width: `${posWidth}%` }}
-          />
-          <div
-            className="h-full bg-red-400 transition-all duration-700"
-            style={{ width: `${negWidth}%` }}
-          />
+    <div className="py-3 border-b border-border/40 last:border-b-0">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="font-semibold text-sm">{aspect.name}</span>
+        <div className="flex items-center gap-3" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+          <span className="text-xs font-bold text-foreground">{aspect.pos}%</span>
+          <span className="text-[10px] text-muted-foreground/60">/</span>
+          <span className="text-xs font-medium text-muted-foreground">{aspect.neg}%</span>
         </div>
-        <span className="text-red-500 font-bold text-xs w-10 shrink-0">{aspect.neg}%</span>
+      </div>
+      <div className="h-1 rounded-full overflow-hidden bg-black/[0.04] flex">
+        <div
+          className="h-full bg-foreground/80 rounded-full"
+          style={{ width: `${posWidth}%`, transition: 'width 600ms var(--md-ease-emphasized-decel)' }}
+        />
       </div>
       {aspect.desc && (
         <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{aspect.desc}</p>
@@ -77,12 +75,12 @@ function AspectRow({ aspect }: { aspect: Aspect }) {
 
 function PriorityBadge({ priority }: { priority: "回避" | "注意" | "活用" }) {
   const cls = {
-    回避: "bg-red-50 text-red-600 border-red-200",
-    注意: "bg-orange-50 text-orange-600 border-orange-200",
-    活用: "bg-green-50 text-green-600 border-green-200",
+    回避: "bg-foreground text-background",
+    注意: "bg-transparent text-foreground border border-foreground/30",
+    活用: "bg-foreground/[0.06] text-foreground/70 border border-transparent",
   }[priority];
   return (
-    <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${cls}`}>
+    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm ${cls}`} style={{ fontFamily: "'Space Mono', monospace" }}>
       {priority}
     </span>
   );
@@ -117,20 +115,20 @@ export function ReportSection({
           <p className="text-xs text-muted-foreground mb-3">
             {platform}上の {cleanKeyword} 関連動画{videoCount}本を分析。各側面のポジティブ/ネガティブ比率。
           </p>
-          <div className="flex gap-4 mb-3 text-xs text-muted-foreground">
+          <div className="flex gap-4 mb-4 text-[10px] uppercase tracking-wider text-muted-foreground" style={{ fontFamily: "'Space Mono', monospace" }}>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500" />ポジティブ
+              <span className="inline-block w-3 h-[3px] rounded-full bg-foreground/80" />Positive
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400" />ネガティブ
+              <span className="inline-block w-3 h-[3px] rounded-full bg-foreground/15" />Negative
             </span>
           </div>
 
           {strengths.length > 0 && (
-            <div className="mb-3">
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-0.5 rounded mb-2">
-                ● 強み
-              </span>
+            <div className="mb-4">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                Strengths
+              </div>
               {strengths.map((a) => (
                 <AspectRow key={a.name} aspect={a} />
               ))}
@@ -139,9 +137,9 @@ export function ReportSection({
 
           {improvements.length > 0 && (
             <div>
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-0.5 rounded mb-2">
-                ● 要改善
-              </span>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/50 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>
+                Needs Improvement
+              </div>
               {improvements.map((a) => (
                 <AspectRow key={a.name} aspect={a} />
               ))}
@@ -189,7 +187,7 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
     });
   };
   return (
-    <div className="space-y-2">
+    <div className="space-y-px">
       {proposals.map((p, i) => {
         const refs = (p.sourceVideoIds ?? [])
           .map(id => ({ id, num: refMap.get(id), video: (videos ?? []).find(v => v.videoId === id) }))
@@ -197,10 +195,12 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
         return (
           <div
             key={i}
-            className="rounded-lg bg-muted/30 border overflow-hidden"
+            className="border-b border-border/40 last:border-b-0 py-3"
           >
-            <div className="flex items-start gap-3 p-3">
-              <span className="text-xl leading-none mt-0.5 shrink-0">{p.icon}</span>
+            <div className="flex items-start gap-3">
+              <span className="text-[10px] font-bold text-muted-foreground/40 mt-0.5 shrink-0 w-5 text-center tabular-nums" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                {String(i + 1).padStart(2, '0')}
+              </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm font-semibold">{p.area}</span>
@@ -211,21 +211,20 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
             </div>
 
             {p.analysis && (
-              <div className="px-3 pb-2">
-                <div className="text-xs font-semibold text-foreground/70 mb-1">分析詳細</div>
+              <div className="pl-8 mt-2">
                 <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.analysis)}</p>
               </div>
             )}
 
             {p.strategicAdvice && (
-              <div className="mx-3 mb-2 p-2.5 rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
-                <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">戦略的アドバイス</div>
-                <p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.strategicAdvice)}</p>
+              <div className="ml-8 mt-2 pl-3 border-l-2 border-foreground/10">
+                <div className="text-[10px] font-bold uppercase tracking-widest text-foreground/40 mb-1" style={{ fontFamily: "'Space Mono', monospace" }}>Strategic Advice</div>
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{replaceVideoIds(p.strategicAdvice)}</p>
               </div>
             )}
 
             {refs.length > 0 && (
-              <div className="flex flex-wrap gap-1 px-3 pb-3">
+              <div className="flex flex-wrap gap-1.5 pl-8 mt-2">
                 {refs.map(r => (
                   <a
                     key={r.id}
@@ -233,9 +232,10 @@ export function MicroAnalysisSection({ proposals, videos }: { proposals: Proposa
                     target="_blank"
                     rel="noopener noreferrer"
                     title={r.video?.title || r.id}
-                    className="text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                    className="text-[10px] font-medium text-foreground/40 hover:text-foreground transition-colors"
+                    style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   >
-                    [参照{r.num}]
+                    [{r.num}]
                   </a>
                 ))}
               </div>
