@@ -419,9 +419,9 @@ function getFreshnessSignal(score: number): FreshnessSignal {
   if (score >= 80) return {
     text: "急上昇",
     subtext: "今まさに需要が集中",
-    badgeClass: "bg-foreground text-background",
-    gaugeColor: "#171717",
-    borderClass: "border-foreground",
+    badgeClass: "bg-[#D71921]/10 text-[#D71921] font-bold",
+    gaugeColor: "#D71921",
+    borderClass: "border-[#D71921]/40",
     glowClass: "",
     icon: "",
   };

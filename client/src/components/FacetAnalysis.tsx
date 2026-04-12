@@ -42,13 +42,13 @@ export function FacetAnalysis({ facets }: FacetAnalysisProps) {
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-foreground">{facet.aspect}</span>
                 <div className="flex gap-3 text-xs">
-                  <span className="text-teal-600">ポジ {facet.positive_percentage}%</span>
+                  <span className="text-emerald-600">ポジ {facet.positive_percentage}%</span>
                   <span className="text-muted-foreground">中立 {neutral}%</span>
-                  <span className="text-amber-600">ネガ {facet.negative_percentage}%</span>
+                  <span className="text-red-600">ネガ {facet.negative_percentage}%</span>
                 </div>
               </div>
               <div className="flex h-8 rounded-sm overflow-hidden bg-muted">
-                <BarSegment width={facet.positive_percentage} className="bg-teal-600" label={`${facet.positive_percentage}%`} />
+                <BarSegment width={facet.positive_percentage} className="bg-emerald-600" label={`${facet.positive_percentage}%`} />
                 <BarSegment width={neutral} className="bg-muted" label={`${neutral}%`} muted />
                 <BarSegment width={facet.negative_percentage} className="bg-amber-600" label={`${facet.negative_percentage}%`} />
               </div>

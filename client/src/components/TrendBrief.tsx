@@ -32,19 +32,19 @@ export default function TrendBrief({
       {/* 乗るべきトレンド */}
       <div>
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-          <Sparkles className="h-3.5 w-3.5 text-amber-500" /> 乗るべきトレンド TOP3
+          <Sparkles className="h-3.5 w-3.5 text-foreground/60" /> 乗るべきトレンド TOP3
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {top3Tags.map((h, i) => (
-            <Card key={h.tag} className="rounded-sm border-slate-200 hover:border-amber-300 transition-colors">
+            <Card key={h.tag} className="rounded-sm hover:border-foreground/20 transition-colors">
               <CardContent className="p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="rounded-sm border-teal-300 text-teal-800 bg-teal-50 text-[11px] font-bold">
+                  <Badge variant="outline" className="rounded-sm text-[11px] font-bold">
                     #{h.tag}
                   </Badge>
-                  <span className="text-[10px] font-semibold text-slate-400">{h.videoCount}本</span>
+                  <span className="text-[10px] font-semibold text-muted-foreground">{h.videoCount}本</span>
                 </div>
-                <p className="text-lg font-extrabold text-amber-700 tabular-nums">{h.avgER}%<span className="text-[10px] font-medium text-slate-400 ml-1">ER</span></p>
+                <p className="text-lg font-extrabold text-foreground tabular-nums">{h.avgER}%<span className="text-[10px] font-medium text-muted-foreground ml-1">ER</span></p>
                 <p className="text-[11px] text-slate-500 leading-snug">{IDEA_HINTS[i % IDEA_HINTS.length]}</p>
               </CardContent>
             </Card>

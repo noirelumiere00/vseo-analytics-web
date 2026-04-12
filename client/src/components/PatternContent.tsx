@@ -3,7 +3,7 @@ import { Anchor, FileText, Clapperboard, Hash, Lightbulb, AlertTriangle } from "
 export function WinPatternContent({ analysis }: { analysis: { summary: string; keyHook: string; contentTrend: string; formatFeatures: string; hashtagStrategy: string; vseoTips: string; avoidTips?: string } }) {
   return (
     <div className="space-y-4">
-      <div className="p-3 bg-card rounded-sm border">
+      <div className="p-3 bg-card rounded-sm border border-l-2 border-l-emerald-500">
         <p className="text-sm font-medium text-foreground">{analysis.summary}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -42,7 +42,7 @@ export function WinPatternContent({ analysis }: { analysis: { summary: string; k
 export function LosePatternContent({ analysis }: { analysis: { summary: string; badHook: string; contentWeakness: string; formatProblems: string; hashtagMistakes: string; avoidTips: string } }) {
   return (
     <div className="space-y-4">
-      <div className="p-3 bg-card rounded-sm border">
+      <div className="p-3 bg-card rounded-sm border border-l-2 border-l-[#D71921]/60">
         <p className="text-sm font-medium text-foreground">{analysis.summary}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

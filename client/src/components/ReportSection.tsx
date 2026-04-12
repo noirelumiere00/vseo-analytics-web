@@ -75,9 +75,9 @@ function AspectRow({ aspect }: { aspect: Aspect }) {
 
 function PriorityBadge({ priority }: { priority: "回避" | "注意" | "活用" }) {
   const cls = {
-    回避: "bg-foreground text-background",
-    注意: "bg-transparent text-foreground border border-foreground/30",
-    活用: "bg-foreground/[0.06] text-foreground/70 border border-transparent",
+    回避: "text-[#D71921] bg-[#D71921]/[0.06] border border-[#D71921]/15",
+    注意: "text-amber-600 bg-amber-500/[0.06] border border-amber-500/15",
+    活用: "text-emerald-600 bg-emerald-500/[0.06] border border-emerald-500/15",
   }[priority];
   return (
     <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-px rounded-sm ${cls}`} style={{ fontFamily: "'Space Mono', monospace" }}>
