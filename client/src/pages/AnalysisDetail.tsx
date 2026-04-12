@@ -1003,70 +1003,77 @@ export default function AnalysisDetail() {
                 <h2 className="text-base leading-none font-semibold">分析レポート</h2>
               </div>
 
-              {/* センチメント構成比 ― ドーナツ + 統計カード */}
+              {/* センチメント構成比 ― 3カラム (Positive / Negative / Neutral) */}
               <div className="border rounded-sm p-3">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">センチメント構成比</h3>
-                <div className="grid grid-cols-[140px_1fr] md:grid-cols-[160px_1fr] gap-3 items-center">
-                  {/* ドーナツチャート（コンパクト） */}
-                  <div className="relative">
-                    <ResponsiveContainer width="100%" height={140}>
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Pos', value: reportStats.sentimentCounts.positive },
-                            { name: 'Neu', value: reportStats.sentimentCounts.neutral },
-                            { name: 'Neg', value: reportStats.sentimentCounts.negative },
-                          ]}
-                          cx="50%" cy="50%"
-                          innerRadius={40} outerRadius={60}
-                          startAngle={90} endAngle={-270}
-                          paddingAngle={2}
-                          animationBegin={0} animationDuration={600}
-                          labelLine={false}
-                          dataKey="value"
-                        >
-                          <Cell fill="#10b981" />
-                          <Cell fill="#9ca3af" />
-                          <Cell fill="#ef4444" />
-                        </Pie>
-                        <Tooltip formatter={(v: number) => [`${v}本`, ""]} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="text-center">
-                        <div className="text-lg font-bold font-data leading-none">
-                          {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative
-                            ? reportStats.sentimentPercentages.positive
-                            : reportStats.sentimentPercentages.negative}%
-                        </div>
-                        <div className="text-[10px] text-muted-foreground">
-                          {reportStats.sentimentCounts.positive >= reportStats.sentimentCounts.negative ? "Pos" : "Neg"}
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">センチメント構成比</h3>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    {
+                      label: "Positive",
+                      count: reportStats.sentimentCounts.positive,
+                      pct: reportStats.sentimentPercentages.positive,
+                      views: reportStats.threeWay.views.positive,
+                      engagement: reportStats.threeWay.engagement.positive,
+                      border: "border-green-200 dark:border-green-800",
+                      bg: "bg-green-50 dark:bg-green-950/20",
+                      numCls: "text-green-700 dark:text-green-400",
+                      barCls: "bg-green-500",
+                    },
+                    {
+                      label: "Negative",
+                      count: reportStats.sentimentCounts.negative,
+                      pct: reportStats.sentimentPercentages.negative,
+                      views: reportStats.threeWay.views.negative,
+                      engagement: reportStats.threeWay.engagement.negative,
+                      border: "border-red-200 dark:border-red-800",
+                      bg: "bg-red-50 dark:bg-red-950/20",
+                      numCls: "text-red-700 dark:text-red-400",
+                      barCls: "bg-red-500",
+                    },
+                    {
+                      label: "Neutral",
+                      count: reportStats.sentimentCounts.neutral,
+                      pct: reportStats.sentimentPercentages.neutral,
+                      views: reportStats.threeWay.views.neutral,
+                      engagement: reportStats.threeWay.engagement.neutral,
+                      border: "border-gray-200 dark:border-gray-700",
+                      bg: "bg-gray-50 dark:bg-gray-800/30",
+                      numCls: "text-gray-600 dark:text-gray-400",
+                      barCls: "bg-gray-400",
+                    },
+                  ] as const).map(col => (
+                    <div key={col.label} className={`rounded-md border ${col.border} overflow-hidden`}>
+                      {/* ヘッダー: ラベル + 割合 */}
+                      <div className={`${col.bg} px-3 py-2.5`}>
+                        <div className={`text-[10px] font-bold uppercase tracking-wider ${col.numCls}`}>{col.label}</div>
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                          <span className={`text-xl font-bold font-data leading-none ${col.numCls}`} style={{ fontFeatureSettings: '"tnum"' }}>{col.pct}%</span>
+                          <span className={`text-xs font-data ${col.numCls} opacity-70`}>{col.count}本</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* 3センチメント横並び */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { label: "Positive", count: reportStats.sentimentCounts.positive, pct: reportStats.sentimentPercentages.positive, border: "border-green-200", bg: "bg-green-50 dark:bg-green-950/20", numCls: "text-green-700 dark:text-green-400", bar: "bg-green-500" },
-                      { label: "Neutral",  count: reportStats.sentimentCounts.neutral,  pct: reportStats.sentimentPercentages.neutral,  border: "border-gray-200",  bg: "bg-gray-50 dark:bg-gray-800/30",   numCls: "text-gray-600 dark:text-gray-400",  bar: "bg-gray-400" },
-                      { label: "Negative", count: reportStats.sentimentCounts.negative, pct: reportStats.sentimentPercentages.negative, border: "border-red-200",   bg: "bg-red-50 dark:bg-red-950/20",     numCls: "text-red-700 dark:text-red-400",    bar: "bg-red-500" },
-                    ] as const).map(row => (
-                      <div key={row.label} className={`p-2 rounded-md border ${row.border} ${row.bg}`}>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[10px] font-bold uppercase ${row.numCls}`}>{row.label}</span>
-                          <span className={`text-sm font-bold font-data ${row.numCls}`}>{row.pct}%</span>
+                      {/* メトリクス: 再生数 / エンゲージメント */}
+                      <div className="px-3 py-2 space-y-2">
+                        <div>
+                          <div className="flex justify-between items-center mb-0.5">
+                            <span className="text-[10px] text-muted-foreground">再生数</span>
+                            <span className="font-bold text-[10px] font-data" style={{ fontFeatureSettings: '"tnum"' }}>{col.views}%</span>
+                          </div>
+                          <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full ${col.barCls} rounded-full`} style={{ width: `${col.views}%`, transition: 'width 700ms var(--md-ease-emphasized-decel)' }} />
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-xs font-semibold font-data ${row.numCls}`}>{row.count}本</span>
-                          <div className="flex-1 h-1.5 bg-white/60 dark:bg-white/10 rounded-full overflow-hidden">
-                            <div className={`h-full ${row.bar} rounded-full`} style={{ width: `${row.pct}%` }} />
+                        <div>
+                          <div className="flex justify-between items-center mb-0.5">
+                            <span className="text-[10px] text-muted-foreground">エンゲージメント</span>
+                            <span className="font-bold text-[10px] font-data" style={{ fontFeatureSettings: '"tnum"' }}>{col.engagement}%</span>
+                          </div>
+                          <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div className={`h-full ${col.barCls} rounded-full`} style={{ width: `${col.engagement}%`, transition: 'width 700ms var(--md-ease-emphasized-decel)' }} />
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* インサイト */}
@@ -1075,119 +1082,86 @@ export default function AnalysisDetail() {
                 </div>
               </div>
 
-              {/* インパクト分析 */}
-              <div className="border rounded-sm p-3">
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">インパクト分析</h3>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    { title: "投稿数",           data: reportStats.threeWay.posts       },
-                    { title: "再生数",           data: reportStats.threeWay.views       },
-                    { title: "エンゲージメント", data: reportStats.threeWay.engagement  },
-                  ] as const).map(({ title, data }) => (
-                    <div key={title} className="p-2 border rounded-sm">
-                      <h4 className="font-semibold mb-2 text-[10px] text-muted-foreground uppercase">{title}</h4>
-                      <div className="space-y-1.5">
-                        {([
-                          { label: "Pos", pct: data.positive, barCls: "bg-green-500", bgCls: "bg-green-100" },
-                          { label: "Neu", pct: data.neutral,  barCls: "bg-gray-400",  bgCls: "bg-gray-100" },
-                          { label: "Neg", pct: data.negative, barCls: "bg-red-500",   bgCls: "bg-red-100" },
-                        ] as const).map(row => (
-                          <div key={row.label}>
-                            <div className="flex justify-between items-center mb-0.5">
-                              <span className="text-[10px] text-muted-foreground">{row.label}</span>
-                              <span className="font-bold text-[10px] font-data">{row.pct}%</span>
-                            </div>
-                            <Progress value={Number(row.pct)} className={`h-1 ${row.bgCls} [&>div]:${row.barCls}`} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
+              {data && data.report && (
+                <section className="border rounded-sm bg-card p-3 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: "250ms" }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-4 w-0.5 rounded-full bg-primary" />
+                    <h3 className="text-xs font-semibold leading-none">動画マクロ分析</h3>
+                  </div>
+                  <ReportSection
+                    keyword={data.job?.keyword || ""}
+                    date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
+                    videoCount={data.videos?.length || 0}
+                    platform="TikTok"
+                    aspects={(data.report?.facets || []).map((f: any) => ({
+                      name: f.aspect || f.name || "",
+                      pos: f.positive_percentage || f.pos || 0,
+                      neg: f.negative_percentage || f.neg || 0,
+                      desc: f.description || f.desc || ""
+                    }))}
+                    proposals={[]}
+                    sentimentData={{
+                      positive: reportStats.sentimentCounts.positive || 0,
+                      negative: reportStats.sentimentCounts.negative || 0,
+                      neutral: reportStats.sentimentCounts.neutral || 0,
+                    }}
+                    positiveWords={reportStats.positiveWords}
+                    negativeWords={reportStats.negativeWords}
+                    emotionWords={(data.report as any)?.emotionWords ?? undefined}
+                    videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined}
+                  />
+                </section>
+              )}
+
+              {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
+              {data && data.report && (
+                <section className="border rounded-sm bg-card p-3 animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: "300ms" }}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="h-4 w-0.5 rounded-full bg-primary" />
+                    <h3 className="text-xs font-semibold leading-none">動画ミクロ分析</h3>
+                  </div>
+                  <Tabs defaultValue="insights" className="w-full">
+                    <TabsList className="w-full mb-3">
+                      <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
+                      <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="insights">
+                      <MicroAnalysisSection
+                        proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
+                          const cat = insight.category;
+                          const priority =
+                            cat === "avoid" || cat === "risk" ? "回避" :
+                            cat === "caution" || cat === "urgent" ? "注意" : "活用";
+                          const icon =
+                            cat === "avoid" || cat === "risk" ? "🚫" :
+                            cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
+                          return {
+                            area: insight.title,
+                            action: insight.description,
+                            priority: priority as "回避" | "注意" | "活用",
+                            icon,
+                            analysis: insight.analysis,
+                            strategicAdvice: insight.strategicAdvice,
+                            sourceVideoIds: insight.sourceVideoIds,
+                          };
+                        })}
+                        videos={(data.videos || [])
+                          .slice()
+                          .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
+                          .slice(0, 15)
+                          .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
+                      />
+                    </TabsContent>
+                    <TabsContent value="seo-keywords">
+                      <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
+                    </TabsContent>
+                  </Tabs>
+                </section>
+              )}
 
               {/* 詳細分析アコーディオン */}
-              <Accordion type="multiple" defaultValue={["aspects", "micro-analysis"]} className="space-y-2">
-
-                {/* 動画マクロ分析（側面分析・頻出ワード感情マップ） */}
-                {data && data.report && (
-                  <AccordionItem value="aspects" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "250ms" }}>
-                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
-                      動画マクロ分析
-                      </AccordionTrigger>
-                    <AccordionContent className="px-3 pb-3">
-                      <ReportSection
-                          keyword={data.job?.keyword || ""}
-                          date={new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}
-                          videoCount={data.videos?.length || 0}
-                          platform="TikTok"
-                          aspects={(data.report?.facets || []).map((f: any) => ({
-                            name: f.aspect || f.name || "",
-                            pos: f.positive_percentage || f.pos || 0,
-                            neg: f.negative_percentage || f.neg || 0,
-                            desc: f.description || f.desc || ""
-                          }))}
-                          proposals={[]}
-                          sentimentData={{
-                            positive: reportStats.sentimentCounts.positive || 0,
-                            negative: reportStats.sentimentCounts.negative || 0,
-                            neutral: reportStats.sentimentCounts.neutral || 0,
-                          }}
-                          positiveWords={reportStats.positiveWords}
-                          negativeWords={reportStats.negativeWords}
-                          emotionWords={(data.report as any)?.emotionWords ?? undefined}
-                          videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined}
-                        />
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
-
-                {/* 動画ミクロ分析（マーケティング施策提案 + SEOメタキーワード） */}
-                {data && data.report && (
-                  <AccordionItem value="micro-analysis" className="border rounded-sm !p-0 bg-card" style={{ animationDelay: "300ms" }}>
-                    <AccordionTrigger className="px-3 py-2.5 hover:no-underline hover:bg-muted/30 font-semibold text-xs">
-                      動画ミクロ分析
-                    </AccordionTrigger>
-                    <AccordionContent className="px-5 pb-5 pt-2">
-                        <Tabs defaultValue="insights" className="w-full">
-                          <TabsList className="w-full mb-3">
-                            <TabsTrigger value="insights" className="flex-1 text-xs">マーケティング施策</TabsTrigger>
-                            <TabsTrigger value="seo-keywords" className="flex-1 text-xs">SEOメタキーワード</TabsTrigger>
-                          </TabsList>
-                          <TabsContent value="insights">
-                            <MicroAnalysisSection
-                              proposals={(data.report?.keyInsights as Array<{ category: string; title: string; description: string; analysis?: string; strategicAdvice?: string; sourceVideoIds?: string[] }> || []).map(insight => {
-                                const cat = insight.category;
-                                const priority =
-                                  cat === "avoid" || cat === "risk" ? "回避" :
-                                  cat === "caution" || cat === "urgent" ? "注意" : "活用";
-                                const icon =
-                                  cat === "avoid" || cat === "risk" ? "🚫" :
-                                  cat === "caution" || cat === "urgent" ? "⚠️" : "✅";
-                                return {
-                                  area: insight.title,
-                                  action: insight.description,
-                                  priority: priority as "回避" | "注意" | "活用",
-                                  icon,
-                                  analysis: insight.analysis,
-                                  strategicAdvice: insight.strategicAdvice,
-                                  sourceVideoIds: insight.sourceVideoIds,
-                                };
-                              })}
-                              videos={(data.videos || [])
-                                .slice()
-                                .sort((a: any, b: any) => (b.viewCount || 0) - (a.viewCount || 0))
-                                .slice(0, 15)
-                                .map((v: any) => ({ videoId: v.videoId, accountId: v.accountId, title: v.title }))}
-                            />
-                          </TabsContent>
-                          <TabsContent value="seo-keywords">
-                            <SeoMetaKeywordsSection videoMetaKeywords={(data.report as any)?.videoMetaKeywords ?? undefined} />
-                          </TabsContent>
-                        </Tabs>
-                      </AccordionContent>
-                    </AccordionItem>
-                  )}
+              <Accordion type="multiple" className="space-y-2">
 
                 {/* 検索相関分析（Google Trends × TikTok） */}
                 {data.job?.keyword && (
