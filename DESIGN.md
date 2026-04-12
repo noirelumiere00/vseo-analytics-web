@@ -197,6 +197,8 @@ M3 dual-layer shadow system (Light mode):
 - Shippori Mincho (明朝体) を見出しに使わない — Space Mono に統一済み
 - Inter, Roboto, Arial などの汎用フォントを使わない
 - 紫グラデーション、ネオンカラーなど「AIスロップ」的な配色を使わない
+- `border-l-*` でカードやセクションに色付きの左ボーダーを付けない — AIテンプレートの典型パターン。色はテキスト・バッジ・アイコンなどインライン要素にのみ使用する
+- カード背景にセマンティックカラー (`bg-green-50`, `bg-red-50`, `bg-amber-50` 等) を塗らない — カード背景は常に `bg-card` または `bg-muted`
 - 静止状態のカードに `box-shadow` で重い影を付けない（inset highlight + 微shadow のみ）
 - Tailwind の transition-all で雑にアニメーションしない（M3 easing/duration を使う）
 
