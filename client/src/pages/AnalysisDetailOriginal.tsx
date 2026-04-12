@@ -1322,6 +1322,39 @@ export default function AnalysisDetail() {
                   );
                 })()}
 
+                {/* 投稿最適化（アコーディオン） */}
+                {data?.videos && data.videos.length > 0 && (
+                  <Accordion type="single" collapsible className="mb-4">
+                    <AccordionItem value="optimization" className="border rounded-xl">
+                      <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/40 font-semibold text-sm">
+                        投稿最適化
+                      </AccordionTrigger>
+                      <AccordionContent className="px-4 pb-4">
+                        <Tabs defaultValue="heatmap" className="w-full">
+                          <TabsList className="w-full">
+                            <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
+                            <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
+                            {(data.report as any)?.hashtagStrategy && (
+                              <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
+                            )}
+                          </TabsList>
+                          <TabsContent value="heatmap" className="mt-4">
+                            <PostingTimeHeatmap videos={data.videos as any} />
+                          </TabsContent>
+                          <TabsContent value="duration" className="mt-4">
+                            <DurationAnalysis videos={data.videos as any} />
+                          </TabsContent>
+                          {(data.report as any)?.hashtagStrategy && (
+                            <TabsContent value="hashtag" className="mt-4">
+                              <HashtagStrategy data={(data.report as any).hashtagStrategy} videos={data.videos as any[]} />
+                            </TabsContent>
+                          )}
+                        </Tabs>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                )}
+
                 {/* Pattern content (win+lose integrated, from Beta) */}
                 {(tripleSearch.commonalityAnalysisAd || tripleSearch.losePatternAnalysisAd) ? (
                   <Tabs defaultValue="organic" className="w-full">
@@ -1359,32 +1392,6 @@ export default function AnalysisDetail() {
                   </Accordion>
                 )}
 
-                {/* 投稿最適化（ヒートマップ・動画尺・ハッシュタグ） */}
-                {data?.videos && data.videos.length > 0 && (
-                  <div className="mt-6 pt-6 border-t border-border/40">
-                    <h3 className="text-sm font-semibold mb-4 uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>投稿最適化</h3>
-                    <Tabs defaultValue="heatmap" className="w-full">
-                      <TabsList className="w-full">
-                        <TabsTrigger value="heatmap" className="flex-1 text-xs">投稿ヒートマップ</TabsTrigger>
-                        <TabsTrigger value="duration" className="flex-1 text-xs">動画尺 x 再生数</TabsTrigger>
-                        {(data.report as any)?.hashtagStrategy && (
-                          <TabsTrigger value="hashtag" className="flex-1 text-xs">ハッシュタグ戦略</TabsTrigger>
-                        )}
-                      </TabsList>
-                      <TabsContent value="heatmap" className="mt-4">
-                        <PostingTimeHeatmap videos={data.videos as any} />
-                      </TabsContent>
-                      <TabsContent value="duration" className="mt-4">
-                        <DurationAnalysis videos={data.videos as any} />
-                      </TabsContent>
-                      {(data.report as any)?.hashtagStrategy && (
-                        <TabsContent value="hashtag" className="mt-4">
-                          <HashtagStrategy data={(data.report as any).hashtagStrategy} videos={data.videos as any[]} />
-                        </TabsContent>
-                      )}
-                    </Tabs>
-                  </div>
-                )}
               </CardContent>
             </Card>
             </div>
