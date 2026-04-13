@@ -234,9 +234,15 @@ export async function executeAnalysisJob(
             processedCount,
           });
 
-          const sentimentResults = await analyzeSentimentAndKeywordsBatch(
-            batchResults.map(r => r.sentimentInput)
-          );
+          let sentimentResults: Array<{ sentiment: "positive"|"neutral"|"negative"; keyHook: string; keywords: string[] }>;
+          try {
+            sentimentResults = await analyzeSentimentAndKeywordsBatch(
+              batchResults.map(r => r.sentimentInput)
+            );
+          } catch (sentimentError) {
+            console.warn(`[Analysis] Sentiment batch failed, falling back to neutral:`, (sentimentError as Error).message);
+            sentimentResults = batchResults.map(() => ({ sentiment: "neutral" as const, keyHook: "", keywords: [] }));
+          }
 
           await Promise.all(
             batchResults.map((r, j) => db.updateVideo(r.dbVideoId, {
