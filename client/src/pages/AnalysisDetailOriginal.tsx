@@ -1445,7 +1445,9 @@ export default function AnalysisDetail() {
                         pct: reportStats.sentimentPercentages.positive,
                         views: reportStats.threeWay.views.positive,
                         engagement: reportStats.threeWay.engagement.positive,
-                        barOpacity: "bg-foreground/80",
+                        labelCls: "text-green-600",
+                        numCls: "text-green-600",
+                        barCls: "bg-green-500",
                       },
                       {
                         label: "Negative",
@@ -1453,7 +1455,9 @@ export default function AnalysisDetail() {
                         pct: reportStats.sentimentPercentages.negative,
                         views: reportStats.threeWay.views.negative,
                         engagement: reportStats.threeWay.engagement.negative,
-                        barOpacity: "bg-[#D71921]/70",
+                        labelCls: "text-red-600",
+                        numCls: "text-red-600",
+                        barCls: "bg-red-500",
                       },
                       {
                         label: "Neutral",
@@ -1461,25 +1465,27 @@ export default function AnalysisDetail() {
                         pct: reportStats.sentimentPercentages.neutral,
                         views: reportStats.threeWay.views.neutral,
                         engagement: reportStats.threeWay.engagement.neutral,
-                        barOpacity: "bg-foreground/25",
+                        labelCls: "text-muted-foreground/60",
+                        numCls: "text-foreground",
+                        barCls: "bg-foreground/25",
                       },
                     ] as const).map(col => (
-                      <div key={col.label} className="bg-card p-4 animate-fade-slide-up">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 mb-3" style={{ fontFamily: "'Space Mono', monospace" }}>{col.label}</div>
-                        <div className="text-3xl md:text-4xl font-black leading-none text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
-                          {col.pct}<span className="text-base font-bold text-muted-foreground/40">%</span>
+                      <div key={col.label} className="bg-card px-4 py-3 animate-fade-slide-up flex flex-col justify-center">
+                        <div className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${col.labelCls}`} style={{ fontFamily: "'Space Mono', monospace" }}>{col.label}</div>
+                        <div className={`text-3xl md:text-4xl font-black leading-none ${col.numCls}`} style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                          {col.pct}<span className="text-base font-bold opacity-40">%</span>
                         </div>
-                        <div className="text-xs font-medium mt-1 text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
+                        <div className="text-xs font-medium mt-0.5 text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>
                           {col.count}<span className="text-[10px] font-normal ml-0.5">本</span>
                         </div>
-                        <div className="mt-4 pt-3 border-t border-border/40 space-y-2.5">
+                        <div className="mt-3 pt-2.5 border-t border-border/40 space-y-2">
                           <div>
                             <div className="flex justify-between items-center mb-1">
                               <span className="text-[10px] uppercase tracking-wider text-muted-foreground/50" style={{ fontFamily: "'Space Mono', monospace" }}>Views</span>
                               <span className="text-[11px] font-bold text-foreground/70" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{col.views}%</span>
                             </div>
                             <div className="h-[3px] rounded-full bg-black/[0.04] overflow-hidden">
-                              <div className={`h-full rounded-full ${col.barOpacity}`} style={{ width: `${col.views}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
+                              <div className={`h-full rounded-full ${col.barCls}`} style={{ width: `${col.views}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
                             </div>
                           </div>
                           <div>
@@ -1488,7 +1494,7 @@ export default function AnalysisDetail() {
                               <span className="text-[11px] font-bold text-foreground/70" style={{ fontFamily: "'JetBrains Mono', monospace", fontFeatureSettings: '"tnum"' }}>{col.engagement}%</span>
                             </div>
                             <div className="h-[3px] rounded-full bg-black/[0.04] overflow-hidden">
-                              <div className={`h-full rounded-full ${col.barOpacity}`} style={{ width: `${col.engagement}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
+                              <div className={`h-full rounded-full ${col.barCls}`} style={{ width: `${col.engagement}%`, transition: 'width 800ms var(--md-ease-emphasized-decel)' }} />
                             </div>
                           </div>
                         </div>
