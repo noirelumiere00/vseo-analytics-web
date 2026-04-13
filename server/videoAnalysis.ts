@@ -6,6 +6,7 @@ import * as db from "./db";
 import type { TikTokVideo } from "./tiktokScraper";
 import { scrapeTikTokMetaKeywords } from "./tiktokScraper";
 import { filterAdHashtags, isPromotionVideo } from "@shared/const";
+import { downloadAndSaveCover } from "./coverStorage";
 
 /**
  * 分析対象動画のTikTokメタキーワードを取得
@@ -138,7 +139,13 @@ export async function analyzeVideoFromTikTok(
 
   const videoUrl = `https://www.tiktok.com/@${tiktokVideo.author.uniqueId}/video/${tiktokVideo.id}`;
 
-  // 1. DBに動画レコードを作成（実データ）
+  // 1. 画像をローカル保存（CDN URL期限切れ対策）
+  const [localThumbnail, localAvatar] = await Promise.all([
+    downloadAndSaveCover(videoUrl, tiktokVideo.coverUrl),
+    downloadAndSaveCover(`avatar:${tiktokVideo.author.uniqueId}`, tiktokVideo.author.avatarUrl),
+  ]);
+
+  // 2. DBに動画レコードを作成（実データ）
   const videoId = await db.createVideo({
     jobId,
     videoUrl,
@@ -146,7 +153,7 @@ export async function analyzeVideoFromTikTok(
     videoId: tiktokVideo.id,
     title: tiktokVideo.desc.substring(0, 200),
     description: tiktokVideo.desc,
-    thumbnailUrl: tiktokVideo.coverUrl,
+    thumbnailUrl: localThumbnail,
     duration: tiktokVideo.duration,
     viewCount: tiktokVideo.stats.playCount,
     likeCount: tiktokVideo.stats.diggCount,
@@ -156,7 +163,7 @@ export async function analyzeVideoFromTikTok(
     accountName: `@${tiktokVideo.author.uniqueId}`,
     accountId: tiktokVideo.author.uniqueId,
     followerCount: tiktokVideo.author.followerCount,
-    accountAvatarUrl: tiktokVideo.author.avatarUrl,
+    accountAvatarUrl: localAvatar,
     hashtags: tiktokVideo.hashtags,
     isAd: tiktokVideo.isAd ? 1 : 0,
     postedAt: new Date(tiktokVideo.createTime * 1000),
