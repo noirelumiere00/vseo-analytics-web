@@ -940,3 +940,157 @@ export const contextAnalyses = mysqlTable("context_analyses", {
 
 export type ContextAnalysis = typeof contextAnalyses.$inferSelect;
 export type InsertContextAnalysis = typeof contextAnalyses.$inferInsert;
+
+/**
+ * ペイン分析（Pain Analyzer）
+ * 商品名→特徴抽出→ペイン仮説→X/TT検証→層分類→購買態度→訴求案
+ */
+export const painAnalyses = mysqlTable("pain_analyses", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productUrl: text("productUrl"),
+
+  // ジョブ制御
+  queuedAction: varchar("queuedAction", { length: 32 }), // "phase1" | "phase2"
+  status: mysqlEnum("status", [
+    "pending", "collecting", "hypothesizing", "awaiting_approval",
+    "verifying", "segmenting", "estimating", "proposing",
+    "completed", "failed",
+  ]).default("pending").notNull(),
+  progress: json("progress").$type<{ message: string; percent: number; phase?: string }>(),
+
+  // STEP 2: 商品特徴抽出
+  s1RawData: json("s1RawData"),
+  s3RawData: json("s3RawData"),
+  productFeatures: json("productFeatures").$type<{
+    features: string[];
+    targetAudience: string;
+    competitors: string[];
+    productCategory: string;
+  }>(),
+
+  // STEP 3: ペイン仮説
+  painHypotheses: json("painHypotheses").$type<Array<{
+    id: string;
+    pain: string;
+    feature: string;
+    searchQuery: string;
+    confidence: number;
+    approved: boolean;
+    userAdded?: boolean;
+  }>>(),
+
+  // STEP 4: ペイン検証
+  verificationData: json("verificationData").$type<{
+    xPosts: Array<{
+      postId: string;
+      text: string;
+      authorUsername: string;
+      authorId: string;
+      likeCount: number;
+      retweetCount: number;
+      painId: string;
+      relevanceScore: number;
+    }>;
+    tiktokVideos: Array<{
+      videoId: string;
+      desc: string;
+      authorUniqueId: string;
+      playCount: number;
+      diggCount: number;
+      painId: string;
+      relevanceScore: number;
+    }>;
+    verifiedPains: Array<{
+      painId: string;
+      pain: string;
+      verificationScore: number;
+      xPostCount: number;
+      ttVideoCount: number;
+      topEvidence: string[];
+    }>;
+  }>(),
+
+  // STEP 5: 層分類
+  segmentData: json("segmentData").$type<{
+    communities: Array<{
+      id: string;
+      name: string;
+      description: string;
+      keywords: string[];
+      representativeUsers: string[];
+      size: "large" | "medium" | "small";
+    }>;
+    segments: Array<{
+      id: string;
+      name: string;
+      icon: string;
+      matchScore: number;
+      primaryPain: string;
+      appeals: string[];
+      communityIds: string[];
+      trendStats?: {
+        avgER: number;
+        topHashtags: string[];
+        postCount: number;
+        avgViews: number;
+      };
+    }>;
+  }>(),
+
+  // STEP 6: 購買態度推定
+  purchaseAttitudes: json("purchaseAttitudes").$type<Array<{
+    segmentId: string;
+    attitude: string;
+    priceRange: string;
+    purchaseDrivers: string[];
+    purchaseBarriers: string[];
+    evidence: string[];
+  }>>(),
+
+  // STEP 7: 訴求案生成
+  proposals: json("proposals").$type<Array<{
+    segmentId: string;
+    segmentName: string;
+    copyProposals: Array<{
+      headline: string;
+      body: string;
+      cta: string;
+      platform: "x" | "tiktok" | "instagram";
+    }>;
+    hashtagSets: string[];
+    representativeContent: Array<{
+      platform: "x" | "tiktok" | "instagram";
+      url: string;
+      description: string;
+      engagement: number;
+    }>;
+    priorityActions: Array<{
+      action: string;
+      timeline: string;
+      expectedImpact: string;
+    }>;
+  }>>(),
+
+  // 最終結果サマリー
+  analysisResult: json("analysisResult").$type<{
+    executiveSummary: string;
+    totalPainsVerified: number;
+    totalSegments: number;
+    topSegment: string;
+    recommendations: string[];
+    segmentBreakdown: Array<{
+      segmentName: string;
+      percentage: number;
+      icon: string;
+    }>;
+  }>(),
+
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type PainAnalysis = typeof painAnalyses.$inferSelect;
+export type InsertPainAnalysis = typeof painAnalyses.$inferInsert;

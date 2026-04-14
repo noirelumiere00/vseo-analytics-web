@@ -31,6 +31,8 @@ import {
   InsertSubscription,
   contextAnalyses,
   InsertContextAnalysis,
+  painAnalyses,
+  InsertPainAnalysis,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1529,4 +1531,62 @@ export async function listContextAnalysesByUser(userId: number, limit: number = 
     .orderBy(desc(contextAnalyses.id))
     .limit(limit);
   return q;
+}
+
+// === Pain Analyzer ===
+
+export async function createPainAnalysis(data: InsertPainAnalysis) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(painAnalyses).values(data).$returningId();
+  return result.id;
+}
+
+export async function getPainAnalysis(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select().from(painAnalyses).where(eq(painAnalyses.id, id)).limit(1);
+  return row || null;
+}
+
+export async function updatePainAnalysis(id: number, data: Partial<{
+  status: string;
+  queuedAction: string | null;
+  progress: { message: string; percent: number; phase?: string };
+  s1RawData: any;
+  s3RawData: any;
+  productFeatures: any;
+  painHypotheses: any;
+  verificationData: any;
+  segmentData: any;
+  purchaseAttitudes: any;
+  proposals: any;
+  analysisResult: any;
+  errorMessage: string;
+  completedAt: Date;
+}>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(painAnalyses).set(data as any).where(eq(painAnalyses.id, id));
+}
+
+export async function getQueuedPainAnalyses(queuedAction: string) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(painAnalyses)
+    .where(and(
+      eq(painAnalyses.status, queuedAction === "phase1" ? "pending" : "verifying"),
+      eq(painAnalyses.queuedAction as any, queuedAction),
+    ))
+    .orderBy(painAnalyses.createdAt)
+    .limit(5);
+}
+
+export async function listPainAnalysesByUser(userId: number, limit: number = 20, cursor?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(painAnalyses)
+    .where(cursor ? and(eq(painAnalyses.userId, userId), sql`${painAnalyses.id} < ${cursor}`) : eq(painAnalyses.userId, userId))
+    .orderBy(desc(painAnalyses.id))
+    .limit(limit);
 }

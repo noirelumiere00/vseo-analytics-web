@@ -39,6 +39,8 @@ export const ENV = {
   apifyApiToken: process.env.APIFY_API_TOKEN ?? "",
   // YouTube Data API v3
   youtubeApiKey: process.env.YOUTUBE_API_KEY ?? "",
+  // X MCP Server (Pain Analysis)
+  xmcpBaseUrl: process.env.XMCP_BASE_URL ?? "",
 };
 
 /** 起動時に必須環境変数をバリデーション */

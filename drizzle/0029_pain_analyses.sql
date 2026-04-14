@@ -1,0 +1,22 @@
+CREATE TABLE `pain_analyses` (
+  `id` int AUTO_INCREMENT NOT NULL,
+  `userId` int NOT NULL,
+  `productName` varchar(255) NOT NULL,
+  `productUrl` text,
+  `queuedAction` varchar(32),
+  `status` enum('pending','collecting','hypothesizing','awaiting_approval','verifying','segmenting','estimating','proposing','completed','failed') NOT NULL DEFAULT 'pending',
+  `progress` json DEFAULT NULL,
+  `s1RawData` json DEFAULT NULL,
+  `s3RawData` json DEFAULT NULL,
+  `productFeatures` json DEFAULT NULL,
+  `painHypotheses` json DEFAULT NULL,
+  `verificationData` json DEFAULT NULL,
+  `segmentData` json DEFAULT NULL,
+  `purchaseAttitudes` json DEFAULT NULL,
+  `proposals` json DEFAULT NULL,
+  `analysisResult` json DEFAULT NULL,
+  `errorMessage` text,
+  `createdAt` timestamp NOT NULL DEFAULT (now()),
+  `completedAt` timestamp,
+  CONSTRAINT `pain_analyses_id` PRIMARY KEY(`id`)
+);

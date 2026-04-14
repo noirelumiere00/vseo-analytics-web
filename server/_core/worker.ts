@@ -19,6 +19,8 @@ import {
 } from "../jobExecutor";
 import { startDailyMetricsScheduler } from "../dailyMetricsScheduler";
 import { executeContextAnalysis } from "../services/contextAnalyzer";
+import { executePainAnalysisPhase1 } from "../services/painAnalyzer";
+import { executePainAnalysisPhase2 } from "../services/painAnalyzer/resumeVerification";
 
 const POLL_INTERVAL_MS = 3000;
 const jobLimit = pLimit(2);
@@ -45,12 +47,14 @@ export async function startWorker() {
     if (shuttingDown) return;
 
     try {
-      // 全4テーブルから queued ジョブを取得
-      const [analysisJobs, trendJobs, campaignSnapshots, contextJobs] = await Promise.all([
+      // 全テーブルから queued ジョブを取得
+      const [analysisJobs, trendJobs, campaignSnapshots, contextJobs, painPhase1Jobs, painPhase2Jobs] = await Promise.all([
         db.getQueuedAnalysisJobs(),
         db.getQueuedTrendDiscoveryJobs(),
         db.getQueuedCampaignSnapshots(),
         db.getQueuedContextAnalyses(),
+        db.getQueuedPainAnalyses("phase1"),
+        db.getQueuedPainAnalyses("phase2"),
       ]);
 
       // Analysis jobs
@@ -180,6 +184,85 @@ export async function startWorker() {
           } catch (error) {
             console.error(`[Worker] Context analysis ${ctxJob.id} error:`, error instanceof Error ? error.message : error);
             await db.updateContextAnalysisStatus(ctxJob.id, "failed", {
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+            });
+          } finally {
+            runningJobs.delete(jobKey);
+          }
+        });
+      }
+      // Pain Analysis Phase 1 jobs
+      for (const pJob of painPhase1Jobs) {
+        if (shuttingDown) break;
+        const jobKey = `pain1:${pJob.id}`;
+        if (runningJobs.has(jobKey)) continue;
+
+        runningJobs.add(jobKey);
+
+        jobLimit(async () => {
+          try {
+            await db.updatePainAnalysis(pJob.id, {
+              status: "collecting",
+              queuedAction: null,
+              progress: { message: "処理を開始しています...", percent: 0, phase: "collecting" },
+            });
+
+            const result = await executePainAnalysisPhase1(
+              pJob.productName,
+              pJob.productUrl || null,
+              async (progress) => {
+                await db.updatePainAnalysis(pJob.id, {
+                  status: progress.phase as any || "collecting",
+                  progress,
+                });
+              },
+            );
+
+            await db.updatePainAnalysis(pJob.id, {
+              status: "awaiting_approval",
+              s1RawData: result.s1RawData,
+              s3RawData: result.s3RawData,
+              productFeatures: result.productFeatures,
+              painHypotheses: result.painHypotheses,
+              progress: { message: "仮説を確認してください", percent: 45, phase: "awaiting_approval" },
+            });
+          } catch (error) {
+            console.error(`[Worker] Pain analysis Phase 1 ${pJob.id} error:`, error instanceof Error ? error.message : error);
+            await db.updatePainAnalysis(pJob.id, {
+              status: "failed",
+              errorMessage: error instanceof Error ? error.message : "Unknown error",
+            });
+          } finally {
+            runningJobs.delete(jobKey);
+          }
+        });
+      }
+
+      // Pain Analysis Phase 2 jobs
+      for (const pJob of painPhase2Jobs) {
+        if (shuttingDown) break;
+        const jobKey = `pain2:${pJob.id}`;
+        if (runningJobs.has(jobKey)) continue;
+
+        runningJobs.add(jobKey);
+
+        jobLimit(async () => {
+          try {
+            await db.updatePainAnalysis(pJob.id, {
+              queuedAction: null,
+              progress: { message: "ペイン検証を開始しています...", percent: 50, phase: "verifying" },
+            });
+
+            await executePainAnalysisPhase2(
+              pJob.id,
+              async (progress) => {
+                await db.updatePainAnalysis(pJob.id, { status: progress.phase as any || "verifying", progress });
+              },
+            );
+          } catch (error) {
+            console.error(`[Worker] Pain analysis Phase 2 ${pJob.id} error:`, error instanceof Error ? error.message : error);
+            await db.updatePainAnalysis(pJob.id, {
+              status: "failed",
               errorMessage: error instanceof Error ? error.message : "Unknown error",
             });
           } finally {

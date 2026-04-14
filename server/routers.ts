@@ -2311,6 +2311,134 @@ export const appRouter = router({
         };
       }),
   }),
+
+  // ── Pain Analyzer ──
+  painAnalysis: router({
+    // 新規分析ジョブ作成（Phase 1 キュー投入）
+    analyze: protectedProcedure
+      .input(z.object({
+        productName: z.string().min(1).max(255),
+        productUrl: z.string().url().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const analysisId = await db.createPainAnalysis({
+          userId: ctx.user.id,
+          productName: input.productName,
+          productUrl: input.productUrl || null,
+          status: "pending",
+          queuedAction: "phase1",
+        });
+        return { analysisId };
+      }),
+
+    // ステータスポーリング（2.5秒間隔）
+    getStatus: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input }) => {
+        const row = await db.getPainAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        return {
+          status: row.status,
+          progress: row.progress,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt,
+          errorMessage: row.errorMessage,
+        };
+      }),
+
+    // STEP 3 仮説取得（承認UI用）
+    getHypotheses: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const row = await db.getPainAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return {
+          productName: row.productName,
+          productFeatures: row.productFeatures,
+          hypotheses: row.painHypotheses || [],
+        };
+      }),
+
+    // 仮説承認 → Phase 2 開始
+    approveHypotheses: protectedProcedure
+      .input(z.object({
+        analysisId: z.number(),
+        approvedHypotheses: z.array(z.object({
+          id: z.string(),
+          pain: z.string(),
+          feature: z.string(),
+          searchQuery: z.string(),
+          confidence: z.number(),
+          approved: z.boolean(),
+          userAdded: z.boolean().optional(),
+        })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const row = await db.getPainAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (row.status !== "awaiting_approval") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "この分析は承認待ち状態ではありません" });
+        }
+
+        // Save approved hypotheses and start Phase 2
+        await db.updatePainAnalysis(input.analysisId, {
+          painHypotheses: input.approvedHypotheses,
+          status: "verifying",
+          queuedAction: "phase2",
+          progress: { message: "検証を開始しています...", percent: 50, phase: "verifying" },
+        });
+
+        return { success: true };
+      }),
+
+    // 完全結果取得
+    getResult: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const row = await db.getPainAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        return {
+          id: row.id,
+          productName: row.productName,
+          productUrl: row.productUrl,
+          status: row.status,
+          productFeatures: row.productFeatures,
+          painHypotheses: row.painHypotheses,
+          verificationData: row.verificationData,
+          segmentData: row.segmentData,
+          purchaseAttitudes: row.purchaseAttitudes,
+          proposals: row.proposals,
+          analysisResult: row.analysisResult,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt,
+        };
+      }),
+
+    // 履歴一覧（カーソルページネーション）
+    list: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.number().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const items = await db.listPainAnalysesByUser(ctx.user.id, input.limit + 1, input.cursor);
+        const hasMore = items.length > input.limit;
+        const resultItems = hasMore ? items.slice(0, input.limit) : items;
+        return {
+          items: resultItems.map(r => ({
+            id: r.id,
+            productName: r.productName,
+            status: r.status,
+            createdAt: r.createdAt,
+            completedAt: r.completedAt,
+          })),
+          nextCursor: hasMore ? resultItems[resultItems.length - 1]?.id : null,
+        };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
