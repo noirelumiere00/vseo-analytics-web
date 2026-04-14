@@ -1021,6 +1021,35 @@ export const painAnalyses = mysqlTable("pain_analyses", {
       keywords: string[];
       representativeUsers: string[];
       size: "large" | "medium" | "small";
+      layer?: "core" | "expansion";
+      cultureCode?: {
+        nicknames: string[];
+        hashtags: string[];
+        contentPatterns: string[];
+      };
+      estimatedPopulation?: number;
+      populationFormula?: string;
+      populationSources?: Array<{ title: string; url: string }>;
+      officialGap?: {
+        official: string;
+        reality: string;
+        insight: string;
+      };
+      keywordCandidates?: Array<{
+        keyword: string;
+        tiktokViews: number;
+        tiktokPostCount: number;
+        tiktokAvgER: number;
+        instagramPostCount: number;
+        xPostCount: number;
+        xTotalLikes: number;
+        googleTrend: "rising" | "stable" | "declining";
+        googleTrendScore: number;
+        monthlySearchVolume: number;
+        competition: string;
+        trend: "rising" | "stable" | "declining";
+        selected: boolean;
+      }>;
     }>;
     segments: Array<{
       id: string;
