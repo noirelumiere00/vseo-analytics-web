@@ -138,23 +138,23 @@ export function generateGensparkMarkdown(
     const slideNum = 14 + idx;
     const candidates = community.keywordCandidates || [];
 
-    let table = `| No | 候補ワード | TikTok再生数 | TikTok投稿数 | ER% | IGハッシュタグ | トレンド | 判定 |\n`;
-    table += `|:---:|:---|:---|:---|:---|:---|:---|:---:|\n`;
+    let table = `| No | 候補ワード | TT再生数 | TT投稿 | ER% | IG投稿 | X投稿 | 月間検索Vol | トレンド(GT) | 判定 |\n`;
+    table += `|:---:|:---|:---|:---|:---|:---|:---|:---|:---|:---:|\n`;
 
-    candidates.forEach((c, i) => {
+    candidates.forEach((c: any, i: number) => {
       const viewsStr = c.tiktokViews >= 10000
         ? `${(c.tiktokViews / 10000).toFixed(1)}万回`
         : `${c.tiktokViews.toLocaleString()}回`;
-      const trendLabel = c.trend === "rising" ? "上昇" : c.trend === "declining" ? "減少" : "維持";
+      const trendLabel = (c.googleTrend || c.trend) === "rising" ? "上昇" : (c.googleTrend || c.trend) === "declining" ? "減少" : "維持";
       const selectedLabel = c.selected ? "**採用**" : "不採用";
       const bold = c.selected ? "**" : "";
 
-      table += `| ${i + 1} | ${bold}${c.keyword}${bold} | ${bold}${viewsStr}${bold} | ${c.tiktokPostCount.toLocaleString()}件 | ${c.tiktokAvgER}% | ${c.instagramPostCount.toLocaleString()}件 | ${trendLabel} | ${selectedLabel} |\n`;
+      table += `| ${i + 1} | ${bold}${c.keyword}${bold} | ${bold}${viewsStr}${bold} | ${c.tiktokPostCount?.toLocaleString() || 0}件 | ${c.tiktokAvgER || 0}% | ${c.instagramPostCount?.toLocaleString() || "-"}件 | ${c.xPostCount || 0}件 | ${c.monthlySearchVolume?.toLocaleString() || "-"} | ${trendLabel} | ${selectedLabel} |\n`;
     });
 
     md.push(`## Slide ${slideNum}: Selection - ${community.name} キラーワード選抜
 ${table}
-- **Source**: TikTok検索結果 / Instagram検索結果（VSEO Analytics実測データ）
+- **Source**: TikTok検索 / Instagram検索 / X検索 / Google Trends / Google Ads Keyword Planner（VSEO Analytics実測データ）
 `);
   });
 

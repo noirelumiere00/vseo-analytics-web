@@ -618,18 +618,20 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
                   {/* Keyword Candidates Table */}
                   {community.keywordCandidates?.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-medium text-muted-foreground mb-1">キーワード候補 (TT/IG実測データ)</p>
+                      <p className="text-[10px] font-medium text-muted-foreground mb-1">キーワード候補 (5データソース実測)</p>
                       <div className="overflow-x-auto">
                         <table className="w-full text-[10px]">
                           <thead>
                             <tr className="border-b text-left text-muted-foreground">
                               <th className="py-1 pr-2">#</th>
                               <th className="py-1 pr-2">ワード</th>
-                              <th className="py-1 pr-2 text-right">TT再生数</th>
-                              <th className="py-1 pr-2 text-right">TT投稿</th>
-                              <th className="py-1 pr-2 text-right">ER%</th>
-                              <th className="py-1 pr-2 text-right">IG投稿</th>
-                              <th className="py-1 pr-2">トレンド</th>
+                              <th className="py-1 pr-1 text-right">TT再生数</th>
+                              <th className="py-1 pr-1 text-right">TT投稿</th>
+                              <th className="py-1 pr-1 text-right">ER%</th>
+                              <th className="py-1 pr-1 text-right">IG投稿</th>
+                              <th className="py-1 pr-1 text-right">X投稿</th>
+                              <th className="py-1 pr-1 text-right">月間検索</th>
+                              <th className="py-1 pr-1">GT</th>
                               <th className="py-1">採否</th>
                             </tr>
                           </thead>
@@ -637,14 +639,19 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
                             {community.keywordCandidates.map((kw: any, i: number) => (
                               <tr key={i} className={`border-b border-border/30 ${kw.selected ? "font-medium" : "text-muted-foreground"}`}>
                                 <td className="py-1 pr-2">{i + 1}</td>
-                                <td className="py-1 pr-2">{kw.keyword}</td>
-                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokViews >= 10000 ? `${(kw.tiktokViews / 10000).toFixed(1)}万` : kw.tiktokViews.toLocaleString()}</td>
-                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokPostCount.toLocaleString()}</td>
-                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokAvgER}%</td>
-                                <td className="py-1 pr-2 text-right font-mono">{kw.instagramPostCount.toLocaleString()}</td>
-                                <td className="py-1 pr-2">
-                                  <span className={kw.trend === "rising" ? "text-emerald-600" : kw.trend === "declining" ? "text-red-500" : "text-muted-foreground"}>
-                                    {kw.trend === "rising" ? "上昇" : kw.trend === "declining" ? "減少" : "維持"}
+                                <td className="py-1 pr-2 max-w-24 truncate">{kw.keyword}</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.tiktokViews >= 10000 ? `${(kw.tiktokViews / 10000).toFixed(1)}万` : kw.tiktokViews.toLocaleString()}</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.tiktokPostCount.toLocaleString()}</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.tiktokAvgER}%</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.instagramPostCount >= 0 ? kw.instagramPostCount.toLocaleString() : "-"}</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.xPostCount || "-"}</td>
+                                <td className="py-1 pr-1 text-right font-mono">{kw.monthlySearchVolume ? kw.monthlySearchVolume.toLocaleString() : "-"}</td>
+                                <td className="py-1 pr-1">
+                                  <span className={
+                                    (kw.googleTrend || kw.trend) === "rising" ? "text-emerald-600" :
+                                    (kw.googleTrend || kw.trend) === "declining" ? "text-red-500" : "text-muted-foreground"
+                                  }>
+                                    {(kw.googleTrend || kw.trend) === "rising" ? "↑" : (kw.googleTrend || kw.trend) === "declining" ? "↓" : "→"}
                                   </span>
                                 </td>
                                 <td className="py-1">
@@ -656,6 +663,7 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
                             ))}
                           </tbody>
                         </table>
+                        <p className="text-[8px] text-muted-foreground/50 mt-1">Source: TikTok検索 / Instagram検索 / X検索 / Google Trends / Google Ads Keyword Planner (VSEO Analytics実測)</p>
                       </div>
                     </div>
                   )}
