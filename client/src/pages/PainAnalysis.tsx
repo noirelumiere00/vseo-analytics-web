@@ -377,6 +377,18 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
   const verificationData = data.verificationData as any;
   const purchaseAttitudes = (data.purchaseAttitudes as any[]) || [];
   const proposals = (data.proposals as any[]) || [];
+  const kaiwaiCreatives = (data.kaiwaiCreatives as any[]) || [];
+  const gensparkMarkdown = (data.gensparkMarkdown as string) || "";
+
+  const [markdownExpanded, setMarkdownExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyMarkdown = async () => {
+    await navigator.clipboard.writeText(gensparkMarkdown);
+    setCopied(true);
+    toast.success("マークダウンをコピーしました");
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="space-y-5">
@@ -530,6 +542,155 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
                 </div>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Communities with Culture Code + GAP + Keywords */}
+      {communities.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+            <Globe className="h-4 w-4 text-purple-500" />界隈プロフィール ({communities.length}界隈)
+          </h3>
+          <div className="space-y-3">
+            {communities.map((community: any) => (
+              <Card key={community.id}>
+                <CardContent className="pt-4 pb-3 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-sm">{community.name}</h4>
+                      <p className="text-[10px] text-muted-foreground">{community.description}</p>
+                    </div>
+                    <Badge variant="outline" className={`text-[9px] ${community.layer === "core" ? "border-orange-300 text-orange-700 bg-orange-50" : "border-purple-300 text-purple-700 bg-purple-50"}`}>
+                      {community.layer === "core" ? "Core" : "Expansion"}
+                    </Badge>
+                  </div>
+
+                  {/* Population */}
+                  {community.estimatedPopulation && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="font-mono font-bold">{community.estimatedPopulation.toLocaleString()}</span>人
+                      {community.populationFormula && (
+                        <span className="text-[10px] text-muted-foreground">({community.populationFormula})</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Culture Code */}
+                  {community.cultureCode && (
+                    <div className="bg-purple-50/50 dark:bg-purple-950/10 rounded-md p-2 space-y-1">
+                      <p className="text-[10px] font-medium text-purple-600">文化コード</p>
+                      {community.cultureCode.nicknames?.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {community.cultureCode.nicknames.map((n: string, i: number) => (
+                            <Badge key={i} variant="secondary" className="text-[9px]">{n}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {community.cultureCode.hashtags?.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {community.cultureCode.hashtags.map((h: string, i: number) => (
+                            <span key={i} className="text-[10px] text-purple-600">#{h}</span>
+                          ))}
+                        </div>
+                      )}
+                      {community.cultureCode.contentPatterns?.length > 0 && (
+                        <p className="text-[10px] text-muted-foreground">構図: {community.cultureCode.contentPatterns.join(", ")}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Official GAP */}
+                  {community.officialGap && (
+                    <div className="bg-amber-50/50 dark:bg-amber-950/10 rounded-md p-2 space-y-1">
+                      <p className="text-[10px] font-medium text-amber-600">公式とのGAP</p>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">{community.officialGap.official}</span>
+                        <ArrowRight className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                        <span className="font-medium">{community.officialGap.reality}</span>
+                      </div>
+                      <p className="text-[10px] text-amber-700">{community.officialGap.insight}</p>
+                    </div>
+                  )}
+
+                  {/* Keyword Candidates Table */}
+                  {community.keywordCandidates?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium text-muted-foreground mb-1">キーワード候補 (TT/IG実測データ)</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[10px]">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="py-1 pr-2">#</th>
+                              <th className="py-1 pr-2">ワード</th>
+                              <th className="py-1 pr-2 text-right">TT再生数</th>
+                              <th className="py-1 pr-2 text-right">TT投稿</th>
+                              <th className="py-1 pr-2 text-right">ER%</th>
+                              <th className="py-1 pr-2 text-right">IG投稿</th>
+                              <th className="py-1 pr-2">トレンド</th>
+                              <th className="py-1">採否</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {community.keywordCandidates.map((kw: any, i: number) => (
+                              <tr key={i} className={`border-b border-border/30 ${kw.selected ? "font-medium" : "text-muted-foreground"}`}>
+                                <td className="py-1 pr-2">{i + 1}</td>
+                                <td className="py-1 pr-2">{kw.keyword}</td>
+                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokViews >= 10000 ? `${(kw.tiktokViews / 10000).toFixed(1)}万` : kw.tiktokViews.toLocaleString()}</td>
+                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokPostCount.toLocaleString()}</td>
+                                <td className="py-1 pr-2 text-right font-mono">{kw.tiktokAvgER}%</td>
+                                <td className="py-1 pr-2 text-right font-mono">{kw.instagramPostCount.toLocaleString()}</td>
+                                <td className="py-1 pr-2">
+                                  <span className={kw.trend === "rising" ? "text-emerald-600" : kw.trend === "declining" ? "text-red-500" : "text-muted-foreground"}>
+                                    {kw.trend === "rising" ? "上昇" : kw.trend === "declining" ? "減少" : "維持"}
+                                  </span>
+                                </td>
+                                <td className="py-1">
+                                  {kw.selected
+                                    ? <Badge variant="default" className="text-[8px] px-1 py-0 bg-emerald-600">採用</Badge>
+                                    : <span className="text-muted-foreground/50">-</span>}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Genspark Markdown Export */}
+      {gensparkMarkdown && (
+        <Card className="border-l-4 border-l-orange-500">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-orange-500" />
+                <h3 className="text-sm font-bold">Genspark用マークダウン</h3>
+                <Badge variant="secondary" className="text-[9px]">27枚スライド構成</Badge>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setMarkdownExpanded(!markdownExpanded)}>
+                  {markdownExpanded ? "閉じる" : "プレビュー"}
+                </Button>
+                <Button size="sm" onClick={handleCopyMarkdown} className="bg-orange-500 hover:bg-orange-600 text-white">
+                  {copied ? <><CheckCircle2 className="mr-1 h-3 w-3" />コピー済み</> : "マークダウンをコピー"}
+                </Button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Gensparkに貼り付けるとPPTが生成されます</p>
+            {markdownExpanded && (
+              <pre className="mt-3 p-3 bg-muted/50 rounded-md text-[10px] overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
+                {gensparkMarkdown}
+              </pre>
+            )}
           </CardContent>
         </Card>
       )}

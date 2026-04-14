@@ -2411,6 +2411,8 @@ export const appRouter = router({
           segmentData: row.segmentData,
           purchaseAttitudes: row.purchaseAttitudes,
           proposals: row.proposals,
+          kaiwaiCreatives: row.kaiwaiCreatives,
+          gensparkMarkdown: row.gensparkMarkdown,
           analysisResult: row.analysisResult,
           createdAt: row.createdAt,
           completedAt: row.completedAt,

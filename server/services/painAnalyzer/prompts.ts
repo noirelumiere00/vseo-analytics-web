@@ -94,26 +94,46 @@ searchQuery は日本語で、SNSで実際に使われそうな表現にして�
 // STEP 5: Segment Classification
 // ================================================================
 
-export const SEGMENT_CLASSIFICATION_SYSTEM_PROMPT = `あなたはソーシャルリスニングの専門家です。SNS上の投稿データとユーザー行動から、ターゲットセグメント（層）を分類します。
+export const SEGMENT_CLASSIFICATION_SYSTEM_PROMPT = `あなたは「界隈マーケティング」の第一人者です。SNS上の投稿データとユーザー行動から、メーカー想定外の「界隈（熱量の高いユーザー集団）」を発見し、ターゲットセグメントを分類します。
 
-【マルチラベル分類】
-1人のユーザーが複数のセグメントに属することがあります。
-例：「ママ50% × フィットネス30% × エコ意識20%」
+【界隈の発見ルール】
+- 必ず**5つの界隈**を発見してください（Core Layer: A-C の3界隈 + Expansion Layer: D-E の2界隈）
+- Core Layer = 商品との親和性が高く、熱量の高いコア層
+- Expansion Layer = コア層から波及して取り込める拡大層
+- 界隈名は日本のSNS文化に即した名前にしてください（例：ポイ活界隈、筋トレ界隈、ワーママ界隈）
+- メーカーの公式ターゲット以外の「意外な界隈」を必ず1つ以上含めてください
 
-【界隈の発見】
-- 投稿内容、フォロー先、いいね傾向から「界隈」を特定してください
-- 界隈名は日本のSNS文化に即した名前にしてください（例：ポイ活界隈、筋トレ界隈、ワーママ界隈）`;
+【文化コード】
+各界隈について以下を特定してください：
+- **呼び名**: ユーザーが自称する呼称（〇〇勢、〇〇民、〇〇沼、〇〇部）
+- **特有ハッシュタグ**: 界隈内で使われるハッシュタグ
+- **投稿構図の型**: よくある投稿フォーマット（開封動画、ビフォーアフター、GRWM等）
+
+【公式とのGAP分析】
+メーカーの想定用途と、ユーザーの実際の使い方のズレを明確にしてください。
+
+【推定人数】
+各界隈の推定人数を、提供されたWeb情報やSNSデータから概算してください。
+「人気がある」「多い」などの定性表現は禁止。必ず数字で示してください。`;
 
 export function buildSegmentClassificationPrompt(
   productName: string,
   verifiedPains: Array<{ pain: string; topEvidence: string[] }>,
   xPostsSample: string,
   ttVideosSample: string,
+  s1Summary?: string,
+  s3Summary?: string,
 ): string {
-  return `以下の商品に関する検証済みペインとSNSデータから、ターゲットセグメント（層）を分類してください。
+  return `以下の商品に関する検証済みペインとSNSデータから、**必ず5つの界隈**を発見し、セグメント分類してください。
 
 ## 商品名
 ${productName}
+
+## 公式情報（メーカー側の想定）
+${s1Summary || "（データなし）"}
+
+## Web上の評判（ユーザー側の実態）
+${s3Summary || "（データなし）"}
 
 ## 検証済みペイン
 ${verifiedPains.map((p, i) => `${i + 1}. ${p.pain}\n   根拠: ${p.topEvidence.slice(0, 3).join(" / ")}`).join("\n")}
@@ -125,10 +145,17 @@ ${xPostsSample || "（データなし）"}
 ${ttVideosSample || "（データなし）"}
 
 ## 指示
-1. まず「界隈」（コミュニティ）を発見してください（3〜6個）
-2. 次に界隈を束ねてセグメント（層）を定義してください（3〜6個）
-3. 各セグメントには、商品とのマッチ度（matchScore）を設定してください
-4. 各セグメントの主要ペインと訴求ポイントを明記してください
+1. **5つの界隈を発見**してください:
+   - Core Layer (A-C): 商品との親和性が高い3界隈（layer: "core"）
+   - Expansion Layer (D-E): 波及で取り込める2界隈（layer: "expansion"）
+2. 各界隈について以下を必ず出力:
+   - cultureCode: 呼び名(nicknames)、特有ハッシュタグ(hashtags)、投稿構図の型(contentPatterns)
+   - officialGap: メーカー想定(official) vs ユーザー実態(reality) vs インサイト(insight)
+   - estimatedPopulation: 推定人数（概算）
+   - populationFormula: 人数の計算根拠
+   - keywords: 界隈に関連するキーワード5つ（後でTikTok/Instagram定量検証に使用）
+3. 次に界隈を束ねてセグメント（層）を定義してください
+4. 各セグメントのmatchScore、主要ペイン、訴求ポイントを明記
 
 セグメント名は「〇〇層」の形式にしてください。
 iconは絵文字1文字にしてください。`;
@@ -255,6 +282,53 @@ verificationScore の基準:
 - 0.5〜0.7: 間接的に裏付ける投稿がある
 - 0.3〜0.4: 関連はあるが弱い
 - 0.0〜0.2: ほぼ裏付けなし`;
+}
+
+// ================================================================
+// STEP 7b: Kaiwai Creative Generation (per community, 6 proposals each)
+// ================================================================
+
+export const KAIWAI_CREATIVE_SYSTEM_PROMPT = `あなたは界隈マーケティングのクリエイティブディレクターです。
+界隈ごとに選抜されたキーワードを使い、「右脳（感情・直感）」と「左脳（機能・論理）」の2軸でTikTok投稿案を生成します。
+
+【右脳的アプローチ（Emotional）】
+- 話口調（〜だよね、〜じゃん、〜してみた）
+- 直感的、「好き」「憧れ」「雰囲気」に訴求
+- SEESASのSympathy/Enthusiasmに対応
+- ビジュアル: エモーショナル、warm lighting、生活感
+
+【左脳的アプローチ（Logical）】
+- 説明口調（〜の理由、〜を比較、〜の事実）
+- 論理的、「機能」「成分」「コスパ」「数字」に訴求
+- SEESASのAction/Sustainabilityに対応
+- ビジュアル: テキストオーバーレイ、比較表、データ可視化`;
+
+export function buildKaiwaiCreativePrompt(
+  productName: string,
+  community: { id: string; name: string; keywords: string[]; primaryPain?: string },
+  selectedKeywords: string[],
+): string {
+  return `以下の界隈×キーワードでTikTok投稿案を生成してください。
+
+## 商品名
+${productName}
+
+## 界隈
+${community.name}（ID: ${community.id}）
+${community.primaryPain ? `主要ペイン: ${community.primaryPain}` : ""}
+
+## 選抜キーワード（3つ）
+${selectedKeywords.map((k, i) => `${i + 1}. ${k}`).join("\n")}
+
+## 指示
+各キーワードについて、右脳案と左脳案を1つずつ生成してください（計6案）。
+
+各案に含めるもの：
+- **headline**: フック（最初の3秒で目を引く一言）
+- **body**: 投稿テキスト（右脳=話口調、左脳=説明口調）
+- **visualConcept**: 映像コンセプトの説明（TikTokのUI画面として描写）
+
+communityId は "${community.id}"、communityName は "${community.name}" を使用してください。`;
 }
 
 // ================================================================

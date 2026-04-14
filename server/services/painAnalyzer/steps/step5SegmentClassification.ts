@@ -57,6 +57,8 @@ export async function classifySegments(
   xPosts: XPostData[],
   tiktokVideos: TTVideoData[],
   onProgress?: ProgressFn,
+  s1Summary?: string,
+  s3Summary?: string,
 ): Promise<{
   communities: Array<{
     id: string;
@@ -65,6 +67,16 @@ export async function classifySegments(
     keywords: string[];
     representativeUsers: string[];
     size: "large" | "medium" | "small";
+    layer?: "core" | "expansion";
+    cultureCode?: { nicknames: string[]; hashtags: string[]; contentPatterns: string[] };
+    estimatedPopulation?: number;
+    populationFormula?: string;
+    officialGap?: { official: string; reality: string; insight: string };
+    keywordCandidates?: Array<{
+      keyword: string; tiktokViews: number; tiktokPostCount: number;
+      tiktokAvgER: number; instagramPostCount: number;
+      trend: "rising" | "stable" | "declining"; selected: boolean;
+    }>;
   }>;
   segments: Array<{
     id: string;
@@ -169,10 +181,12 @@ export async function classifySegments(
           verifiedPains.filter(p => p.verificationScore >= 0.3),
           enrichedXSample.slice(0, 4000),
           ttVideosSample.slice(0, 2000),
+          s1Summary,
+          s3Summary,
         ),
       },
     ],
-    maxTokens: 4096,
+    maxTokens: 8192,
     responseFormat: {
       type: "json_schema",
       json_schema: SEGMENT_CLASSIFICATION_JSON_SCHEMA,

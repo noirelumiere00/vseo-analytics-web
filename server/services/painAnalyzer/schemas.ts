@@ -100,6 +100,29 @@ export const communitySchema = z.object({
   keywords: z.array(z.string()),
   representativeUsers: z.array(z.string()),
   size: z.enum(["large", "medium", "small"]),
+  layer: z.enum(["core", "expansion"]).optional(),
+  cultureCode: z.object({
+    nicknames: z.array(z.string()),
+    hashtags: z.array(z.string()),
+    contentPatterns: z.array(z.string()),
+  }).optional(),
+  estimatedPopulation: z.number().optional(),
+  populationFormula: z.string().optional(),
+  populationSources: z.array(z.object({ title: z.string(), url: z.string() })).optional(),
+  officialGap: z.object({
+    official: z.string(),
+    reality: z.string(),
+    insight: z.string(),
+  }).optional(),
+  keywordCandidates: z.array(z.object({
+    keyword: z.string(),
+    tiktokViews: z.number(),
+    tiktokPostCount: z.number(),
+    tiktokAvgER: z.number(),
+    instagramPostCount: z.number(),
+    trend: z.enum(["rising", "stable", "declining"]),
+    selected: z.boolean(),
+  })).optional(),
 });
 
 export const segmentSchema = z.object({
@@ -121,7 +144,7 @@ export const segmentSchema = z.object({
 export type Segment = z.infer<typeof segmentSchema>;
 
 export const segmentClassificationSchema = z.object({
-  communities: z.array(communitySchema),
+  communities: z.array(communitySchema).min(3).max(7),
   segments: z.array(segmentSchema).min(2),
 });
 
@@ -138,11 +161,32 @@ export const SEGMENT_CLASSIFICATION_JSON_SCHEMA = {
             id: { type: "string" },
             name: { type: "string", description: "界隈名（例: 子育てママ界隈, ビジネスマン界隈）" },
             description: { type: "string" },
-            keywords: { type: "array", items: { type: "string" } },
+            keywords: { type: "array", items: { type: "string" }, description: "界隈に関連するキーワード5つ" },
             representativeUsers: { type: "array", items: { type: "string" } },
             size: { type: "string", enum: ["large", "medium", "small"] },
+            layer: { type: "string", enum: ["core", "expansion"], description: "Core(A-C)=熱量の高いコア層, Expansion(D-E)=拡大層" },
+            cultureCode: {
+              type: "object",
+              properties: {
+                nicknames: { type: "array", items: { type: "string" }, description: "ユーザーの自称（〇〇勢、〇〇民、〇〇沼）" },
+                hashtags: { type: "array", items: { type: "string" }, description: "界隈特有のハッシュタグ" },
+                contentPatterns: { type: "array", items: { type: "string" }, description: "よくある投稿構図・型（例: 開封動画、ビフォーアフター）" },
+              },
+              required: ["nicknames", "hashtags", "contentPatterns"],
+            },
+            estimatedPopulation: { type: "number", description: "推定人数（Web上のFactから算出）" },
+            populationFormula: { type: "string", description: "人数の計算式・根拠" },
+            officialGap: {
+              type: "object",
+              properties: {
+                official: { type: "string", description: "メーカーの想定用途" },
+                reality: { type: "string", description: "ユーザーの実際の使い方" },
+                insight: { type: "string", description: "ズレから見えるインサイト" },
+              },
+              required: ["official", "reality", "insight"],
+            },
           },
-          required: ["id", "name", "description", "keywords", "representativeUsers", "size"],
+          required: ["id", "name", "description", "keywords", "representativeUsers", "size", "layer", "cultureCode", "officialGap"],
         },
       },
       segments: {
@@ -292,6 +336,48 @@ export const PROPOSAL_JSON_SCHEMA = {
       },
     },
     required: ["proposals"],
+  },
+};
+
+// ================================================================
+// STEP 7b: Kaiwai Creative (30 proposals: 5×3×right/left brain)
+// ================================================================
+
+export const kaiwaiCreativeSchema = z.object({
+  communityId: z.string(),
+  communityName: z.string(),
+  keyword: z.string(),
+  axis: z.enum(["right-brain", "left-brain"]),
+  headline: z.string(),
+  body: z.string(),
+  visualConcept: z.string(),
+});
+
+export type KaiwaiCreative = z.infer<typeof kaiwaiCreativeSchema>;
+
+export const KAIWAI_CREATIVE_JSON_SCHEMA = {
+  name: "kaiwaiCreatives",
+  schema: {
+    type: "object",
+    properties: {
+      creatives: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            communityId: { type: "string" },
+            communityName: { type: "string" },
+            keyword: { type: "string" },
+            axis: { type: "string", enum: ["right-brain", "left-brain"], description: "right-brain=話口調(感情・直感), left-brain=説明口調(機能・論理)" },
+            headline: { type: "string", description: "投稿のヘッドライン/フック" },
+            body: { type: "string", description: "right-brain=話口調テキスト, left-brain=説明口調テキスト" },
+            visualConcept: { type: "string", description: "映像/ビジュアルのコンセプト説明" },
+          },
+          required: ["communityId", "communityName", "keyword", "axis", "headline", "body", "visualConcept"],
+        },
+      },
+    },
+    required: ["creatives"],
   },
 };
 

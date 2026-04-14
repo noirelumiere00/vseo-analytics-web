@@ -1087,6 +1087,20 @@ export const painAnalyses = mysqlTable("pain_analyses", {
     }>;
   }>(),
 
+  // 界隈クリエイティブ (30案: 5界隈×3ワード×右脳左脳)
+  kaiwaiCreatives: json("kaiwaiCreatives").$type<Array<{
+    communityId: string;
+    communityName: string;
+    keyword: string;
+    axis: "right-brain" | "left-brain";
+    headline: string;
+    body: string;
+    visualConcept: string;
+  }>>(),
+
+  // Genspark用マークダウン出力
+  gensparkMarkdown: text("gensparkMarkdown"),
+
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),

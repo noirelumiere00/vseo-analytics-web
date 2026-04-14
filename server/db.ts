@@ -1562,6 +1562,8 @@ export async function updatePainAnalysis(id: number, data: Partial<{
   purchaseAttitudes: any;
   proposals: any;
   analysisResult: any;
+  kaiwaiCreatives: any;
+  gensparkMarkdown: string;
   errorMessage: string;
   completedAt: Date;
 }>) {
