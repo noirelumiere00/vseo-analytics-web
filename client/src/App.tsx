@@ -35,6 +35,7 @@ const AnalysisNew = lazy(() => import("./pages/AnalysisNew"));
 const Activity = lazy(() => import("./pages/Activity"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const ContextAnalysis = lazy(() => import("./pages/ContextAnalysis"));
+const PainAnalysis = lazy(() => import("./pages/PainAnalysis"));
 
 function RedirectTo({ to }: { to: string }) {
   const [, navigate] = useLocation();
@@ -94,6 +95,8 @@ function Router() {
       <Route path="/trend-discovery/:id" component={TrendDiscoveryDetail} />
       <Route path="/context-analysis" component={ContextAnalysis} />
       <Route path="/context-analysis/:id" component={ContextAnalysis} />
+      <Route path="/pain-analysis" component={PainAnalysis} />
+      <Route path="/pain-analysis/:id" component={PainAnalysis} />
       <Route path="/campaigns" component={CampaignList} />
       {/* Legacy redirects */}
       <Route path="/history">{() => <RedirectTo to="/activity?filter=seo" />}</Route>
