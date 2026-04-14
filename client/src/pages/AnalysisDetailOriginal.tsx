@@ -162,6 +162,14 @@ export default function AnalysisDetail() {
     onError: handleTrpcError,
   });
 
+  const reAnalyzeLLM = trpc.analysis.reAnalyzeLLM.useMutation({
+    onSuccess: () => {
+      toast.success("AI再分析をキューに追加しました。しばらくお待ちください。");
+      refetch();
+    },
+    onError: handleTrpcError,
+  });
+
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // IntersectionObserver for sticky nav
@@ -1507,9 +1515,21 @@ export default function AnalysisDetail() {
                 {data && data.report && (
                   <div className="space-y-3">
                     <div className="border rounded-xl p-3 animate-fade-slide-up">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="h-4 w-0.5 rounded-full bg-[#171717]" />
-                        <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画マクロ分析</h3>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="h-4 w-0.5 rounded-full bg-[#171717]" />
+                          <h3 className="text-xs font-semibold uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>動画マクロ分析</h3>
+                        </div>
+                        {(!(data.report?.facets as any[])?.length || !(data.report as any)?.emotionWords?.length) && job.status === "completed" && (
+                          <button
+                            onClick={() => reAnalyzeLLM.mutate({ jobId })}
+                            disabled={reAnalyzeLLM.isPending}
+                            className="flex items-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md px-2 py-1 transition-colors disabled:opacity-50"
+                          >
+                            {reAnalyzeLLM.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Repeat className="h-3 w-3" />}
+                            AI再分析
+                          </button>
+                        )}
                       </div>
                       <ReportSection
                         keyword={data.job?.keyword || ""}

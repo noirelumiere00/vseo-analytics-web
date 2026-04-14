@@ -127,5 +127,7 @@ export async function analyzeFacetsImproved(
   }
 
   console.error(`[Facet Analysis] All ${MAX_ATTEMPTS} attempts failed for jobId ${jobId}. Last error:`, lastError);
+  // 全リトライ失敗時もレポート生成は続行するが、警告ログを出す
+  console.warn(`[Facet Analysis] Returning empty facets for jobId ${jobId}. 「再分析」で再実行可能。`);
   return [];
 }

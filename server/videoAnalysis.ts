@@ -1084,16 +1084,55 @@ ${videosData.slice(0, 20).map(v => {
       console.warn(`[Report] Only ${keyInsights.length} keyInsights generated (expected 4). finish_reason=${finishReason}`);
     }
   } catch (error) {
-    console.error("[Report] Error in combined LLM analysis:", error);
-    // LLM枠超過エラーは上位に伝搬して明示的に通知する
+    console.error("[Report] Error in combined LLM analysis (attempt 1):", error);
     if (error instanceof LLMQuotaExhaustedError) {
       throw error;
     }
-    // 部分的に成功したデータがあれば保持する
-    if (emotionWords.length === 0 && autoInsight === "" && keyInsights.length === 0) {
-      keyInsights = [
-        { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。`, analysis: "", strategicAdvice: "", sourceVideoIds: [] },
-      ];
+    // 1回リトライ（タイムアウト等の一時的エラー対策）
+    try {
+      console.log("[Report] Retrying combined LLM analysis (attempt 2)...");
+      await new Promise(resolve => setTimeout(resolve, 3000));
+
+      const wordsWithCountRetry = getTopWordsWithCount(allKeywords, ocrAndAudioKeywords, 25, metaSeoKeywords);
+      const wordListRetry = wordsWithCountRetry.map(w => w.word).join("、");
+
+      const retryRes = await invokeLLM({
+        messages: [
+          { role: "system", content: "あなたはTikTok動画分析の専門家です。" },
+          { role: "user", content: `以下のキーワードについて感情座標アノテーションと自動インサイトを生成してください。\nキーワード: ${wordListRetry}\n動画数: ${totalVideos}` },
+        ],
+        max_tokens: 8192,
+        response_format: { type: "json_object" },
+      });
+
+      const retryContent = typeof retryRes.choices[0].message.content === "string"
+        ? retryRes.choices[0].message.content : "{}";
+      const retryParsed = safeJsonParse(retryContent);
+
+      const retryAnnotationMap = new Map<string, { valence: number; arousal: number }>(
+        (retryParsed.annotations || []).map((a: any) => [a.word, { valence: a.valence, arousal: a.arousal }])
+      );
+      emotionWords = wordsWithCountRetry.map(({ word, count }) => {
+        const annotation = retryAnnotationMap.get(word) ?? { valence: 0, arousal: 0 };
+        const sources: EmotionWordSource[] = ["keyword"];
+        if (ocrAndAudioKeywords.includes(word)) sources.push("ocr");
+        if (metaSeoKeywords.includes(word)) sources.push("modal");
+        return { word, count, ...annotation, sources };
+      });
+      autoInsight = retryParsed.autoInsight || "";
+      keyInsights = retryParsed.keyInsights || [];
+      console.log("[Report] Retry succeeded for combined LLM analysis");
+    } catch (retryError) {
+      console.error("[Report] Retry also failed for combined LLM analysis:", retryError);
+      if (retryError instanceof LLMQuotaExhaustedError) {
+        throw retryError;
+      }
+      // 2回失敗: フォールバック値を設定するが警告を出す
+      if (emotionWords.length === 0 && autoInsight === "" && keyInsights.length === 0) {
+        keyInsights = [
+          { category: "leverage", title: "データ収集完了", description: `${totalVideos}件の動画データを正常に収集・分析しました。AI分析は一時的なエラーにより生成できませんでした。「再分析」ボタンから再実行できます。`, analysis: "", strategicAdvice: "ページ上部の「再分析」ボタンを押すと、AI分析を再実行できます。", sourceVideoIds: [] },
+        ];
+      }
     }
   }
 
