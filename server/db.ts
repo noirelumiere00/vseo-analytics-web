@@ -746,6 +746,18 @@ export async function patchCampaignReportInstagramHashtag(
     .where(eq(campaignReports.campaignId, campaignId));
 }
 
+export async function patchCampaignReportPositionReport(
+  campaignId: number,
+  positionReport: any[],
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(campaignReports)
+    .set({ positionReport: positionReport as any })
+    .where(eq(campaignReports.campaignId, campaignId));
+}
+
 export async function patchCampaignReportRipple(
   campaignId: number,
   rippleReport: Record<string, any>,

@@ -1725,11 +1725,18 @@ export const appRouter = router({
         // Instagram — 成功分のみ上書き
         if (instagramUrls.length > 0) {
           const igPosts = await fetchInstagramPostsWithFallback(instagramUrls);
+          // shortcodeベースで元URLにマッチ（Apifyが /p/ 形式で返すため /reels/ 等と不一致になる対策）
+          const igUrlByShortcode = new Map<string, string>();
+          for (const u of instagramUrls) {
+            const extracted = extractVideoId(u);
+            if (extracted) igUrlByShortcode.set(extracted.id, u);
+          }
           for (const p of igPosts) {
-            existingData.set(p.videoUrl, {
+            const originalUrl = igUrlByShortcode.get(p.videoId) || p.videoUrl;
+            existingData.set(originalUrl, {
               platform: "instagram",
               videoId: p.videoId,
-              videoUrl: p.videoUrl,
+              videoUrl: originalUrl,
               coverUrl: p.coverUrl,
               description: p.caption,
               caption: p.caption,
@@ -2014,6 +2021,82 @@ export const appRouter = router({
         };
 
         await db.patchCampaignReportSovReport(input.campaignId, sovReport);
+        return { success: true };
+      }),
+
+    // TikTok 順位手動更新
+    updatePositionRank: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        keyword: z.string(),
+        before_rank: z.number().nullable().optional(),
+        after_rank: z.number().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report || !report.positionReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません" });
+        }
+
+        const positionReport = report.positionReport as any[];
+        const entry = positionReport.find((p: any) => p.keyword === input.keyword);
+        if (!entry) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キーワードが見つかりません" });
+        }
+
+        if (input.before_rank !== undefined) entry.before_rank = input.before_rank;
+        if (input.after_rank !== undefined) entry.after_rank = input.after_rank;
+        entry.rank_change = (entry.before_rank != null && entry.after_rank != null)
+          ? entry.before_rank - entry.after_rank
+          : null;
+
+        await db.patchCampaignReportPositionReport(input.campaignId, positionReport);
+        return { success: true };
+      }),
+
+    // IG ハッシュタグ順位手動更新
+    updateIgHashtagRank: protectedProcedure
+      .input(z.object({
+        campaignId: z.number(),
+        hashtag: z.string(),
+        shortcode: z.string(),
+        position: z.number().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const campaign = await db.getCampaignById(input.campaignId);
+        if (!campaign || campaign.userId !== ctx.user.id) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "キャンペーンが見つかりません" });
+        }
+        const report = await db.getCampaignReportByCampaignId(input.campaignId);
+        if (!report || !report.instagramHashtagReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "レポートが見つかりません" });
+        }
+
+        const igReport = report.instagramHashtagReport as any[];
+        const tagReport = igReport.find((r: any) => r.hashtag === input.hashtag);
+        if (!tagReport) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "ハッシュタグが見つかりません" });
+        }
+
+        const posts: any[] = tagReport.topPosts || [];
+        const postIdx = posts.findIndex((p: any) => p.shortcode === input.shortcode);
+        if (postIdx === -1) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "投稿が見つかりません" });
+        }
+
+        posts[postIdx].position = input.position;
+
+        // Recalculate ownRanks
+        tagReport.ownRanks = posts
+          .filter((p: any) => p.owner === "own" || (p.owner === undefined && p.isOwn))
+          .map((p: any) => p.position)
+          .filter((p: any) => p != null);
+
+        await db.patchCampaignReportInstagramHashtag(input.campaignId, igReport);
         return { success: true };
       }),
 

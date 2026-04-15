@@ -79,6 +79,77 @@ export const SECTIONS = [
 ];
 
 // ============================
+// Inline Rank Editor
+// ============================
+
+function InlineRankEditor({ value, onSave, colorClass }: {
+  value: number | null;
+  onSave: (v: number | null) => void;
+  colorClass?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDraft(value != null ? String(value) : "");
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    const newVal = trimmed === "" ? null : parseInt(trimmed, 10);
+    if (trimmed !== "" && isNaN(newVal!)) return; // invalid input, discard
+    if (newVal !== value) onSave(newVal);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+    if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="numeric"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        onClick={e => e.stopPropagation()}
+        className="w-12 h-6 text-center text-sm font-bold border border-blue-400 rounded bg-white outline-none ring-2 ring-blue-200 tabular-nums"
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={startEdit}
+      className={`group/rank inline-flex items-center gap-0.5 cursor-pointer hover:bg-blue-50 rounded px-1 py-0.5 transition-colors ${colorClass || ""}`}
+      title="クリックして順位を編集"
+    >
+      {value != null ? (
+        <span className="tabular-nums">{value}位</span>
+      ) : (
+        <span className="text-xs text-slate-300">—</span>
+      )}
+      <Pencil className="h-2.5 w-2.5 text-blue-400 opacity-0 group-hover/rank:opacity-100 transition-opacity" />
+    </button>
+  );
+}
+
+// ============================
 // Main Component
 // ============================
 
@@ -203,6 +274,82 @@ export default function CampaignReport() {
       changes: changes as any,
     });
   }, [campaignId, utils, updateSlotMutation]);
+
+  // TikTok 順位手動更新 mutation
+  const updatePositionRankMutation = trpc.campaign.updatePositionRank.useMutation({
+    onError: () => {
+      toast.error("順位更新に失敗しました");
+      reportQuery.refetch();
+    },
+  });
+
+  const handlePositionRankUpdate = useCallback((
+    keyword: string,
+    changes: { before_rank?: number | null; after_rank?: number | null },
+  ) => {
+    // Optimistic update
+    utils.campaign.getReport.setData({ campaignId }, (old: any) => {
+      if (!old?.positionReport) return old;
+      const positionReport = [...old.positionReport];
+      const idx = positionReport.findIndex((p: any) => p.keyword === keyword);
+      if (idx === -1) return old;
+      const entry = { ...positionReport[idx] };
+      if (changes.before_rank !== undefined) entry.before_rank = changes.before_rank;
+      if (changes.after_rank !== undefined) entry.after_rank = changes.after_rank;
+      entry.rank_change = (entry.before_rank != null && entry.after_rank != null)
+        ? entry.before_rank - entry.after_rank
+        : null;
+      positionReport[idx] = entry;
+      return { ...old, positionReport };
+    });
+
+    updatePositionRankMutation.mutate({
+      campaignId,
+      keyword,
+      ...changes,
+    });
+  }, [campaignId, utils, updatePositionRankMutation]);
+
+  // IG ハッシュタグ順位手動更新 mutation
+  const updateIgHashtagRankMutation = trpc.campaign.updateIgHashtagRank.useMutation({
+    onError: () => {
+      toast.error("IG順位更新に失敗しました");
+      reportQuery.refetch();
+    },
+  });
+
+  const handleIgHashtagRankUpdate = useCallback((
+    hashtag: string,
+    shortcode: string,
+    position: number | null,
+  ) => {
+    // Optimistic update
+    utils.campaign.getReport.setData({ campaignId }, (old: any) => {
+      if (!old?.instagramHashtagReport) return old;
+      const igReport = [...old.instagramHashtagReport];
+      const tagIdx = igReport.findIndex((r: any) => r.hashtag === hashtag);
+      if (tagIdx === -1) return old;
+      const tagReport = { ...igReport[tagIdx] };
+      const posts = [...(tagReport.topPosts || [])];
+      const postIdx = posts.findIndex((p: any) => p.shortcode === shortcode);
+      if (postIdx === -1) return old;
+      posts[postIdx] = { ...posts[postIdx], position };
+      tagReport.topPosts = posts;
+      tagReport.ownRanks = posts
+        .filter((p: any) => p.owner === "own" || (p.owner === undefined && p.isOwn))
+        .map((p: any) => p.position)
+        .filter((p: any) => p != null);
+      igReport[tagIdx] = tagReport;
+      return { ...old, instagramHashtagReport: igReport };
+    });
+
+    updateIgHashtagRankMutation.mutate({
+      campaignId,
+      hashtag,
+      shortcode,
+      position,
+    });
+  }, [campaignId, utils, updateIgHashtagRankMutation]);
 
   // IG SOV slot mutation
   const updateIgSlotMutation = trpc.campaign.updateIgSovSlot.useMutation({
@@ -627,12 +774,12 @@ export default function CampaignReport() {
 
           {/* TikTok SOV */}
           {platformTab === "tiktok" && (
-            <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} overviewUniqueAll={overviewUniqueAll} />
+            <UnifiedKeywordSovSection positions={positions} bigKeywordReport={hasBigKW ? bigKeywordReport! : undefined} sovReport={sovReport} hasBaseline={hasBaseline} campaign={campaign} campaignId={campaignId} onSlotUpdate={handleSlotUpdate} onPositionRankUpdate={handlePositionRankUpdate} overviewUniqueAll={overviewUniqueAll} />
           )}
 
           {/* Instagram Hashtag Rankings */}
           {platformTab === "instagram" && hasInstagramHashtag && (
-            <InstagramHashtagRankingSection instagramHashtagReport={instagramHashtagReport!} campaignId={campaignId} onIgSlotUpdate={handleIgSlotUpdate} />
+            <InstagramHashtagRankingSection instagramHashtagReport={instagramHashtagReport!} campaignId={campaignId} onIgSlotUpdate={handleIgSlotUpdate} onIgHashtagRankUpdate={handleIgHashtagRankUpdate} />
           )}
         </div>
 
@@ -2272,10 +2419,11 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
 // Instagram Hashtag Ranking Section (順位・シェア IG tab)
 // ============================
 
-export function InstagramHashtagRankingSection({ instagramHashtagReport, campaignId, onIgSlotUpdate }: {
+export function InstagramHashtagRankingSection({ instagramHashtagReport, campaignId, onIgSlotUpdate, onIgHashtagRankUpdate }: {
   instagramHashtagReport: IGHashtagReport;
   campaignId: number;
   onIgSlotUpdate?: (hashtag: string, shortcode: string, changes: IgSlotChanges) => void;
+  onIgHashtagRankUpdate?: (hashtag: string, shortcode: string, position: number | null) => void;
 }) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set());
@@ -2592,7 +2740,15 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport, campaig
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-1.5">
                                               <span className="text-[13px] font-semibold text-foreground">@{post.username}</span>
-                                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>{post.position}位</span>
+                                              {onIgHashtagRankUpdate ? (
+                                                <InlineRankEditor
+                                                  value={post.position}
+                                                  onSave={(v) => onIgHashtagRankUpdate(ts.hashtag, post.shortcode, v)}
+                                                  colorClass="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white"
+                                                />
+                                              ) : (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: `linear-gradient(135deg, ${IG.pink}, ${IG.purple})` }}>{post.position}位</span>
+                                              )}
                                             </div>
                                             <span className="text-[10px] text-[#a3a3a3]">{post.type === "reel" ? "Reel" : post.type === "carousel" ? "Carousel" : "Post"}</span>
                                           </div>
@@ -2829,7 +2985,7 @@ function OwnVideoCard({ slot, keyword, onSlotUpdate, readOnly }: {
 // Unified Keyword + SOV Section
 // ============================
 
-export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate, readOnly, overviewUniqueAll }: {
+export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovReport, hasBaseline, campaign, campaignId, onSlotUpdate, onPositionRankUpdate, readOnly, overviewUniqueAll }: {
   positions: any[];
   bigKeywordReport?: Array<{ keyword: string; before: { ownVideoCount: number; bestRank: number | null }; after: { ownVideoCount: number; bestRank: number | null }; ownVideos?: Array<{ videoId: string; username: string; description: string; rank: number; viewCount: number }> }>;
   sovReport: Record<string, any>;
@@ -2837,6 +2993,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   campaign?: any;
   campaignId: number;
   onSlotUpdate: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+  onPositionRankUpdate?: (keyword: string, changes: { before_rank?: number | null; after_rank?: number | null }) => void;
   readOnly?: boolean;
   overviewUniqueAll?: { after: { own: number; total: number }; before: { own: number; total: number } };
 }) {
@@ -3633,7 +3790,13 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         <span className="text-sm font-bold text-foreground">{allOwn}<span className="text-xs font-normal text-muted-foreground">/{allTotal}</span></span>
                       </td>
                       <td className="py-3 px-3 text-center">
-                        {afterRank != null ? (
+                        {onPositionRankUpdate && !kw.isBigKeyword ? (
+                          <InlineRankEditor
+                            value={afterRank ?? null}
+                            onSave={(v) => onPositionRankUpdate(kw.keyword, { after_rank: v })}
+                            colorClass={`text-sm font-bold ${afterRank != null && afterRank <= 3 ? "text-[#D71921]" : afterRank != null && afterRank <= 10 ? "text-foreground" : "text-muted-foreground"}`}
+                          />
+                        ) : afterRank != null ? (
                           <span className={`text-sm font-bold ${afterRank <= 3 ? "text-[#D71921]" : afterRank <= 10 ? "text-foreground" : "text-muted-foreground"}`}>{afterRank}位</span>
                         ) : (
                           <span className="text-xs text-slate-300">—</span>
