@@ -15,6 +15,7 @@ import * as db from "../../db";
 import { verifyPains } from "./steps/step4PainVerification";
 import { classifySegments } from "./steps/step5SegmentClassification";
 import { quantifyKeywords } from "./steps/step5bKeywordQuantification";
+import { generateKeywordRationale } from "./steps/step5cKeywordRationale";
 import { estimatePurchaseAttitude } from "./steps/step6PurchaseAttitude";
 import { generateProposals } from "./steps/step7ProposalGeneration";
 import { generateKaiwaiCreatives } from "./steps/step7bKaiwaiCreative";
@@ -71,11 +72,21 @@ export async function executePainAnalysisPhase2(
     s3Summary,
   );
 
-  // ── STEP 5b: Keyword Quantification (TT/IG実データ) ──
+  // ── STEP 5b: Keyword Quantification (TT/IG/X/GT/Ads 実データ) ──
   await onProgress?.({ message: "キーワードを定量検証中...", percent: 78, phase: "segmenting" });
 
   const enrichedCommunities = await quantifyKeywords(segmentData.communities, onProgress);
   segmentData.communities = enrichedCommunities as typeof segmentData.communities;
+
+  // ── STEP 5c: Keyword Selection Rationale (LLM解釈) ──
+  await onProgress?.({ message: "キーワード選抜理由を生成中...", percent: 84, phase: "segmenting" });
+
+  const communitiesWithRationale = await generateKeywordRationale(
+    row.productName,
+    segmentData.communities as any,
+    onProgress,
+  );
+  segmentData.communities = communitiesWithRationale as typeof segmentData.communities;
 
   await db.updatePainAnalysis(analysisId, {
     segmentData: segmentData,

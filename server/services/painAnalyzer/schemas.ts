@@ -108,7 +108,28 @@ export const communitySchema = z.object({
   }).optional(),
   estimatedPopulation: z.number().optional(),
   populationFormula: z.string().optional(),
+  populationCalculation: z.object({
+    steps: z.array(z.object({
+      label: z.string(),
+      value: z.number(),
+      source: z.object({ title: z.string(), url: z.string() }).optional(),
+    })),
+    formula: z.string(),
+  }).optional(),
   populationSources: z.array(z.object({ title: z.string(), url: z.string() })).optional(),
+  representativeUserProfiles: z.array(z.object({
+    username: z.string(),
+    profileUrl: z.string().optional(),
+    followerCount: z.number().optional(),
+    bio: z.string().optional(),
+    samplePostUrl: z.string().optional(),
+    samplePostText: z.string().optional(),
+    samplePostViews: z.number().optional(),
+  })).optional(),
+  personaDay: z.object({
+    weekday: z.string(),
+    purchaseBehavior: z.string(),
+  }).optional(),
   officialGap: z.object({
     official: z.string(),
     reality: z.string(),
@@ -128,6 +149,18 @@ export const communitySchema = z.object({
     competition: z.string(),
     trend: z.enum(["rising", "stable", "declining"]),
     selected: z.boolean(),
+    selectionRationale: z.string().optional(),
+    trendBackground: z.string().optional(),
+    competitorKeywords: z.array(z.object({
+      keyword: z.string(),
+      reason: z.string(),
+    })).optional(),
+    sources: z.object({
+      tiktokSearchUrl: z.string().optional(),
+      instagramTagUrl: z.string().optional(),
+      xSearchUrl: z.string().optional(),
+      googleTrendsUrl: z.string().optional(),
+    }).optional(),
   })).optional(),
 });
 
@@ -180,8 +213,61 @@ export const SEGMENT_CLASSIFICATION_JSON_SCHEMA = {
               },
               required: ["nicknames", "hashtags", "contentPatterns"],
             },
-            estimatedPopulation: { type: "number", description: "推定人数（Web上のFactから算出）" },
-            populationFormula: { type: "string", description: "人数の計算式・根拠" },
+            estimatedPopulation: { type: "number", description: "推定人数（Web上のFactから算出した整数）" },
+            populationFormula: { type: "string", description: "人数の計算式の一行要約（例: 1.24M ÷ 6.7 × 0.15 = 27,761 → 年間UU 185,000人）" },
+            populationCalculation: {
+              type: "object",
+              description: "人数の詳細な計算ステップ",
+              properties: {
+                steps: {
+                  type: "array",
+                  description: "計算ステップ。各stepは基礎数値+ソースURL",
+                  items: {
+                    type: "object",
+                    properties: {
+                      label: { type: "string", description: "何の数字か (例: Instagram #サウナー 投稿数)" },
+                      value: { type: "number", description: "具体的な数値" },
+                      source: {
+                        type: "object",
+                        properties: {
+                          title: { type: "string" },
+                          url: { type: "string" },
+                        },
+                      },
+                    },
+                    required: ["label", "value"],
+                  },
+                },
+                formula: { type: "string", description: "数式 (例: A ÷ B × C = D)" },
+              },
+              required: ["steps", "formula"],
+            },
+            representativeUserProfiles: {
+              type: "array",
+              description: "代表ユーザー 3人の詳細プロフィール（X/TTの実アカウントから選抜）",
+              items: {
+                type: "object",
+                properties: {
+                  username: { type: "string", description: "@XXXXX" },
+                  profileUrl: { type: "string" },
+                  followerCount: { type: "number" },
+                  bio: { type: "string", description: "プロフィール文の要約" },
+                  samplePostUrl: { type: "string" },
+                  samplePostText: { type: "string", description: "代表投稿の内容要約" },
+                  samplePostViews: { type: "number" },
+                },
+                required: ["username"],
+              },
+            },
+            personaDay: {
+              type: "object",
+              description: "典型的な生活者の1日と購買行動",
+              properties: {
+                weekday: { type: "string", description: "平日の行動パターン (朝→昼→夕→夜)" },
+                purchaseBehavior: { type: "string", description: "購買行動の特徴 (金額感・頻度・トリガー)" },
+              },
+              required: ["weekday", "purchaseBehavior"],
+            },
             officialGap: {
               type: "object",
               properties: {
@@ -357,6 +443,24 @@ export const kaiwaiCreativeSchema = z.object({
   headline: z.string(),
   body: z.string(),
   visualConcept: z.string(),
+  languageStyle: z.object({
+    tone: z.string(),
+    endings: z.array(z.string()),
+    fillers: z.array(z.string()),
+    emoji: z.array(z.string()),
+  }).optional(),
+  imagePrompt: z.string().optional(),
+  productionBrief: z.object({
+    durationSec: z.number(),
+    cuts: z.array(z.object({
+      sec: z.string(),
+      shot: z.string(),
+      overlay: z.string().optional(),
+    })),
+    bgmMood: z.string().optional(),
+    subtitleStyle: z.string().optional(),
+    ctaOnScreen: z.string().optional(),
+  }).optional(),
 });
 
 export type KaiwaiCreative = z.infer<typeof kaiwaiCreativeSchema>;
@@ -374,12 +478,51 @@ export const KAIWAI_CREATIVE_JSON_SCHEMA = {
             communityId: { type: "string" },
             communityName: { type: "string" },
             keyword: { type: "string" },
-            axis: { type: "string", enum: ["right-brain", "left-brain"], description: "right-brain=話口調(感情・直感), left-brain=説明口調(機能・論理)" },
-            headline: { type: "string", description: "投稿のヘッドライン/フック" },
-            body: { type: "string", description: "right-brain=話口調テキスト, left-brain=説明口調テキスト" },
-            visualConcept: { type: "string", description: "映像/ビジュアルのコンセプト説明" },
+            axis: { type: "string", enum: ["right-brain", "left-brain"] },
+            headline: { type: "string", description: "投稿のヘッドライン/フック (〜20文字)" },
+            body: { type: "string", description: "投稿本文。right-brain=話口調(〜だよね/まじで/てか)、left-brain=説明口調(〜の理由/比較)" },
+            visualConcept: { type: "string", description: "映像/ビジュアルの一言コンセプト" },
+            languageStyle: {
+              type: "object",
+              description: "口調・語尾・フィラー・絵文字の辞書",
+              properties: {
+                tone: { type: "string", description: "casual-feminine-20s / chill-masculine-30s 等" },
+                endings: { type: "array", items: { type: "string" }, description: "語尾例 (〜だわ/〜じゃん/〜って感じ)" },
+                fillers: { type: "array", items: { type: "string" }, description: "つなぎ言葉 (てか/まじで/なんか)" },
+                emoji: { type: "array", items: { type: "string" }, description: "使用する絵文字" },
+              },
+              required: ["tone", "endings", "fillers", "emoji"],
+            },
+            imagePrompt: {
+              type: "string",
+              description: "Stable Diffusion/Midjourney風の画像生成プロンプト。必ず英語で、Photorealistic, full-screen vertical TikTok interface, Japanese [persona], warm lighting, TikTok UI overlay, aspect ratio 9:16, no hands visible の構造で記述",
+            },
+            productionBrief: {
+              type: "object",
+              description: "撮影ブリーフ。制作担当が即動ける粒度",
+              properties: {
+                durationSec: { type: "number", description: "動画秒数 (15/30/60)" },
+                cuts: {
+                  type: "array",
+                  description: "カット割り",
+                  items: {
+                    type: "object",
+                    properties: {
+                      sec: { type: "string", description: "秒数帯 (例: 0-3)" },
+                      shot: { type: "string", description: "ショット内容" },
+                      overlay: { type: "string", description: "テキストオーバーレイ (任意)" },
+                    },
+                    required: ["sec", "shot"],
+                  },
+                },
+                bgmMood: { type: "string", description: "BGMの雰囲気 (例: chill lo-fi, upbeat J-POP)" },
+                subtitleStyle: { type: "string", description: "字幕スタイル (例: white sans-serif + black edge, 32pt)" },
+                ctaOnScreen: { type: "string", description: "画面に出すCTA (例: プロフリンクから購入)" },
+              },
+              required: ["durationSec", "cuts"],
+            },
           },
-          required: ["communityId", "communityName", "keyword", "axis", "headline", "body", "visualConcept"],
+          required: ["communityId", "communityName", "keyword", "axis", "headline", "body", "visualConcept", "languageStyle", "imagePrompt", "productionBrief"],
         },
       },
     },

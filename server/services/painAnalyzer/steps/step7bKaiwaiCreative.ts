@@ -72,7 +72,7 @@ export async function generateKaiwaiCreatives(
               content: buildKaiwaiCreativePrompt(productName, community, keywords),
             },
           ],
-          maxTokens: 4096,
+          maxTokens: 8192,
           responseFormat: {
             type: "json_schema",
             json_schema: KAIWAI_CREATIVE_JSON_SCHEMA,
@@ -94,6 +94,9 @@ export async function generateKaiwaiCreatives(
             headline: c.headline || "",
             body: c.body || "",
             visualConcept: c.visualConcept || "",
+            languageStyle: c.languageStyle,
+            imagePrompt: c.imagePrompt,
+            productionBrief: c.productionBrief,
           } satisfies KaiwaiCreative;
         });
 

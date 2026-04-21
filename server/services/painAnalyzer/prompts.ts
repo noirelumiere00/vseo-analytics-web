@@ -146,9 +146,40 @@ export const SEGMENT_CLASSIFICATION_SYSTEM_PROMPT = `あなたは「界隈マー
 このズレこそが界隈消費の起点になります。
 例：「栄養ドリンク」が「推し活の儀式」として消費されている
 
-【推定人数】
-各界隈の推定人数を、提供されたWeb情報やSNSデータから概算してください。
-「人気がある」「多い」などの定性表現は禁止。必ず数字で示してください。`;
+【推定人数（必須: 計算式+ソース）】
+各界隈の推定人数を算出してください。
+
+必須出力:
+1. **estimatedPopulation** (整数): 最終的な推定人数
+2. **populationFormula** (一行): 計算の要約 (例: "1.24M ÷ 6.7 × 0.15 = 27,761人")
+3. **populationCalculation** (詳細): 各ステップごとに基礎数値+ソースURLを明記
+   例:
+   - step1: "Instagram #サウナー 投稿数 = 1,240,000" (source: Instagram検索)
+   - step2: "1人あたり平均投稿数 = 6.7" (source: 業界調査)
+   - step3: "アクティブ投稿者比率 = 0.15"
+   - formula: "1,240,000 ÷ 6.7 × 0.15 = 27,761人"
+
+定性表現(「人気がある」「多い」)は禁止。必ず数字で示してください。
+一次ソースが不明な場合は source フィールドを省略してOK。
+
+【代表ユーザー (必須: 3人)】
+各界隈の representativeUserProfiles として、提供されたX投稿サンプルから**実在するアカウント3人**を選抜してください:
+- username (@XXXXX)
+- profileUrl (https://x.com/XXXXX または TikTok URL)
+- followerCount
+- bio (ある場合)
+- samplePostUrl, samplePostText, samplePostViews (代表投稿1件)
+
+ユーザー名は提供されたサンプルから必ず選ぶこと。架空のアカウントは禁止。
+
+【ペルソナの1日】
+各界隈について personaDay として以下を記述:
+- weekday: 朝→昼→夕→夜 の典型的な行動パターン (1-2文)
+- purchaseBehavior: 金額感・頻度・購買トリガー (1-2文)
+
+例:
+- weekday: "朝はXでサウナ界隈の新着チェック、昼休みはTikTokで『ととのい動画』、退勤後に週2で施設、寝る前にサ活をXに投稿"
+- purchaseBehavior: "月3,000〜5,000円をサウナグッズに。購入トリガーは『施設スタッフ推奨』『推しサウナーの着用品』"`;
 
 export function buildSegmentClassificationPrompt(
   productName: string,
@@ -346,7 +377,29 @@ Sympathy(共感) → Enthusiasm(熱狂) → Expression(発信) → Spread(拡散
 - 説明口調（〜の理由、〜を比較、〜の事実）
 - 論理的、「機能」「成分」「コスパ」「数字」に訴求
 - 界隈内で共有される「実用情報」としての価値を持たせる
-- ビジュアル: テキストオーバーレイ、比較表、データ可視化`;
+- ビジュアル: テキストオーバーレイ、比較表、データ可視化
+
+【重要: 出力フィールドの厳守】
+各クリエイティブは以下を必ず含めてください:
+
+1. **headline** (〜20文字): フック
+2. **body**: 投稿本文
+   - 右脳: 話口調で絶対に口語的に（例: "最近さ、仕事終わりに〇〇するのがルーティン。てか〇〇するとき、まじで沼すぎる🥲"）
+   - 左脳: 説明口調（例: "〇〇を選ぶ理由は3つ。①...②...③..."）
+3. **languageStyle**: 口調の辞書
+   - tone: "casual-feminine-20s" / "chill-masculine-30s" / "assertive-genz" 等
+   - endings: 語尾リスト (例: ["〜だわ", "〜じゃん", "〜って感じ"])
+   - fillers: つなぎ言葉 (例: ["てか", "まじで", "なんか"])
+   - emoji: 使う絵文字 (例: ["🥲", "🔥", "✨"])
+4. **imagePrompt**: 必ず英語で詳細に。構造:
+   "Photorealistic, full-screen vertical TikTok interface, [Japanese persona description - age/gender/style], [scene description], [lighting: warm/natural/cool], TikTok UI overlay (like/comment/share icons on right, @username and caption at bottom), aspect ratio 9:16, no hands visible, [specific details]"
+   例: "Photorealistic, full-screen vertical TikTok interface, Japanese woman in her mid-20s wrapped in a white sauna towel, sitting by wooden changing room bench, warm yellow lighting slightly backlit, authentic Japanese sauna facility, TikTok UI overlay, aspect ratio 9:16, no hands visible, shot from chest-up angle, soft grain texture"
+5. **productionBrief**: 撮影ブリーフ
+   - durationSec: 15 / 30 / 60
+   - cuts: 秒数帯ごとのカット割り [{sec: "0-3", shot: "サウナ室→水風呂", overlay: "これやらないと1日終われない"}]
+   - bgmMood: "chill lo-fi with subtle percussion" 等
+   - subtitleStyle: "white sans-serif + black edge, bottom-center, 32pt" 等
+   - ctaOnScreen: "プロフリンクから購入" 等`;
 
 export function buildKaiwaiCreativePrompt(
   productName: string,
@@ -368,10 +421,13 @@ ${selectedKeywords.map((k, i) => `${i + 1}. ${k}`).join("\n")}
 ## 指示
 各キーワードについて、右脳案と左脳案を1つずつ生成してください（計6案）。
 
-各案に含めるもの：
-- **headline**: フック（最初の3秒で目を引く一言）
-- **body**: 投稿テキスト（右脳=話口調、左脳=説明口調）
-- **visualConcept**: 映像コンセプトの説明（TikTokのUI画面として描写）
+各案に含めるもの (全フィールド必須):
+- **headline**: フック（最初の3秒で目を引く一言、〜20文字）
+- **body**: 投稿テキスト（右脳=話口調で口語的に、左脳=説明口調で論理的に）
+- **visualConcept**: 映像コンセプトの日本語一言要約
+- **languageStyle**: tone/endings/fillers/emoji の辞書 (例: tone="casual-feminine-20s", endings=["〜だわ","〜じゃん"], fillers=["てか","まじで"], emoji=["🥲","🔥"])
+- **imagePrompt**: 英語で、Photorealistic の画像生成プロンプト。TikTok UI overlay + aspect ratio 9:16 + no hands visible を必ず含める
+- **productionBrief**: durationSec/cuts/bgmMood/subtitleStyle/ctaOnScreen の撮影ブリーフ
 
 communityId は "${community.id}"、communityName は "${community.name}" を使用してください。`;
 }

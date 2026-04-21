@@ -71,6 +71,15 @@ export async function classifySegments(
     cultureCode?: { nicknames: string[]; hashtags: string[]; contentPatterns: string[] };
     estimatedPopulation?: number;
     populationFormula?: string;
+    populationCalculation?: {
+      steps: Array<{ label: string; value: number; source?: { title: string; url: string } }>;
+      formula: string;
+    };
+    representativeUserProfiles?: Array<{
+      username: string; profileUrl?: string; followerCount?: number;
+      bio?: string; samplePostUrl?: string; samplePostText?: string; samplePostViews?: number;
+    }>;
+    personaDay?: { weekday: string; purchaseBehavior: string };
     officialGap?: { official: string; reality: string; insight: string };
     keywordCandidates?: Array<{
       keyword: string; tiktokViews: number; tiktokPostCount: number;
@@ -153,17 +162,17 @@ export async function classifySegments(
 
   await onProgress?.({ message: "セグメントをAIが分類中...", percent: 75, phase: "segmenting" });
 
-  // Format sample data for LLM
+  // Format sample data for LLM with URLs (so LLM can output representativeUserProfiles)
   const xPostsSample = xPosts
     .sort((a, b) => b.likeCount - a.likeCount)
     .slice(0, 30)
-    .map(p => `@${p.authorUsername}: ${p.text.slice(0, 200)} (${p.likeCount}いいね)`)
+    .map(p => `@${p.authorUsername} [url: https://x.com/${p.authorUsername}/status/${p.postId}]: ${p.text.slice(0, 200)} (${p.likeCount}いいね)`)
     .join("\n");
 
   const ttVideosSample = tiktokVideos
     .sort((a, b) => b.playCount - a.playCount)
     .slice(0, 20)
-    .map(v => `@${v.authorUniqueId}: ${v.desc.slice(0, 200)} (${v.playCount.toLocaleString()}再生)`)
+    .map(v => `@${v.authorUniqueId} [url: https://www.tiktok.com/@${v.authorUniqueId}/video/${v.videoId}]: ${v.desc.slice(0, 200)} (${v.playCount.toLocaleString()}再生)`)
     .join("\n");
 
   const enrichedXSample = userPostsSample.length > 0
