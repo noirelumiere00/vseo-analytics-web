@@ -2659,6 +2659,7 @@ export const appRouter = router({
           proposals: row.proposals,
           kaiwaiCreatives: row.kaiwaiCreatives,
           gensparkMarkdown: row.gensparkMarkdown,
+          htmlOutput: row.htmlOutput,
           analysisResult: row.analysisResult,
           createdAt: row.createdAt,
           completedAt: row.completedAt,

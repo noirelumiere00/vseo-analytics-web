@@ -1130,6 +1130,9 @@ export const painAnalyses = mysqlTable("pain_analyses", {
   // Genspark用マークダウン出力
   gensparkMarkdown: text("gensparkMarkdown"),
 
+  // HTMLスライド出力 (27枚、CSS/JS全インライン、単独で動作)
+  htmlOutput: text("htmlOutput"),
+
   errorMessage: text("errorMessage"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   completedAt: timestamp("completedAt"),

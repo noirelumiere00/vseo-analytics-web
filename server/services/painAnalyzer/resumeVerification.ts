@@ -20,6 +20,7 @@ import { estimatePurchaseAttitude } from "./steps/step6PurchaseAttitude";
 import { generateProposals } from "./steps/step7ProposalGeneration";
 import { generateKaiwaiCreatives } from "./steps/step7bKaiwaiCreative";
 import { generateGensparkMarkdown } from "./steps/step8GensparkExport";
+import { generateHtmlReport } from "./steps/step8bHtmlExport";
 import type { PainHypothesis, ProductFeatures, ProgressFn } from "./schemas";
 import type { S1RawData, S3RawData } from "../contextAnalyzer/schemas";
 
@@ -151,7 +152,7 @@ export async function executePainAnalysisPhase2(
 
   // ── STEP 8: Genspark Markdown Export (best-effort) ──
   try {
-    await onProgress?.({ message: "Genspark用マークダウンを生成中...", percent: 98, phase: "completed" });
+    await onProgress?.({ message: "Genspark用マークダウンを生成中...", percent: 97, phase: "completed" });
     const gensparkMarkdown = generateGensparkMarkdown(
       row.productName,
       segmentData.communities,
@@ -162,5 +163,20 @@ export async function executePainAnalysisPhase2(
     await db.updatePainAnalysis(analysisId, { gensparkMarkdown });
   } catch (e) {
     console.error(`[PainAnalyzer/Step8] Genspark markdown save failed (non-fatal):`, e instanceof Error ? e.message.slice(0, 500) : e);
+  }
+
+  // ── STEP 8b: HTML Slide Export (best-effort) ──
+  try {
+    await onProgress?.({ message: "HTML提案書を生成中...", percent: 99, phase: "completed" });
+    const htmlOutput = generateHtmlReport(
+      row.productName,
+      segmentData.communities as any,
+      segmentData.segments as any,
+      kaiwaiCreatives,
+      approvedPains,
+    );
+    await db.updatePainAnalysis(analysisId, { htmlOutput });
+  } catch (e) {
+    console.error(`[PainAnalyzer/Step8b] HTML report save failed (non-fatal):`, e instanceof Error ? e.message.slice(0, 500) : e);
   }
 }
