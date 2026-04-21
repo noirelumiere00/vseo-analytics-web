@@ -48,9 +48,18 @@ export function validateRequiredEnv() {
   const required: [string, string][] = [
     ["JWT_SECRET", ENV.cookieSecret],
     ["DATABASE_URL", ENV.databaseUrl],
+    ["VITE_APP_ID", ENV.appId],
+    ["OAUTH_SERVER_URL", ENV.oAuthServerUrl],
   ];
   const missing = required.filter(([, v]) => !v).map(([k]) => k);
   if (missing.length > 0) {
     throw new Error(`FATAL: Missing required environment variables: ${missing.join(", ")}`);
+  }
+
+  // APP_URL の形式検証
+  try {
+    new URL(ENV.appUrl);
+  } catch {
+    throw new Error(`FATAL: APP_URL is not a valid URL: ${ENV.appUrl}`);
   }
 }

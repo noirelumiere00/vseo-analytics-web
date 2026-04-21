@@ -136,6 +136,25 @@ export async function deleteUserById(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
+  // Delete campaign children first (campaignDailyMetrics, campaignReports, campaignSnapshots)
+  const userCampaigns = await db.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.userId, id));
+  const campaignIds = userCampaigns.map(c => c.id);
+  if (campaignIds.length > 0) {
+    await db.delete(campaignDailyMetrics).where(inArray(campaignDailyMetrics.campaignId, campaignIds));
+    await db.delete(campaignReports).where(inArray(campaignReports.campaignId, campaignIds));
+    await db.delete(campaignSnapshots).where(inArray(campaignSnapshots.campaignId, campaignIds));
+  }
+  await db.delete(campaigns).where(eq(campaigns.userId, id));
+
+  // Delete other direct children
+  await db.delete(analysisJobs).where(eq(analysisJobs.userId, id));
+  await db.delete(trendDiscoveryJobs).where(eq(trendDiscoveryJobs.userId, id));
+  await db.delete(subscriptions).where(eq(subscriptions.userId, id));
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, id));
+  await db.delete(contextAnalyses).where(eq(contextAnalyses.userId, id));
+  await db.delete(painAnalyses).where(eq(painAnalyses.userId, id));
+
+  // Finally delete the user
   await db.delete(users).where(eq(users.id, id));
 }
 
@@ -437,7 +456,18 @@ export async function resetStuckProcessingJobs() {
     .set({ status: "queued" })
     .where(eq(campaignSnapshots.status, "processing"));
 
-  return (result1[0].affectedRows ?? 0) + (result2[0].affectedRows ?? 0) + (result3[0].affectedRows ?? 0);
+  // Reset stuck context analyses to "failed" (safest — avoid automatic re-execution)
+  const result4 = await db.update(contextAnalyses)
+    .set({ status: "failed", errorMessage: "Server restarted while job was in progress" })
+    .where(inArray(contextAnalyses.status, ["collecting", "analyzing"]));
+
+  // Reset stuck pain analyses to "failed"
+  const result5 = await db.update(painAnalyses)
+    .set({ status: "failed", errorMessage: "Server restarted while job was in progress" })
+    .where(inArray(painAnalyses.status, ["collecting", "hypothesizing", "segmenting", "estimating", "proposing"]));
+
+  return (result1[0].affectedRows ?? 0) + (result2[0].affectedRows ?? 0) + (result3[0].affectedRows ?? 0)
+    + (result4[0].affectedRows ?? 0) + (result5[0].affectedRows ?? 0);
 }
 
 // === Worker Queue Helpers ===
@@ -593,7 +623,30 @@ export async function createCampaign(data: InsertCampaign) {
 export async function getCampaignsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(campaigns).where(eq(campaigns.userId, userId)).orderBy(desc(campaigns.createdAt));
+  // Exclude ownVideoData (can be 200KB+) to avoid ER_OUT_OF_SORTMEMORY
+  return db.select({
+    id: campaigns.id,
+    userId: campaigns.userId,
+    name: campaigns.name,
+    clientName: campaigns.clientName,
+    keywords: campaigns.keywords,
+    ownAccountIds: campaigns.ownAccountIds,
+    satelliteAccountIds: campaigns.satelliteAccountIds,
+    ownVideoIds: campaigns.ownVideoIds,
+    ownVideoUrls: campaigns.ownVideoUrls,
+    campaignHashtags: campaigns.campaignHashtags,
+    competitors: campaigns.competitors,
+    brandKeywords: campaigns.brandKeywords,
+    bigKeywords: campaigns.bigKeywords,
+    targetCommunities: campaigns.targetCommunities,
+    baselineSnapshotId: campaigns.baselineSnapshotId,
+    measurementSnapshotId: campaigns.measurementSnapshotId,
+    trackingEnabled: campaigns.trackingEnabled,
+    targetViews: campaigns.targetViews,
+    status: campaigns.status,
+    createdAt: campaigns.createdAt,
+    updatedAt: campaigns.updatedAt,
+  }).from(campaigns).where(eq(campaigns.userId, userId)).orderBy(desc(campaigns.createdAt));
 }
 
 export async function getCampaignById(id: number) {
@@ -612,6 +665,7 @@ export async function updateCampaign(id: number, data: Partial<InsertCampaign>) 
 export async function deleteCampaign(id: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
+  await db.delete(campaignDailyMetrics).where(eq(campaignDailyMetrics.campaignId, id));
   await db.delete(campaignReports).where(eq(campaignReports.campaignId, id));
   await db.delete(campaignSnapshots).where(eq(campaignSnapshots.campaignId, id));
   await db.delete(campaigns).where(eq(campaigns.id, id));
@@ -1036,7 +1090,25 @@ export async function countMonthlyJobs(userId: number, since: Date): Promise<num
       ne(campaignSnapshots.status, "pending"),
     ));
 
-  return (a?.count ?? 0) + (t?.count ?? 0) + (c?.count ?? 0);
+  // Count context_analyses (exclude pending)
+  const [ctx] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(contextAnalyses)
+    .where(and(
+      eq(contextAnalyses.userId, userId),
+      gte(contextAnalyses.createdAt, since),
+      ne(contextAnalyses.status, "pending"),
+    ));
+
+  // Count pain_analyses (exclude pending)
+  const [pa] = await db.select({ count: sql<number>`COUNT(*)` })
+    .from(painAnalyses)
+    .where(and(
+      eq(painAnalyses.userId, userId),
+      gte(painAnalyses.createdAt, since),
+      ne(painAnalyses.status, "pending"),
+    ));
+
+  return (a?.count ?? 0) + (t?.count ?? 0) + (c?.count ?? 0) + (ctx?.count ?? 0) + (pa?.count ?? 0);
 }
 
 // === Active Jobs (Dashboard) ===

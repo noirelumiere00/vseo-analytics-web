@@ -150,21 +150,29 @@ async function processCampaign(campaign: Campaign, today: Date, todayStr: string
 export function startDailyMetricsScheduler() {
   console.log("[DailyScheduler] Starting daily metrics scheduler (check every 1h)");
 
-  // 初回は10秒後に実行
-  setTimeout(async () => {
-    try {
-      await checkAndCapture();
-    } catch (e) {
-      console.error("[DailyScheduler] Initial check error:", e);
-    }
-  }, 10_000);
+  let running = false;
 
-  // 以降1時間ごと
-  setInterval(async () => {
+  async function tick() {
+    if (running) {
+      console.warn("[DailyScheduler] Previous run still in progress, skipping");
+      scheduleNext();
+      return;
+    }
+    running = true;
     try {
       await checkAndCapture();
     } catch (e) {
-      console.error("[DailyScheduler] Periodic check error:", e);
+      console.error("[DailyScheduler] Check error:", e);
+    } finally {
+      running = false;
     }
-  }, CHECK_INTERVAL_MS);
+    scheduleNext();
+  }
+
+  function scheduleNext() {
+    setTimeout(tick, CHECK_INTERVAL_MS);
+  }
+
+  // 初回は10秒後に実行、完了後に自動で次回をスケジュール
+  setTimeout(tick, 10_000);
 }

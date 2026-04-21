@@ -167,16 +167,24 @@ export default function CampaignReport() {
   const dailyMetrics = dailyMetricsQuery.data || [];
 
   const [activeSection, setActiveSection] = useState("summary");
-  const [platformTab, setPlatformTab] = useState<"tiktok" | "instagram">("tiktok");
+  const [platformTab, setPlatformTab] = useState<"tiktok" | "instagram" | "youtube">("tiktok");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Auto-select platform tab when only one platform has data
-  const _vmLen = (report as any)?.videoMetricsReport?.length || 0;
+  const _ttLen = ((report as any)?.videoMetricsReport || []).filter((v: any) => {
+    const url = v.videoUrl || "";
+    return !url.includes("instagram.com") && !url.includes("youtube.com") && !url.includes("youtu.be");
+  }).length;
+  const _ytLen = ((report as any)?.videoMetricsReport || []).filter((v: any) => {
+    const url = v.videoUrl || "";
+    return url.includes("youtube.com") || url.includes("youtu.be");
+  }).length;
   const _ighLen = ((report as any)?.instagramHashtagReport || []).filter((r: any) => r.topPosts?.length > 0).length;
   useEffect(() => {
-    if (_vmLen === 0 && _ighLen > 0) setPlatformTab("instagram");
-    else if (_vmLen > 0 && _ighLen === 0) setPlatformTab("tiktok");
-  }, [_vmLen, _ighLen]);
+    if (_ttLen === 0 && _ytLen === 0 && _ighLen > 0) setPlatformTab("instagram");
+    else if (_ttLen === 0 && _ytLen > 0 && _ighLen === 0) setPlatformTab("youtube");
+    else setPlatformTab("tiktok");
+  }, [_ttLen, _ytLen, _ighLen]);
 
 
   // IntersectionObserver for active section tracking
@@ -216,8 +224,8 @@ export default function CampaignReport() {
       a.click();
       URL.revokeObjectURL(url);
       toast.success("CSVをダウンロードしました");
-    } catch {
-      toast.error("CSVエクスポートに失敗しました");
+    } catch (err: any) {
+      toast.error(err?.message || "CSVエクスポートに失敗しました");
     }
   };
 
@@ -243,7 +251,7 @@ export default function CampaignReport() {
     keyword: string,
     phase: "before" | "after",
     videoId: string,
-    changes: { owner?: string; owner_detail?: string; owner_name?: string; genre?: string; tiktok_labels?: string[] },
+    changes: { owner?: string; owner_detail?: string; owner_name?: string; genre?: string; tiktok_labels?: string[]; rank?: number },
   ) => {
     // Optimistic update
     utils.campaign.getReport.setData({ campaignId }, (old: any) => {
@@ -254,10 +262,26 @@ export default function CampaignReport() {
       const slots = [...(kwData[slotsKey] || [])];
       const idx = slots.findIndex((s: any) => s.video_id === videoId);
       if (idx === -1) return old;
+      const oldRank = slots[idx].rank;
       const slot = { ...slots[idx], ...changes };
       if (slot.owner !== "own") delete slot.owner_detail;
       if (slot.owner !== "competitor") delete slot.owner_name;
       slots[idx] = slot;
+      // If rank changed, shift other slots and re-sort
+      if (changes.rank !== undefined && changes.rank !== oldRank) {
+        const newRank = changes.rank;
+        for (let i = 0; i < slots.length; i++) {
+          if (i === idx) continue;
+          const s = { ...slots[i] };
+          if (oldRank < newRank) {
+            if (s.rank > oldRank && s.rank <= newRank) s.rank--;
+          } else {
+            if (s.rank >= newRank && s.rank < oldRank) s.rank++;
+          }
+          slots[i] = s;
+        }
+        slots.sort((a: any, b: any) => a.rank - b.rank);
+      }
       kwData[slotsKey] = slots;
       // Recalculate counts
       const ownCount = slots.filter((s: any) => s.owner === "own").length;
@@ -374,10 +398,26 @@ export default function CampaignReport() {
       const posts = [...(tagReport.topPosts || [])];
       const postIdx = posts.findIndex((p: any) => p.shortcode === shortcode);
       if (postIdx === -1) return old;
+      const oldPos = posts[postIdx].position;
       const post = { ...posts[postIdx], ...changes, isOwn: changes.owner === "own" };
       if (post.owner !== "own") delete post.owner_detail;
       if (post.owner !== "competitor") delete post.owner_name;
       posts[postIdx] = post;
+      // If position changed, shift other posts and re-sort
+      if (changes.position !== undefined && changes.position !== oldPos) {
+        const newPos = changes.position;
+        for (let i = 0; i < posts.length; i++) {
+          if (i === postIdx) continue;
+          const p = { ...posts[i] };
+          if (oldPos < newPos) {
+            if (p.position > oldPos && p.position <= newPos) p.position--;
+          } else {
+            if (p.position >= newPos && p.position < oldPos) p.position++;
+          }
+          posts[i] = p;
+        }
+        posts.sort((a: any, b: any) => a.position - b.position);
+      }
       tagReport.topPosts = posts;
       tagReport.ownRanks = posts
         .filter((p: any) => p.owner === "own" || (p.owner === undefined && p.isOwn))
@@ -507,6 +547,16 @@ export default function CampaignReport() {
     );
   }
 
+  if (reportQuery.isError) {
+    return (
+      <DashboardLayout>
+        <div className="w-full min-w-0">
+          <div className="p-8 text-center text-red-500">レポートの取得に失敗しました。再読み込みしてください。</div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   if (!report) {
     return (
       <DashboardLayout>
@@ -545,6 +595,14 @@ export default function CampaignReport() {
 
   const hasBaseline = report.baselineDate != null;
   const hasVideoMetrics = videoMetrics && videoMetrics.length > 0;
+  const hasTikTokVideos = (videoMetrics || []).some((v: any) => {
+    const url = v.videoUrl || "";
+    return !url.includes("instagram.com") && !url.includes("youtube.com") && !url.includes("youtu.be");
+  });
+  const hasYoutubeVideos = (videoMetrics || []).some((v: any) => {
+    const url = v.videoUrl || "";
+    return url.includes("youtube.com") || url.includes("youtu.be");
+  });
   const hasCrossPlatform = crossPlatform && (crossPlatform.trendsData?.length > 0 || crossPlatform.videoTimeline?.length > 0);
   const hasBigKW = bigKeywordReport && bigKeywordReport.length > 0;
   const hasCompetitors = campaign?.competitors && campaign.competitors.length > 0;
@@ -732,14 +790,14 @@ export default function CampaignReport() {
         {(hasVideoMetrics || hasInstagramHashtag) && (
           <div id="videos" ref={el => { sectionRefs.current["videos"] = el; }} className="scroll-mt-16 section-fade-in">
             <div className="flex items-end justify-between">
-              <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question={platformTab === "tiktok" ? "TikTok動画の状況は？" : "Instagram投稿の状況は？"} />
-              {hasVideoMetrics && hasInstagramHashtag && (
+              <SectionHeader number={sectionNumber("videos")} title="施策動画パフォーマンス" question={platformTab === "tiktok" ? "TikTok動画の状況は？" : platformTab === "youtube" ? "YouTube動画の状況は？" : "Instagram投稿の状況は？"} />
+              {[hasTikTokVideos, hasYoutubeVideos, hasInstagramHashtag].filter(Boolean).length > 1 && (
                 <PlatformTabSwitcher value={platformTab} onChange={setPlatformTab} />
               )}
             </div>
 
             {/* TikTok tab */}
-            {(platformTab === "tiktok" && hasVideoMetrics) && (
+            {(platformTab === "tiktok" && hasTikTokVideos) && (
               <>
                 <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
                 <div className="mt-5">
@@ -760,14 +818,27 @@ export default function CampaignReport() {
               />
             )}
 
+            {/* YouTube tab */}
+            {(platformTab === "youtube") && (
+              <>
+                <SummaryCards summary={summary} thirdPartyCount={thirdPartyInPeriodCount} hasBaseline={hasBaseline} ripple={ripple} sovReport={sovReport} />
+                <div className="mt-5">
+                  <VideoSection videos={(videoMetrics || []).filter((v: any) => {
+                    const url = v.videoUrl || "";
+                    return url.includes("youtube.com") || url.includes("youtu.be");
+                  })} videoScores={videoScores} hasBaseline={hasBaseline} dailyMetrics={dailyMetrics} keywords={campaign?.keywords ?? undefined} bigKeywords={campaign?.bigKeywords ?? undefined} />
+                </div>
+              </>
+            )}
+
           </div>
         )}
 
         {/* Section: Keyword + SOV (platform-linked) */}
         <div id="keyword-sov" ref={el => { sectionRefs.current["keyword-sov"] = el; }} className="scroll-mt-16 section-fade-in">
           <div className="flex items-end justify-between">
-            <SectionHeader number={sectionNumber("keyword-sov")} title={platformTab === "tiktok" ? "検索順位・上位シェア率" : "ハッシュタグ検索順位"} question={platformTab === "tiktok" ? "検索上位にどの動画が露出した？" : "IG検索でどの位置に表示された？"} />
-            {hasVideoMetrics && hasInstagramHashtag && (
+            <SectionHeader number={sectionNumber("keyword-sov")} title={platformTab === "tiktok" ? "検索順位・上位シェア率" : platformTab === "youtube" ? "YouTube検索順位" : "ハッシュタグ検索順位"} question={platformTab === "tiktok" ? "検索上位にどの動画が露出した？" : platformTab === "youtube" ? "YouTube検索でどの位置に表示された？" : "IG検索でどの位置に表示された？"} />
+            {[hasTikTokVideos, hasYoutubeVideos, hasInstagramHashtag].filter(Boolean).length > 1 && (
               <PlatformTabSwitcher value={platformTab} onChange={setPlatformTab} />
             )}
           </div>
@@ -845,7 +916,7 @@ export function SectionHeader({ number, title, question }: { number: number; tit
 // Platform Tab Switcher
 // ============================
 
-export function PlatformTabSwitcher({ value, onChange }: { value: "tiktok" | "instagram"; onChange: (v: "tiktok" | "instagram") => void }) {
+export function PlatformTabSwitcher({ value, onChange }: { value: "tiktok" | "instagram" | "youtube"; onChange: (v: "tiktok" | "instagram" | "youtube") => void }) {
   return (
     <div className="flex items-center gap-0 rounded-lg border border-black/8 bg-white p-0.5 shrink-0 mb-4">
       <button
@@ -870,6 +941,17 @@ export function PlatformTabSwitcher({ value, onChange }: { value: "tiktok" | "in
         <Hash className="h-3 w-3" />
         Instagram
       </button>
+      <button
+        onClick={() => onChange("youtube")}
+        className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all ${
+          value === "youtube"
+            ? "bg-[#FF0000] text-white shadow-sm"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Play className="h-3 w-3" />
+        YouTube
+      </button>
     </div>
   );
 }
@@ -881,7 +963,7 @@ export function PlatformTabSwitcher({ value, onChange }: { value: "tiktok" | "in
 
 function InstagramVideoSection({ instagramHashtagReport, platformSummary, dailyMetrics }: {
   instagramHashtagReport: IGHashtagReport;
-  platformSummary?: { instagram?: { totalVideos: number; totalViews: number; totalLikes: number; totalComments?: number; avgER: number; avgRetention3s?: number; videos: any[] } };
+  platformSummary?: { instagram?: { totalVideos: number; totalViews: number; totalThreeSecViews?: number; totalLikes: number; totalComments?: number; avgER: number; avgRetention3s?: number; videos: any[] } };
   dailyMetrics: any[];
 }) {
   const igData = platformSummary?.instagram;
@@ -1579,7 +1661,151 @@ function ownerKeyToChanges(key: OwnerKey): { owner: "own" | "competitor" | "othe
   return { owner: "other" };
 }
 
-function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: IGPostData[]; hashtag: string; isOwnOverrides?: Record<string, boolean> }) {
+function IGMockSlotItem({ post, index, hashtag, isOwnOverrides, onSlotUpdate }: {
+  post: IGPostData;
+  index: number;
+  hashtag: string;
+  isOwnOverrides: Record<string, boolean>;
+  onSlotUpdate?: (hashtag: string, shortcode: string, changes: IgSlotChanges) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const slotKey = `${hashtag}:${post.shortcode}`;
+  const effectiveIsOwn = slotKey in isOwnOverrides ? isOwnOverrides[slotKey] : (post.owner === "own" || (post.owner === undefined && post.isOwn));
+  const placeholderColors = [
+    "from-[#f0e6ff] to-[#e0d0f0]",
+    "from-[#e6f0ff] to-[#d0e0f0]",
+    "from-[#fff0e6] to-[#f0e0d0]",
+    "from-[#e6ffe6] to-[#d0f0d0]",
+    "from-[#ffe6f0] to-[#f0d0e0]",
+  ];
+
+  const content = (
+    <div
+      className={`relative aspect-square overflow-visible group/igmock ig-thumb-stagger block cursor-pointer`}
+      style={{ animationDelay: `${index * 40}ms`, zIndex: effectiveIsOwn ? 5 : 0 }}
+      onClick={(e) => {
+        if (!editOpen) {
+          e.stopPropagation();
+          window.open(post.postUrl, "_blank", "noopener,noreferrer");
+        }
+      }}
+    >
+      {/* Edit pencil button */}
+      {onSlotUpdate && (
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); }}
+            className={`absolute -top-1 -right-1 z-40 w-[11px] h-[11px] rounded-full bg-white/90 border border-black/10 shadow flex items-center justify-center
+              transition-all duration-150
+              ${editOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/igmock:opacity-100 group-hover/igmock:scale-100 group-hover/igmock:pointer-events-auto"}`}
+          >
+            <Pencil className="h-[6px] w-[6px] text-black/60" />
+          </button>
+        </PopoverTrigger>
+      )}
+
+      {effectiveIsOwn && (() => {
+        const d = post.owner_detail || "campaign";
+        const cfg = d === "official" ? { bg: "bg-blue-600", label: "公式", border: "border-blue-500/50" }
+          : d === "satellite" ? { bg: "bg-teal-600", label: "サテライト", border: "border-teal-500/50" }
+          : { bg: "bg-[#D71921]", label: "施策", border: "border-[#D71921]/50" };
+        return <div className={`absolute top-0 left-0 right-0 z-[6] ${cfg.bg} text-white text-[5px] font-bold text-center py-[2px] leading-none`}>{cfg.label}</div>;
+      })()}
+      <div className={`w-full h-full overflow-hidden ${effectiveIsOwn ? (() => {
+        const d = post.owner_detail || "campaign";
+        return d === "official" ? "border-[2px] border-blue-500/50" : d === "satellite" ? "border-[2px] border-teal-500/50" : "border-[2px] border-[#D71921]/50";
+      })() : ""}`}>
+        {post.coverUrl ? (
+          <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover/igmock:scale-105" loading="lazy" decoding="async" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${placeholderColors[index % placeholderColors.length]} flex items-center justify-center`}>
+            {(post.type === "reel" || post.type === "video") ? (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M4 2.5L11 7L4 11.5Z" fill="#b0b0b0" /></svg>
+            ) : post.type === "carousel" ? (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="3" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/><rect x="4" y="1" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="4.5" stroke="#b0b0b0" strokeWidth="1.2"/><circle cx="7" cy="7" r="1.5" fill="#b0b0b0"/><circle cx="10" cy="3.5" r="0.8" fill="#b0b0b0"/></svg>
+            )}
+          </div>
+        )}
+      </div>
+
+      {effectiveIsOwn && (() => {
+        const d = post.owner_detail || "campaign";
+        const overlay = d === "official" ? "bg-blue-600/15" : d === "satellite" ? "bg-teal-600/15" : "bg-[#D71921]/15";
+        const bar = d === "official" ? "bg-blue-600" : d === "satellite" ? "bg-teal-600" : "bg-[#D71921]";
+        return <>
+          <div className={`absolute inset-0 pointer-events-none z-[1] ${overlay}`} />
+          <div className={`absolute top-0 bottom-0 left-0 w-[3px] z-[4] ${bar}`} />
+        </>;
+      })()}
+
+      <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${effectiveIsOwn ? (() => { const d = post.owner_detail || "campaign"; return d === "official" ? "bg-blue-600" : d === "satellite" ? "bg-teal-600" : "bg-[#D71921]"; })() : "bg-black/50"}`}>
+        <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
+      </div>
+
+      {(post.type === "reel" || post.type === "video") && (
+        <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+          <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
+        </svg>
+      )}
+      {post.type === "carousel" && (
+        <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
+          <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
+          <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
+        </svg>
+      )}
+
+      <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+      <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
+        <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
+          <path d="M2.5 0.5L3.2 1.9L4.7 2.1L3.6 3.2L3.9 4.7L2.5 3.9L1.1 4.7L1.4 3.2L0.3 2.1L1.8 1.9Z" />
+        </svg>
+        <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+          {fmt(post.likeCount)}
+        </span>
+      </div>
+      {post.viewCount > 0 && (
+        <div className="absolute bottom-[2px] right-[2px] flex items-center gap-[1px]">
+          <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.8">
+            <path d="M0.5 2.5C0.5 2.5 1.5 0.8 2.5 0.8C3.5 0.8 4.5 2.5 4.5 2.5C4.5 2.5 3.5 4.2 2.5 4.2C1.5 4.2 0.5 2.5 0.5 2.5Z" />
+            <circle cx="2.5" cy="2.5" r="0.8" fill="#333" opacity="0.6"/>
+          </svg>
+          <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+            {fmt(post.viewCount)}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+
+  if (!onSlotUpdate) return content;
+
+  return (
+    <Popover open={editOpen} onOpenChange={setEditOpen}>
+      {content}
+      <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <IgSovSlotEditForm
+          post={post}
+          onSave={(changes) => {
+            onSlotUpdate(hashtag, post.shortcode, changes);
+            setEditOpen(false);
+            toast.success("スロットを更新しました");
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {}, onSlotUpdate }: {
+  posts: IGPostData[];
+  hashtag: string;
+  isOwnOverrides?: Record<string, boolean>;
+  onSlotUpdate?: (hashtag: string, shortcode: string, changes: IgSlotChanges) => void;
+}) {
   return (
     <div className="relative hover:scale-[1.02] transition-all duration-500">
       {/* iPhone 15 Pro chassis */}
@@ -1683,101 +1909,16 @@ function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {} }: { posts: I
               <div className="flex-1 relative bg-white overflow-hidden">
                 <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
                   <div className="grid grid-cols-3 gap-px bg-white">
-                    {posts.slice(0, 30).map((post, i) => {
-                      const slotKey = `${hashtag}:${post.shortcode}`;
-                      const effectiveIsOwn = slotKey in isOwnOverrides ? isOwnOverrides[slotKey] : (post.owner === "own" || (post.owner === undefined && post.isOwn));
-                      const placeholderColors = [
-                        "from-[#f0e6ff] to-[#e0d0f0]",
-                        "from-[#e6f0ff] to-[#d0e0f0]",
-                        "from-[#fff0e6] to-[#f0e0d0]",
-                        "from-[#e6ffe6] to-[#d0f0d0]",
-                        "from-[#ffe6f0] to-[#f0d0e0]",
-                      ];
-                      return (
-                        <a
-                          href={post.postUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          key={i}
-                          className={`relative aspect-square overflow-visible group ig-thumb-stagger block`}
-                          style={{ animationDelay: `${i * 40}ms`, zIndex: effectiveIsOwn ? 5 : 0 }}
-                        >
-                          {/* TikTok SOV同様: 施策キャップ */}
-                          {effectiveIsOwn && (
-                            <div className="absolute top-0 left-0 right-0 z-[6] bg-[#D71921] text-white text-[5px] font-bold text-center py-[2px] leading-none">施策</div>
-                          )}
-                          <div className={`w-full h-full overflow-hidden ${effectiveIsOwn ? "border-[2px] border-[#D71921]/50" : ""}`}>
-                            {post.coverUrl ? (
-                              <img src={post.coverUrl} alt="" className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" loading="lazy" decoding="async" />
-                            ) : (
-                              <div className={`w-full h-full bg-gradient-to-br ${placeholderColors[i % placeholderColors.length]} flex items-center justify-center`}>
-                                {(post.type === "reel" || post.type === "video") ? (
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <path d="M4 2.5L11 7L4 11.5Z" fill="#b0b0b0" />
-                                  </svg>
-                                ) : post.type === "carousel" ? (
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <rect x="1" y="3" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/>
-                                    <rect x="4" y="1" width="8" height="8" rx="1" stroke="#b0b0b0" strokeWidth="1.2"/>
-                                  </svg>
-                                ) : (
-                                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                    <circle cx="7" cy="7" r="4.5" stroke="#b0b0b0" strokeWidth="1.2"/>
-                                    <circle cx="7" cy="7" r="1.5" fill="#b0b0b0"/>
-                                    <circle cx="10" cy="3.5" r="0.8" fill="#b0b0b0"/>
-                                  </svg>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* TikTok SOV同様: 赤オーバーレイ + 左アクセントバー */}
-                          {effectiveIsOwn && (
-                            <div className="absolute inset-0 pointer-events-none z-[1] bg-[#D71921]/15" />
-                          )}
-                          {effectiveIsOwn && (
-                            <div className="absolute top-0 bottom-0 left-0 w-[3px] z-[4] bg-[#D71921]" />
-                          )}
-
-                          <div className={`absolute top-[2px] left-[2px] min-w-[11px] h-[11px] rounded-[2px] flex items-center justify-center px-[2px] ${effectiveIsOwn ? "bg-[#D71921]" : "bg-black/50"}`}>
-                            <span className="text-[6px] text-white font-bold leading-none">{post.position}</span>
-                          </div>
-
-                          {(post.type === "reel" || post.type === "video") && (
-                            <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="white" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
-                              <path d="M1.5 0.8L6.5 4L1.5 7.2Z" />
-                            </svg>
-                          )}
-                          {post.type === "carousel" && (
-                            <svg className="absolute top-[2px] right-[2px] w-[8px] h-[8px]" viewBox="0 0 8 8" fill="none" style={{ filter: "drop-shadow(0 0.5px 1px rgba(0,0,0,0.5))" }}>
-                              <rect x="0.5" y="1.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8"/>
-                              <rect x="2.5" y="0.5" width="5" height="5" rx="0.5" stroke="white" strokeWidth="0.8" fill="none"/>
-                            </svg>
-                          )}
-
-                          <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-                          <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[2px]">
-                            <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9">
-                              <path d="M2.5 0.5L3.2 1.9L4.7 2.1L3.6 3.2L3.9 4.7L2.5 3.9L1.1 4.7L1.4 3.2L0.3 2.1L1.8 1.9Z" />
-                            </svg>
-                            <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
-                              {fmt(post.likeCount)}
-                            </span>
-                          </div>
-                          {post.viewCount > 0 && (
-                            <div className="absolute bottom-[2px] right-[2px] flex items-center gap-[1px]">
-                              <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.8">
-                                <path d="M0.5 2.5C0.5 2.5 1.5 0.8 2.5 0.8C3.5 0.8 4.5 2.5 4.5 2.5C4.5 2.5 3.5 4.2 2.5 4.2C1.5 4.2 0.5 2.5 0.5 2.5Z" />
-                                <circle cx="2.5" cy="2.5" r="0.8" fill="#333" opacity="0.6"/>
-                              </svg>
-                              <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
-                                {fmt(post.viewCount)}
-                              </span>
-                            </div>
-                          )}
-                        </a>
-                      );
-                    })}
+                    {posts.slice(0, 30).map((post, i) => (
+                      <IGMockSlotItem
+                        key={i}
+                        post={post}
+                        index={i}
+                        hashtag={hashtag}
+                        isOwnOverrides={isOwnOverrides}
+                        onSlotUpdate={onSlotUpdate}
+                      />
+                    ))}
                   </div>
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-white to-transparent pointer-events-none z-10" />
@@ -1836,7 +1977,7 @@ function igPostToOwnerKey(post: IGPostData): OwnerKey {
   return "other";
 }
 
-type IgSlotChanges = { owner: string; owner_detail?: string; owner_name?: string; genre: string; ig_labels: string[] };
+type IgSlotChanges = { owner: string; owner_detail?: string; owner_name?: string; genre: string; ig_labels: string[]; position?: number };
 
 function IgSovSlotEditForm({ post, onSave, onCancel }: {
   post: IGPostData;
@@ -1847,6 +1988,7 @@ function IgSovSlotEditForm({ post, onSave, onCancel }: {
   const [ownerName, setOwnerName] = useState(post.owner_name || "");
   const [genre, setGenre] = useState(post.genre || "other");
   const [labels, setLabels] = useState<string[]>([...(post.ig_labels || [])]);
+  const [position, setPosition] = useState(post.position);
 
   const toggleLabel = (l: string) => setLabels(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
 
@@ -1857,6 +1999,7 @@ function IgSovSlotEditForm({ post, onSave, onCancel }: {
       owner_name: ownerKey === "competitor" ? ownerName : undefined,
       genre,
       ig_labels: labels,
+      ...(position !== post.position ? { position } : {}),
     });
   };
 
@@ -1865,6 +2008,18 @@ function IgSovSlotEditForm({ post, onSave, onCancel }: {
       <div className="flex items-center gap-2 pb-1 border-b border-black/4">
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">スロット編集</span>
         <span className="text-[10px] text-slate-300">@{post.username}</span>
+      </div>
+
+      {/* Position */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-muted-foreground">順位</Label>
+        <Input
+          type="number"
+          min={1}
+          value={position}
+          onChange={(e) => setPosition(parseInt(e.target.value) || 1)}
+          className="h-7 text-xs w-20"
+        />
       </div>
 
       {/* Owner classification */}
@@ -1906,7 +2061,7 @@ function IgSovSlotEditForm({ post, onSave, onCancel }: {
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => setGenre(opt.key)}
+                onClick={() => setGenre(opt.key as typeof genre)}
                 className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                   genre === opt.key
                     ? `${gi.cls} border-transparent`
@@ -1979,7 +2134,7 @@ function getIGCardTransform(offset: number, count: number): { tx: number; scale:
   return { tx: sign * 1000, scale: 0.28, rotateY: sign * -33, z: 2, opacity: 0 };
 }
 
-function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, onActiveTagChange, IG }: {
+function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, onActiveTagChange, IG, onSlotUpdate }: {
   validReports: Array<{ hashtag: string; topPosts: IGPostData[] }>;
   tagStats: Array<{ hashtag: string; ownCount: number; totalCount: number; bestPos: number | null; sovPct: number; totalViews: number; ownViews: number }>;
   activeTag: string | null;
@@ -1993,6 +2148,8 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
   const [selectedIdx, setSelectedIdx] = useState(0);
   // IG slot edit: track which slot popover is open (by position)
   const [igEditOpenSlot, setIgEditOpenSlot] = useState<number | null>(null);
+  const [igSlotPage, setIgSlotPage] = useState(0);
+  const IG_SLOTS_PER_PAGE = 15;
 
   useEffect(() => {
     const el = stageRef.current;
@@ -2013,6 +2170,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
     } else {
       setSelectedIdx(0);
     }
+    setIgSlotPage(0);
   }, [activeTag, validReports]);
 
   const count = validReports.length;
@@ -2045,8 +2203,13 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
 
   const selectedReport = validReports[selectedIdx];
   const selectedTag = tagStats.find(t => t.hashtag === selectedReport?.hashtag);
-  const selectedPosts = selectedReport ? selectedReport.topPosts.slice(0, 10) : [];
-  const filteredSlotPosts = showOwnOnly ? selectedPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)) : selectedPosts;
+  const allSelectedPosts = selectedReport ? selectedReport.topPosts : [];
+  const selectedPosts = allSelectedPosts; // keep full list for stats
+  const igPageStart = igSlotPage * IG_SLOTS_PER_PAGE;
+  const igPageEnd = igPageStart + IG_SLOTS_PER_PAGE;
+  const igTotalPages = Math.ceil(allSelectedPosts.length / IG_SLOTS_PER_PAGE);
+  const pagedPosts = allSelectedPosts.slice(igPageStart, igPageEnd);
+  const filteredSlotPosts = showOwnOnly ? pagedPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)) : pagedPosts;
 
   return (
     <div className="space-y-4">
@@ -2110,7 +2273,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                         </div>
                         <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                           <div style={{ transform: `scale(${OVERVIEW_PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                            <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} onSlotUpdate={onSlotUpdate} />
                           </div>
                         </div>
                       </div>
@@ -2180,7 +2343,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                           </div>
                           <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                             <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                              <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} />
+                              <InstagramSearchMock posts={report.topPosts} hashtag={report.hashtag} onSlotUpdate={onSlotUpdate} />
                             </div>
                           </div>
                         </div>
@@ -2266,7 +2429,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
 
             {/* Horizontal slot row */}
             <div className="px-5 py-5">
-              <div className="flex gap-2 overflow-x-auto pb-2 min-w-0">
+              <div className="flex gap-3 flex-wrap justify-center pb-2 min-w-0">
                 {filteredSlotPosts.map((post, i) => {
                   const effectiveIsOwn = post.owner === "own" || (post.owner === undefined && post.isOwn);
                   const isCompetitor = post.owner === "competitor";
@@ -2377,6 +2540,34 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                   );
                 })}
               </div>
+              {/* Page navigation */}
+              {igTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={igSlotPage === 0}
+                    onClick={() => setIgSlotPage(p => Math.max(0, p - 1))}
+                    className="h-7 text-xs px-2 text-muted-foreground"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-0.5" />
+                    {igPageStart > 0 ? `${igPageStart - IG_SLOTS_PER_PAGE + 1}〜${igPageStart}位` : ""}
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                    {igPageStart + 1}〜{Math.min(igPageEnd, allSelectedPosts.length)}位
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={igSlotPage >= igTotalPages - 1}
+                    onClick={() => setIgSlotPage(p => Math.min(igTotalPages - 1, p + 1))}
+                    className="h-7 text-xs px-2 text-muted-foreground"
+                  >
+                    {igPageEnd < allSelectedPosts.length ? `${igPageEnd + 1}〜${Math.min(igPageEnd + IG_SLOTS_PER_PAGE, allSelectedPosts.length)}位` : ""}
+                    <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* Stats strip below slots */}
@@ -2385,7 +2576,7 @@ function IGPhoneMockupStage({ validReports, tagStats, activeTag, showOwnOnly, on
                 <span className="text-[10px] text-[#b0b0b0] font-medium uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>上位シェア率</span>
                 <span className="text-lg font-black text-foreground tabular-nums">
                   {selectedReport.topPosts.filter(p => p.owner === "own" || (p.owner === undefined && p.isOwn)).length}
-                  <span className="text-xs font-normal text-[#b0b0b0]">/{selectedPosts.length > 10 ? 10 : selectedPosts.length}</span>
+                  <span className="text-xs font-normal text-[#b0b0b0]">/{selectedPosts.length}</span>
                 </span>
               </div>
               <div className="flex flex-col items-center py-3">
@@ -2721,8 +2912,9 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport, campaig
                                   {ownPosts.sort((a, b) => a.position - b.position).map(post => {
                                     const er = post.viewCount > 0 ? ((post.likeCount + post.commentCount) / post.viewCount * 100).toFixed(1) : "0.0";
                                     return (
-                                      <a key={post.shortcode} href={post.postUrl} target="_blank" rel="noopener noreferrer"
-                                        className="block rounded-2xl bg-white border border-slate-100 hover:border-[#E1306C]/20 shadow-sm hover:shadow-md transition-all overflow-hidden">
+                                      <div key={post.shortcode}
+                                        className="block rounded-2xl bg-white border border-slate-100 hover:border-[#E1306C]/20 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer"
+                                        onClick={() => window.open(post.postUrl, "_blank", "noopener,noreferrer")}>
                                         {/* IG Feed-style header */}
                                         <div className="flex items-center gap-2.5 px-3.5 py-2.5">
                                           {/* Story ring avatar */}
@@ -2776,7 +2968,7 @@ export function InstagramHashtagRankingSection({ instagramHashtagReport, campaig
                                             <span className="ml-auto text-[11px] font-bold tabular-nums" style={{ color: IG.pink }}>ER {er}%</span>
                                           </div>
                                         </div>
-                                      </a>
+                                      </div>
                                     );
                                   })}
                                 </div>
@@ -2997,7 +3189,9 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
   readOnly?: boolean;
   overviewUniqueAll?: { after: { own: number; total: number }; before: { own: number; total: number } };
 }) {
-  const [activeKw, setActiveKw] = useState<string | null>(null);
+  const [activeKw, setActiveKwRaw] = useState<string | null>(null);
+  const [slotPage, setSlotPage] = useState(0); // 0 = slots 1-15, 1 = slots 16-30
+  const setActiveKw = useCallback((kw: string | null) => { setActiveKwRaw(kw); setSlotPage(0); }, []);
   const [expandedKws, setExpandedKws] = useState<Set<string>>(new Set());
   const toggleExpanded = (kw: string) => setExpandedKws(prev => {
     const next = new Set(prev);
@@ -3355,6 +3549,37 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                     <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ラベル</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
+                    <span className="flex-1" />
+                    <button
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        if (chartData.length === 0) return;
+                        const header = ["キーワード", "順位", "アカウント名", "URL", "再生数", "いいね"];
+                        const rows: string[] = [];
+                        for (const d of chartData) {
+                          for (const s of [...d.afterSlots].sort((a, b) => a.rank - b.rank)) {
+                            rows.push([
+                              `"${d.keyword}"`,
+                              s.rank,
+                              `"@${s.creator_username}"`,
+                              s.video_url,
+                              s.view_count,
+                              s.like_count,
+                            ].join(","));
+                          }
+                        }
+                        const csv = [header.join(","), ...rows].join("\n");
+                        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "sov_all_keywords_slots.csv";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <FileDown className="h-3 w-3" /> CSV
+                    </button>
                   </div>
                   {/* Horizontal row of After phone cards */}
                   <div className="px-4 py-5">
@@ -3413,20 +3638,30 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
         // SOV calculations (safe even when no sovData)
         // activeKwData is guaranteed non-null here (overview returned early above)
         const sovData = activeKwData!.sovData;
-        // 上位10枠のみ表示（30枠 → 10枠に絞る）
         const afterSlotsAll = sovData?.afterSlots || [];
         const beforeSlotsAll = sovData?.beforeSlots || [];
-        const afterSlots = afterSlotsAll.filter(s => s.rank <= 10);
-        const beforeSlots = beforeSlotsAll.filter(s => s.rank <= 10);
+        const afterSlots = afterSlotsAll;
+        const beforeSlots = beforeSlotsAll;
         const afterOwnCount = afterSlots.filter(s => s.owner === "own").length;
         const beforeOwnCount = beforeSlots.filter(s => s.owner === "own").length;
         const ownChange = afterOwnCount - beforeOwnCount;
-        const paddedBefore = padSlots(beforeSlots);
-        const paddedAfter = padSlots(afterSlots);
-        const slotCount = 10;
+        const slotCount = afterSlots.length || 30;
         const afterPct = afterSlots.length > 0 ? Math.round((afterOwnCount / slotCount) * 100 * 10) / 10 : 0;
         const beforePct = beforeSlots.length > 0 ? Math.round((beforeOwnCount / slotCount) * 100 * 10) / 10 : 0;
         const pctChange = Number((afterPct - beforePct).toFixed(1));
+
+        // Pagination: 15 slots per page
+        const SLOTS_PER_PAGE = 15;
+        const pageStart = slotPage * SLOTS_PER_PAGE; // 0 or 15
+        const pageEnd = pageStart + SLOTS_PER_PAGE;  // 15 or 30
+        const maxSlotRank = Math.max(afterSlots.length, beforeSlots.length, 30);
+        const totalPages = Math.ceil(maxSlotRank / SLOTS_PER_PAGE);
+        const pageSlotIndices = Array.from({ length: SLOTS_PER_PAGE }, (_, i) => pageStart + i); // [0..14] or [15..29]
+        const padSlotsPage = (slots: SlotData[]) => {
+          return pageSlotIndices.map(i => slots.find(s => s.rank === i + 1) || null);
+        };
+        const paddedAfter = padSlotsPage(afterSlots);
+        const paddedBefore = padSlotsPage(beforeSlots);
 
         const countGenres = (slots: SlotData[]) => {
           const counts: Record<string, number> = {};
@@ -3458,11 +3693,12 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
         };
 
         const renderSlotInRow = (slot: SlotData | null, i: number, isBefore: boolean) => {
+          const rankNum = pageStart + i + 1;
           if (!slot) return (
             <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
-              <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{i + 1}</span>
+              <span className="text-[10px] font-semibold text-slate-300/60 mb-0.5">#{rankNum}</span>
               <div className={`w-full ${isBefore ? "h-[85px]" : "h-[100px]"} rounded-md border border-dashed border-border/40 flex items-center justify-center`}>
-                <span className="text-[9px] text-slate-200">{i + 1}</span>
+                <span className="text-[9px] text-slate-200">{rankNum}</span>
               </div>
             </div>
           );
@@ -3470,7 +3706,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
           const slotIsOwn = slot.owner === "own";
           return (
             <div key={i} className="flex flex-col items-center flex-1 max-w-[100px]">
-              <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
+              <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{rankNum}</span>
               <SovSlotCell
                 slot={slot} maxViewCount={maxViewCount} keyword={activeKwData!.keyword}
                 phase={isBefore ? "before" : "after"} isBefore={isBefore}
@@ -3531,6 +3767,34 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                     <span className="text-[9px] text-muted-foreground font-semibold tracking-wider uppercase mr-1">ラベル</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" />有償</span>
                     <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-teal-500" />AI生成</span>
+                    <span className="flex-1" />
+                    <button
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium text-muted-foreground hover:text-foreground hover:bg-slate-100 transition-colors"
+                      onClick={() => {
+                        const slots = afterSlots.length > 0 ? afterSlots : [];
+                        if (slots.length === 0) return;
+                        const header = ["順位", "アカウント名", "URL", "再生数", "いいね"];
+                        const rows = slots
+                          .sort((a, b) => a.rank - b.rank)
+                          .map(s => [
+                            s.rank,
+                            `"@${s.creator_username}"`,
+                            s.video_url,
+                            s.view_count,
+                            s.like_count,
+                          ].join(","));
+                        const csv = [header.join(","), ...rows].join("\n");
+                        const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `sov_${activeKw || "all"}_slots.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <FileDown className="h-3 w-3" /> CSV
+                    </button>
                   </div>
 
                   {/* Phone carousel — embedded, left-aligned */}
@@ -3551,6 +3815,7 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                         }))}
                         activeKw={activeKw}
                         onActiveKwChange={setActiveKw}
+                        onSlotUpdate={readOnly ? undefined : onSlotUpdate}
                       />
                     </div>
                   )}
@@ -3578,14 +3843,14 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                           </div>
 
                           {/* ランク別ペア: Before(上) → ↓ → After(下) */}
-                          <div className="flex justify-between w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
-                            {Array.from({ length: 10 }, (_, i) => {
+                          <div className="flex gap-2 flex-wrap justify-center pb-1 min-w-0">
+                            {paddedAfter.map((aSlot, i) => {
                               const bSlot = paddedBefore[i];
-                              const aSlot = paddedAfter[i];
+                              const rankNum = pageStart + i + 1;
                               return (
                                 <div key={i} className="flex flex-col items-center flex-1 max-w-[100px] gap-0">
                                   {/* Rank # */}
-                                  <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{i + 1}</span>
+                                  <span className="text-[10px] font-semibold text-slate-300 mb-0.5">#{rankNum}</span>
                                   {/* Before (compact) */}
                                   {bSlot ? (
                                     <div className="opacity-50 w-full">
@@ -3625,13 +3890,42 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                                     </div>
                                   ) : (
                                     <div className="w-full h-[100px] rounded-md border border-dashed border-border/30 flex items-center justify-center">
-                                      <span className="text-[9px] text-slate-200">{i + 1}</span>
+                                      <span className="text-[9px] text-slate-200">{rankNum}</span>
                                     </div>
                                   )}
                                 </div>
                               );
                             })}
                           </div>
+
+                          {/* Page navigation */}
+                          {totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={slotPage === 0}
+                                onClick={() => setSlotPage(p => Math.max(0, p - 1))}
+                                className="h-7 text-xs px-2 text-muted-foreground"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5 mr-0.5" />
+                                {pageStart > 0 ? `${pageStart - SLOTS_PER_PAGE + 1}〜${pageStart}位` : ""}
+                              </Button>
+                              <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                                {pageStart + 1}〜{Math.min(pageEnd, maxSlotRank)}位
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={slotPage >= totalPages - 1}
+                                onClick={() => setSlotPage(p => Math.min(totalPages - 1, p + 1))}
+                                className="h-7 text-xs px-2 text-muted-foreground"
+                              >
+                                {pageEnd < maxSlotRank ? `${pageEnd + 1}〜${Math.min(pageEnd + SLOTS_PER_PAGE, maxSlotRank)}位` : ""}
+                                <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                              </Button>
+                            </div>
+                          )}
 
                           {/* ===== ジャンル変動サマリー (横スクロール pill) ===== */}
                           <div className="flex items-center gap-1.5 overflow-x-auto py-2 -mx-1 px-1">
@@ -3669,9 +3963,37 @@ export function UnifiedKeywordSovSection({ positions, bigKeywordReport, sovRepor
                               自社 {afterOwnCount}/{slotCount} ({afterPct}%)
                             </span>
                           </div>
-                          <div className="flex justify-between w-full gap-0.5 overflow-x-auto pb-1 min-w-0">
+                          <div className="flex gap-2 flex-wrap justify-center pb-1 min-w-0">
                             {paddedAfter.map((slot, i) => renderSlotInRow(slot, i, false))}
                           </div>
+                          {/* Page navigation */}
+                          {totalPages > 1 && (
+                            <div className="flex items-center justify-center gap-2 pt-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={slotPage === 0}
+                                onClick={() => setSlotPage(p => Math.max(0, p - 1))}
+                                className="h-7 text-xs px-2 text-muted-foreground"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5 mr-0.5" />
+                                {pageStart > 0 ? `${pageStart - SLOTS_PER_PAGE + 1}〜${pageStart}位` : ""}
+                              </Button>
+                              <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                                {pageStart + 1}〜{Math.min(pageEnd, maxSlotRank)}位
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={slotPage >= totalPages - 1}
+                                onClick={() => setSlotPage(p => Math.min(totalPages - 1, p + 1))}
+                                className="h-7 text-xs px-2 text-muted-foreground"
+                              >
+                                {pageEnd < maxSlotRank ? `${pageEnd + 1}〜${Math.min(pageEnd + SLOTS_PER_PAGE, maxSlotRank)}位` : ""}
+                                <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -4285,8 +4607,8 @@ const SPARK_KEY: Record<string, string> = { views: "viewCount", likes: "likeCoun
 function PostPerformanceGrid({ videos, dailyMetrics, sparkMetric, setSparkMetric, sortBy, setSortBy, sortOptions, videoScores, bestVideoId, kwSet, bigKwSet, hasBaseline = true }: {
   videos: any[];
   dailyMetrics?: any[];
-  sparkMetric: "views" | "likes" | "shares" | "saves";
-  setSparkMetric: (m: "views" | "likes" | "shares" | "saves") => void;
+  sparkMetric: "views" | "likes" | "comments" | "shares" | "saves";
+  setSparkMetric: (m: "views" | "likes" | "comments" | "shares" | "saves") => void;
   sortBy: string;
   setSortBy: (s: string) => void;
   sortOptions: { key: string; label: string }[];
@@ -4808,13 +5130,14 @@ const GENRE_OPTIONS: { key: string; label: string }[] = [
 
 function SovSlotEditForm({ slot, onSave, onCancel }: {
   slot: SlotData;
-  onSave: (changes: { owner: string; owner_detail?: string; owner_name?: string; genre: string; tiktok_labels: string[] }) => void;
+  onSave: (changes: { owner: string; owner_detail?: string; owner_name?: string; genre: string; tiktok_labels: string[]; rank?: number }) => void;
   onCancel: () => void;
 }) {
   const [ownerKey, setOwnerKey] = useState<OwnerKey>(slotToOwnerKey(slot));
   const [ownerName, setOwnerName] = useState(slot.owner_name || "");
   const [genre, setGenre] = useState(slot.genre || "other");
   const [labels, setLabels] = useState<string[]>([...(slot.tiktok_labels || [])]);
+  const [rank, setRank] = useState(slot.rank);
 
   const toggleLabel = (l: string) => setLabels(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
 
@@ -4825,6 +5148,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
       owner_name: ownerKey === "competitor" ? ownerName : undefined,
       genre,
       tiktok_labels: labels,
+      ...(rank !== slot.rank ? { rank } : {}),
     });
   };
 
@@ -4834,6 +5158,18 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
       <div className="flex items-center gap-2 pb-1 border-b border-black/4">
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">スロット編集</span>
         <span className="text-[10px] text-slate-300">@{slot.creator_username}</span>
+      </div>
+
+      {/* Rank */}
+      <div className="space-y-1.5">
+        <Label className="text-[11px] font-semibold text-muted-foreground">順位</Label>
+        <Input
+          type="number"
+          min={1}
+          value={rank}
+          onChange={(e) => setRank(parseInt(e.target.value) || 1)}
+          className="h-7 text-xs w-20"
+        />
       </div>
 
       {/* Owner classification */}
@@ -4875,7 +5211,7 @@ function SovSlotEditForm({ slot, onSave, onCancel }: {
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => setGenre(opt.key)}
+                onClick={() => setGenre(opt.key as typeof genre)}
                 className={`text-[10px] px-2 py-1 rounded-md border font-medium transition-all duration-150 ${
                   genre === opt.key
                     ? `${gi.cls} border-transparent`
@@ -4950,6 +5286,7 @@ interface TikTokMockStageProps {
   activeKw?: string | null;
   onActiveKwChange?: (kw: string) => void;
   centered?: boolean;
+  onSlotUpdate?: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
 }
 
 function getCardTransform(offset: number, total: number) {
@@ -4968,7 +5305,7 @@ function getCardTransform(offset: number, total: number) {
   return { tx: sign * 1000, scale: 0.28, rotateY: sign * -33, z: 2, opacity: 0 };
 }
 
-function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: TikTokMockStageProps) {
+function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered, onSlotUpdate }: TikTokMockStageProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const [revealed, setRevealed] = useState(false);
 
@@ -5075,7 +5412,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                     </div>
                     <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                       <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                        <TikTokSearchMock slots={paddedBefore} keyword={keyword} isBefore />
+                        <TikTokSearchMock slots={paddedBefore} keyword={keyword} isBefore onSlotUpdate={onSlotUpdate} phase="before" />
                       </div>
                     </div>
                   </div>
@@ -5098,7 +5435,7 @@ function TikTokMockStage({ kwEntries, activeKw, onActiveKwChange, centered }: Ti
                   </div>
                   <div style={{ width: PHONE_W, height: PHONE_H, overflow: "hidden" }}>
                     <div style={{ transform: `scale(${PHONE_SCALE})`, transformOrigin: "top left", width: 220 }}>
-                      <TikTokSearchMock slots={paddedAfter} keyword={keyword} />
+                      <TikTokSearchMock slots={paddedAfter} keyword={keyword} onSlotUpdate={onSlotUpdate} phase="after" />
                     </div>
                   </div>
                 </div>
@@ -5189,7 +5526,134 @@ function fmtJa(n: number | null | undefined): string {
   return n.toLocaleString();
 }
 
-function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | null)[]; keyword: string; isBefore?: boolean }) {
+function TikTokMockSlotItem({ slot, keyword, phase, onSlotUpdate }: {
+  slot: SlotData;
+  keyword: string;
+  phase: "before" | "after";
+  onSlotUpdate?: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const isOwn = slot.owner === "own";
+  const isCompetitor = slot.owner === "competitor";
+  const accentColor = isOwn
+    ? slot.owner_detail === "official" ? "#3b82f6"
+      : slot.owner_detail === "satellite" ? "#14b8a6"
+      : "#D71921"
+    : isCompetitor ? "#64748b" : "";
+  const isHighlighted = isOwn || isCompetitor;
+  const overlayRgba = isOwn
+    ? slot.owner_detail === "official" ? "rgba(37,99,235,0.55)"
+      : slot.owner_detail === "satellite" ? "rgba(13,148,136,0.55)"
+      : "rgba(220,20,30,0.55)"
+    : "";
+  const genreColorMap: Record<string, string> = {
+    recommend: "#3b82f6", howto: "#f59e0b", entertainment: "#a855f7", negative: "#D71921", other: "#9ca3af",
+  };
+  const genreDotColor = genreColorMap[slot.genre] || genreColorMap.other;
+
+  const content = (
+    <div
+      className="relative aspect-[9/14] overflow-visible block cursor-pointer group/mockslot"
+      style={isHighlighted ? {
+        zIndex: 2,
+        boxShadow: `0 0 0 1.5px ${accentColor}, 0 0 6px 1px ${accentColor}66`,
+      } : undefined}
+      onClick={(e) => {
+        if (!editOpen) {
+          e.stopPropagation();
+          window.open(slot.video_url, "_blank", "noopener,noreferrer");
+        }
+      }}
+    >
+      {/* Edit pencil button */}
+      {onSlotUpdate && (
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); }}
+            className={`absolute -top-1 -right-1 z-40 w-[11px] h-[11px] rounded-full bg-white/90 border border-black/10 shadow flex items-center justify-center
+              transition-all duration-150
+              ${editOpen ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none group-hover/mockslot:opacity-100 group-hover/mockslot:scale-100 group-hover/mockslot:pointer-events-auto"}`}
+          >
+            <Pencil className="h-[6px] w-[6px] text-black/60" />
+          </button>
+        </PopoverTrigger>
+      )}
+
+      {/* Thumbnail */}
+      <div className="w-full h-full overflow-hidden">
+        {slot.cover_url ? (
+          <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-[#222] to-[#0a0a0a]" />
+        )}
+      </div>
+
+      {/* Own-video color overlay */}
+      {isOwn && (
+        <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: overlayRgba }} />
+      )}
+
+      {/* Bottom gradient */}
+      <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+
+      {/* View count */}
+      <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[1px]">
+        <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9" strokeLinejoin="round">
+          <path d="M1.2 0.8 L4.2 2.5 L1.2 4.2 Z" />
+        </svg>
+        <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
+          {fmtJa(slot.view_count)}
+        </span>
+      </div>
+
+      {/* Rank badge — top3 only */}
+      {slot.rank <= 3 && (
+        <div className="absolute top-[1.5px] left-[1.5px] min-w-[9px] h-[9px] rounded-[1.5px] flex items-center justify-center px-[1.5px] bg-[#fe2c55]/90">
+          <span className="text-[5.5px] text-white font-bold leading-none">{slot.rank}</span>
+        </div>
+      )}
+
+      {/* Genre dot */}
+      <div
+        className="absolute bottom-[2px] right-[2px] w-[5px] h-[5px] rounded-full z-[5] border border-black/30"
+        style={{ backgroundColor: genreDotColor }}
+      />
+
+      {/* Highlight accent bar */}
+      {isHighlighted && (
+        <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4]" style={{ backgroundColor: accentColor }} />
+      )}
+    </div>
+  );
+
+  if (!onSlotUpdate) return content;
+
+  return (
+    <Popover open={editOpen} onOpenChange={setEditOpen}>
+      {content}
+      <PopoverContent side="right" align="start" className="p-3 w-auto z-50" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <SovSlotEditForm
+          slot={slot}
+          onSave={(changes) => {
+            onSlotUpdate(keyword, phase, slot.video_id, changes);
+            setEditOpen(false);
+            toast.success("スロットを更新しました");
+          }}
+          onCancel={() => setEditOpen(false)}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TikTokSearchMock({ slots, keyword, isBefore, onSlotUpdate, phase }: {
+  slots: (SlotData | null)[];
+  keyword: string;
+  isBefore?: boolean;
+  onSlotUpdate?: (keyword: string, phase: "before" | "after", videoId: string, changes: any) => void;
+  phase?: "before" | "after";
+}) {
   return (
     <div
       className={`relative transition-all duration-500 ${isBefore ? "scale-[0.94]" : "hover:scale-[1.02]"}`}
@@ -5308,80 +5772,14 @@ function TikTokSearchMock({ slots, keyword, isBefore }: { slots: (SlotData | nul
                 <div className="grid grid-cols-3 gap-[1.5px]">
                   {slots.map((slot, i) => {
                     if (!slot) return <div key={i} className="aspect-[9/14] bg-[#0a0a0a]" />;
-                    const isOwn = slot.owner === "own";
-                    const isCompetitor = slot.owner === "competitor";
-                    const accentColor = isOwn
-                      ? slot.owner_detail === "official" ? "#3b82f6"
-                        : slot.owner_detail === "satellite" ? "#14b8a6"
-                        : "#D71921"
-                      : isCompetitor ? "#64748b" : "";
-                    const isHighlighted = isOwn || isCompetitor;
-                    const overlayRgba = isOwn
-                      ? slot.owner_detail === "official" ? "rgba(37,99,235,0.55)"
-                        : slot.owner_detail === "satellite" ? "rgba(13,148,136,0.55)"
-                        : "rgba(220,20,30,0.55)"
-                      : "";
-                    const genreColorMap: Record<string, string> = {
-                      recommend: "#3b82f6", howto: "#f59e0b", entertainment: "#a855f7", negative: "#D71921", other: "#9ca3af",
-                    };
-                    const genreDotColor = genreColorMap[slot.genre] || genreColorMap.other;
                     return (
-                      <a
+                      <TikTokMockSlotItem
                         key={i}
-                        href={slot.video_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="relative aspect-[9/14] overflow-visible block"
-                        style={isHighlighted ? {
-                          zIndex: 2,
-                          boxShadow: `0 0 0 1.5px ${accentColor}, 0 0 6px 1px ${accentColor}66`,
-                        } : undefined}
-                      >
-                        {/* Thumbnail */}
-                        <div className="w-full h-full overflow-hidden">
-                          {slot.cover_url ? (
-                            <img src={slot.cover_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-[#222] to-[#0a0a0a]" />
-                          )}
-                        </div>
-
-                        {/* Own-video color overlay — per account type */}
-                        {isOwn && (
-                          <div className="absolute inset-0 pointer-events-none z-[1]" style={{ backgroundColor: overlayRgba }} />
-                        )}
-
-                        {/* Bottom gradient */}
-                        <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
-
-                        {/* View count */}
-                        <div className="absolute bottom-[2px] left-[2px] flex items-center gap-[1px]">
-                          <svg width="5" height="5" viewBox="0 0 5 5" fill="white" opacity="0.9" strokeLinejoin="round">
-                            <path d="M1.2 0.8 L4.2 2.5 L1.2 4.2 Z" />
-                          </svg>
-                          <span className="text-[5px] text-white font-medium leading-none" style={{ textShadow: "0 0.5px 2px rgba(0,0,0,0.9)" }}>
-                            {fmtJa(slot.view_count)}
-                          </span>
-                        </div>
-
-                        {/* Rank badge — top3 only */}
-                        {slot.rank <= 3 && (
-                          <div className="absolute top-[1.5px] left-[1.5px] min-w-[9px] h-[9px] rounded-[1.5px] flex items-center justify-center px-[1.5px] bg-[#fe2c55]/90">
-                            <span className="text-[5.5px] text-white font-bold leading-none">{slot.rank}</span>
-                          </div>
-                        )}
-
-                        {/* Genre dot — bottom-right */}
-                        <div
-                          className="absolute bottom-[2px] right-[2px] w-[5px] h-[5px] rounded-full z-[5] border border-black/30"
-                          style={{ backgroundColor: genreDotColor }}
-                        />
-
-                        {/* Highlight accent bar — own or competitor */}
-                        {isHighlighted && (
-                          <div className="absolute top-0 bottom-0 left-0 w-[2.5px] z-[4]" style={{ backgroundColor: accentColor }} />
-                        )}
-                      </a>
+                        slot={slot}
+                        keyword={keyword}
+                        phase={phase || "after"}
+                        onSlotUpdate={onSlotUpdate}
+                      />
                     );
                   })}
                 </div>
@@ -6588,13 +6986,7 @@ export function CrossPlatformSection({ data, videoMetrics, baselineDate, measure
                     <Area yAxisId="left" type="monotone" dataKey="trends" name="Google Trends" stroke="#0a0a0a" strokeWidth={2.5} fill="url(#trendFill)" dot={false} connectNulls />
                     <Bar yAxisId="right" dataKey="dailyViews" name="日次再生数" fill="#6366f1" fillOpacity={0.5} radius={[2, 2, 0, 0]} barSize={6} />
                     {Array.from(markerDates).map((date: string) => (
-                      <ReferenceLine key={date} x={date.slice(5)} stroke="#059669" strokeWidth={1.5} strokeDasharray="4 3" yAxisId="left">
-                        <label position="top" offset={8}>
-                          <text style={{ fontSize: 9, fill: "#059669", fontWeight: 600 }}>
-                            <tspan>&#9658;</tspan>
-                          </text>
-                        </label>
-                      </ReferenceLine>
+                      <ReferenceLine key={date} x={date.slice(5)} stroke="#059669" strokeWidth={1.5} strokeDasharray="4 3" yAxisId="left" label={{ value: "\u25B6", position: "top", offset: 8, style: { fontSize: 9, fill: "#059669", fontWeight: 600 } }} />
                     ))}
                   </ComposedChart>
                 </ResponsiveContainer>

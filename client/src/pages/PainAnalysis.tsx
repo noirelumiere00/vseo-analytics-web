@@ -367,6 +367,8 @@ function HypothesisApprovalView({ analysisId, onApproved }: { analysisId: number
 
 function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
   const { data, isLoading } = trpc.painAnalysis.getResult.useQuery({ analysisId });
+  const [markdownExpanded, setMarkdownExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (isLoading) return <div className="py-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></div>;
   if (!data) return <p className="text-sm text-muted-foreground text-center py-8">結果がありません</p>;
@@ -379,9 +381,6 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
   const proposals = (data.proposals as any[]) || [];
   const kaiwaiCreatives = (data.kaiwaiCreatives as any[]) || [];
   const gensparkMarkdown = (data.gensparkMarkdown as string) || "";
-
-  const [markdownExpanded, setMarkdownExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const handleCopyMarkdown = async () => {
     await navigator.clipboard.writeText(gensparkMarkdown);

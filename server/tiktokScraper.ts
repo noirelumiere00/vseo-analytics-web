@@ -775,7 +775,7 @@ export function buildChromiumArgs(): string[] {
     if (process.env.PROXY_KYC_VERIFIED !== "true") {
       args.push("--ignore-certificate-errors");
     }
-    console.log(`[TikTok] Proxy: ${process.env.PROXY_SERVER}`);
+    console.log(`[TikTok] Proxy: ${process.env.PROXY_SERVER?.replace(/\/\/[^@]+@/, "//***:***@")}`);
   } else {
     console.log("[TikTok] Running without proxy (direct connection)");
   }

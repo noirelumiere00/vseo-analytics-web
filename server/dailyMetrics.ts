@@ -125,18 +125,29 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
     try {
       const posts = await fetchInstagramPostsWithFallback(instagramUrls);
 
+      // shortcodeベースで元URLにマッチ（Apifyが /p/ 形式で返すため /reels/ 等と不一致になる対策）
+      const igUrlByShortcode = new Map<string, string>();
+      for (const u of instagramUrls) {
+        const extracted = extractVideoId(u);
+        if (extracted) igUrlByShortcode.set(extracted.id, u);
+      }
+
       // Detect missing URLs that Apify didn't return
       if (posts.length < instagramUrls.length) {
-        const fetchedIgUrls = new Set(posts.map((p) => p.videoUrl));
-        const missingIg = instagramUrls.filter((u) => !fetchedIgUrls.has(u) && !posts.some((p) => u.includes(p.videoId)));
+        const fetchedShortcodes = new Set(posts.map((p) => p.videoId));
+        const missingIg = instagramUrls.filter((u) => {
+          const ext = extractVideoId(u);
+          return !ext || !fetchedShortcodes.has(ext.id);
+        });
         if (missingIg.length > 0) {
           console.warn(`[DailyMetrics] Instagram: ${missingIg.length}/${instagramUrls.length} posts not returned by Apify`);
         }
       }
 
       for (const p of posts) {
+        const originalUrl = igUrlByShortcode.get(p.videoId) || p.videoUrl;
         rows.push({
-          campaignId: campaign.id, videoUrl: p.videoUrl, platform: "instagram", dateKey,
+          campaignId: campaign.id, videoUrl: originalUrl, platform: "instagram", dateKey,
           viewCount: p.viewCount, likeCount: p.likeCount,
           commentCount: p.commentCount, shareCount: null, saveCount: null,
         });
@@ -221,11 +232,11 @@ export async function captureDailyMetrics(campaign: Campaign, targetUrls?: strin
     // スナップショット値をフロアとして適用
     const floor = snapshotFloor.get(row.videoUrl);
     if (floor) {
-      row.viewCount = Math.max(row.viewCount ?? 0, floor.viewCount);
-      row.likeCount = Math.max(row.likeCount ?? 0, floor.likeCount);
-      row.commentCount = Math.max(row.commentCount ?? 0, floor.commentCount);
-      if (row.shareCount != null) row.shareCount = Math.max(row.shareCount, floor.shareCount);
-      if (row.saveCount != null) row.saveCount = Math.max(row.saveCount, floor.saveCount);
+      row.viewCount = Math.max(row.viewCount ?? 0, floor.viewCount ?? 0);
+      row.likeCount = Math.max(row.likeCount ?? 0, floor.likeCount ?? 0);
+      row.commentCount = Math.max(row.commentCount ?? 0, floor.commentCount ?? 0);
+      if (row.shareCount != null) row.shareCount = Math.max(row.shareCount, floor.shareCount ?? 0);
+      if (row.saveCount != null) row.saveCount = Math.max(row.saveCount, floor.saveCount ?? 0);
     }
 
     // GREATEST を使い、スクレイパー失敗で0が返った場合に既存の正しい値を保護

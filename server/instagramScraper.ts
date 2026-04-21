@@ -7,6 +7,23 @@
 import { ENV } from "./_core/env";
 import puppeteer, { type Page } from "puppeteer-core";
 import { findChromiumPath, buildChromiumArgs } from "./tiktokScraper";
+import { extractVideoId } from "../shared/videoUrl";
+
+/** Instagram sessionid のフォーマット検証（英数字+%エンコード、1000文字以内） */
+function isValidSessionId(sessionId: string): boolean {
+  return /^[a-zA-Z0-9%:_-]{10,1000}$/.test(sessionId);
+}
+
+/** 検証済み sessionid を返す（無効な場合は undefined） */
+function getValidatedSessionId(): string | undefined {
+  const raw = process.env.INSTAGRAM_SESSION_ID;
+  if (!raw) return undefined;
+  if (!isValidSessionId(raw)) {
+    console.warn("[Instagram] INSTAGRAM_SESSION_ID has invalid format, ignoring");
+    return undefined;
+  }
+  return raw;
+}
 
 export interface InstagramPostData {
   videoId: string;
@@ -84,6 +101,21 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
   }
   if (urls.length === 0) return [];
 
+  // Instagram URLからトラッキングパラメータを除去（Apifyの取得精度向上）
+  const cleanUrls = urls.map(u => {
+    try {
+      const parsed = new URL(u);
+      if (parsed.hostname.includes("instagram.com")) {
+        // /reels/ → /reel/ に正規化
+        parsed.pathname = parsed.pathname.replace(/\/reels\//, "/reel/");
+        parsed.search = "";
+        parsed.hash = "";
+        return parsed.toString();
+      }
+    } catch { /* keep original */ }
+    return u;
+  });
+
   const results: InstagramPostData[] = [];
 
   try {
@@ -94,7 +126,7 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          directUrls: urls,
+          directUrls: cleanUrls,
           resultsType: "posts",
           resultsLimit: urls.length,
         }),
@@ -114,12 +146,12 @@ export async function fetchInstagramPosts(urls: string[]): Promise<InstagramPost
       return results;
     }
 
-    // 実行ステータスを確認 — RUNNING中なら完了までポーリング待機
+    // 実行ステータスを確認 — 未完了なら完了までポーリング待機
     const runStatus = runData?.data?.status;
     if (runStatus && runStatus !== "SUCCEEDED") {
-      if (runStatus === "RUNNING" && runId) {
-        console.log(`[Instagram] Apify run still RUNNING, polling for completion...`);
-        const finalStatus = await waitForApifyRun(runId, token, 120_000);
+      if (runId && (runStatus === "RUNNING" || runStatus === "READY")) {
+        console.log(`[Instagram] Apify run status: ${runStatus}, polling for completion...`);
+        const finalStatus = await waitForApifyRun(runId, token, 180_000);
         if (finalStatus !== "SUCCEEDED") {
           console.warn(`[Instagram] Apify run finished with status: ${finalStatus} (may have partial results)`);
         }
@@ -200,7 +232,7 @@ export async function searchInstagramHashtag(
   const tag = hashtag.replace(/^#/, "").trim();
 
   // Puppeteer方式を試行
-  const sessionId = process.env.INSTAGRAM_SESSION_ID;
+  const sessionId = getValidatedSessionId();
   if (sessionId) {
     try {
       const result = await scrapeHashtagWithPuppeteer(tag, maxResults, ownNamesLower);
@@ -228,7 +260,7 @@ async function scrapeHashtagWithPuppeteer(
   maxResults: number,
   ownNamesLower: Set<string>,
 ): Promise<InstagramHashtagResult> {
-  const sessionId = process.env.INSTAGRAM_SESSION_ID!;
+  const sessionId = getValidatedSessionId()!;
   const chromiumPath = findChromiumPath();
   const browser = await puppeteer.launch({
     executablePath: chromiumPath,
@@ -640,8 +672,196 @@ async function scrapeHashtagWithApify(
 }
 
 // ============================
-// Puppeteer fallback: 個別投稿メトリクス取得
+// Puppeteer fallback: バッチ投稿データ取得（年齢制限対応）
 // ============================
+
+/**
+ * Puppeteer + sessionid を使用してInstagram投稿をバッチ取得。
+ * 単一ブラウザインスタンスでページを使い回し、年齢制限投稿にも対応。
+ * GraphQL/APIレスポンスをインターセプトしてフル InstagramPostData を返却。
+ */
+async function fetchInstagramPostsViaPuppeteer(
+  urls: string[],
+): Promise<InstagramPostData[]> {
+  const sessionId = getValidatedSessionId();
+  if (!sessionId) {
+    console.warn("[Instagram Puppeteer Batch] INSTAGRAM_SESSION_ID not set, skipping");
+    return [];
+  }
+  if (urls.length === 0) return [];
+
+  const chromePath = findChromiumPath();
+  if (!chromePath) {
+    console.warn("[Instagram Puppeteer Batch] Chromium not found");
+    return [];
+  }
+
+  const results: InstagramPostData[] = [];
+  let browser;
+
+  try {
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true,
+      args: buildChromiumArgs(),
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 900 });
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    );
+    await page.setCookie({
+      name: "sessionid",
+      value: sessionId,
+      domain: ".instagram.com",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+    });
+
+    console.log(`[Instagram Puppeteer Batch] Processing ${urls.length} URLs...`);
+
+    for (let i = 0; i < urls.length; i++) {
+      const postUrl = urls[i];
+      // Extract shortcode from URL
+      const shortcodeMatch = postUrl.match(/\/(p|reels?|tv)\/([A-Za-z0-9_-]+)/);
+      if (!shortcodeMatch) {
+        console.warn(`[Instagram Puppeteer Batch] Could not extract shortcode from: ${postUrl}`);
+        continue;
+      }
+      const shortcode = shortcodeMatch[2];
+
+      let mediaData: any = null;
+
+      // Set up response interception for this page load
+      const responseHandler = async (response: any) => {
+        try {
+          const url = response.url();
+          if (
+            url.includes("/graphql") ||
+            url.includes("/api/v1/media/") ||
+            url.includes("/api/graphql")
+          ) {
+            const text = await response.text();
+            if (!text || text.startsWith("<")) return;
+            if (
+              text.includes(shortcode) ||
+              text.includes("edge_media_preview_like") ||
+              text.includes("like_count") ||
+              text.includes("play_count")
+            ) {
+              const json = JSON.parse(text);
+              const media =
+                json?.data?.shortcode_media ||
+                json?.data?.xdt_shortcode_media ||
+                json?.items?.[0];
+              if (media && !mediaData) {
+                mediaData = media;
+              }
+            }
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      };
+
+      page.on("response", responseHandler);
+
+      try {
+        await page.goto(`https://www.instagram.com/p/${shortcode}/`, {
+          waitUntil: "networkidle2",
+          timeout: 30_000,
+        });
+
+        // セッション期限切れ検出
+        const currentUrl = page.url();
+        if (currentUrl.includes("/accounts/login") || currentUrl.includes("/challenge/")) {
+          console.error("[Instagram Puppeteer Batch] Session expired — redirected to login. Stopping batch.");
+          page.off("response", responseHandler);
+          break;
+        }
+
+        // Wait for GraphQL responses
+        await new Promise((r) => setTimeout(r, 3000));
+
+        if (mediaData) {
+          const viewCount = mediaData.play_count
+            || mediaData.video_play_count
+            || mediaData.video_view_count
+            || mediaData.edge_media_video_views?.count
+            || 0;
+          const likeCount = mediaData.edge_media_preview_like?.count
+            ?? mediaData.like_count
+            ?? 0;
+          const commentCount = mediaData.edge_media_preview_comment?.count
+            ?? mediaData.edge_media_to_parent_comment?.count
+            ?? mediaData.comment_count
+            ?? 0;
+          const caption = mediaData.edge_media_to_caption?.edges?.[0]?.node?.text
+            || mediaData.caption?.text
+            || "";
+          const ownerUsername = mediaData.owner?.username
+            || mediaData.user?.username
+            || "";
+          const publishedAt = mediaData.taken_at_timestamp
+            ? new Date(mediaData.taken_at_timestamp * 1000).toISOString()
+            : mediaData.taken_at
+              ? new Date(mediaData.taken_at * 1000).toISOString()
+              : "";
+          const coverUrl = mediaData.display_url
+            || mediaData.thumbnail_src
+            || mediaData.image_versions2?.candidates?.[0]?.url
+            || "";
+          const rawMusic = mediaData.clips_music_attribution_info || mediaData.music_metadata?.music_info?.music_asset_info;
+          const musicInfo = rawMusic
+            ? { title: rawMusic.title || rawMusic.song_name || "", artistName: rawMusic.artist_name || rawMusic.display_artist || "" }
+            : null;
+
+          results.push({
+            videoId: shortcode,
+            videoUrl: postUrl,
+            coverUrl,
+            caption,
+            viewCount,
+            threeSecViewCount: mediaData.video_view_count || 0,
+            likeCount,
+            commentCount,
+            publishedAt,
+            ownerUsername,
+            musicInfo: musicInfo && (musicInfo.title || musicInfo.artistName) ? musicInfo : null,
+            metricsReliable: true,
+          });
+
+          if ((i + 1) % 10 === 0) {
+            console.log(`[Instagram Puppeteer Batch] Progress: ${i + 1}/${urls.length} (${results.length} succeeded)`);
+          }
+        } else {
+          console.warn(`[Instagram Puppeteer Batch] No media data for ${shortcode}`);
+        }
+      } catch (e) {
+        console.warn(`[Instagram Puppeteer Batch] Failed for ${shortcode}:`, e);
+      } finally {
+        page.off("response", responseHandler);
+      }
+
+      // Rate limiting: small delay between requests
+      if (i < urls.length - 1) {
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    }
+
+    console.log(`[Instagram Puppeteer Batch] Completed: ${results.length}/${urls.length} posts recovered`);
+  } catch (e) {
+    console.error("[Instagram Puppeteer Batch] Browser error:", e);
+  } finally {
+    if (browser) {
+      try { await browser.close(); } catch { /* ignore */ }
+    }
+  }
+
+  return results;
+}
 
 /**
  * Puppeteer + sessionid を使用して単一Instagram投稿のメトリクスを取得。
@@ -650,11 +870,11 @@ async function scrapeHashtagWithApify(
 async function fetchInstagramPostMetrics(
   postUrl: string,
 ): Promise<{ likeCount: number; commentCount: number } | null> {
-  const sessionId = process.env.INSTAGRAM_SESSION_ID;
+  const sessionId = getValidatedSessionId();
   if (!sessionId) return null;
 
   // Extract shortcode from URL
-  const shortcodeMatch = postUrl.match(/\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  const shortcodeMatch = postUrl.match(/\/(p|reels?|tv)\/([A-Za-z0-9_-]+)/);
   if (!shortcodeMatch) return null;
   const shortcode = shortcodeMatch[2];
 
@@ -742,33 +962,75 @@ async function fetchInstagramPostMetrics(
 
 /**
  * fetchInstagramPosts のラッパー。
- * メトリクス不完全（viewCount > 100 かつ like/comment ともに 0）な投稿に対して
- * Puppeteer フォールバックで正確なメトリクスの回復を試みる。
+ * 1. Apifyで全URL取得
+ * 2. Apifyが返さなかったURL（= missingUrls）を特定
+ * 3. Apifyが返したが不完全な投稿（= incompleteUrls）も特定
+ * 4. missingUrls + incompleteUrls をまとめてPuppeteerバッチで取得
+ * 5. 結果をマージして返却
  */
 export async function fetchInstagramPostsWithFallback(
   urls: string[],
 ): Promise<InstagramPostData[]> {
   const results = await fetchInstagramPosts(urls);
 
-  // Find incomplete metrics
-  const incomplete = results.filter(
+  if (!getValidatedSessionId()) {
+    return results;
+  }
+
+  // Build a set of videoIds returned by Apify for matching
+  const apifyVideoIds = new Set(results.map((r) => r.videoId).filter(Boolean));
+
+  // Find URLs that Apify did not return at all (e.g. age-restricted posts)
+  const missingUrls = urls.filter((u) => {
+    const parsed = extractVideoId(u);
+    if (!parsed || parsed.platform !== "instagram") return false;
+    return !apifyVideoIds.has(parsed.id);
+  });
+
+  // Find posts Apify returned but with incomplete metrics
+  const incompleteItems = results.filter(
     (r) => r.viewCount > 100 && r.likeCount === 0 && r.commentCount === 0,
   );
+  const incompleteUrls = incompleteItems.map((r) => r.videoUrl);
 
-  if (incomplete.length > 0 && process.env.INSTAGRAM_SESSION_ID) {
-    console.log(`[Instagram] ${incomplete.length}/${results.length} posts have incomplete metrics, trying Puppeteer fallback...`);
-    for (const item of incomplete) {
-      try {
-        const recovered = await fetchInstagramPostMetrics(item.videoUrl);
-        if (recovered && recovered.likeCount > 0) {
-          item.likeCount = recovered.likeCount;
-          item.commentCount = recovered.commentCount;
-          item.metricsReliable = true;
-        }
-      } catch {
-        /* skip — metricsReliable remains false */
+  const puppeteerTargetUrls = [...missingUrls, ...incompleteUrls];
+
+  if (puppeteerTargetUrls.length > 0) {
+    console.log(
+      `[Instagram] Puppeteer fallback: ${missingUrls.length} missing + ${incompleteUrls.length} incomplete = ${puppeteerTargetUrls.length} URLs`,
+    );
+
+    const puppeteerResults = await fetchInstagramPostsViaPuppeteer(puppeteerTargetUrls);
+
+    // Index Puppeteer results by videoId for fast lookup
+    const puppeteerMap = new Map<string, InstagramPostData>();
+    for (const pr of puppeteerResults) {
+      puppeteerMap.set(pr.videoId, pr);
+    }
+
+    // Update incomplete Apify results with Puppeteer data
+    for (const item of incompleteItems) {
+      const recovered = puppeteerMap.get(item.videoId);
+      if (recovered && (recovered.likeCount > 0 || recovered.commentCount > 0)) {
+        item.likeCount = recovered.likeCount;
+        item.commentCount = recovered.commentCount;
+        if (recovered.viewCount > 0) item.viewCount = recovered.viewCount;
+        item.metricsReliable = true;
+        puppeteerMap.delete(item.videoId); // consumed
       }
     }
+
+    // Add missing posts that were recovered by Puppeteer
+    for (const [, pr] of puppeteerMap) {
+      // Only add if this was a missing URL (not already in results)
+      if (!apifyVideoIds.has(pr.videoId)) {
+        results.push(pr);
+      }
+    }
+
+    console.log(
+      `[Instagram] Final: ${results.length}/${urls.length} posts (${results.filter((r) => r.metricsReliable !== false).length} with reliable metrics)`,
+    );
   }
 
   return results;

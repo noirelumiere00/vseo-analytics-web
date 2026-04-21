@@ -175,6 +175,213 @@ async function batchSearch(
 }
 
 // =============================
+// Campaign context helpers (shared state for search functions)
+// =============================
+
+function buildCampaignContext(campaign: Campaign) {
+  const keywords = campaign.keywords || [];
+  const competitors = campaign.competitors || [];
+  const campaignHashtags = campaign.campaignHashtags || [];
+  const ownAccountIds = campaign.ownAccountIds || [];
+  const ownVideoIds = campaign.ownVideoIds || [];
+
+  const ownVideoData = (campaign as any).ownVideoData as Array<{ videoId: string; authorUniqueId: string }> | undefined;
+  const campaignVideoIds = new Set<string>(ownVideoIds);
+  const campaignVideoAuthors = new Set<string>();
+  if (ownVideoData) {
+    for (const v of ownVideoData) {
+      if (v.videoId) campaignVideoIds.add(v.videoId);
+      if (v.authorUniqueId) campaignVideoAuthors.add(v.authorUniqueId.toLowerCase());
+    }
+  }
+
+  const satelliteAccountIds = ((campaign as any).satelliteAccountIds || []) as string[];
+  const satelliteAccountIdsLower = new Set<string>(satelliteAccountIds.map((id: string) => id.toLowerCase()));
+  const ownAccountIdsLower = new Set<string>(ownAccountIds.map((id: string) => id.toLowerCase()));
+
+  const isCampaignVideo = (v: NormalizedVideo): boolean =>
+    ownAccountIdsLower.has(v.creator_username.toLowerCase()) || satelliteAccountIdsLower.has(v.creator_username.toLowerCase()) || campaignVideoIds.has(v.video_id);
+
+  return {
+    keywords, competitors, campaignHashtags,
+    ownAccountIds, ownVideoIds, campaignVideoIds, campaignVideoAuthors,
+    satelliteAccountIdsLower, ownAccountIdsLower, isCampaignVideo,
+  };
+}
+
+// =============================
+// Exported partial-refresh functions
+// =============================
+
+/**
+ * Phase A: 指定キーワードの検索結果を取得し、searchResults形式で返す
+ */
+export async function refreshSearchResultsForKeywords(
+  keywords: string[],
+  campaign: Campaign,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ searchResults: NonNullable<InsertCampaignSnapshot["searchResults"]>; failedQueries?: string[] }> {
+  const ctx = buildCampaignContext(campaign);
+  const searchResults: NonNullable<InsertCampaignSnapshot["searchResults"]> = {};
+
+  if (keywords.length === 0) return { searchResults };
+
+  const kwResults = await batchSearch(keywords, 3, 2000, onProgress, 60);
+
+  const failedQueries = (kwResults as any)._failedQueries as string[] | undefined;
+
+  for (const kw of keywords) {
+    const videos = kwResults.get(kw) || [];
+    const allVideos = videos.map((v, idx) => normalizeVideo(v, idx + 1));
+
+    const ownVideos: NormalizedVideoWithER[] = allVideos
+      .filter(v => ctx.isCampaignVideo(v))
+      .map(v => ({ ...v, er: calcER(v) }));
+
+    const competitorPositions = ctx.competitors.map(comp => {
+      const compVideos = allVideos.filter(v => v.creator_username === comp.account_id);
+      return {
+        competitor_name: comp.name,
+        competitor_id: comp.account_id,
+        best_rank: compVideos.length > 0 ? Math.min(...compVideos.map(v => v.search_rank)) : null,
+        video_count_in_top30: compVideos.length,
+      };
+    });
+
+    const ownCountInResults = allVideos.filter(v => ctx.isCampaignVideo(v)).length;
+
+    searchResults[kw] = {
+      total_results: allVideos.length,
+      all_videos: allVideos,
+      own_videos: ownVideos,
+      competitor_positions: competitorPositions,
+      share_of_voice: {
+        own_count: ownCountInResults,
+        total_count: allVideos.length,
+        percentage: allVideos.length > 0 ? (ownCountInResults / allVideos.length * 100).toFixed(1) : "0",
+      },
+      screenshot_key: null,
+    };
+  }
+
+  return { searchResults, failedQueries: failedQueries && failedQueries.length > 0 ? failedQueries : undefined };
+}
+
+/**
+ * Phase E: ビッグキーワードの検索結果を取得し、bigKeywordResults形式で返す
+ */
+export async function refreshBigKeywordResults(
+  bigKeywords: string[],
+  campaign: Campaign,
+  onProgress?: (done: number, total: number) => void,
+): Promise<NonNullable<InsertCampaignSnapshot["bigKeywordResults"]>> {
+  const ctx = buildCampaignContext(campaign);
+  const bigKeywordResults: NonNullable<InsertCampaignSnapshot["bigKeywordResults"]> = {};
+
+  if (bigKeywords.length === 0) return bigKeywordResults;
+
+  const bkResults = await batchSearch(bigKeywords, 3, 2000, onProgress);
+
+  const campaignTerms = [
+    ...ctx.keywords.map((kw: string) => kw.replace(/^#/, "").toLowerCase()),
+    ...ctx.campaignHashtags.map((h: string) => h.replace(/^#/, "").toLowerCase()),
+  ].filter(Boolean);
+
+  for (const [bkw, bkVideos] of bkResults) {
+    const ownVideosInTop30: Array<{ videoId: string; rank: number; viewCount: number; username?: string; description?: string }> = [];
+    for (let idx = 0; idx < bkVideos.length; idx++) {
+      const v = bkVideos[idx];
+      if (ctx.ownAccountIdsLower.has(v.author.uniqueId.toLowerCase()) || ctx.campaignVideoIds.has(v.id)) {
+        const desc = (v.desc || "").toLowerCase();
+        const tags = (v.hashtags || []).map((h: string) => h.toLowerCase());
+        const isRelevant = ctx.campaignVideoIds.has(v.id) || campaignTerms.some(term =>
+          desc.includes(term) || tags.some(t => t.includes(term) || term.includes(t))
+        );
+        if (!isRelevant) continue;
+
+        ownVideosInTop30.push({
+          videoId: v.id,
+          rank: idx + 1,
+          viewCount: v.stats.playCount || 0,
+          username: v.author.uniqueId,
+          description: (v.desc || "").slice(0, 40),
+        });
+      }
+    }
+
+    const competitorPositions = ctx.competitors.map(comp => {
+      const compVideos = bkVideos
+        .map((v, idx) => ({ v, rank: idx + 1 }))
+        .filter(({ v }) => v.author.uniqueId === comp.account_id);
+      return {
+        competitor_name: comp.name,
+        competitor_id: comp.account_id,
+        best_rank: compVideos.length > 0 ? Math.min(...compVideos.map(c => c.rank)) : null,
+        video_count_in_top30: compVideos.length,
+      };
+    });
+
+    const allVideosTop10 = bkVideos.slice(0, 10).map((v, idx) => normalizeVideo(v, idx + 1));
+
+    bigKeywordResults[bkw] = {
+      ownVideosInTop30,
+      competitorPositions,
+      totalResults: bkVideos.length,
+      all_videos: allVideosTop10,
+    };
+  }
+
+  return bigKeywordResults;
+}
+
+/**
+ * Phase G: searchResultsから競合を自動検出（インメモリ処理、I/Oなし）
+ */
+export function recomputeDetectedCompetitors(
+  searchResults: NonNullable<InsertCampaignSnapshot["searchResults"]>,
+  campaign: Campaign,
+): NonNullable<InsertCampaignSnapshot["detectedCompetitors"]> {
+  const ctx = buildCampaignContext(campaign);
+  const competitorIds = new Set(ctx.competitors.map(c => c.account_id));
+
+  const accountMap = new Map<string, {
+    nickname: string; avatarUrl: string; followerCount: number;
+    kwSet: Set<string>; totalVideos: number; ranks: number[];
+  }>();
+
+  for (const [kw, data] of Object.entries(searchResults)) {
+    for (const v of data.all_videos) {
+      const acct = v.creator_username;
+      if (ctx.ownAccountIdsLower.has(acct.toLowerCase()) || ctx.campaignVideoAuthors.has(acct.toLowerCase()) || competitorIds.has(acct)) continue;
+
+      if (!accountMap.has(acct)) {
+        accountMap.set(acct, {
+          nickname: acct, avatarUrl: "", followerCount: 0,
+          kwSet: new Set(), totalVideos: 0, ranks: [],
+        });
+      }
+      const entry = accountMap.get(acct)!;
+      entry.kwSet.add(kw);
+      entry.totalVideos++;
+      entry.ranks.push(v.search_rank);
+    }
+  }
+
+  return Array.from(accountMap.entries())
+    .filter(([, e]) => e.kwSet.size >= 2)
+    .map(([accountId, e]) => ({
+      accountId,
+      nickname: e.nickname,
+      avatarUrl: e.avatarUrl,
+      followerCount: e.followerCount,
+      keywordAppearances: e.kwSet.size,
+      totalVideosInTop30: e.totalVideos,
+      avgRank: Math.round(e.ranks.reduce((a, b) => a + b, 0) / e.ranks.length),
+    }))
+    .sort((a, b) => b.keywordAppearances - a.keywordAppearances || a.avgRank - b.avgRank);
+}
+
+// =============================
 // Snapshot capture
 // =============================
 
@@ -187,84 +394,25 @@ export async function captureSnapshot(
     if (onProgress) onProgress({ phase, message, percent });
   };
 
-  const searchResults: NonNullable<InsertCampaignSnapshot["searchResults"]> = {};
   const competitorProfiles: NonNullable<InsertCampaignSnapshot["competitorProfiles"]> = {};
   const rippleEffect: NonNullable<InsertCampaignSnapshot["rippleEffect"]> = {};
 
-  const keywords = campaign.keywords || [];
-  const competitors = campaign.competitors || [];
-  const campaignHashtags = campaign.campaignHashtags || [];
-  const ownAccountIds = campaign.ownAccountIds || [];
-  const ownVideoIds = campaign.ownVideoIds || [];
-
-  // 施策動画のビデオID集合（SOV・順位マッチ用 — アカウント単位ではなく動画単位で判定）
-  const ownVideoData = (campaign as any).ownVideoData as Array<{ videoId: string; authorUniqueId: string }> | undefined;
-  const campaignVideoIds = new Set<string>(ownVideoIds);
-  const campaignVideoAuthors = new Set<string>(); // 施策動画の投稿者（競合検出除外用）
-  if (ownVideoData) {
-    for (const v of ownVideoData) {
-      if (v.videoId) campaignVideoIds.add(v.videoId);
-      if (v.authorUniqueId) campaignVideoAuthors.add(v.authorUniqueId.toLowerCase());
-    }
-  }
-  // サテライトアカウント
+  const ctx = buildCampaignContext(campaign);
+  const { keywords, competitors, ownAccountIds, ownVideoIds } = ctx;
   const satelliteAccountIds = ((campaign as any).satelliteAccountIds || []) as string[];
-  const satelliteAccountIdsLower = new Set<string>(satelliteAccountIds.map((id: string) => id.toLowerCase()));
-
-  // 施策動画の判定: 自社アカウントの動画 OR サテライト OR 登録済み施策ビデオID
-  const ownAccountIdsLower = new Set<string>(ownAccountIds.map((id: string) => id.toLowerCase()));
-  const isCampaignVideo = (v: NormalizedVideo): boolean =>
-    ownAccountIdsLower.has(v.creator_username.toLowerCase()) || satelliteAccountIdsLower.has(v.creator_username.toLowerCase()) || campaignVideoIds.has(v.video_id);
 
   // ============================
-  // A. KW別の検索結果（3並列）
+  // A. KW別の検索結果（3並列） — 共通関数を使用
   // ============================
     report("search", `KW検索中 (${keywords.length}件)...`, 5);
 
-    const kwResults = await batchSearch(keywords, 3, 2000, (done, total) =>
-      report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30)),
-      60,
+    const { searchResults, failedQueries: failedSearchQueries } = await refreshSearchResultsForKeywords(
+      keywords, campaign,
+      (done, total) => report("search", `KW検索: ${done}/${total}`, Math.round((done / total) * 30)),
     );
 
-    // 失敗したクエリ情報をスナップショットに記録
-    const failedSearchQueries = (kwResults as any)._failedQueries as string[] | undefined;
     if (failedSearchQueries && failedSearchQueries.length > 0) {
       console.warn(`[captureSnapshot] ${failedSearchQueries.length} keywords had search failures: ${failedSearchQueries.join(", ")}`);
-    }
-
-    for (let i = 0; i < keywords.length; i++) {
-      const kw = keywords[i];
-      const videos = kwResults.get(kw) || [];
-      const allVideos = videos.map((v, idx) => normalizeVideo(v, idx + 1));
-
-      const ownVideos: NormalizedVideoWithER[] = allVideos
-        .filter(v => isCampaignVideo(v))
-        .map(v => ({ ...v, er: calcER(v) }));
-
-      const competitorPositions = competitors.map(comp => {
-        const compVideos = allVideos.filter(v => v.creator_username === comp.account_id);
-        return {
-          competitor_name: comp.name,
-          competitor_id: comp.account_id,
-          best_rank: compVideos.length > 0 ? Math.min(...compVideos.map(v => v.search_rank)) : null,
-          video_count_in_top30: compVideos.length,
-        };
-      });
-
-      const ownCountInResults = allVideos.filter(v => isCampaignVideo(v)).length;
-
-      searchResults[kw] = {
-        total_results: allVideos.length,
-        all_videos: allVideos,
-        own_videos: ownVideos,
-        competitor_positions: competitorPositions,
-        share_of_voice: {
-          own_count: ownCountInResults,
-          total_count: allVideos.length,
-          percentage: allVideos.length > 0 ? (ownCountInResults / allVideos.length * 100).toFixed(1) : "0",
-        },
-        screenshot_key: null,
-      };
     }
 
     // ============================
@@ -521,7 +669,7 @@ export async function captureSnapshot(
     }
 
     // ============================
-    // E. ビッグキーワード検索（3並列）
+    // E. ビッグキーワード検索（3並列） — 共通関数を使用
     // ============================
     let bigKeywordResults: NonNullable<InsertCampaignSnapshot["bigKeywordResults"]> = {};
 
@@ -529,104 +677,16 @@ export async function captureSnapshot(
     if (bigKeywords && bigKeywords.length > 0) {
       report("big_keywords", `ビッグキーワード検索中 (${bigKeywords.length}件)...`, 90);
 
-      const bkResults = await batchSearch(bigKeywords, 3, 2000, (done, total) =>
-        report("big_keywords", `ビッグKW検索: ${done}/${total}`, 90 + Math.round((done / total) * 7))
+      bigKeywordResults = await refreshBigKeywordResults(
+        bigKeywords, campaign,
+        (done, total) => report("big_keywords", `ビッグKW検索: ${done}/${total}`, 90 + Math.round((done / total) * 7)),
       );
-
-      // 施策KWに関連するコンテンツかを判定するキーワードセット
-      const campaignTerms = [
-        ...keywords.map((kw: string) => kw.replace(/^#/, "").toLowerCase()),
-        ...campaignHashtags.map((h: string) => h.replace(/^#/, "").toLowerCase()),
-      ].filter(Boolean);
-
-      for (const [bkw, bkVideos] of bkResults) {
-        const ownVideosInTop30: Array<{ videoId: string; rank: number; viewCount: number; username?: string; description?: string }> = [];
-        for (let idx = 0; idx < bkVideos.length; idx++) {
-          const v = bkVideos[idx];
-          if (ownAccountIdsLower.has(v.author.uniqueId.toLowerCase()) || campaignVideoIds.has(v.id)) {
-            // 施策KW関連の動画のみ対象（動画説明文 or ハッシュタグに施策KWが含まれるか）
-            const desc = (v.desc || "").toLowerCase();
-            const tags = (v.hashtags || []).map((h: string) => h.toLowerCase());
-            const isRelevant = campaignVideoIds.has(v.id) || campaignTerms.some(term =>
-              desc.includes(term) || tags.some(t => t.includes(term) || term.includes(t))
-            );
-            if (!isRelevant) continue;
-
-            ownVideosInTop30.push({
-              videoId: v.id,
-              rank: idx + 1,
-              viewCount: v.stats.playCount || 0,
-              username: v.author.uniqueId,
-              description: (v.desc || "").slice(0, 40),
-            });
-          }
-        }
-
-        const competitorPositions = competitors.map(comp => {
-          const compVideos = bkVideos
-            .map((v, idx) => ({ v, rank: idx + 1 }))
-            .filter(({ v }) => v.author.uniqueId === comp.account_id);
-          return {
-            competitor_name: comp.name,
-            competitor_id: comp.account_id,
-            best_rank: compVideos.length > 0 ? Math.min(...compVideos.map(c => c.rank)) : null,
-            video_count_in_top30: compVideos.length,
-          };
-        });
-
-        // Top10を all_videos として保存（SOVスロットマップ用）
-        const allVideosTop10 = bkVideos.slice(0, 10).map((v, idx) => normalizeVideo(v, idx + 1));
-
-        bigKeywordResults[bkw] = {
-          ownVideosInTop30,
-          competitorPositions,
-          totalResults: bkVideos.length,
-          all_videos: allVideosTop10,
-        };
-      }
     }
 
     // ============================
-    // G. 競合自動検出（インメモリ）
+    // G. 競合自動検出（インメモリ） — 共通関数を使用
     // ============================
-    let detectedCompetitors: NonNullable<InsertCampaignSnapshot["detectedCompetitors"]> = [];
-
-    const competitorIds = new Set(competitors.map(c => c.account_id));
-    const accountMap = new Map<string, {
-      nickname: string; avatarUrl: string; followerCount: number;
-      kwSet: Set<string>; totalVideos: number; ranks: number[];
-    }>();
-
-    for (const [kw, data] of Object.entries(searchResults)) {
-      for (const v of data.all_videos) {
-        const acct = v.creator_username;
-        if (ownAccountIdsLower.has(acct.toLowerCase()) || campaignVideoAuthors.has(acct.toLowerCase()) || competitorIds.has(acct)) continue;
-
-        if (!accountMap.has(acct)) {
-          accountMap.set(acct, {
-            nickname: acct, avatarUrl: "", followerCount: 0,
-            kwSet: new Set(), totalVideos: 0, ranks: [],
-          });
-        }
-        const entry = accountMap.get(acct)!;
-        entry.kwSet.add(kw);
-        entry.totalVideos++;
-        entry.ranks.push(v.search_rank);
-      }
-    }
-
-    detectedCompetitors = Array.from(accountMap.entries())
-      .filter(([, e]) => e.kwSet.size >= 2)
-      .map(([accountId, e]) => ({
-        accountId,
-        nickname: e.nickname,
-        avatarUrl: e.avatarUrl,
-        followerCount: e.followerCount,
-        keywordAppearances: e.kwSet.size,
-        totalVideosInTop30: e.totalVideos,
-        avgRank: Math.round(e.ranks.reduce((a, b) => a + b, 0) / e.ranks.length),
-      }))
-      .sort((a, b) => b.keywordAppearances - a.keywordAppearances || a.avgRank - b.avgRank);
+    const detectedCompetitors = recomputeDetectedCompetitors(searchResults, campaign);
 
   report("complete", "スナップショット取得完了", 100);
 

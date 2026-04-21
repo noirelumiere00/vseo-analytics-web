@@ -14,6 +14,7 @@ import { calculateScoresFromData } from "./videoAnalysis";
 import { invokeLLM } from "./_core/llm";
 import { downloadAndSaveCover } from "./coverStorage";
 import { searchInstagramHashtag, type InstagramHashtagResult } from "./instagramScraper";
+import { detectPlatform } from "../shared/videoUrl";
 /**
  * TikTok CDNのcover_urlは署名付きで数日で失効する。
  * oEmbed APIでサムネURLを取得し、ローカルに保存して配信する。
@@ -733,6 +734,7 @@ export async function generateCampaignReport(
         videoUrl: v.videoUrl,
         coverUrl: v.coverUrl,
         description: v.description,
+        platform: v.platform || detectPlatform(v.videoUrl) || "tiktok",
         postedAt: v.createTime ? new Date(v.createTime * 1000).toISOString() : "",
         hashtags: (v as any).hashtags || [],
         duration: (v as any).duration || 0,

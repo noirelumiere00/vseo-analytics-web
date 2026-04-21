@@ -22,16 +22,16 @@ export function detectPlatform(url: string): VideoPlatform | null {
 export function extractVideoId(url: string): { platform: VideoPlatform; id: string } | null {
   const trimmed = url.trim();
 
-  // TikTok: /video/1234567890
-  const tiktokMatch = trimmed.match(/tiktok\.com\/@[\w.]+\/video\/(\d+)/);
+  // TikTok: /video/1234567890 or /photo/1234567890 (supports hyphenated usernames)
+  const tiktokMatch = trimmed.match(/tiktok\.com\/@[\w.-]+\/(?:video|photo)\/(\d+)/);
   if (tiktokMatch) return { platform: "tiktok", id: tiktokMatch[1] };
 
   // YouTube: watch?v=ID, shorts/ID, youtu.be/ID
   const ytMatch = trimmed.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/);
   if (ytMatch) return { platform: "youtube", id: ytMatch[1] };
 
-  // Instagram: /reel/CODE or /p/CODE
-  const igMatch = trimmed.match(/instagram\.com\/(?:reel|p)\/([\w-]+)/);
+  // Instagram: /reel/CODE, /reels/CODE, /p/CODE, or /tv/CODE
+  const igMatch = trimmed.match(/instagram\.com\/(?:reels?|p|tv)\/([\w-]+)/);
   if (igMatch) return { platform: "instagram", id: igMatch[1] };
 
   return null;

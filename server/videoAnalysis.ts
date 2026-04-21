@@ -51,7 +51,7 @@ async function fetchMetaKeywordsForVideos(
         if (vid) result.set(vid, keywords);
       }
     } catch (e) {
-      console.warn("[Analysis] Failed to fetch meta keywords:", (e as Error).message);
+      console.warn("[Analysis] Failed to fetch meta keywords:", e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -135,14 +135,14 @@ export async function analyzeVideoFromTikTok(
   tiktokVideo: TikTokVideo,
   options?: { skipSentiment?: boolean }
 ): Promise<{ dbVideoId: number; sentimentInput: SentimentInput }> {
-  console.log(`[Analysis] Analyzing TikTok video: ${tiktokVideo.id} by @${tiktokVideo.author.uniqueId}`);
+  console.log(`[Analysis] Analyzing TikTok video: ${tiktokVideo.id} by @${tiktokVideo.author?.uniqueId ?? "unknown"}`);
 
-  const videoUrl = `https://www.tiktok.com/@${tiktokVideo.author.uniqueId}/video/${tiktokVideo.id}`;
+  const videoUrl = `https://www.tiktok.com/@${tiktokVideo.author?.uniqueId ?? "unknown"}/video/${tiktokVideo.id}`;
 
   // 1. 画像をローカル保存（CDN URL期限切れ対策）
   const [localThumbnail, localAvatar] = await Promise.all([
     downloadAndSaveCover(videoUrl, tiktokVideo.coverUrl),
-    downloadAndSaveCover(`avatar:${tiktokVideo.author.uniqueId}`, tiktokVideo.author.avatarUrl),
+    downloadAndSaveCover(`avatar:${tiktokVideo.author?.uniqueId ?? "unknown"}`, tiktokVideo.author?.avatarUrl),
   ]);
 
   // 2. DBに動画レコードを作成（実データ）
@@ -160,9 +160,9 @@ export async function analyzeVideoFromTikTok(
     commentCount: tiktokVideo.stats.commentCount,
     shareCount: tiktokVideo.stats.shareCount,
     saveCount: tiktokVideo.stats.collectCount,
-    accountName: `@${tiktokVideo.author.uniqueId}`,
-    accountId: tiktokVideo.author.uniqueId,
-    followerCount: tiktokVideo.author.followerCount,
+    accountName: `@${tiktokVideo.author?.uniqueId ?? "unknown"}`,
+    accountId: tiktokVideo.author?.uniqueId ?? "unknown",
+    followerCount: tiktokVideo.author?.followerCount ?? 0,
     accountAvatarUrl: localAvatar,
     hashtags: tiktokVideo.hashtags,
     isAd: tiktokVideo.isAd ? 1 : 0,
@@ -815,7 +815,7 @@ export async function generateAnalysisReport(jobId: number): Promise<void> {
       }
     }
   } catch (e) {
-    console.warn("[Report] Failed to fetch TikTok meta keywords:", (e as Error).message);
+    console.warn("[Report] Failed to fetch TikTok meta keywords:", e instanceof Error ? e.message : String(e));
   }
 
   // 頻出ワードを抽出（出現回数でソート、OCR・音声データを優先）

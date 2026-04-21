@@ -155,7 +155,7 @@ export async function transcribeAudio(
     const response = await fetch(fullUrl, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${ENV.forgeApiKey}`,
+        Authorization: `Bearer ${ENV.forgeApiKey}`,
         "Accept-Encoding": "identity",
       },
       body: formData,

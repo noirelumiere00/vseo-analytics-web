@@ -261,10 +261,14 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 
   const client = new BedrockRuntimeClient({
     region: ENV.awsRegion,
-    credentials: {
-      accessKeyId: ENV.awsAccessKeyId,
-      secretAccessKey: ENV.awsSecretAccessKey,
-    },
+    ...(ENV.awsAccessKeyId && ENV.awsSecretAccessKey
+      ? {
+          credentials: {
+            accessKeyId: ENV.awsAccessKeyId,
+            secretAccessKey: ENV.awsSecretAccessKey,
+          },
+        }
+      : {}),
   });
 
   const modelId = ENV.bedrockModelId;

@@ -226,12 +226,16 @@ export async function startWorker() {
               painHypotheses: result.painHypotheses,
               progress: { message: "仮説を確認してください", percent: 45, phase: "awaiting_approval" },
             });
-          } catch (error) {
-            console.error(`[Worker] Pain analysis Phase 1 ${pJob.id} error:`, error instanceof Error ? error.message : error);
-            await db.updatePainAnalysis(pJob.id, {
-              status: "failed",
-              errorMessage: error instanceof Error ? error.message : "Unknown error",
-            });
+          } catch (error: any) {
+            const cause = error?.cause?.message || "";
+            const msg = (error instanceof Error ? error.message : "Unknown error").slice(0, 2000) + (cause ? `\nCause: ${cause}` : "");
+            console.error(`[Worker] Pain analysis Phase 1 ${pJob.id} error:`, msg);
+            try {
+              await db.updatePainAnalysis(pJob.id, {
+                status: "failed",
+                errorMessage: msg,
+              });
+            } catch { /* prevent double-failure loop */ }
           } finally {
             runningJobs.delete(jobKey);
           }
@@ -259,12 +263,16 @@ export async function startWorker() {
                 await db.updatePainAnalysis(pJob.id, { status: progress.phase as any || "verifying", progress });
               },
             );
-          } catch (error) {
-            console.error(`[Worker] Pain analysis Phase 2 ${pJob.id} error:`, error instanceof Error ? error.message : error);
-            await db.updatePainAnalysis(pJob.id, {
-              status: "failed",
-              errorMessage: error instanceof Error ? error.message : "Unknown error",
-            });
+          } catch (error: any) {
+            const cause = error?.cause?.message || "";
+            const msg = (error instanceof Error ? error.message : "Unknown error").slice(0, 2000) + (cause ? `\nCause: ${cause}` : "");
+            console.error(`[Worker] Pain analysis Phase 2 ${pJob.id} error:`, msg);
+            try {
+              await db.updatePainAnalysis(pJob.id, {
+                status: "failed",
+                errorMessage: msg,
+              });
+            } catch { /* prevent double-failure loop */ }
           } finally {
             runningJobs.delete(jobKey);
           }

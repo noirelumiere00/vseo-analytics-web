@@ -90,7 +90,7 @@ export async function fetchKeywordVolume(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Google Ads API failed (${res.status}): ${text}`);
+    throw new Error(`Google Ads API failed (${res.status}): ${text.replace(/customers\/\d+/g, "customers/***")}`);
   }
 
   const data = (await res.json()) as {

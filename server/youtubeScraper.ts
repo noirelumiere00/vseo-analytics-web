@@ -36,7 +36,7 @@ function parseDuration(iso: string): number {
 export async function fetchYouTubeVideos(videoIds: string[]): Promise<YouTubeVideoData[]> {
   const apiKey = ENV.youtubeApiKey;
   if (!apiKey) {
-    console.warn("[YouTube] YOUTUBE_API_KEY not set, skipping");
+    console.error("[YouTube] YOUTUBE_API_KEY not set — YouTube video metrics will not be collected. Set YOUTUBE_API_KEY env variable.");
     return [];
   }
   if (videoIds.length === 0) return [];
@@ -76,9 +76,9 @@ export async function fetchYouTubeVideos(videoIds: string[]): Promise<YouTubeVid
             title: snippet.title || "",
             description: snippet.description || "",
             coverUrl: snippet.thumbnails?.high?.url || snippet.thumbnails?.medium?.url || "",
-            viewCount: parseInt(stats.viewCount || "0", 10),
-            likeCount: parseInt(stats.likeCount || "0", 10),
-            commentCount: parseInt(stats.commentCount || "0", 10),
+            viewCount: Number(stats.viewCount) || 0,
+            likeCount: Number(stats.likeCount) || 0,
+            commentCount: Number(stats.commentCount) || 0,
             duration: parseDuration(content.duration || ""),
             publishedAt: snippet.publishedAt || "",
             channelTitle: snippet.channelTitle || "",

@@ -30,7 +30,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { CopyButton } from "@/components/CopyButton";
 import { useLocation } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 
@@ -46,8 +46,7 @@ export default function Dashboard() {
   const [lastFetchedAt, setLastFetchedAt] = useState<string>(() => new Date().toLocaleTimeString("ja-JP"));
   const utils = trpc.useUtils();
 
-  const { data, isLoading } = trpc.analysis.dashboard.useQuery(undefined, {
-    onSuccess: () => setLastFetchedAt(new Date().toLocaleTimeString("ja-JP")),
+  const { data, isLoading, dataUpdatedAt } = trpc.analysis.dashboard.useQuery(undefined, {
     refetchInterval: (query) => {
       const d = query.state.data as typeof data | undefined;
       if (!d) return false;
@@ -55,6 +54,10 @@ export default function Dashboard() {
       return hasActive ? 3000 : false;
     },
   });
+
+  useEffect(() => {
+    if (dataUpdatedAt) setLastFetchedAt(new Date().toLocaleTimeString("ja-JP"));
+  }, [dataUpdatedAt]);
 
   const { data: insights } = trpc.analysis.platformInsights.useQuery(undefined, {
     staleTime: 5 * 60 * 1000,

@@ -1058,7 +1058,7 @@ export default function AnalysisDetail() {
                 <CardContent>
                   <div className="flex justify-center gap-6 overflow-x-auto pb-4">
                     {searches.slice(0, 3).map((search: any, sessionIdx: number) => {
-                      const sessionVideos = (search.results || search.videos || []);
+                      const sessionVideos = search.results || search.videos || (search.videoIds || []).map((id: string) => ({ videoId: id }));
                       return (
                         <div key={sessionIdx} className="flex flex-col items-center gap-2 shrink-0">
                           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider" style={{ fontFamily: "'Space Mono', monospace" }}>
@@ -1140,7 +1140,7 @@ export default function AnalysisDetail() {
                                   {/* Tabs */}
                                   <div className="flex items-end shrink-0 border-b border-[#1a1a1a] py-[3px]">
                                     {["トップ", "動画", "ユーザー", "サウンド", "LIVE"].map((tab) => {
-                                      const isActive = tab === "動画";
+                                      const isActive = tab === "トップ";
                                       return (
                                         <div key={tab} className="flex-1 flex flex-col items-center gap-[2px]" style={{ minWidth: 0 }}>
                                           <span className={`text-[7.5px] whitespace-nowrap ${isActive ? "text-white font-bold" : "text-[#808080] font-medium"}`}>{tab}</span>
@@ -1162,7 +1162,7 @@ export default function AnalysisDetail() {
                                   {/* Video Grid */}
                                   <div className="flex-1 relative bg-[#080808] overflow-hidden">
                                     <div className="absolute inset-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch", scrollbarWidth: "none" }}>
-                                      <div className="grid grid-cols-3 gap-[1.5px]">
+                                      <div className="grid grid-cols-3 gap-[0.5px] bg-[#080808]">
                                         {sessionVideos.map((result: any, vi: number) => {
                                           const videoId = result.videoId || result.video_id;
                                           const video = videoMap.get(videoId);
@@ -1176,17 +1176,18 @@ export default function AnalysisDetail() {
                                           return (
                                             <div
                                               key={vi}
-                                              className="relative aspect-[9/14] overflow-visible"
+                                              className="relative aspect-[9/14] bg-black overflow-hidden"
                                               style={isAllSessions || isTwoSessions ? {
                                                 zIndex: 2,
+                                                overflow: "visible",
                                                 boxShadow: `0 0 0 1.5px ${borderColor}, 0 0 6px 1px ${borderColor}66`,
                                               } : undefined}
                                             >
                                               <div className="w-full h-full overflow-hidden">
                                                 {thumb ? (
-                                                  <img src={thumb} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                                  <img src={thumb} alt="" className="w-full h-full object-cover scale-[1.01]" loading="lazy" />
                                                 ) : (
-                                                  <div className="w-full h-full bg-gradient-to-br from-[#222] to-[#0a0a0a]" />
+                                                  <div className="w-full h-full bg-black" />
                                                 )}
                                               </div>
                                               <div className="absolute bottom-0 inset-x-0 h-[40%] bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />

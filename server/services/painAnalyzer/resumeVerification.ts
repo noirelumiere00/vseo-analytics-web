@@ -125,22 +125,10 @@ export async function executePainAnalysisPhase2(
     onProgress,
   );
 
-  // ── STEP 8: Genspark Markdown Export ──
-  await onProgress?.({ message: "Genspark用マークダウンを生成中...", percent: 96, phase: "proposing" });
-
-  const gensparkMarkdown = generateGensparkMarkdown(
-    row.productName,
-    segmentData.communities,
-    segmentData.segments,
-    kaiwaiCreatives,
-    approvedPains,
-  );
-
-  // ── Final: Save everything ──
+  // ── Final: Save core results ──
   await db.updatePainAnalysis(analysisId, {
     proposals,
     kaiwaiCreatives,
-    gensparkMarkdown,
     analysisResult: {
       ...analysisResult,
       totalPainsVerified: verificationData.verifiedPains.filter(p => p.verificationScore >= 0.3).length,
@@ -149,4 +137,19 @@ export async function executePainAnalysisPhase2(
     completedAt: new Date(),
     progress: { message: "分析が完了しました", percent: 100, phase: "completed" },
   });
+
+  // ── STEP 8: Genspark Markdown Export (best-effort) ──
+  try {
+    await onProgress?.({ message: "Genspark用マークダウンを生成中...", percent: 98, phase: "completed" });
+    const gensparkMarkdown = generateGensparkMarkdown(
+      row.productName,
+      segmentData.communities,
+      segmentData.segments,
+      kaiwaiCreatives,
+      approvedPains,
+    );
+    await db.updatePainAnalysis(analysisId, { gensparkMarkdown });
+  } catch (e) {
+    console.error(`[PainAnalyzer/Step8] Genspark markdown save failed (non-fatal):`, e instanceof Error ? e.message.slice(0, 500) : e);
+  }
 }

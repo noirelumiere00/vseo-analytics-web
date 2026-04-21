@@ -11,6 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { logBuffer } from "./logBuffer";
 import { generateCampaignReport, generateCampaignCsv } from "./campaignReport";
+import { refreshSearchResultsForKeywords, refreshBigKeywordResults, recomputeDetectedCompetitors } from "./campaignSnapshot";
 import { scrapeTikTokVideosByUrls } from "./tiktokScraper";
 import { fetchYouTubeVideos } from "./youtubeScraper";
 import { fetchInstagramPosts, fetchInstagramPostsWithFallback } from "./instagramScraper";
@@ -24,6 +25,7 @@ import { fetchGoogleTrends, aggregateVideosByDay, computeSearchCorrelation } fro
 import { fetchKeywordVolume, type KeywordVolumeData } from "./googleAds";
 import { generateProductionBrief } from "./videoAnalysis";
 import { localizeCovers } from "./coverStorage";
+import { nanoid } from "nanoid";
 
 // Google Trends取得＋キャッシュ保存ヘルパー
 async function fetchAndCacheTrends(jobId: number, keyword: string) {
@@ -117,17 +119,18 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
 
         const videosDataRaw = await db.getVideosByJobId(input.jobId);
 
-        // 重複排除: 同じvideoIdが複数レコード存在する場合、最新（id大）を優先
+        // 重複排除: 同じplatform+videoIdが複数レコード存在する場合、最新（id大）を優先
         const seen = new Map<string, typeof videosDataRaw[0]>();
         for (const v of videosDataRaw) {
-          const existing = seen.get(v.videoId);
+          const dedupKey = `${v.platform}:${v.videoId}`;
+          const existing = seen.get(dedupKey);
           if (!existing || v.id > existing.id) {
-            seen.set(v.videoId, v);
+            seen.set(dedupKey, v);
           }
         }
         const videosData = Array.from(seen.values());
@@ -255,7 +258,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
 
         // ユーザーレート制限: 1人2つまで同時分析可能
@@ -289,7 +292,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "ジョブが見つかりません" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         const videos = await db.getVideosByJobId(input.jobId);
         if (videos.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "動画データがありません" });
@@ -325,12 +328,12 @@ export const appRouter = router({
         productName: z.string().optional(),
         productUrl: z.string().optional(),
         customPrompt: z.string().optional(),
-        imageBase64: z.string().optional(),
+        imageBase64: z.string().max(5_000_000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (job.status !== "completed") throw new TRPCError({ code: "BAD_REQUEST", message: "分析が完了していません" });
 
         const report = await db.getAnalysisReportByJobId(input.jobId);
@@ -458,7 +461,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
 
         // DB の progress カラムから進捗を取得
@@ -499,7 +502,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         const videos = await db.getVideosByJobId(input.jobId);
         const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
@@ -717,7 +720,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
         if (job.status === "processing" || job.status === "queued") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "処理中またはキュー中のジョブは削除できません" });
@@ -757,7 +760,7 @@ export const appRouter = router({
     //       throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
     //     }
     //     if (job.userId !== ctx.user.id) {
-    //       throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+    //       throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
     //     }
     //
     //     // 分析データを取得
@@ -790,7 +793,7 @@ export const appRouter = router({
     //       throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
     //     }
     //     if (job.userId !== ctx.user.id) {
-    //       throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+    //       throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
     //     }
     //
     //     // トークンを生成（10分有効）
@@ -879,7 +882,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         if (job.status !== "processing" && job.status !== "queued") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "実行中またはキュー中のジョブのみキャンセルできます" });
@@ -897,7 +900,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getAnalysisJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         const report = await db.getAnalysisReportByJobId(input.jobId);
         const tripleSearch = await db.getTripleSearchResultByJobId(input.jobId);
@@ -1084,7 +1087,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
         if (job.status !== "failed" && job.status !== "pending") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "失敗または待機中のジョブのみ再実行できます" });
@@ -1103,7 +1106,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
         if (!job.keyword) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "キーワードが設定されていないジョブです" });
@@ -1157,7 +1160,7 @@ export const appRouter = router({
           throw new TRPCError({ code: "NOT_FOUND", message: "分析ジョブが見つかりません" });
         }
         if (job.userId !== ctx.user.id) {
-          throw new TRPCError({ code: "FORBIDDEN", message: "このジョブにアクセスする権限がありません" });
+          throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         }
         if (!job.keyword) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "キーワードが設定されていないジョブです" });
@@ -1221,7 +1224,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "ジョブが見つかりません" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         return job;
       }),
 
@@ -1230,7 +1233,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (job.status === "processing" || job.status === "queued") return { success: true, message: "既に実行中です" };
         if (job.status === "completed") return { success: true, message: "既に完了しています" };
 
@@ -1262,7 +1265,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (!job.scrapedVideos || job.scrapedVideos.length === 0) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "スクレイピングデータがありません" });
         }
@@ -1287,7 +1290,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         // DB の progress カラムから進捗を取得
         const progressInfo = (job as any).progress as { message?: string; percent?: number } | null;
@@ -1308,7 +1311,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
 
         const lines: string[] = [];
 
@@ -1358,7 +1361,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (job.status === "processing" || job.status === "queued") throw new TRPCError({ code: "BAD_REQUEST", message: "処理中またはキュー中のジョブは削除できません" });
         await db.deleteTrendDiscoveryJob(input.jobId);
         return { success: true };
@@ -1390,7 +1393,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await db.getTrendDiscoveryJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (job.status !== "processing" && job.status !== "queued") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "キャンセルできるのは実行中またはキュー中のジョブのみです" });
         }
@@ -1513,17 +1516,17 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1, "キャンペーン名を入力してください"),
         clientName: z.string().optional(),
-        keywords: z.array(z.string()).min(1, "キーワードを1つ以上入力してください"),
-        ownAccountIds: z.array(z.string()).optional(),
-        satelliteAccountIds: z.array(z.string()).optional(),
-        campaignHashtags: z.array(z.string()).optional(),
+        keywords: z.array(z.string().max(200)).min(1, "キーワードを1つ以上入力してください").max(50),
+        ownAccountIds: z.array(z.string().max(200)).max(50).optional(),
+        satelliteAccountIds: z.array(z.string().max(200)).max(50).optional(),
+        campaignHashtags: z.array(z.string().max(200)).max(50).optional(),
         competitors: z.array(z.object({
-          name: z.string(),
-          account_id: z.string(),
-        })).optional(),
-        brandKeywords: z.array(z.string()).optional(),
-        bigKeywords: z.array(z.string()).optional(),
-        targetCommunities: z.array(z.string()).optional(),
+          name: z.string().max(200),
+          account_id: z.string().max(200),
+        })).max(50).optional(),
+        brandKeywords: z.array(z.string().max(200)).max(50).optional(),
+        bigKeywords: z.array(z.string().max(200)).max(50).optional(),
+        targetCommunities: z.array(z.string().max(200)).max(50).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { extractTikTokUsername } = await import("@shared/tiktokUrl");
@@ -1580,21 +1583,22 @@ export const appRouter = router({
     update: protectedProcedure
       .input(z.object({
         id: z.number(),
-        name: z.string().min(1).optional(),
-        clientName: z.string().optional(),
-        keywords: z.array(z.string()).optional(),
-        ownAccountIds: z.array(z.string()).optional(),
-        satelliteAccountIds: z.array(z.string()).optional(),
-        ownVideoIds: z.array(z.string()).optional(),
-        ownVideoUrls: z.array(z.string()).optional(),
-        campaignHashtags: z.array(z.string()).optional(),
+        name: z.string().min(1).max(200).optional(),
+        clientName: z.string().max(200).optional(),
+        keywords: z.array(z.string().max(200)).max(50).optional(),
+        ownAccountIds: z.array(z.string().max(200)).max(50).optional(),
+        satelliteAccountIds: z.array(z.string().max(200)).max(50).optional(),
+        ownVideoIds: z.array(z.string().max(200)).max(50).optional(),
+        ownVideoUrls: z.array(z.string().url()).max(200).optional(),
+        ownVideoData: z.array(z.any()).max(200).optional(),
+        campaignHashtags: z.array(z.string().max(200)).max(50).optional(),
         competitors: z.array(z.object({
-          name: z.string(),
-          account_id: z.string(),
-        })).optional(),
-        brandKeywords: z.array(z.string()).optional(),
-        bigKeywords: z.array(z.string()).optional(),
-        targetCommunities: z.array(z.string()).optional(),
+          name: z.string().max(200),
+          account_id: z.string().max(200),
+        })).max(50).optional(),
+        brandKeywords: z.array(z.string().max(200)).max(50).optional(),
+        bigKeywords: z.array(z.string().max(200)).max(50).optional(),
+        targetCommunities: z.array(z.string().max(200)).max(50).optional(),
         targetViews: z.number().int().positive().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -1657,160 +1661,181 @@ export const appRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "施策動画URLが設定されていません" });
         }
 
-        // URLをプラットフォーム別にグループ分け
-        const tiktokUrls: string[] = [];
-        const youtubeIds: string[] = [];
-        const youtubeUrlMap = new Map<string, string>();
-        const instagramUrls: string[] = [];
-
-        for (const url of urls) {
-          const platform = detectPlatform(url);
-          if (platform === "tiktok") {
-            tiktokUrls.push(url);
-          } else if (platform === "youtube") {
-            const extracted = extractVideoId(url);
-            if (extracted) {
-              youtubeIds.push(extracted.id);
-              youtubeUrlMap.set(extracted.id, url);
-            }
-          } else if (platform === "instagram") {
-            instagramUrls.push(url);
-          }
-        }
-
-        // 既存データを保持用Mapに読み込む（スクレイプ失敗時のデータ消失を防止）
-        const existingData = new Map<string, any>();
-        for (const v of ((campaign as any).ownVideoData || []) as any[]) {
-          if (v.videoUrl) existingData.set(v.videoUrl, v);
-        }
-
-        // TikTok — 成功分のみ上書き
-        if (tiktokUrls.length > 0) {
-          const scraped = await scrapeTikTokVideosByUrls(tiktokUrls);
-          for (const [url, v] of scraped) {
-            existingData.set(url, { ...v, platform: "tiktok" });
-          }
-        }
-
-        // YouTube — 成功分のみ上書き
-        if (youtubeIds.length > 0) {
-          const ytVideos = await fetchYouTubeVideos(youtubeIds);
-          for (const v of ytVideos) {
-            const originalUrl = youtubeUrlMap.get(v.videoId) || v.videoUrl;
-            existingData.set(originalUrl, {
-              platform: "youtube",
-              videoId: v.videoId,
-              videoUrl: originalUrl,
-              coverUrl: v.coverUrl,
-              description: v.description,
-              title: v.title,
-              hashtags: [],
-              duration: v.duration,
-              createTime: v.publishedAt ? Math.floor(new Date(v.publishedAt).getTime() / 1000) : 0,
-              authorUniqueId: v.channelTitle,
-              authorNickname: v.channelTitle,
-              authorAvatarUrl: "",
-              followerCount: 0,
-              viewCount: v.viewCount,
-              likeCount: v.likeCount,
-              commentCount: v.commentCount,
-              shareCount: 0,
-              saveCount: 0,
-              channelTitle: v.channelTitle,
-              publishedAt: v.publishedAt,
-            });
-          }
-        }
-
-        // Instagram — 成功分のみ上書き
-        if (instagramUrls.length > 0) {
-          const igPosts = await fetchInstagramPostsWithFallback(instagramUrls);
-          // shortcodeベースで元URLにマッチ（Apifyが /p/ 形式で返すため /reels/ 等と不一致になる対策）
-          const igUrlByShortcode = new Map<string, string>();
-          for (const u of instagramUrls) {
-            const extracted = extractVideoId(u);
-            if (extracted) igUrlByShortcode.set(extracted.id, u);
-          }
-          for (const p of igPosts) {
-            const originalUrl = igUrlByShortcode.get(p.videoId) || p.videoUrl;
-            existingData.set(originalUrl, {
-              platform: "instagram",
-              videoId: p.videoId,
-              videoUrl: originalUrl,
-              coverUrl: p.coverUrl,
-              description: p.caption,
-              caption: p.caption,
-              hashtags: (p.caption.match(/#[\w\u3000-\u9FFF]+/g) || []).map((t: string) => t.replace("#", "")),
-              duration: 0,
-              createTime: p.publishedAt ? Math.floor(new Date(p.publishedAt).getTime() / 1000) : 0,
-              authorUniqueId: p.ownerUsername,
-              authorNickname: p.ownerUsername,
-              authorAvatarUrl: "",
-              followerCount: 0,
-              viewCount: p.viewCount,
-              threeSecViewCount: p.threeSecViewCount || 0,
-              likeCount: p.likeCount,
-              commentCount: p.commentCount,
-              shareCount: 0,
-              saveCount: 0,
-              ownerUsername: p.ownerUsername,
-              publishedAt: p.publishedAt,
-              musicInfo: p.musicInfo || null,
-            });
-          }
-        }
-
-        // ownVideoUrlsから削除されたURLをクリーンアップ
-        const urlSet = new Set(urls);
-        for (const key of existingData.keys()) {
-          if (!urlSet.has(key)) existingData.delete(key);
-        }
-
-        const ownVideoData = [...existingData.values()];
-
-        // サムネイルをローカル保存（CDN URL期限切れ対策）
-        await localizeCovers(ownVideoData);
-
-        // 自動でハッシュタグを抽出してcampaignHashtagsにマージ（TikTokのみ）
-        const existingHashtags = new Set((campaign.campaignHashtags || []).map(t => t.toLowerCase().replace(/^#/, "")));
-        const newHashtags: string[] = [];
-        for (const v of ownVideoData) {
-          if (v.platform !== "tiktok") continue;
-          for (const tag of (v.hashtags || [])) {
-            const normalized = tag.toLowerCase().replace(/^#/, "");
-            if (!existingHashtags.has(normalized)) {
-              existingHashtags.add(normalized);
-              newHashtags.push(tag);
-            }
-          }
-        }
-
-        const mergedHashtags = [...(campaign.campaignHashtags || []), ...newHashtags];
-        await db.updateCampaign(input.campaignId, {
-          ownVideoData,
-          campaignHashtags: mergedHashtags,
-        });
-
-        // ownVideoData更新後、レポートを自動再生成
-        if (campaign.measurementSnapshotId) {
+        // バックグラウンドでスクレイプ実行（Cloudflare 100秒タイムアウト回避）
+        const campaignId = input.campaignId;
+        (async () => {
           try {
-            const updated = await db.getCampaignById(input.campaignId);
-            if (updated) {
-              const bs = updated.baselineSnapshotId
-                ? await db.getCampaignSnapshotById(updated.baselineSnapshotId)
-                : null;
-              const ms = await db.getCampaignSnapshotById(updated.measurementSnapshotId);
-              if (ms?.status === "completed") {
-                const reportData = await generateCampaignReport(updated, bs, ms);
-                await db.upsertCampaignReport(reportData);
+            const cam = await db.getCampaignById(campaignId);
+            if (!cam) return;
+
+            // URLをプラットフォーム別にグループ分け
+            const tiktokUrls: string[] = [];
+            const youtubeIds: string[] = [];
+            const youtubeUrlMap = new Map<string, string>();
+            const instagramUrls: string[] = [];
+
+            for (const url of urls) {
+              const platform = detectPlatform(url);
+              if (platform === "tiktok") {
+                tiktokUrls.push(url);
+              } else if (platform === "youtube") {
+                const extracted = extractVideoId(url);
+                if (extracted) {
+                  youtubeIds.push(extracted.id);
+                  youtubeUrlMap.set(extracted.id, url);
+                }
+              } else if (platform === "instagram") {
+                instagramUrls.push(url);
               }
             }
-          } catch (e) {
-            console.error(`[scrapeVideoUrls] Auto-report regen failed:`, e);
-          }
-        }
 
-        return { videoCount: ownVideoData.length, newHashtags };
+            // 既存データを保持用Mapに読み込む（スクレイプ失敗時のデータ消失を防止）
+            // IG: 空データ（videoId無し＝未取得）はスキップして再取得を促す
+            const existingData = new Map<string, any>();
+            for (const v of ((cam as any).ownVideoData || []) as any[]) {
+              if (!v.videoUrl) continue;
+              if (v.platform === "instagram" && !v.videoId) continue; // 未取得のIG空データをスキップ
+              existingData.set(v.videoUrl, v);
+            }
+
+            // TikTok — 成功分のみ上書き
+            if (tiktokUrls.length > 0) {
+              const scraped = await scrapeTikTokVideosByUrls(tiktokUrls);
+              for (const [url, v] of scraped) {
+                existingData.set(url, { ...v, platform: "tiktok" });
+              }
+            }
+
+            // YouTube — 成功分のみ上書き
+            if (youtubeIds.length > 0) {
+              const ytVideos = await fetchYouTubeVideos(youtubeIds);
+              for (const v of ytVideos) {
+                const originalUrl = youtubeUrlMap.get(v.videoId) || v.videoUrl;
+                existingData.set(originalUrl, {
+                  platform: "youtube",
+                  videoId: v.videoId,
+                  videoUrl: originalUrl,
+                  coverUrl: v.coverUrl,
+                  description: v.description,
+                  title: v.title,
+                  hashtags: [],
+                  duration: v.duration,
+                  createTime: v.publishedAt ? Math.floor(new Date(v.publishedAt).getTime() / 1000) : 0,
+                  authorUniqueId: v.channelTitle,
+                  authorNickname: v.channelTitle,
+                  authorAvatarUrl: "",
+                  followerCount: 0,
+                  viewCount: v.viewCount,
+                  likeCount: v.likeCount,
+                  commentCount: v.commentCount,
+                  shareCount: 0,
+                  saveCount: 0,
+                  channelTitle: v.channelTitle,
+                  publishedAt: v.publishedAt,
+                });
+              }
+            }
+
+            // Instagram — 成功分のみ上書き
+            if (instagramUrls.length > 0) {
+              const igPosts = await fetchInstagramPostsWithFallback(instagramUrls);
+              const igUrlByShortcode = new Map<string, string>();
+              for (const u of instagramUrls) {
+                const extracted = extractVideoId(u);
+                if (extracted) igUrlByShortcode.set(extracted.id, u);
+              }
+              // shortcodeベースで既存の古いキーも削除（パラメータ違いの重複防止）
+              for (const p of igPosts) {
+                for (const [key, val] of existingData) {
+                  if (val.platform === "instagram" && val.videoId === p.videoId) {
+                    existingData.delete(key);
+                  }
+                }
+              }
+              for (const p of igPosts) {
+                const originalUrl = igUrlByShortcode.get(p.videoId) || p.videoUrl;
+                existingData.set(originalUrl, {
+                  platform: "instagram",
+                  videoId: p.videoId,
+                  videoUrl: originalUrl,
+                  coverUrl: p.coverUrl,
+                  description: p.caption,
+                  caption: p.caption,
+                  hashtags: (p.caption.match(/#[\w\u3000-\u9FFF]+/g) || []).map((t: string) => t.replace("#", "")),
+                  duration: 0,
+                  createTime: p.publishedAt ? Math.floor(new Date(p.publishedAt).getTime() / 1000) : 0,
+                  authorUniqueId: p.ownerUsername,
+                  authorNickname: p.ownerUsername,
+                  authorAvatarUrl: "",
+                  followerCount: 0,
+                  viewCount: p.viewCount,
+                  threeSecViewCount: p.threeSecViewCount || 0,
+                  likeCount: p.likeCount,
+                  commentCount: p.commentCount,
+                  shareCount: 0,
+                  saveCount: 0,
+                  ownerUsername: p.ownerUsername,
+                  publishedAt: p.publishedAt,
+                  musicInfo: p.musicInfo || null,
+                });
+              }
+            }
+
+            // ownVideoUrlsから削除されたURLをクリーンアップ
+            const urlSet = new Set(urls);
+            for (const key of existingData.keys()) {
+              if (!urlSet.has(key)) existingData.delete(key);
+            }
+
+            const ownVideoData = [...existingData.values()];
+
+            // サムネイルをローカル保存（CDN URL期限切れ対策）
+            await localizeCovers(ownVideoData);
+
+            // 自動でハッシュタグを抽出してcampaignHashtagsにマージ（TikTokのみ）
+            const existingHashtags = new Set((cam.campaignHashtags || []).map(t => t.toLowerCase().replace(/^#/, "")));
+            const newHashtags: string[] = [];
+            for (const v of ownVideoData) {
+              if (v.platform !== "tiktok") continue;
+              for (const tag of (v.hashtags || [])) {
+                const normalized = tag.toLowerCase().replace(/^#/, "");
+                if (!existingHashtags.has(normalized)) {
+                  existingHashtags.add(normalized);
+                  newHashtags.push(tag);
+                }
+              }
+            }
+
+            const mergedHashtags = [...(cam.campaignHashtags || []), ...newHashtags];
+            await db.updateCampaign(campaignId, {
+              ownVideoData,
+              campaignHashtags: mergedHashtags,
+            });
+            console.log(`[scrapeVideoUrls] Campaign ${campaignId}: completed ${ownVideoData.length} videos`);
+          } catch (e) {
+            console.error(`[scrapeVideoUrls] Campaign ${campaignId} background scrape failed:`, e);
+            // Persist error info so the frontend can surface it
+            try {
+              const existing = await db.getCampaignById(campaignId);
+              const existingOwnVideoData = (existing as any)?.ownVideoData || [];
+              await db.updateCampaign(campaignId, {
+                ownVideoData: [
+                  ...existingOwnVideoData,
+                  {
+                    _scrapeError: true,
+                    errorMessage: e instanceof Error ? e.message : String(e),
+                    errorAt: new Date().toISOString(),
+                  },
+                ],
+              });
+            } catch (dbErr) {
+              console.error(`[scrapeVideoUrls] Campaign ${campaignId} failed to persist error:`, dbErr);
+            }
+          }
+        })();
+
+        // すぐレスポンスを返す
+        return { videoCount: urls.length, started: true };
       }),
 
     // 検出された競合をcampaign.competitorsにマージ
@@ -1935,7 +1960,109 @@ export const appRouter = router({
         if (!measurementSnapshot) {
           throw new TRPCError({ code: "NOT_FOUND", message: "スナップショットが見つかりません" });
         }
+
+        // ---- キーワード差分検出 & スナップショット部分更新 ----
+        const currentKeywords = campaign.keywords || [];
+        const currentBigKeywords = ((campaign as any).bigKeywords || []) as string[];
+
+        // measurement snapshot の searchResults キーから既存KWを抽出
+        const snapshotKeywords = Object.keys(measurementSnapshot.searchResults || {});
+        const snapshotKeywordsSet = new Set(snapshotKeywords);
+        const currentKeywordsSet = new Set(currentKeywords);
+
+        const addedKeywords = currentKeywords.filter(kw => !snapshotKeywordsSet.has(kw));
+        const removedKeywords = snapshotKeywords.filter(kw => !currentKeywordsSet.has(kw));
+        const unchangedKeywords = currentKeywords.filter(kw => snapshotKeywordsSet.has(kw));
+
+        // bigKeywords 差分
+        const snapshotBigKeywords = Object.keys(measurementSnapshot.bigKeywordResults || {});
+        const snapshotBigKeywordsSet = new Set(snapshotBigKeywords);
+        const currentBigKeywordsSet = new Set(currentBigKeywords);
+        const addedBigKeywords = currentBigKeywords.filter(kw => !snapshotBigKeywordsSet.has(kw));
+        const removedBigKeywords = snapshotBigKeywords.filter(kw => !currentBigKeywordsSet.has(kw));
+
+        const hasKeywordChanges = addedKeywords.length > 0 || removedKeywords.length > 0;
+        const hasBigKeywordChanges = addedBigKeywords.length > 0 || removedBigKeywords.length > 0;
+
+        // スナップショット更新が必要な場合のみ実行
+        if (hasKeywordChanges || hasBigKeywordChanges) {
+          console.log(`[generateReport] KW差分検出 — 追加: [${addedKeywords.join(", ")}] 削除: [${removedKeywords.join(", ")}] ビッグKW追加: [${addedBigKeywords.join(", ")}] 削除: [${removedBigKeywords.join(", ")}]`);
+
+          // 更新対象のスナップショットIDリスト（measurement + baseline）
+          const snapshotIdsToUpdate: number[] = [measurementSnapshot.id];
+          if (baselineSnapshot) snapshotIdsToUpdate.push(baselineSnapshot.id);
+
+          for (const snapId of snapshotIdsToUpdate) {
+            const snap = snapId === measurementSnapshot.id
+              ? measurementSnapshot
+              : baselineSnapshot!;
+            const updatedSearchResults = { ...(snap.searchResults || {}) };
+
+            // 削除KWを除外
+            for (const kw of removedKeywords) {
+              delete updatedSearchResults[kw];
+            }
+
+            // 新規KWの検索結果を取得
+            if (addedKeywords.length > 0) {
+              const { searchResults: newResults } = await refreshSearchResultsForKeywords(addedKeywords, campaign);
+              Object.assign(updatedSearchResults, newResults);
+            }
+
+            // bigKeywordResults 更新
+            const updatedBigKeywordResults = { ...(snap.bigKeywordResults || {}) };
+            for (const kw of removedBigKeywords) {
+              delete updatedBigKeywordResults[kw];
+            }
+            if (addedBigKeywords.length > 0) {
+              const newBkResults = await refreshBigKeywordResults(addedBigKeywords, campaign);
+              Object.assign(updatedBigKeywordResults, newBkResults);
+            }
+
+            // 競合自動検出を再計算
+            const updatedDetectedCompetitors = recomputeDetectedCompetitors(updatedSearchResults, campaign);
+
+            // DB更新
+            await db.updateCampaignSnapshot(snapId, {
+              searchResults: updatedSearchResults,
+              bigKeywordResults: Object.keys(updatedBigKeywordResults).length > 0 ? updatedBigKeywordResults : undefined,
+              detectedCompetitors: updatedDetectedCompetitors,
+            });
+
+            // メモリ上のオブジェクトも更新（この後のレポート生成で使う）
+            (snap as any).searchResults = updatedSearchResults;
+            (snap as any).bigKeywordResults = Object.keys(updatedBigKeywordResults).length > 0 ? updatedBigKeywordResults : undefined;
+            (snap as any).detectedCompetitors = updatedDetectedCompetitors;
+          }
+        }
+
+        // ---- レポート生成 ----
+        const existingReport = await db.getCampaignReportByCampaignId(input.campaignId);
+
         const reportData = await generateCampaignReport(campaign, baselineSnapshot, measurementSnapshot);
+
+        // 既存レポートがあれば、変更のないKWの positionReport/sovReport を保持（手動編集を守る）
+        // 追加・変更されたKWは新たに生成されたデータを使う
+        if (existingReport) {
+          const unchangedKeywordsSet = new Set(unchangedKeywords);
+
+          if (existingReport.positionReport && reportData.positionReport) {
+            const oldArr = existingReport.positionReport as typeof reportData.positionReport;
+            const oldByKw = new Map(oldArr.map(p => [p.keyword, p]));
+            reportData.positionReport = reportData.positionReport.map(p =>
+              unchangedKeywordsSet.has(p.keyword) && oldByKw.has(p.keyword) ? oldByKw.get(p.keyword)! : p
+            );
+          }
+          if (existingReport.sovReport && reportData.sovReport) {
+            const oldSov = existingReport.sovReport as typeof reportData.sovReport;
+            for (const kw of Object.keys(reportData.sovReport)) {
+              if (unchangedKeywordsSet.has(kw) && oldSov[kw]) {
+                reportData.sovReport[kw] = oldSov[kw];
+              }
+            }
+          }
+        }
+
         await db.upsertCampaignReport(reportData);
         await db.updateCampaign(input.campaignId, { status: "report_ready" });
         return { success: true };
@@ -1969,6 +2096,7 @@ export const appRouter = router({
           owner_name: z.string().optional(),
           genre: z.enum(["recommend", "howto", "entertainment", "negative", "other"]).optional(),
           tiktok_labels: z.array(z.enum(["promotion", "paid_partnership", "aigc"])).optional(),
+          rank: z.number().optional(),
         }),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2001,6 +2129,24 @@ export const appRouter = router({
         if (input.changes.owner_name !== undefined) slot.owner_name = input.changes.owner_name;
         if (input.changes.genre !== undefined) slot.genre = input.changes.genre;
         if (input.changes.tiktok_labels !== undefined) slot.tiktok_labels = input.changes.tiktok_labels;
+        if (input.changes.rank !== undefined) {
+          const oldRank = slot.rank;
+          const newRank = input.changes.rank;
+          slot.rank = newRank;
+          // Shift other slots' ranks to accommodate the change
+          for (const s of slots) {
+            if (s === slot) continue;
+            if (oldRank < newRank) {
+              // Moved down: shift slots in (oldRank, newRank] up by 1
+              if (s.rank > oldRank && s.rank <= newRank) s.rank--;
+            } else if (oldRank > newRank) {
+              // Moved up: shift slots in [newRank, oldRank) down by 1
+              if (s.rank >= newRank && s.rank < oldRank) s.rank++;
+            }
+          }
+          // Re-sort slots by rank
+          slots.sort((a: any, b: any) => a.rank - b.rank);
+        }
 
         // Clear owner_detail/owner_name when not applicable
         if (slot.owner !== "own") {
@@ -2112,6 +2258,7 @@ export const appRouter = router({
           owner_name: z.string().optional(),
           genre: z.enum(["recommend", "howto", "entertainment", "negative", "other"]).optional(),
           ig_labels: z.array(z.enum(["promotion", "paid_partnership", "aigc"])).optional(),
+          position: z.number().optional(),
         }),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2145,6 +2292,22 @@ export const appRouter = router({
         if (input.changes.owner_name !== undefined) post.owner_name = input.changes.owner_name;
         if (input.changes.genre !== undefined) post.genre = input.changes.genre;
         if (input.changes.ig_labels !== undefined) post.ig_labels = input.changes.ig_labels;
+
+        // Position change: shift other posts and re-sort
+        if (input.changes.position !== undefined) {
+          const oldPos = post.position;
+          const newPos = input.changes.position;
+          post.position = newPos;
+          for (const p of posts) {
+            if (p === post) continue;
+            if (oldPos < newPos) {
+              if (p.position > oldPos && p.position <= newPos) p.position--;
+            } else if (oldPos > newPos) {
+              if (p.position >= newPos && p.position < oldPos) p.position++;
+            }
+          }
+          posts.sort((a: any, b: any) => a.position - b.position);
+        }
 
         if (post.owner !== "own") {
           delete post.owner_detail;
@@ -2285,7 +2448,7 @@ export const appRouter = router({
         }
         if (input.enabled) {
           const existing = await db.getShareToken(input.campaignId);
-          const token = existing?.shareToken || crypto.randomUUID().replace(/-/g, "");
+          const token = existing?.shareToken || nanoid(32);
           await db.setShareToken(input.campaignId, token);
           return { enabled: true, token };
         } else {
@@ -2308,7 +2471,7 @@ export const appRouter = router({
 
     // 公開レポート取得（認証不要）
     getPublicReport: publicProcedure
-      .input(z.object({ token: z.string().min(1) }))
+      .input(z.object({ token: z.string().min(1).max(256) }))
       .query(async ({ input }) => {
         const result = await db.getReportByShareToken(input.token);
         if (!result) {
@@ -2319,7 +2482,7 @@ export const appRouter = router({
 
     // 公開日次メトリクス取得（認証不要）
     getPublicDailyMetrics: publicProcedure
-      .input(z.object({ token: z.string().min(1) }))
+      .input(z.object({ token: z.string().min(1).max(256) }))
       .query(async ({ input }) => {
         return db.getDailyMetricsByShareToken(input.token);
       }),
@@ -2358,7 +2521,7 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         const row = await db.getContextAnalysis(input.analysisId);
         if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
-        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権がありません" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         return {
           id: row.id,
           productName: row.productName,
@@ -2435,7 +2598,7 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         const row = await db.getPainAnalysis(input.analysisId);
         if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
-        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         return {
           productName: row.productName,
           productFeatures: row.productFeatures,
@@ -2460,7 +2623,7 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const row = await db.getPainAnalysis(input.analysisId);
         if (!row) throw new TRPCError({ code: "NOT_FOUND" });
-        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         if (row.status !== "awaiting_approval") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "この分析は承認待ち状態ではありません" });
         }
@@ -2482,7 +2645,7 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         const row = await db.getPainAnalysis(input.analysisId);
         if (!row) throw new TRPCError({ code: "NOT_FOUND" });
-        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
         return {
           id: row.id,
           productName: row.productName,

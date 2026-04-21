@@ -11,6 +11,7 @@ import { authLimiter, registerLimiter, forgotPasswordLimiter } from "./rateLimit
 import { sendPasswordResetEmail } from "./email";
 import { getGoogleAuthUrl, exchangeCodeForTokens, getGoogleUserInfo } from "./google";
 import { SignJWT, jwtVerify } from "jose";
+import { z } from "zod";
 
 /** メールドメインが無制限対象か判定 */
 function isUnlimitedDomain(email: string): boolean {
@@ -112,8 +113,7 @@ export function registerOAuthRoutes(app: Express) {
       const { email, name, password, tosAccepted } = req.body ?? {};
 
       // Validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!email || typeof email !== "string" || !emailRegex.test(email) || email.length > 320) {
+      if (!email || typeof email !== "string" || !z.string().email().max(320).safeParse(email).success) {
         res.status(400).json({ error: "有効なメールアドレスを入力してください" });
         return;
       }

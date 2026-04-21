@@ -25,6 +25,9 @@ export default function CampaignList() {
       campaignsQuery.refetch();
       toast.success("キャンペーンを削除しました");
     },
+    onError: (err: any) => {
+      toast.error("キャンペーンの削除に失敗しました");
+    },
   });
 
   return (
@@ -49,6 +52,10 @@ export default function CampaignList() {
               <div key={i} className="h-24 bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
+        )}
+
+        {campaignsQuery.isError && (
+          <div className="p-8 text-center text-red-500">データの取得に失敗しました。再読み込みしてください。</div>
         )}
 
         {campaignsQuery.data?.length === 0 && (

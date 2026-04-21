@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { usePageTitle } from "@/hooks/usePageTitle";
 import { trpc } from "@/lib/trpc";
-import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink, Target } from "lucide-react";
+import { Camera, FileText, ArrowLeft, Loader2, CheckCircle2, XCircle, Clock, Video, UserPlus, Plus, Check, X, RefreshCw, ExternalLink, Target, Pencil } from "lucide-react";
 import { useLocation, useParams } from "wouter";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -79,8 +79,14 @@ export default function CampaignDetail() {
 
   const scrapeVideosMutation = trpc.campaign.scrapeVideoUrls.useMutation({
     onSuccess: (data) => {
-      toast.success(`${data.videoCount}件の動画データを取得しました${data.newHashtags.length > 0 ? `（${data.newHashtags.length}件の新規ハッシュタグを追加）` : ""}`);
-      detailQuery.refetch();
+      toast.success(`${data.videoCount}件の動画データ取得を開始しました（バックグラウンドで実行中）`);
+      // Poll for completion - refetch every 5s for up to 2 minutes
+      let attempts = 0;
+      const pollInterval = setInterval(() => {
+        detailQuery.refetch();
+        attempts++;
+        if (attempts >= 24) clearInterval(pollInterval); // Stop after 2 min
+      }, 5000);
     },
     onError: handleTrpcError,
   });
@@ -115,12 +121,36 @@ export default function CampaignDetail() {
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const updateCampaignMutation = trpc.campaign.update.useMutation({
     onSuccess: () => {
-      toast.success("目標再生数を保存しました");
       detailQuery.refetch();
       setIsEditingTarget(false);
+      setEditingKeywordField(null);
     },
     onError: handleTrpcError,
   });
+
+  // キーワードインライン編集
+  const [editingKeywordField, setEditingKeywordField] = useState<string | null>(null);
+  const [editingKeywordText, setEditingKeywordText] = useState("");
+
+  const startEditKeyword = (fieldName: string, values: string[]) => {
+    setEditingKeywordField(fieldName);
+    setEditingKeywordText(values.join("\n"));
+  };
+
+  const saveKeyword = (fieldName: string, required: boolean, hashtagMode: boolean) => {
+    let lines = editingKeywordText.split("\n").map(s => s.trim()).filter(Boolean);
+    if (required && lines.length === 0) {
+      toast.error("最低1件は入力してください");
+      return;
+    }
+    if (hashtagMode) {
+      lines = lines.map(l => l.startsWith("#") ? l : `#${l}`);
+    }
+    updateCampaignMutation.mutate(
+      { id: campaignId, [fieldName]: lines },
+      { onSuccess: () => toast.success("キーワードを保存しました") },
+    );
+  };
 
   const startEditTarget = () => {
     setTargetViewsField(campaign?.targetViews ? String(campaign.targetViews) : currentTotalViews > 0 ? String(currentTotalViews) : "");
@@ -134,7 +164,10 @@ export default function CampaignDetail() {
       toast.error("目標再生数は正の整数で入力してください");
       return;
     }
-    updateCampaignMutation.mutate({ id: campaignId, targetViews: parsed });
+    updateCampaignMutation.mutate(
+      { id: campaignId, targetViews: parsed },
+      { onSuccess: () => toast.success("目標再生数を保存しました") },
+    );
   };
 
   // レポート生成ダイアログ
@@ -255,14 +288,45 @@ export default function CampaignDetail() {
               <CardTitle className="text-base">キャンペーン設定</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+              {/* 計測キーワード (required) */}
               <div>
-                <span className="text-muted-foreground">計測キーワード:</span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {(campaign.keywords as string[])?.map((kw, i) => (
-                    <Badge key={i} variant="secondary">{kw}</Badge>
-                  ))}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">計測キーワード:</span>
+                  {editingKeywordField !== "keywords" && (
+                    <button onClick={() => startEditKeyword("keywords", (campaign.keywords as string[]) || [])} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
+                {editingKeywordField === "keywords" ? (
+                  <div className="mt-1 space-y-1.5">
+                    <Textarea
+                      value={editingKeywordText}
+                      onChange={e => setEditingKeywordText(e.target.value)}
+                      placeholder="1行に1キーワード"
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => saveKeyword("keywords", true, false)} disabled={updateCampaignMutation.isPending}>
+                        {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingKeywordField(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(campaign.keywords as string[])?.map((kw, i) => (
+                      <Badge key={i} variant="secondary">{kw}</Badge>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              {/* 自社アカウント (read-only, edited in the video section) */}
               {(campaign.ownAccountIds as string[])?.length > 0 && (
                 <div>
                   <span className="text-muted-foreground">自社アカウント:</span>
@@ -273,26 +337,172 @@ export default function CampaignDetail() {
                   </div>
                 </div>
               )}
-              {(campaign as any).bigKeywords?.length > 0 && (
-                <div>
+
+              {/* ビッグキーワード */}
+              <div>
+                <div className="flex items-center gap-1.5">
                   <span className="text-muted-foreground">ビッグキーワード:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {((campaign as any).bigKeywords as string[]).map((bk, i) => (
-                      <Badge key={i} variant="secondary">{bk}</Badge>
-                    ))}
-                  </div>
+                  {editingKeywordField !== "bigKeywords" && (
+                    <button onClick={() => startEditKeyword("bigKeywords", ((campaign as any).bigKeywords as string[]) || [])} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
-              )}
-              {(campaign.campaignHashtags as string[])?.length > 0 && (
-                <div>
-                  <span className="text-muted-foreground">ハッシュタグ:</span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(campaign.campaignHashtags as string[]).map((tag, i) => (
-                      <Badge key={i} variant="secondary">{tag}</Badge>
-                    ))}
+                {editingKeywordField === "bigKeywords" ? (
+                  <div className="mt-1 space-y-1.5">
+                    <Textarea
+                      value={editingKeywordText}
+                      onChange={e => setEditingKeywordText(e.target.value)}
+                      placeholder="1行に1キーワード"
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => saveKeyword("bigKeywords", false, false)} disabled={updateCampaignMutation.isPending}>
+                        {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingKeywordField(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {((campaign as any).bigKeywords as string[])?.length > 0
+                      ? ((campaign as any).bigKeywords as string[]).map((bk, i) => (
+                          <Badge key={i} variant="secondary">{bk}</Badge>
+                        ))
+                      : <span className="text-muted-foreground text-xs">未設定</span>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* 施策ハッシュタグ */}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">施策ハッシュタグ:</span>
+                  {editingKeywordField !== "campaignHashtags" && (
+                    <button onClick={() => startEditKeyword("campaignHashtags", (campaign.campaignHashtags as string[]) || [])} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
-              )}
+                {editingKeywordField === "campaignHashtags" ? (
+                  <div className="mt-1 space-y-1.5">
+                    <Textarea
+                      value={editingKeywordText}
+                      onChange={e => setEditingKeywordText(e.target.value)}
+                      placeholder="1行に1ハッシュタグ（#は自動付与）"
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => saveKeyword("campaignHashtags", false, true)} disabled={updateCampaignMutation.isPending}>
+                        {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingKeywordField(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(campaign.campaignHashtags as string[])?.length > 0
+                      ? (campaign.campaignHashtags as string[]).map((tag, i) => (
+                          <Badge key={i} variant="secondary">{tag}</Badge>
+                        ))
+                      : <span className="text-muted-foreground text-xs">未設定</span>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* ブランドキーワード */}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">ブランドキーワード:</span>
+                  {editingKeywordField !== "brandKeywords" && (
+                    <button onClick={() => startEditKeyword("brandKeywords", ((campaign as any).brandKeywords as string[]) || [])} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                {editingKeywordField === "brandKeywords" ? (
+                  <div className="mt-1 space-y-1.5">
+                    <Textarea
+                      value={editingKeywordText}
+                      onChange={e => setEditingKeywordText(e.target.value)}
+                      placeholder="1行に1キーワード"
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => saveKeyword("brandKeywords", false, false)} disabled={updateCampaignMutation.isPending}>
+                        {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingKeywordField(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {((campaign as any).brandKeywords as string[])?.length > 0
+                      ? ((campaign as any).brandKeywords as string[]).map((bk, i) => (
+                          <Badge key={i} variant="secondary">{bk}</Badge>
+                        ))
+                      : <span className="text-muted-foreground text-xs">未設定</span>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* ターゲット界隈 */}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">ターゲット界隈:</span>
+                  {editingKeywordField !== "targetCommunities" && (
+                    <button onClick={() => startEditKeyword("targetCommunities", ((campaign as any).targetCommunities as string[]) || [])} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                {editingKeywordField === "targetCommunities" ? (
+                  <div className="mt-1 space-y-1.5">
+                    <Textarea
+                      value={editingKeywordText}
+                      onChange={e => setEditingKeywordText(e.target.value)}
+                      placeholder="1行に1界隈"
+                      rows={3}
+                      className="text-sm"
+                      autoFocus
+                    />
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => saveKeyword("targetCommunities", false, false)} disabled={updateCampaignMutation.isPending}>
+                        {updateCampaignMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingKeywordField(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {((campaign as any).targetCommunities as string[])?.length > 0
+                      ? ((campaign as any).targetCommunities as string[]).map((tc, i) => (
+                          <Badge key={i} variant="secondary">{tc}</Badge>
+                        ))
+                      : <span className="text-muted-foreground text-xs">未設定</span>
+                    }
+                  </div>
+                )}
+              </div>
+
+              {/* 競合 (read-only) */}
               {(campaign.competitors as any[])?.length > 0 && (
                 <div>
                   <span className="text-muted-foreground">競合:</span>
@@ -633,19 +843,21 @@ function PostCampaignRegistration({
   });
 
   const handleAddVideos = () => {
-    const lines = videoUrl.split("\n").map(s => s.trim()).filter(Boolean);
+    const lines = videoUrl.split("\n").map(s => s.trim()).filter(Boolean)
+      .map(u => /^https?:\/\//i.test(u) ? u : `https://${u}`);
     if (lines.length === 0) { toast.error("URLを入力してください"); return; }
 
     const invalid = lines.filter(u => detectPlatform(u) === null);
     if (invalid.length > 0) { toast.error(`対応していないURLが${invalid.length}件あります（TikTok/YouTube/Instagram対応）`); return; }
 
-    const existing = new Set((campaign.ownVideoUrls as string[]) || []);
-    const newUrls = lines.filter(u => !existing.has(u));
+    const existingUrls = (campaign.ownVideoUrls as string[]) || [];
+    const existingLower = new Set(existingUrls.map(u => u.toLowerCase()));
+    const newUrls = lines.filter(u => !existingLower.has(u.toLowerCase()));
     if (newUrls.length === 0) { toast.error("全て登録済みのURLです"); return; }
 
     updateMutation.mutate({
       id: campaignId,
-      ownVideoUrls: [...existing, ...newUrls],
+      ownVideoUrls: [...existingUrls, ...newUrls],
     }, {
       onSuccess: () => {
         toast.success(`${newUrls.length}件の動画URLを追加しました`);
@@ -760,8 +972,10 @@ function PostCampaignRegistration({
                   <button
                     type="button"
                     onClick={() => {
-                      const updated = ((campaign.ownVideoUrls as string[]) || []).filter((_, idx) => idx !== i);
-                      updateMutation.mutate({ id: campaignId, ownVideoUrls: updated }, {
+                      const urlToRemove = (campaign.ownVideoUrls as string[])[i];
+                      const updatedUrls = ((campaign.ownVideoUrls as string[]) || []).filter((_, idx) => idx !== i);
+                      const updatedData = ((campaign as any).ownVideoData || []).filter((v: any) => v.videoUrl !== urlToRemove);
+                      updateMutation.mutate({ id: campaignId, ownVideoUrls: updatedUrls, ownVideoData: updatedData }, {
                         onSuccess: () => { toast.success("動画URLを削除しました"); onRefetch(); },
                       });
                     }}
@@ -795,7 +1009,7 @@ function PostCampaignRegistration({
 
         {/* 自社アカウント */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium">自社アカウント追加（1行1アカウント）</Label>
+          <Label className="text-sm font-medium">自社 TikTok アカウント追加（1行1アカウント）</Label>
           {((campaign.ownAccountIds as string[]) || []).length > 0 && (
             <div className="flex flex-wrap gap-1">
               {((campaign.ownAccountIds as string[]) || []).map((id, i) => (
@@ -1076,7 +1290,11 @@ function StepIndicator({ label, status }: { label: string; status: "pending" | "
 function SnapshotProgressBar({ snapshotId }: { snapshotId: number }) {
   const progressQuery = trpc.campaign.getSnapshotProgress.useQuery(
     { snapshotId },
-    { refetchInterval: 2000 },
+    { refetchInterval: (query) => {
+        const p = query.state.data?.progress?.percent;
+        return (p != null && p >= 100) ? false : 2000;
+      }
+    },
   );
 
   const progress = progressQuery.data?.progress;
