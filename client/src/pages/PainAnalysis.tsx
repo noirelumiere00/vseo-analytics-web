@@ -362,6 +362,72 @@ function HypothesisApprovalView({ analysisId, onApproved }: { analysisId: number
 }
 
 // ================================================================
+// HTML Slide Preview (iframe + download)
+// ================================================================
+
+function HtmlSlidePreview({ html, productName }: { html: string; productName: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const handleDownload = () => {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${productName.replace(/[^\w-]/g, "_")}_proposal.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("HTMLファイルをダウンロードしました");
+  };
+
+  const handleOpenInNewTab = () => {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+  };
+
+  return (
+    <Card className="border-l-4 border-l-blue-500">
+      <CardContent className="py-4">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <ExternalLink className="h-4 w-4 text-blue-500" />
+            <h3 className="text-sm font-bold">HTML提案書</h3>
+            <Badge variant="secondary" className="text-[9px]">27枚スライド</Badge>
+            <Badge variant="outline" className="text-[9px] border-blue-300 text-blue-700">テーマ/レイアウト切替可</Badge>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setExpanded(!expanded)}>
+              {expanded ? "閉じる" : "プレビュー"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleOpenInNewTab}>
+              <ExternalLink className="mr-1 h-3 w-3" />新しいタブで開く
+            </Button>
+            <Button size="sm" onClick={handleDownload} className="bg-blue-500 hover:bg-blue-600 text-white">
+              <ArrowRight className="mr-1 h-3 w-3 rotate-90" />HTMLをダウンロード
+            </Button>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          ブラウザで色/レイアウトを切り替えながらクライアントに提示できます。印刷 → PDFでPPT化も可能。
+        </p>
+        {expanded && (
+          <div className="mt-3 rounded-md overflow-hidden border" style={{ height: 600 }}>
+            <iframe
+              srcDoc={html}
+              title="HTML提案書プレビュー"
+              className="w-full h-full"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ================================================================
 // Result View
 // ================================================================
 
@@ -381,6 +447,7 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
   const proposals = (data.proposals as any[]) || [];
   const kaiwaiCreatives = (data.kaiwaiCreatives as any[]) || [];
   const gensparkMarkdown = (data.gensparkMarkdown as string) || "";
+  const htmlOutput = ((data as any).htmlOutput as string) || "";
 
   const handleCopyMarkdown = async () => {
     await navigator.clipboard.writeText(gensparkMarkdown);
@@ -674,6 +741,14 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
       )}
 
       {/* Genspark Markdown Export */}
+      {/* HTML Slide Preview — 27枚PPT比スライド (テーマ/レイアウト切替可) */}
+      {htmlOutput && (
+        <HtmlSlidePreview
+          html={htmlOutput}
+          productName={data.productName || "proposal"}
+        />
+      )}
+
       {gensparkMarkdown && (
         <Card className="border-l-4 border-l-orange-500">
           <CardContent className="py-4">
