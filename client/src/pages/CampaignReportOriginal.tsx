@@ -1813,7 +1813,7 @@ function InstagramSearchMock({ posts, hashtag, isOwnOverrides = {}, onSlotUpdate
         className="relative"
         style={{
           width: 220, height: 476,
-          filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 12px 24px rgba(0,0,0,0.12)) drop-shadow(0 24px 48px rgba(0,0,0,0.08))",
+          filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.12))",
         }}
       >
         {/* Side buttons */}
@@ -5664,7 +5664,7 @@ function TikTokSearchMock({ slots, keyword, isBefore, onSlotUpdate, phase }: {
         className="relative"
         style={{
           width: 220, height: 476,
-          filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18)) drop-shadow(0 12px 24px rgba(0,0,0,0.12)) drop-shadow(0 24px 48px rgba(0,0,0,0.08))",
+          filter: "drop-shadow(0 8px 20px rgba(0,0,0,0.12))",
         }}
       >
         {/* Side buttons */}
@@ -5745,7 +5745,7 @@ function TikTokSearchMock({ slots, keyword, isBefore, onSlotUpdate, phase }: {
               {/* ── Tabs ── */}
               <div className="flex items-end shrink-0 border-b border-[#1a1a1a] py-[3px]">
                 {["トップ", "動画", "ユーザー", "サウンド", "LIVE"].map((tab) => {
-                  const isActive = tab === "動画";
+                  const isActive = tab === "トップ";
                   return (
                     <div key={tab} className="flex-1 flex flex-col items-center gap-[2px]" style={{ minWidth: 0 }}>
                       <span className={`text-[7.5px] whitespace-nowrap ${isActive ? "text-white font-bold" : "text-[#808080] font-medium"}`}>
