@@ -4,7 +4,7 @@
  * Uses LLM to generate pain hypotheses from product features.
  * Pure LLM inference — no external data fetching.
  */
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import {
   painHypothesesArraySchema,
   PAIN_HYPOTHESES_JSON_SCHEMA,
@@ -55,11 +55,7 @@ export async function generatePainHypotheses(
     },
   });
 
-  const text = typeof result.choices[0]?.message?.content === "string"
-    ? result.choices[0].message.content
-    : "";
-
-  const parsed = JSON.parse(text);
+  const parsed = parseLLMJson(result) as any;
   const validated = painHypothesesArraySchema.safeParse(parsed);
 
   if (!validated.success) {

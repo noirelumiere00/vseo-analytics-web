@@ -9,7 +9,7 @@
  * This makes the keyword selection table "語れる" instead of just "数字が並んでる".
  */
 import pLimit from "p-limit";
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import type { ProgressFn } from "../schemas";
 
 const llmLimit = pLimit(2);
@@ -164,10 +164,7 @@ export async function generateKeywordRationale(
             responseFormat: { type: "json_schema", json_schema: RATIONALE_JSON_SCHEMA },
           });
 
-          const text = typeof result.choices[0]?.message?.content === "string"
-            ? result.choices[0].message.content
-            : "";
-          const parsed = JSON.parse(text);
+          const parsed = parseLLMJson(result) as any;
 
           onProgress?.({
             message: `KW選抜理由生成中 (${idx + 1}/${total}: ${community.name})...`,

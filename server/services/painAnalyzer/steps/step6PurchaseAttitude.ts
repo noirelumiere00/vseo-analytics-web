@@ -3,7 +3,7 @@
  *
  * Uses X post data + LLM to estimate purchase attitudes per segment.
  */
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import {
   purchaseAttitudeSchema,
   PURCHASE_ATTITUDE_JSON_SCHEMA,
@@ -65,10 +65,7 @@ export async function estimatePurchaseAttitude(
     },
   });
 
-  const text = typeof result.choices[0]?.message?.content === "string"
-    ? result.choices[0].message.content
-    : "";
-  const parsed = JSON.parse(text);
+  const parsed = parseLLMJson(result) as any;
 
   const attitudes: PurchaseAttitude[] = (parsed.attitudes || []).map((att: any) => {
     const validated = purchaseAttitudeSchema.safeParse(att);

@@ -7,7 +7,7 @@
 import pLimit from "p-limit";
 import { searchXPosts, type XPost } from "../../../mcpClient";
 import { searchTikTokBatch } from "../../../tiktokScraper";
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import type { PainHypothesis, ProgressFn } from "../schemas";
 import { VERIFICATION_SCORE_SYSTEM_PROMPT, buildVerificationScorePrompt } from "../prompts";
 
@@ -147,10 +147,7 @@ export async function verifyPains(
           responseFormat: { type: "json_object" },
         });
 
-        const text = typeof result.choices[0]?.message?.content === "string"
-          ? result.choices[0].message.content
-          : "";
-        const parsed = JSON.parse(text);
+        const parsed = parseLLMJson(result) as any;
 
         verifiedPains.push({
           painId: pain.id,

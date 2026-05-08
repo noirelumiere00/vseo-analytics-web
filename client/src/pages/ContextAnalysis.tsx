@@ -415,12 +415,11 @@ function AnalysisResultView({ analysisId }: { analysisId: number }) {
   );
 }
 
-// ── Main Page ──
-export default function ContextAnalysis() {
-  usePageTitle("コンテキスト分析");
+// ── Content Component (for embedding in ProductAnalysis tabs) ──
+export function ContextAnalysisContent({ externalId, onNavigate }: { externalId?: number | null; onNavigate?: (id: number | null) => void }) {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/context-analysis/:id");
-  const analysisId = params?.id ? parseInt(params.id, 10) : null;
+
+  const analysisId = externalId ?? null;
 
   const [productName, setProductName] = useState("");
   const [activeId, setActiveId] = useState<number | null>(analysisId);
@@ -434,7 +433,7 @@ export default function ContextAnalysis() {
       setShowResult(false);
       setProductName("");
       utils.contextAnalyzer.list.invalidate();
-      setLocation(`/context-analysis/${data.analysisId}`);
+      onNavigate?.(data.analysisId);
     },
     onError: (e) => toast.error(e.message),
   });
@@ -453,6 +452,14 @@ export default function ContextAnalysis() {
     }
   }, [analysisId, statusData?.status]);
 
+  // Sync external id changes
+  useEffect(() => {
+    if (externalId !== undefined) {
+      setActiveId(externalId);
+      if (!externalId) setShowResult(false);
+    }
+  }, [externalId]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!productName.trim()) return;
@@ -462,57 +469,61 @@ export default function ContextAnalysis() {
   const handleSelectHistory = (id: number) => {
     setActiveId(id);
     setShowResult(false);
-    setLocation(`/context-analysis/${id}`);
+    onNavigate?.(id);
   };
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ScanSearch className="h-6 w-6" />
-            コンテキスト分析
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            商品名を入力すると、3セグメント（PR発信・SNS反応・Web評判）からコンテキストを自動分析し、界雈マーケティングの刺さる層を発掘します。
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Input Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />新しいコンテキスト分析</CardTitle>
+          <CardDescription>分析したい商品名・サービス名を入力してください（例: 楽天カード、SHEIN、ユニクロ）</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex gap-3">
+            <Input
+              placeholder="商品名 / サービス名を入力..."
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              className="flex-1"
+              disabled={createMutation.isPending}
+            />
+            <Button type="submit" disabled={!productName.trim() || createMutation.isPending}>
+              {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanSearch className="h-4 w-4 mr-2" />}
+              分析開始
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-        {/* Input Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />新しいコンテキスト分析</CardTitle>
-            <CardDescription>分析したい商品名・サービス名を入力してください（例: 楽天カード、SHEIN、ユニクロ）</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="flex gap-3">
-              <Input
-                placeholder="商品名 / サービス名を入力..."
-                value={productName}
-                onChange={(e) => setProductName(e.target.value)}
-                className="flex-1"
-                disabled={createMutation.isPending}
-              />
-              <Button type="submit" disabled={!productName.trim() || createMutation.isPending}>
-                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanSearch className="h-4 w-4 mr-2" />}
-                分析開始
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      {/* Active Analysis: Status or Result */}
+      {activeId && !showResult && (
+        <AnalysisStatusView analysisId={activeId} onComplete={() => setShowResult(true)} />
+      )}
+      {activeId && showResult && (
+        <AnalysisResultView analysisId={activeId} />
+      )}
 
-        {/* Active Analysis: Status or Result */}
-        {activeId && !showResult && (
-          <AnalysisStatusView analysisId={activeId} onComplete={() => setShowResult(true)} />
-        )}
-        {activeId && showResult && (
-          <AnalysisResultView analysisId={activeId} />
-        )}
-
-        {/* History */}
-        <AnalysisHistoryList onSelect={handleSelectHistory} />
-      </div>
-    </DashboardLayout>
+      {/* History */}
+      <AnalysisHistoryList onSelect={handleSelectHistory} />
+    </div>
   );
+}
+
+// ── Main Page (redirect to product-analysis) ──
+export default function ContextAnalysis() {
+  usePageTitle("コンテキスト分析");
+  const [, setLocation] = useLocation();
+  const [, params] = useRoute("/context-analysis/:id");
+  const analysisId = params?.id ? parseInt(params.id, 10) : null;
+
+  useEffect(() => {
+    const url = analysisId
+      ? `/product-analysis?tab=context&id=${analysisId}`
+      : "/product-analysis?tab=context";
+    setLocation(url, { replace: true });
+  }, [analysisId, setLocation]);
+
+  return null;
 }

@@ -7,7 +7,7 @@
 import pLimit from "p-limit";
 import { collectS1 } from "../../contextAnalyzer/collectors/s1ClientIntent";
 import { collectS3 } from "../../contextAnalyzer/collectors/s3WebReputation";
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import type { S1RawData, S3RawData } from "../../contextAnalyzer/schemas";
 import {
   productFeaturesSchema,
@@ -80,11 +80,7 @@ export async function extractProductFeatures(
     },
   });
 
-  const text = typeof result.choices[0]?.message?.content === "string"
-    ? result.choices[0].message.content
-    : "";
-
-  const parsed = JSON.parse(text);
+  const parsed = parseLLMJson(result) as any;
   const validated = productFeaturesSchema.safeParse(parsed);
 
   if (!validated.success) {

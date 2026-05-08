@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS `pr_word_analyses` (
+  `id` int AUTO_INCREMENT PRIMARY KEY,
+  `userId` int NOT NULL,
+  `productName` varchar(255) NOT NULL,
+  `productUrl` text,
+  `purpose` enum('awareness','consideration','conversion','loyalty','branding') NOT NULL,
+  `status` enum('pending','collecting','analyzing','completed','failed') NOT NULL DEFAULT 'pending',
+  `progress` json,
+  `s1RawData` json,
+  `s3RawData` json,
+  `googleSuggestData` json,
+  `productPageData` json,
+  `productProfile` json,
+  `wordMap` json,
+  `hashtagStructure` json,
+  `hookPhrases` json,
+  `recommendedChannels` json,
+  `errorMessage` text,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `completedAt` timestamp NULL
+);

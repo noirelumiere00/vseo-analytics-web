@@ -33,6 +33,8 @@ import {
   InsertContextAnalysis,
   painAnalyses,
   InsertPainAnalysis,
+  prWordAnalyses,
+  InsertPrWordAnalysis,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -1649,7 +1651,7 @@ export async function updatePainAnalysis(id: number, data: Partial<{
   kaiwaiCreatives: any;
   gensparkMarkdown: string;
   htmlOutput: string;
-  errorMessage: string;
+  errorMessage: string | null;
   completedAt: Date;
 }>) {
   const db = await getDb();
@@ -1675,5 +1677,60 @@ export async function listPainAnalysesByUser(userId: number, limit: number = 20,
   return db.select().from(painAnalyses)
     .where(cursor ? and(eq(painAnalyses.userId, userId), sql`${painAnalyses.id} < ${cursor}`) : eq(painAnalyses.userId, userId))
     .orderBy(desc(painAnalyses.id))
+    .limit(limit);
+}
+
+// === PR Word Developer ===
+
+export async function createPrWordAnalysis(data: InsertPrWordAnalysis) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [result] = await db.insert(prWordAnalyses).values(data).$returningId();
+  return result.id;
+}
+
+export async function getPrWordAnalysis(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select().from(prWordAnalyses).where(eq(prWordAnalyses.id, id)).limit(1);
+  return row || null;
+}
+
+export async function updatePrWordAnalysis(id: number, data: Partial<{
+  status: string;
+  progress: { message: string; percent: number; phase?: string };
+  s1RawData: any;
+  s3RawData: any;
+  googleSuggestData: string[];
+  productPageData: any;
+  productProfile: any;
+  wordMap: any;
+  hashtagStructure: any;
+  hookPhrases: any;
+  recommendedChannels: any;
+  hashtagDiscovery: any;
+  errorMessage: string | null;
+  completedAt: Date;
+}>) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(prWordAnalyses).set(data as any).where(eq(prWordAnalyses.id, id));
+}
+
+export async function getQueuedPrWordAnalyses() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(prWordAnalyses)
+    .where(eq(prWordAnalyses.status, "pending"))
+    .orderBy(prWordAnalyses.createdAt)
+    .limit(5);
+}
+
+export async function listPrWordAnalysesByUser(userId: number, limit: number = 20, cursor?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(prWordAnalyses)
+    .where(cursor ? and(eq(prWordAnalyses.userId, userId), sql`${prWordAnalyses.id} < ${cursor}`) : eq(prWordAnalyses.userId, userId))
+    .orderBy(desc(prWordAnalyses.id))
     .limit(limit);
 }

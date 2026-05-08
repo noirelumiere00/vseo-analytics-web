@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Clock, Compass, Crosshair, LayoutDashboard, LogOut, Megaphone, Search, ScanSearch } from "lucide-react";
+import { Clock, Compass, Crosshair, LayoutDashboard, LogOut, Megaphone, Package, Search, ScanSearch, Wand2 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -32,16 +32,16 @@ const mainNav = [
   { icon: LayoutDashboard, label: "ダッシュボード", path: "/dashboard" },
   { icon: Clock, label: "アクティビティ", path: "/activity" },
   { icon: Megaphone, label: "施策レポート", path: "/campaigns" },
-  { icon: ScanSearch, label: "コンテキスト分析", path: "/context-analysis" },
-  { icon: Crosshair, label: "ペイン分析", path: "/pain-analysis" },
+  { icon: Package, label: "商品分析", path: "/product-analysis" },
+  { icon: Wand2, label: "検索ワード開発", path: "/pr-word" },
 ];
 
 const quickActions = [
   { icon: Search, label: "新規SEO分析", path: "/analysis/new" },
   { icon: Compass, label: "トレンド発掘", path: "/trend-discovery" },
   { icon: Megaphone, label: "新規施策レポート", path: "/campaigns/new" },
-  { icon: ScanSearch, label: "新規コンテキスト分析", path: "/context-analysis" },
-  { icon: Crosshair, label: "新規ペイン分析", path: "/pain-analysis" },
+  { icon: Package, label: "新規商品分析", path: "/product-analysis" },
+  { icon: Wand2, label: "新規検索ワード開発", path: "/pr-word" },
 ];
 
 // Combine for breadcrumb usage

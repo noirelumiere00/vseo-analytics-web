@@ -5,7 +5,7 @@
  * Calls LLM once per community (5 calls × 6 proposals each).
  */
 import pLimit from "p-limit";
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import {
   kaiwaiCreativeSchema,
   KAIWAI_CREATIVE_JSON_SCHEMA,
@@ -79,10 +79,7 @@ export async function generateKaiwaiCreatives(
           },
         });
 
-        const text = typeof result.choices[0]?.message?.content === "string"
-          ? result.choices[0].message.content
-          : "";
-        const parsed = JSON.parse(text);
+        const parsed = parseLLMJson(result) as any;
         const creatives = (parsed.creatives || []).map((c: any) => {
           const validated = kaiwaiCreativeSchema.safeParse(c);
           if (validated.success) return validated.data;

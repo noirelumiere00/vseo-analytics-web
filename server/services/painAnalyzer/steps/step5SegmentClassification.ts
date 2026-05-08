@@ -8,7 +8,7 @@
 import pLimit from "p-limit";
 import { getUserPosts, getUserLikedPosts, type XPost } from "../../../mcpClient";
 import { searchTikTokBatch } from "../../../tiktokScraper";
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson, LLMTruncatedError } from "../../../_core/llm";
 import {
   segmentClassificationSchema,
   SEGMENT_CLASSIFICATION_JSON_SCHEMA,
@@ -179,12 +179,12 @@ export async function classifySegments(
     ? `${xPostsSample}\n\n--- ユーザー行動サンプル ---\n${userPostsSample.slice(0, 10).join("\n\n")}`
     : xPostsSample;
 
-  // LLM classification
-  const result = await invokeLLM({
+  // LLM classification (with retry on truncation)
+  const llmParams = {
     messages: [
-      { role: "system", content: SEGMENT_CLASSIFICATION_SYSTEM_PROMPT },
+      { role: "system" as const, content: SEGMENT_CLASSIFICATION_SYSTEM_PROMPT },
       {
-        role: "user",
+        role: "user" as const,
         content: buildSegmentClassificationPrompt(
           productName,
           verifiedPains.filter(p => p.verificationScore >= 0.3),
@@ -197,15 +197,30 @@ export async function classifySegments(
     ],
     maxTokens: 8192,
     responseFormat: {
-      type: "json_schema",
+      type: "json_schema" as const,
       json_schema: SEGMENT_CLASSIFICATION_JSON_SCHEMA,
     },
-  });
+  };
 
-  const text = typeof result.choices[0]?.message?.content === "string"
-    ? result.choices[0].message.content
-    : "";
-  const parsed = JSON.parse(text);
+  let parsed: unknown;
+  try {
+    const result = await invokeLLM(llmParams);
+    parsed = parseLLMJson(result);
+  } catch (e) {
+    if (e instanceof LLMTruncatedError) {
+      // Retry with concise instruction
+      console.warn("[PainAnalyzer/Step5] Response truncated, retrying with concise prompt...");
+      llmParams.messages[0] = {
+        role: "system" as const,
+        content: SEGMENT_CLASSIFICATION_SYSTEM_PROMPT +
+          "\n\n【重要】出力トークン数に制限があります。各communityのdescriptionは50文字以内、keywordsは最大5個、representativeUsersは最大3名に抑えてください。populationCalculation.stepsは最大3ステップ、personaDayとofficialGapは簡潔に。",
+      };
+      const retryResult = await invokeLLM(llmParams);
+      parsed = parseLLMJson(retryResult);
+    } else {
+      throw e;
+    }
+  }
   const validated = segmentClassificationSchema.safeParse(parsed);
 
   if (!validated.success) {

@@ -5,7 +5,7 @@
  * hashtag sets, and priority action plans.
  * Also generates the final executive summary.
  */
-import { invokeLLM } from "../../../_core/llm";
+import { invokeLLM, parseLLMJson } from "../../../_core/llm";
 import {
   proposalSchema,
   PROPOSAL_JSON_SCHEMA,
@@ -94,10 +94,7 @@ export async function generateProposals(
     },
   });
 
-  const proposalText = typeof proposalResult.choices[0]?.message?.content === "string"
-    ? proposalResult.choices[0].message.content
-    : "";
-  const parsedProposals = JSON.parse(proposalText);
+  const parsedProposals = parseLLMJson(proposalResult) as any;
 
   const proposals: Proposal[] = (parsedProposals.proposals || []).map((p: any) => {
     const validated = proposalSchema.safeParse(p);
@@ -169,10 +166,7 @@ export async function generateProposals(
     },
   });
 
-  const summaryText = typeof summaryResult.choices[0]?.message?.content === "string"
-    ? summaryResult.choices[0].message.content
-    : "";
-  const parsedSummary = JSON.parse(summaryText);
+  const parsedSummary = parseLLMJson(summaryResult) as any;
   const validatedSummary = analysisResultSummarySchema.safeParse(parsedSummary);
 
   const analysisResult = validatedSummary.success

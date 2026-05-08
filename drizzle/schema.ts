@@ -1140,3 +1140,85 @@ export const painAnalyses = mysqlTable("pain_analyses", {
 
 export type PainAnalysis = typeof painAnalyses.$inferSelect;
 export type InsertPainAnalysis = typeof painAnalyses.$inferInsert;
+
+/**
+ * PRワード開発（PR Word Developer）
+ * 商品名→S1/S3/GoogleSuggest収集→LLMでワードマップ・ハッシュタグ・フレーズ生成
+ */
+export const prWordAnalyses = mysqlTable("pr_word_analyses", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productName: varchar("productName", { length: 255 }).notNull(),
+  productUrl: text("productUrl"),
+  purpose: mysqlEnum("purpose", [
+    "awareness",       // 認知拡大
+    "consideration",   // 比較検討
+    "conversion",      // 購入促進
+    "loyalty",         // リピート・ファン化
+    "branding",        // ブランド構築
+  ]).notNull(),
+
+  // ジョブ制御
+  status: mysqlEnum("status", [
+    "pending", "collecting", "analyzing", "completed", "failed",
+  ]).default("pending").notNull(),
+  progress: json("progress").$type<{ message: string; percent: number; phase?: string }>(),
+
+  // 収集データ
+  s1RawData: json("s1RawData"),
+  s3RawData: json("s3RawData"),
+  googleSuggestData: json("googleSuggestData").$type<string[]>(),
+  productPageData: json("productPageData").$type<{
+    title: string;
+    description: string;
+    ogTags: Record<string, string>;
+    headings: string[];
+  }>(),
+
+  // LLM生成結果
+  productProfile: json("productProfile").$type<{
+    category: string;
+    positioning: string;
+    targetAudience: string;
+    uniqueSellingPoints: string[];
+    toneOfVoice: string;
+  }>(),
+
+  wordMap: json("wordMap").$type<{
+    properNouns: string[];      // 固有名詞
+    categoryTerms: string[];    // カテゴリ用語
+    trendTerms: string[];       // 時事・新規性
+    actionTerms: string[];      // 行動・活用
+  }>(),
+
+  hashtagStructure: json("hashtagStructure").$type<{
+    big: Array<{ tag: string; postCount: number | null }>;    // ビッグ2
+    mid: Array<{ tag: string; postCount: number | null }>;    // ミドル5
+    niche: Array<{ tag: string; postCount: number | null }>;  // ニッチ3
+  }>(),
+
+  hookPhrases: json("hookPhrases").$type<Array<{
+    type: "question" | "number" | "contrast" | "confession" | "command";
+    phrase: string;
+    explanation: string;
+  }>>(),
+
+  recommendedChannels: json("recommendedChannels").$type<Array<{
+    channel: string;
+    priority: "high" | "medium" | "low";
+    reason: string;
+  }>>(),
+
+  hashtagDiscovery: json("hashtagDiscovery").$type<{
+    searchQueries: string[];
+    totalVideosScraped: number;
+    topHashtags: Array<{ tag: string; frequency: number; postCount: number | null }>;
+  }>(),
+
+  errorMessage: text("errorMessage"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  completedAt: timestamp("completedAt"),
+});
+
+export type PrWordAnalysis = typeof prWordAnalyses.$inferSelect;
+export type InsertPrWordAnalysis = typeof prWordAnalyses.$inferInsert;

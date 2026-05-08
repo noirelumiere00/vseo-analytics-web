@@ -7,6 +7,91 @@ export class LLMQuotaExhaustedError extends Error {
   }
 }
 
+export class LLMTruncatedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "LLMTruncatedError";
+  }
+}
+
+/**
+ * LLM レスポンスから JSON を安全にパースする。
+ * finish_reason が max_tokens の場合は切断された JSON の修復を試みる。
+ */
+export function parseLLMJson(result: InvokeResult): unknown {
+  const choice = result.choices[0];
+  const text = typeof choice?.message?.content === "string"
+    ? choice.message.content
+    : "";
+  const finishReason = choice?.finish_reason;
+
+  // 正常終了の場合はそのままパース
+  if (finishReason !== "max_tokens") {
+    return JSON.parse(text);
+  }
+
+  // max_tokens で切断された場合 — JSON 修復を試みる
+  console.warn(`[LLM] Response truncated (max_tokens). Attempting JSON repair (${text.length} chars)...`);
+
+  const repaired = repairTruncatedJson(text);
+  if (repaired !== null) {
+    console.warn("[LLM] JSON repair succeeded");
+    return repaired;
+  }
+
+  throw new LLMTruncatedError(
+    `LLM response was truncated at ${text.length} chars (finish_reason=max_tokens). JSON repair failed.`
+  );
+}
+
+/**
+ * 切断された JSON 文字列を修復する。
+ * 未閉じの文字列・配列・オブジェクトを閉じる。
+ */
+function repairTruncatedJson(text: string): unknown | null {
+  // まずそのまま試す
+  try { return JSON.parse(text); } catch {}
+
+  let s = text;
+
+  // 未閉じの文字列を閉じる（最後のエスケープされていない " を探す）
+  let inString = false;
+  let lastStringStart = -1;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') { i++; continue; }
+    if (s[i] === '"') {
+      inString = !inString;
+      if (inString) lastStringStart = i;
+    }
+  }
+  if (inString) {
+    // 文字列途中で切れている — 閉じる
+    s += '"';
+  }
+
+  // 末尾のゴミ（途中のキーやコロン）を除去
+  s = s.replace(/,\s*$/, "");
+  s = s.replace(/,\s*"[^"]*"\s*:\s*$/, "");
+  s = s.replace(/,\s*"[^"]*"\s*$/, "");
+
+  // 開きブラケット/ブレースを数えて閉じる
+  const stack: string[] = [];
+  inString = false;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && inString) { i++; continue; }
+    if (s[i] === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (s[i] === '{') stack.push('}');
+    else if (s[i] === '[') stack.push(']');
+    else if (s[i] === '}' || s[i] === ']') stack.pop();
+  }
+  while (stack.length > 0) {
+    s += stack.pop();
+  }
+
+  try { return JSON.parse(s); } catch { return null; }
+}
+
 // === 型定義（変更なし・そのまま維持） ===
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 

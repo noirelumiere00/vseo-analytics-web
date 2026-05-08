@@ -2666,6 +2666,49 @@ export const appRouter = router({
         };
       }),
 
+    // 失敗した分析をリトライ
+    retry: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const row = await db.getPainAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
+        if (row.status !== "failed") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "失敗した分析のみリトライできます" });
+        }
+
+        // Determine which phase to retry based on existing data
+        const hasVerificationData = row.verificationData && (row.verificationData as any).verifiedPains?.length > 0;
+        const hasApprovedHypotheses = row.painHypotheses && (row.painHypotheses as any[]).some((h: any) => h.approved);
+
+        if (hasApprovedHypotheses) {
+          // Phase 2 failed — retry from phase 2
+          await db.updatePainAnalysis(input.analysisId, {
+            status: "verifying",
+            queuedAction: "phase2",
+            errorMessage: null,
+            // Clear partial phase 2 results to avoid stale data
+            segmentData: null,
+            purchaseAttitudes: null,
+            proposals: null,
+            kaiwaiCreatives: null,
+            analysisResult: null,
+            htmlOutput: null,
+            gensparkMarkdown: null,
+            progress: { message: "リトライ: 検証を再開しています...", percent: 50, phase: "verifying" },
+          });
+        } else {
+          // Phase 1 failed — retry from phase 1
+          await db.updatePainAnalysis(input.analysisId, {
+            status: "pending",
+            queuedAction: "phase1",
+            errorMessage: null,
+            progress: { message: "リトライ: 分析を再開しています...", percent: 0, phase: "pending" },
+          });
+        }
+        return { success: true };
+      }),
+
     // 履歴一覧（カーソルページネーション）
     list: protectedProcedure
       .input(z.object({
@@ -2680,6 +2723,84 @@ export const appRouter = router({
           items: resultItems.map(r => ({
             id: r.id,
             productName: r.productName,
+            status: r.status,
+            createdAt: r.createdAt,
+            completedAt: r.completedAt,
+          })),
+          nextCursor: hasMore ? resultItems[resultItems.length - 1]?.id : null,
+        };
+      }),
+  }),
+
+  // ── PR Word Developer ──
+  prWordDeveloper: router({
+    analyze: protectedProcedure
+      .input(z.object({
+        productName: z.string().min(1).max(255),
+        productUrl: z.string().url().optional(),
+        purpose: z.enum(["awareness", "consideration", "conversion", "loyalty", "branding"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const analysisId = await db.createPrWordAnalysis({
+          userId: ctx.user.id,
+          productName: input.productName,
+          productUrl: input.productUrl || null,
+          purpose: input.purpose,
+          status: "pending",
+        });
+        return { analysisId };
+      }),
+
+    getStatus: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input }) => {
+        const row = await db.getPrWordAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        return {
+          status: row.status,
+          progress: row.progress,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt,
+          errorMessage: row.errorMessage,
+        };
+      }),
+
+    getResult: protectedProcedure
+      .input(z.object({ analysisId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const row = await db.getPrWordAnalysis(input.analysisId);
+        if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "分析が見つかりません" });
+        if (row.userId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "アクセス権限がありません" });
+        return {
+          id: row.id,
+          productName: row.productName,
+          purpose: row.purpose,
+          status: row.status,
+          productProfile: row.productProfile,
+          wordMap: row.wordMap,
+          hashtagStructure: row.hashtagStructure,
+          hookPhrases: row.hookPhrases,
+          recommendedChannels: row.recommendedChannels,
+          hashtagDiscovery: row.hashtagDiscovery,
+          createdAt: row.createdAt,
+          completedAt: row.completedAt,
+        };
+      }),
+
+    list: protectedProcedure
+      .input(z.object({
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.number().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        const items = await db.listPrWordAnalysesByUser(ctx.user.id, input.limit + 1, input.cursor);
+        const hasMore = items.length > input.limit;
+        const resultItems = hasMore ? items.slice(0, input.limit) : items;
+        return {
+          items: resultItems.map(r => ({
+            id: r.id,
+            productName: r.productName,
+            purpose: r.purpose,
             status: r.status,
             createdAt: r.createdAt,
             completedAt: r.completedAt,

@@ -104,6 +104,15 @@ function PainAnalysisStatusView({ analysisId, onAwaitingApproval, onComplete }: 
   ];
   const currentIdx = phases.findIndex(p => p.key === data?.status);
 
+  const retryMutation = trpc.painAnalysis.retry.useMutation({
+    onSuccess: () => {
+      toast.success("リトライを開始しました");
+    },
+    onError: (err) => {
+      toast.error(`リトライに失敗: ${err.message}`);
+    },
+  });
+
   if (data?.status === "failed") {
     return (
       <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
@@ -111,6 +120,16 @@ function PainAnalysisStatusView({ analysisId, onAwaitingApproval, onComplete }: 
           <AlertTriangle className="h-10 w-10 text-red-400 mx-auto" />
           <p className="text-sm font-medium text-red-700 dark:text-red-400">分析に失敗しました</p>
           {data.errorMessage && <p className="text-xs text-red-500">{data.errorMessage}</p>}
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            disabled={retryMutation.isPending}
+            onClick={() => retryMutation.mutate({ analysisId })}
+          >
+            {retryMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+            リトライ
+          </Button>
         </CardContent>
       </Card>
     );
@@ -852,12 +871,11 @@ function PainAnalysisResultView({ analysisId }: { analysisId: number }) {
 // Main Page Component
 // ================================================================
 
-export default function PainAnalysis() {
-  usePageTitle("ペイン分析");
-
+// ── Content Component (for embedding in ProductAnalysis tabs) ──
+export function PainAnalysisContent({ externalId, onNavigate }: { externalId?: number | null; onNavigate?: (id: number | null) => void }) {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/pain-analysis/:id");
-  const analysisId = params?.id ? parseInt(params.id, 10) : null;
+
+  const analysisId = externalId ?? null;
 
   const [productName, setProductName] = useState("");
   const [productUrl, setProductUrl] = useState("");
@@ -865,7 +883,7 @@ export default function PainAnalysis() {
 
   const createMutation = trpc.painAnalysis.analyze.useMutation({
     onSuccess: (data) => {
-      setLocation(`/pain-analysis/${data.analysisId}`);
+      onNavigate?.(data.analysisId);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -887,6 +905,13 @@ export default function PainAnalysis() {
     else if (statusData.status === "failed") setView("status");
     else setView("status");
   }, [analysisId, statusData?.status]);
+
+  // Sync external id changes
+  useEffect(() => {
+    if (externalId !== undefined && externalId === null) {
+      setView("input");
+    }
+  }, [externalId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -910,79 +935,83 @@ export default function PainAnalysis() {
   }, []);
 
   return (
-    <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Page Header */}
-        <div>
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Crosshair className="h-5 w-5" />
-            ペイン分析
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            商品名を入力するだけで、「誰が・どんな悩みで・どう買うか」を自動分析します
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Input Form (show when no analysisId or view is input) */}
+      {view === "input" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">新規分析</CardTitle>
+            <CardDescription>商品名を入力してください。URLは任意です。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Input
+                value={productName}
+                onChange={e => setProductName(e.target.value)}
+                placeholder="例: ナイキ エアマックス 90"
+                className="text-sm"
+                autoFocus
+              />
+              <Input
+                value={productUrl}
+                onChange={e => setProductUrl(e.target.value)}
+                placeholder="商品ページURL（任意）"
+                className="text-sm"
+                type="url"
+              />
+              <Button type="submit" disabled={!productName.trim() || createMutation.isPending} className="w-full">
+                {createMutation.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />分析を開始中...</>
+                ) : (
+                  <><Crosshair className="mr-2 h-4 w-4" />ペイン分析を開始</>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Input Form (show when no analysisId or view is input) */}
-        {view === "input" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">新規分析</CardTitle>
-              <CardDescription>商品名を入力してください。URLは任意です。</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-3">
-                <Input
-                  value={productName}
-                  onChange={e => setProductName(e.target.value)}
-                  placeholder="例: ナイキ エアマックス 90"
-                  className="text-sm"
-                  autoFocus
-                />
-                <Input
-                  value={productUrl}
-                  onChange={e => setProductUrl(e.target.value)}
-                  placeholder="商品ページURL（任意）"
-                  className="text-sm"
-                  type="url"
-                />
-                <Button type="submit" disabled={!productName.trim() || createMutation.isPending} className="w-full">
-                  {createMutation.isPending ? (
-                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" />分析を開始中...</>
-                  ) : (
-                    <><Crosshair className="mr-2 h-4 w-4" />ペイン分析を開始</>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+      {/* Status View */}
+      {view === "status" && analysisId && (
+        <PainAnalysisStatusView
+          analysisId={analysisId}
+          onAwaitingApproval={handleAwaitingApproval}
+          onComplete={handleComplete}
+        />
+      )}
 
-        {/* Status View */}
-        {view === "status" && analysisId && (
-          <PainAnalysisStatusView
-            analysisId={analysisId}
-            onAwaitingApproval={handleAwaitingApproval}
-            onComplete={handleComplete}
-          />
-        )}
+      {/* Hypothesis Approval View */}
+      {view === "approval" && analysisId && (
+        <HypothesisApprovalView
+          analysisId={analysisId}
+          onApproved={handleApproved}
+        />
+      )}
 
-        {/* Hypothesis Approval View */}
-        {view === "approval" && analysisId && (
-          <HypothesisApprovalView
-            analysisId={analysisId}
-            onApproved={handleApproved}
-          />
-        )}
+      {/* Result View */}
+      {view === "result" && analysisId && (
+        <PainAnalysisResultView analysisId={analysisId} />
+      )}
 
-        {/* Result View */}
-        {view === "result" && analysisId && (
-          <PainAnalysisResultView analysisId={analysisId} />
-        )}
-
-        {/* History */}
-        <PainAnalysisHistoryList onSelect={(id) => setLocation(`/pain-analysis/${id}`)} />
-      </div>
-    </DashboardLayout>
+      {/* History */}
+      <PainAnalysisHistoryList onSelect={(id) => onNavigate?.(id)} />
+    </div>
   );
+}
+
+// ── Main Page (redirect to product-analysis) ──
+export default function PainAnalysis() {
+  usePageTitle("ペイン分析");
+  const [, setLocation] = useLocation();
+  const [, params] = useRoute("/pain-analysis/:id");
+  const analysisId = params?.id ? parseInt(params.id, 10) : null;
+
+  useEffect(() => {
+    const url = analysisId
+      ? `/product-analysis?tab=pain&id=${analysisId}`
+      : "/product-analysis?tab=pain";
+    setLocation(url, { replace: true });
+  }, [analysisId, setLocation]);
+
+  return null;
 }

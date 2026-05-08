@@ -21,6 +21,7 @@ import { startDailyMetricsScheduler } from "../dailyMetricsScheduler";
 import { executeContextAnalysis } from "../services/contextAnalyzer";
 import { executePainAnalysisPhase1 } from "../services/painAnalyzer";
 import { executePainAnalysisPhase2 } from "../services/painAnalyzer/resumeVerification";
+import { executePrWordAnalysis } from "../services/prWordDeveloper";
 
 const POLL_INTERVAL_MS = 3000;
 const jobLimit = pLimit(2);
@@ -48,13 +49,14 @@ export async function startWorker() {
 
     try {
       // 全テーブルから queued ジョブを取得
-      const [analysisJobs, trendJobs, campaignSnapshots, contextJobs, painPhase1Jobs, painPhase2Jobs] = await Promise.all([
+      const [analysisJobs, trendJobs, campaignSnapshots, contextJobs, painPhase1Jobs, painPhase2Jobs, prWordJobs] = await Promise.all([
         db.getQueuedAnalysisJobs(),
         db.getQueuedTrendDiscoveryJobs(),
         db.getQueuedCampaignSnapshots(),
         db.getQueuedContextAnalyses(),
         db.getQueuedPainAnalyses("phase1"),
         db.getQueuedPainAnalyses("phase2"),
+        db.getQueuedPrWordAnalyses(),
       ]);
 
       // Analysis jobs
@@ -269,6 +271,61 @@ export async function startWorker() {
             console.error(`[Worker] Pain analysis Phase 2 ${pJob.id} error:`, msg);
             try {
               await db.updatePainAnalysis(pJob.id, {
+                status: "failed",
+                errorMessage: msg,
+              });
+            } catch { /* prevent double-failure loop */ }
+          } finally {
+            runningJobs.delete(jobKey);
+          }
+        });
+      }
+      // PR Word Development jobs
+      for (const pwJob of prWordJobs) {
+        if (shuttingDown) break;
+        const jobKey = `prword:${pwJob.id}`;
+        if (runningJobs.has(jobKey)) continue;
+
+        runningJobs.add(jobKey);
+
+        jobLimit(async () => {
+          try {
+            await db.updatePrWordAnalysis(pwJob.id, {
+              status: "collecting",
+              progress: { message: "処理を開始しています...", percent: 0, phase: "collecting" },
+            });
+
+            const result = await executePrWordAnalysis(
+              pwJob.productName,
+              pwJob.purpose,
+              pwJob.productUrl || null,
+              async (progress) => {
+                await db.updatePrWordAnalysis(pwJob.id, {
+                  status: progress.phase as any || "collecting",
+                  progress,
+                });
+              },
+            );
+
+            await db.updatePrWordAnalysis(pwJob.id, {
+              status: "completed",
+              s1RawData: result.s1RawData,
+              s3RawData: result.s3RawData,
+              googleSuggestData: result.googleSuggestData,
+              productPageData: result.productPageData,
+              productProfile: result.analysisResult.productProfile,
+              wordMap: { version: 2, brandedSearchWords: result.analysisResult.brandedSearchWords },
+              hashtagStructure: { version: 2, genericSearchWords: result.analysisResult.genericSearchWords },
+              hookPhrases: null,
+              recommendedChannels: null,
+              hashtagDiscovery: result.tiktokDiscoveryData,
+              completedAt: new Date(),
+            });
+          } catch (error: any) {
+            const msg = (error instanceof Error ? error.message : "Unknown error").slice(0, 2000);
+            console.error(`[Worker] PR Word analysis ${pwJob.id} error:`, msg);
+            try {
+              await db.updatePrWordAnalysis(pwJob.id, {
                 status: "failed",
                 errorMessage: msg,
               });

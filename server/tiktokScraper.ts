@@ -1009,89 +1009,97 @@ export async function fetchTagVideoCountsBatch(
   });
 
   const result = new Map<string, number>();
-  const CONCURRENCY = 3;
 
+  // Helper: extract count from a single tag page
+  async function scrapeTagCount(page: any): Promise<number | null> {
+    // SSR extraction
+    let count: number | null = null;
+    try {
+      count = await page.evaluate(() => {
+        const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+        if (!el?.textContent) return null;
+        try {
+          const parsed = JSON.parse(el.textContent);
+          const cd = parsed?.['__DEFAULT_SCOPE__']?.['webapp.challenge-detail'];
+          return cd?.challengeInfo?.challenge?.videoCount ?? cd?.stats?.videoCount ?? null;
+        } catch { return null; }
+      });
+    } catch { /* ignore */ }
+
+    // DOM fallback
+    if (count == null) {
+      try {
+        count = await page.evaluate(() => {
+          const el = document.querySelector('[data-e2e="challenge-vvcount"]');
+          if (el?.textContent) {
+            const text = el.textContent.trim();
+            const matchMan = text.match(/([\d.]+)\s*万/);
+            if (matchMan) return Math.round(parseFloat(matchMan[1]) * 10000);
+            const matchK = text.match(/([\d.]+)\s*K/i);
+            if (matchK) return Math.round(parseFloat(matchK[1]) * 1000);
+            const matchM = text.match(/([\d.]+)\s*M/i);
+            if (matchM) return Math.round(parseFloat(matchM[1]) * 1000000);
+            const matchNum = text.match(/([\d,]+)/);
+            if (matchNum) return parseInt(matchNum[1].replace(/,/g, ''), 10);
+          }
+          // Body text fallback: "N本の動画" or "N件の投稿"
+          const bodyText = document.body.innerText || "";
+          const regMatch = bodyText.match(/([\d.]+)\s*万?\s*(本の動画|件の投稿)/);
+          if (regMatch) {
+            const val = parseFloat(regMatch[1]);
+            return regMatch[0].includes('万') ? Math.round(val * 10000) : Math.round(val);
+          }
+          return null;
+        });
+      } catch { /* ignore */ }
+    }
+    return count;
+  }
+
+  // Process tags sequentially to avoid TikTok rate-limiting
   try {
-    for (let i = 0; i < tags.length; i += CONCURRENCY) {
-      const batch = tags.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < tags.length; i++) {
+      const tag = tags[i];
 
+      // Delay between tags (skip first)
       if (i > 0) {
-        await new Promise(r => setTimeout(r, 1500 + Math.random() * 1500));
+        await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000));
       }
 
-      const promises = batch.map(async (tag, batchIdx) => {
-        const context = await browser.createBrowserContext();
-        const page = await context.newPage();
-        try {
-          await page.setViewport({ width: 1280, height: 900 });
-          await page.setUserAgent(USER_AGENTS[(i + batchIdx) % USER_AGENTS.length]);
-          await page.setExtraHTTPHeaders({ "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7" });
+      const context = await browser.createBrowserContext();
+      const page = await context.newPage();
+      try {
+        await page.setViewport({ width: 1280, height: 900 });
+        await page.setUserAgent(USER_AGENTS[i % USER_AGENTS.length]);
+        await page.setExtraHTTPHeaders({ "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7" });
 
-          if (batchIdx > 0) {
-            await new Promise(r => setTimeout(r, batchIdx * 800));
-          }
+        const url = `https://www.tiktok.com/tag/${encodeURIComponent(tag)}`;
+        if (onProgress) onProgress(`#${tag} の投稿数を取得中... (${i + 1}/${tags.length})`);
 
-          const url = `https://www.tiktok.com/tag/${encodeURIComponent(tag)}`;
-          if (onProgress) onProgress(`#${tag} の投稿数を取得中... (${i + batchIdx + 1}/${tags.length})`);
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 1000));
 
-          await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
-          await new Promise(r => setTimeout(r, 2000 + Math.random() * 2000));
+        let count = await scrapeTagCount(page);
 
-          // SSR extraction
-          let count: number | null = null;
-          try {
-            count = await page.evaluate(() => {
-              const el = document.getElementById('__UNIVERSAL_DATA_FOR_REHYDRATION__');
-              if (!el?.textContent) return null;
-              try {
-                const parsed = JSON.parse(el.textContent);
-                const cd = parsed?.['__DEFAULT_SCOPE__']?.['webapp.challenge-detail'];
-                return cd?.challengeInfo?.challenge?.videoCount ?? cd?.stats?.videoCount ?? null;
-              } catch { return null; }
-            });
-          } catch { /* ignore */ }
-
-          // DOM fallback
-          if (count == null) {
-            try {
-              count = await page.evaluate(() => {
-                const el = document.querySelector('[data-e2e="challenge-vvcount"]');
-                if (el?.textContent) {
-                  const text = el.textContent.trim();
-                  const matchMan = text.match(/([\d.]+)\s*万/);
-                  if (matchMan) return Math.round(parseFloat(matchMan[1]) * 10000);
-                  const matchK = text.match(/([\d.]+)\s*K/i);
-                  if (matchK) return Math.round(parseFloat(matchK[1]) * 1000);
-                  const matchM = text.match(/([\d.]+)\s*M/i);
-                  if (matchM) return Math.round(parseFloat(matchM[1]) * 1000000);
-                  const matchNum = text.match(/([\d,]+)/);
-                  if (matchNum) return parseInt(matchNum[1].replace(/,/g, ''), 10);
-                }
-                const bodyText = document.body.innerText || "";
-                const regMatch = bodyText.match(/([\d.]+)\s*万?\s*本の動画/);
-                if (regMatch) {
-                  const val = parseFloat(regMatch[1]);
-                  return regMatch[0].includes('万') ? Math.round(val * 10000) : Math.round(val);
-                }
-                return null;
-              });
-            } catch { /* ignore */ }
-          }
-
-          if (count != null && count > 0) {
-            result.set(tag, count);
-            console.log(`[TagCount] #${tag}: ${count}`);
-          } else {
-            console.log(`[TagCount] #${tag}: count not found`);
-          }
-        } catch (err) {
-          console.warn(`[TagCount] #${tag} failed:`, err);
-        } finally {
-          await context.close();
+        // Retry once on failure — navigate again with longer wait
+        if (count == null) {
+          await new Promise(r => setTimeout(r, 2000));
+          await page.reload({ waitUntil: "domcontentloaded", timeout: 20000 });
+          await new Promise(r => setTimeout(r, 3000));
+          count = await scrapeTagCount(page);
         }
-      });
 
-      await Promise.allSettled(promises);
+        if (count != null && count > 0) {
+          result.set(tag, count);
+          console.log(`[TagCount] #${tag}: ${count}`);
+        } else {
+          console.log(`[TagCount] #${tag}: count not found`);
+        }
+      } catch (err) {
+        console.warn(`[TagCount] #${tag} failed:`, err);
+      } finally {
+        await context.close();
+      }
     }
   } finally {
     await browser.close();
