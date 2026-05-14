@@ -7,7 +7,6 @@ Instagram ハッシュタグ スクレイパー
 2. ターミナル（Mac）またはコマンドプロンプト（Windows）で以下を実行:
 
    pip install playwright openpyxl
-   python -m playwright install chromium
 
 3. スクリプトを実行:
 
@@ -223,7 +222,7 @@ async def main():
         else:
             print('\n⚠ Chromeプロファイルが見つかりませんでした。')
             print('  ブラウザを起動します。Instagramにログインしてください。')
-            browser = await pw.chromium.launch(headless=False, args=['--no-sandbox'])
+            browser = await pw.chromium.launch(headless=False, channel='chrome', args=['--no-sandbox'])
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             )
