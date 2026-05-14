@@ -351,37 +351,18 @@ const DATA=[
 ]},
 ];
 
-// Thumbnail: try Instagram /media/ redirect via img tag (no CORS on img tags)
-// falls back to gradient if blocked
-const thumbQueue=[];
-let thumbIdx=0;
-const thumbCache={};
-
-function applyThumb(code, src){
-  document.querySelectorAll(`[data-code="${code}"] img.igthumb`).forEach(img=>{
-    img.src=src;
+function loadAllThumbs(){
+  document.querySelectorAll('img.igthumb').forEach(img=>{
+    const cell=img.closest('[data-code]');
+    if(!cell)return;
+    const code=cell.dataset.code;
     img.onload=()=>img.classList.add('loaded');
-    img.onerror=()=>{img.style.display='none'};
+    img.onerror=()=>{
+      img.onerror=()=>img.style.display='none';
+      img.src=`https://www.instagram.com/reel/${code}/media/?size=m`;
+    };
+    img.src=`https://www.instagram.com/p/${code}/media/?size=m`;
   });
-}
-
-async function pumpThumbs(){
-  while(thumbIdx<thumbQueue.length){
-    const {code}=thumbQueue[thumbIdx++];
-    if(thumbCache[code]){applyThumb(code,thumbCache[code]);continue;}
-    // Try Instagram oembed (may work for some public posts)
-    try{
-      const r=await fetch(`https://api.instagram.com/oembed/?url=https://www.instagram.com/p/${code}/&format=json`,{mode:'cors'});
-      if(r.ok){
-        const d=await r.json();
-        if(d.thumbnail_url){thumbCache[code]=d.thumbnail_url;applyThumb(code,d.thumbnail_url);continue;}
-      }
-    }catch(e){}
-    // Fallback: direct media URL (img tags bypass CORS)
-    const src=`https://www.instagram.com/p/${code}/media/?size=m`;
-    thumbCache[code]=src;
-    applyThumb(code,src);
-  }
 }
 
 function buildBanner(){
@@ -409,9 +390,8 @@ function buildPhones(){
     const matchCount=d.posts.filter(p=>MY_IDS.has(p.u)).length;
     const cells=d.posts.map((p,i)=>{
       const own=MY_IDS.has(p.u);
-      thumbQueue.push({code:p.u});
       return`<a class="pcell${own?' own':''}" data-code="${p.u}" href="https://www.instagram.com/p/${p.u}/" target="_blank">
-        <div class="pcell-thumb" style="background:${gc(i+di*7)}"><span>${i+1}</span><img class="igthumb" src="" alt="" loading="lazy"/></div>
+        <div class="pcell-thumb" style="background:${gc(i+di*7)}"><span>${i+1}</span><img class="igthumb" src="" alt=""/></div>
         <div class="pcell-overlay"><div class="pcell-cap">${p.c}</div></div>
         <div class="ptip">
           <div class="pt-rank">第${i+1}位</div>
@@ -473,8 +453,7 @@ function buildPhones(){
     </div>`;
   }).join('');
 
-  // Start thumbnail loading after DOM is ready
-  requestAnimationFrame(()=>pumpThumbs());
+  requestAnimationFrame(()=>loadAllThumbs());
 }
 
 buildBanner();
