@@ -244,7 +244,7 @@ async def main():
             posts = await scrape_hashtag(page, tag, url, TOP_N)
             all_posts.extend(posts)
 
-        await browser.disconnect()
+        await browser.close()
 
     proc.terminate()
     import shutil
