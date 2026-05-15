@@ -21,7 +21,18 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-JSON_PATH = Path(__file__).parent / 'ig_results.json'
+# ig_results.json の検索順: スクリプトと同じフォルダ → ホームディレクトリ → カレントディレクトリ
+def _find_json():
+    for p in [
+        Path(__file__).parent / 'ig_results.json',
+        Path.home() / 'ig_results.json',
+        Path('ig_results.json'),
+    ]:
+        if p.exists():
+            return p
+    return Path(__file__).parent / 'ig_results.json'  # エラーメッセージ用
+
+JSON_PATH = _find_json()
 OUT_DIR = Path(__file__).parent.parent / 'client' / 'public' / 'ig-thumbs'
 
 HEADERS = {
