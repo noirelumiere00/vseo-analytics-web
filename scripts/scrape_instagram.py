@@ -209,6 +209,13 @@ async def main():
     print('  Instagram ハッシュタグ スクレイパー')
     print('=' * 55)
 
+    # 前回クラッシュ分のChromeが残っていたらkill
+    r = subprocess.run(['lsof', '-ti', 'tcp:9222'], capture_output=True, text=True)
+    for pid in r.stdout.strip().split('\n'):
+        if pid.strip():
+            subprocess.run(['kill', '-9', pid.strip()], capture_output=True)
+    time.sleep(1)
+
     # 一時プロファイルでChrome起動 → SingletonLock問題を回避
     tmp = tempfile.mkdtemp(prefix='ig_scrape_')
     print(f'\nChromeを起動中...')
