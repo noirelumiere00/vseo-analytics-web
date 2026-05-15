@@ -26,10 +26,10 @@ from datetime import datetime
 
 # ── 設定 ───────────────────────────────────────────────────────────
 HASHTAGS = [
-    ('#洗濯機掃除',      'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF%E6%A9%9F%E6%8E%83%E9%99%A4'),
-    ('#洗濯槽クリーナー', 'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF%E6%A7%BD%E3%82%AF%E3%83%AA%E3%83%BC%E3%83%8A%E3%83%BC'),
-    ('#洗濯槽掃除',      'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF%E6%A7%BD%E6%8E%83%E9%99%A4'),
-    ('#洗濯',           'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF'),
+    ('#洗濯機掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A9%9F%E6%8E%83%E9%99%A4/'),
+    ('#洗濯槽クリーナー', 'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A7%BD%E3%82%AF%E3%83%AA%E3%83%BC%E3%83%8A%E3%83%BC/'),
+    ('#洗濯槽掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A7%BD%E6%8E%83%E9%99%A4/'),
+    ('#洗濯',           'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF/'),
 ]
 TOP_N       = 20   # 各ハッシュタグで取得する上位件数
 OUTPUT_JSON = str(Path.home() / 'ig_results.json')
@@ -75,16 +75,38 @@ async def scrape_hashtag(page, tag: str, url: str, top_n: int) -> list:
         print(f'  ⚠ ページ移動エラー: {e}')
         return posts
 
-    # ページがロードされるまで待機＆スクロール
-    await page.wait_for_timeout(4000)
-    for _ in range(4):
+    await page.wait_for_timeout(3000)
+
+    # ── リールタブをクリック ───────────────────────────────────────
+    clicked = False
+    for xpath in [
+        '//span[text()="リール"]',
+        '//div[text()="リール"]',
+        '//span[text()="Reels"]',
+        '//div[text()="Reels"]',
+    ]:
+        try:
+            el = page.locator(xpath).first
+            if await el.is_visible(timeout=3000):
+                await el.click()
+                clicked = True
+                print('  ✅ リールタブをクリック')
+                await page.wait_for_timeout(2500)
+                break
+        except Exception:
+            pass
+    if not clicked:
+        print('  ⚠ リールタブが見つかりません — /reel/ リンクのみ絞り込みます')
+
+    # スクロールして追加読み込み
+    for _ in range(5):
         await page.evaluate('window.scrollBy(0, 700)')
-        await page.wait_for_timeout(1200)
+        await page.wait_for_timeout(1000)
     await page.wait_for_timeout(2000)
 
-    # ── 投稿リンクを収集 ──────────────────────────────────────────
-    links = await page.query_selector_all('a[href*="/p/"], a[href*="/reel/"]')
-    print(f'  リンク検出: {len(links)} 件')
+    # ── リールリンクのみ収集 ──────────────────────────────────────
+    links = await page.query_selector_all('a[href*="/reel/"]')
+    print(f'  リール検出: {len(links)} 件')
 
     seen = set()
     for link in links:
@@ -97,9 +119,9 @@ async def scrape_hashtag(page, tag: str, url: str, top_n: int) -> list:
         thumb    = (await img_el.get_attribute('src'))  if img_el else ''
         alt      = (await img_el.get_attribute('alt'))  if img_el else ''
 
-        m         = re.search(r'/(p|reel)/([A-Za-z0-9_-]+)/', href)
-        shortcode = m.group(2) if m else ''
-        is_reel   = '/reel/' in href
+        m         = re.search(r'/reel/([A-Za-z0-9_-]+)/', href)
+        shortcode = m.group(1) if m else ''
+        is_reel   = True
 
         api = api_posts.get(shortcode, {})
         posts.append({
