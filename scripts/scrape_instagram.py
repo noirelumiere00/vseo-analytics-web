@@ -26,10 +26,10 @@ from datetime import datetime
 
 # ── 設定 ───────────────────────────────────────────────────────────
 HASHTAGS = [
-    ('#洗濯機掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A9%9F%E6%8E%83%E9%99%A4/'),
-    ('#洗濯槽クリーナー', 'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A7%BD%E3%82%AF%E3%83%AA%E3%83%BC%E3%83%8A%E3%83%BC/'),
-    ('#洗濯槽掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A7%BD%E6%8E%83%E9%99%A4/'),
-    ('#洗濯',           'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF/'),
+    ('#洗濯槽クリーナー', 'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF%E6%A7%BD%E3%82%AF%E3%83%AA%E3%83%BC%E3%83%8A%E3%83%BC&hl=ja'),
+    ('#洗濯機掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A9%9F%E6%8E%83%E9%99%A4/?hl=ja'),
+    ('#洗濯槽掃除',      'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF%E6%A7%BD%E6%8E%83%E9%99%A4/?hl=ja'),
+    ('#洗濯',           'https://www.instagram.com/explore/tags/%E6%B4%97%E6%BF%AF/?hl=ja'),
 ]
 TOP_N       = 20   # 各ハッシュタグで取得する上位件数
 OUTPUT_JSON = str(Path.home() / 'ig_results.json')
