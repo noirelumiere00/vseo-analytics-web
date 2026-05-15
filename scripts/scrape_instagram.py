@@ -32,8 +32,8 @@ HASHTAGS = [
     ('#洗濯',           'https://www.instagram.com/explore/search/keyword/?q=%23%E6%B4%97%E6%BF%AF'),
 ]
 TOP_N       = 20   # 各ハッシュタグで取得する上位件数
-OUTPUT_JSON = 'ig_results.json'
-OUTPUT_XLSX = 'ig_results.xlsx'
+OUTPUT_JSON = str(Path.home() / 'ig_results.json')
+OUTPUT_XLSX = str(Path.home() / 'ig_results.xlsx')
 # ───────────────────────────────────────────────────────────────────
 
 
@@ -198,41 +198,43 @@ def save_xlsx(all_posts: list, path: str):
 
 
 async def main():
+    import subprocess
+    import tempfile
+    import time
     from playwright.async_api import async_playwright
 
-    profile = chrome_profile_path()
-    use_profile = profile and Path(profile).exists()
+    CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 
     print('=' * 55)
     print('  Instagram ハッシュタグ スクレイパー')
     print('=' * 55)
 
-    async with async_playwright() as pw:
-        # ── ブラウザ起動 ──────────────────────────────────────────
-        if use_profile:
-            print(f'\n✅ Chromeプロファイルを検出しました:\n   {profile}')
-            print('  既存のログインセッションを使用します。')
-            context = await pw.chromium.launch_persistent_context(
-                user_data_dir=str(Path(profile).parent),
-                headless=False,
-                channel='chrome',
-                args=['--no-sandbox'],
-            )
-            page = context.pages[0] if context.pages else await context.new_page()
-        else:
-            print('\n⚠ Chromeプロファイルが見つかりませんでした。')
-            print('  ブラウザを起動します。Instagramにログインしてください。')
-            browser = await pw.chromium.launch(headless=False, channel='chrome', args=['--no-sandbox'])
-            context = await browser.new_context(
-                user_agent='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            )
-            page = await context.new_page()
-            await page.goto('https://www.instagram.com/accounts/login/', wait_until='domcontentloaded')
+    # 一時プロファイルでChrome起動 → SingletonLock問題を回避
+    tmp = tempfile.mkdtemp(prefix='ig_scrape_')
+    print(f'\nChromeを起動中...')
+    proc = subprocess.Popen(
+        [CHROME, '--remote-debugging-port=9222', f'--user-data-dir={tmp}',
+         '--no-first-run', '--no-default-browser-check', '--no-sandbox'],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    time.sleep(3)
 
-        # ── ログイン確認 ──────────────────────────────────────────
+    async with async_playwright() as pw:
+        try:
+            browser = await pw.chromium.connect_over_cdp('http://localhost:9222')
+        except Exception as e:
+            print(f'❌ Chrome接続失敗: {e}')
+            proc.terminate()
+            return
+
+        ctx = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+
+        await page.goto('https://www.instagram.com/accounts/login/', wait_until='domcontentloaded')
+
         print('\n' + '-' * 55)
-        print('  ブラウザでInstagramにログインしていることを確認し、')
-        print('  準備ができたら Enter キーを押してください。')
+        print('  Chromeが開きました。Instagramにログインしてください。')
+        print('  ログイン完了後、このターミナルで Enter を押してください。')
         print('-' * 55)
         input()
 
@@ -242,7 +244,11 @@ async def main():
             posts = await scrape_hashtag(page, tag, url, TOP_N)
             all_posts.extend(posts)
 
-        await context.close()
+        await browser.disconnect()
+
+    proc.terminate()
+    import shutil
+    shutil.rmtree(tmp, ignore_errors=True)
 
     # ── 出力 ─────────────────────────────────────────────────────
     print(f'\n合計 {len(all_posts)} 件取得')
@@ -253,7 +259,7 @@ async def main():
 
     save_xlsx(all_posts, OUTPUT_XLSX)
 
-    print('\n完了！ig_results.xlsx をこのスクリプトと同じフォルダで確認してください。')
+    print('\n完了！ ~/ig_results.xlsx を確認してください。')
 
 
 if __name__ == '__main__':
