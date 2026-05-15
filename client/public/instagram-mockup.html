@@ -356,12 +356,19 @@ function loadAllThumbs(){
     const cell=img.closest('[data-code]');
     if(!cell)return;
     const code=cell.dataset.code;
-    img.onload=()=>img.classList.add('loaded');
-    img.onerror=()=>{
-      img.onerror=()=>img.style.display='none';
-      img.src=`https://www.instagram.com/reel/${code}/media/?size=m`;
+    const srcs=[
+      `ig-thumbs/${code}.jpg`,                              // ローカル保存済み（推奨）
+      `https://www.instagram.com/p/${code}/media/?size=m`,  // Instagram直接（要ログイン）
+      `https://www.instagram.com/reel/${code}/media/?size=m`,
+    ];
+    let idx=0;
+    const next=()=>{
+      if(idx>=srcs.length){img.style.display='none';return;}
+      img.onload=()=>img.classList.add('loaded');
+      img.onerror=()=>{idx++;next();};
+      img.src=srcs[idx++];
     };
-    img.src=`https://www.instagram.com/p/${code}/media/?size=m`;
+    next();
   });
 }
 
@@ -419,14 +426,7 @@ function buildPhones(){
                 <span class="ig-topbar-title">${d.tag}</span>
                 <span class="ig-topbar-more">⋯</span>
               </div>
-              <div class="ig-hdr">
-                <div class="ig-hdr-icon">#</div>
-                <div class="ig-hdr-info">
-                  <h3>${d.tag}</h3>
-                  <p>${d.posts.length}件の投稿</p>
-                  <button class="ig-follow">フォロー</button>
-                </div>
-              </div>
+
               <div class="ig-tabs">
                 <div class="ig-tab on">投稿</div>
                 <div class="ig-tab">リール</div>
