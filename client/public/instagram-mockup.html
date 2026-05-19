@@ -175,6 +175,24 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
   flex-shrink:0;
 }
 
+/* ── Hashtag info row ── */
+.ig-tagrow{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px 7px;
+  flex-shrink:0;
+  background:#fff;
+  border-bottom:0.5px solid #dbdbdb;
+}
+.ig-tagrow-left{}
+.ig-tagrow-name{font-size:8px;font-weight:800;color:#262626;letter-spacing:-.2px;line-height:1}
+.ig-tagrow-count{font-size:6px;color:#8e8e8e;margin-top:2px;line-height:1}
+.ig-tagrow-follow{
+  font-size:7.5px;font-weight:700;color:#fff;
+  background:#0095f6;border:none;
+  border-radius:8px;padding:4px 10px;
+  line-height:1;cursor:pointer;flex-shrink:0;
+}
+
 /* ── Tab bar ── */
 .ig-tabs{
   display:flex;flex-shrink:0;
@@ -386,7 +404,13 @@ function buildPhones(){
             <div class="rcell-rank">${i+1}</div>
             <div class="rcell-thumb" style="background:${bg}"><img class="igthumb" src="" alt=""/></div>
             <div class="rcell-play">
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="white" opacity=".85"><path d="M2 1.5l7 3.5-7 3.5z"/></svg>
+              <!-- Instagram reels film-strip indicator -->
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" opacity=".95">
+                <rect x="1" y="4" width="14" height="10" rx="2" stroke="white" stroke-width="1.2"/>
+                <path d="M1 7h14" stroke="white" stroke-width=".9" opacity=".6"/>
+                <path d="M4 4V2M7 4V2M9.5 4V2M12 4V2" stroke="white" stroke-width="1.1" stroke-linecap="round"/>
+                <path d="M6.5 10L10.5 12 6.5 14V10z" fill="white"/>
+              </svg>
             </div>
             <div class="rcell-overlay">
               <div class="rcell-views">${p.v?'▶ '+p.v:''}</div>
@@ -473,6 +497,15 @@ function buildPhones(){
               </div>
             </div>
 
+            <!-- ② ½ Hashtag info row -->
+            <div class="ig-tagrow">
+              <div class="ig-tagrow-left">
+                <div class="ig-tagrow-name">${d.tag}</div>
+                <div class="ig-tagrow-count">公開投稿 · 数万件以上</div>
+              </div>
+              <button class="ig-tagrow-follow">フォロー</button>
+            </div>
+
             <!-- ③ Tabs -->
             <div class="ig-tabs">
               <div class="ig-tab on">おすすめ</div>
@@ -495,10 +528,12 @@ function buildPhones(){
                   <path d="M3 10.8L12 3l9 7.8V21a1 1 0 01-1 1h-4.5v-5.5H8.5V22H4a1 1 0 01-1-1v-10.2z" stroke="#262626" stroke-width="1.7" stroke-linejoin="round"/>
                 </svg>
               </div>
-              <!-- Search (active — bolder stroke) -->
+              <!-- Search (active — filled/solid magnifying glass) -->
               <div class="ig-bni">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                  <circle cx="10.5" cy="10.5" r="7" stroke="#262626" stroke-width="2.2"/>
+                  <circle cx="10.5" cy="10.5" r="7" fill="#262626"/>
+                  <circle cx="10.5" cy="10.5" r="4.5" fill="#fff"/>
+                  <circle cx="10.5" cy="10.5" r="2.5" fill="#262626"/>
                   <path d="M16.2 16.2L21.5 21.5" stroke="#262626" stroke-width="2.2" stroke-linecap="round"/>
                 </svg>
               </div>
