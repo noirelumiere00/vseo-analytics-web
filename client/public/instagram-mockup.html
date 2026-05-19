@@ -59,17 +59,16 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 .ig-back{font-size:18px;color:#262626;line-height:1;flex-shrink:0;font-weight:300}
 .ig-searchbar{flex:1;display:flex;align-items:center;background:#efefef;border-radius:10px;padding:4px 8px;gap:4px;min-width:0}
 .ig-kw{font-size:8px;color:#262626;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
-.ig-more{font-size:12px;color:#262626;flex-shrink:0;line-height:1}
+.ig-more{font-size:13px;color:#262626;flex-shrink:0;line-height:1;letter-spacing:.05em}
 
-/* tab bar — chip style */
-.ig-tabs{display:flex;gap:4px;padding:5px 6px;flex-shrink:0;background:#fff;border-bottom:1px solid #efefef;overflow-x:auto;scrollbar-width:none}
-.ig-tabs::-webkit-scrollbar{display:none}
-.ig-tab{flex-shrink:0;padding:3px 8px;border-radius:999px;font-size:7px;color:#262626;background:#efefef;font-weight:500;line-height:1.4;white-space:nowrap}
-.ig-tab.on{background:#262626;color:#fff;font-weight:700}
+/* tab bar — underline style */
+.ig-tabs{display:flex;flex-shrink:0;background:#fff;border-bottom:1px solid #dbdbdb;padding:0 4px}
+.ig-tab{flex:1;text-align:center;padding:7px 0 5px;font-size:7.5px;color:#8e8e8e;border-bottom:2px solid transparent;line-height:1;white-space:nowrap}
+.ig-tab.on{color:#262626;border-bottom-color:#262626;font-weight:700}
 
 /* reels grid */
-.gwrap{flex:1;overflow:hidden;background:#000;position:relative}
-.gscroll{position:absolute;inset:0;overflow-y:auto;scrollbar-width:none}
+.gwrap{flex:1;overflow:hidden;background:#000;position:relative;min-height:0}
+.gscroll{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .gscroll::-webkit-scrollbar{display:none}
 .rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px}
 .gfade{position:absolute;bottom:0;left:0;right:0;height:24px;background:linear-gradient(transparent,#000);pointer-events:none;z-index:5}
