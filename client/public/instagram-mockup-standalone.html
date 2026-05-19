@@ -136,6 +136,7 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
   flex-shrink:0;
   background:#fff;
 }
+.sbar-left{display:flex;align-items:center;gap:4px}
 .sbar-t{font-size:9px;font-weight:700;color:#000;letter-spacing:-.4px}
 .sbar-i{display:flex;align-items:center;gap:4px}
 
@@ -439,26 +440,33 @@ function buildPhones(){
 
             <!-- ① Status bar -->
             <div class="sbar">
-              <span class="sbar-t">9:41</span>
+              <div class="sbar-left">
+                <span class="sbar-t">9:41</span>
+                <!-- Focus mode person indicator -->
+                <svg width="8" height="9" viewBox="0 0 9 10" fill="black">
+                  <circle cx="4.5" cy="3" r="2.2"/>
+                  <path d="M.5 10c0-2.2 1.8-4 4-4s4 1.8 4 4z"/>
+                </svg>
+              </div>
               <div class="sbar-i">
-                <!-- cellular signal -->
-                <svg width="12" height="9" viewBox="0 0 12 9" fill="black">
-                  <rect x="0"  y="5"   width="2.2" height="4"   rx=".55"/>
-                  <rect x="3.3" y="3.2" width="2.2" height="5.8" rx=".55"/>
-                  <rect x="6.6" y="1.4" width="2.2" height="7.6" rx=".55"/>
-                  <rect x="9.9" y="0"   width="2.2" height="9"   rx=".55"/>
+                <!-- cellular signal — 4 bars ascending -->
+                <svg width="13" height="10" viewBox="0 0 13 10" fill="black">
+                  <rect x="0"   y="6"   width="2.4" height="4"   rx=".6"/>
+                  <rect x="3.5" y="4"   width="2.4" height="6"   rx=".6"/>
+                  <rect x="7"   y="2"   width="2.4" height="8"   rx=".6"/>
+                  <rect x="10.5" y="0"  width="2.4" height="10"  rx=".6"/>
                 </svg>
                 <!-- wifi -->
-                <svg width="12" height="9" viewBox="0 0 12 9" fill="none">
-                  <path d="M6 7a.9.9 0 100 1.8A.9.9 0 006 7z" fill="black"/>
-                  <path d="M3.2 5C4 4.1 5 3.6 6 3.6S8 4.1 8.8 5" stroke="black" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-                  <path d="M.6 2.6C2.1 1.1 4 .2 6 .2S9.9 1.1 11.4 2.6" stroke="black" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+                <svg width="13" height="10" viewBox="0 0 13 10" fill="none">
+                  <path d="M6.5 7.8a1 1 0 100 2 1 1 0 000-2z" fill="black"/>
+                  <path d="M3.4 5.4c.8-.9 1.9-1.4 3.1-1.4s2.3.5 3.1 1.4" stroke="black" stroke-width="1.2" stroke-linecap="round"/>
+                  <path d="M.5 2.8C2.1 1.1 4.2.2 6.5.2S10.9 1.1 12.5 2.8" stroke="black" stroke-width="1.2" stroke-linecap="round"/>
                 </svg>
-                <!-- battery -->
-                <svg width="24" height="9" viewBox="0 0 24 9" fill="none">
-                  <rect x=".5" y="1.2" width="20" height="6.6" rx="2" stroke="black" stroke-width=".9"/>
-                  <rect x="21.2" y="3.2" width="2" height="2.6" rx="1" fill="black" opacity=".4"/>
-                  <rect x="1.8" y="2.4" width="15" height="4.2" rx="1.2" fill="black"/>
+                <!-- battery — percentage number style (iOS 16+) -->
+                <svg width="29" height="12" viewBox="0 0 29 12" fill="none">
+                  <rect x=".5" y="1" width="25" height="10" rx="2.8" stroke="black" stroke-width="1"/>
+                  <rect x="26" y="4" width="2.2" height="4" rx="1.1" fill="black" opacity=".4"/>
+                  <text x="13" y="9" text-anchor="middle" font-size="7" font-weight="700" fill="black" font-family="-apple-system,system-ui,sans-serif">100</text>
                 </svg>
               </div>
             </div>
