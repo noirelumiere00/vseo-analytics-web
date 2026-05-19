@@ -34,74 +34,214 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 .leg-my::after{content:'自社';position:absolute;top:-1px;left:-1px;font-size:4.5px;font-weight:800;background:var(--ig-pink);color:white;padding:1px 2px;border-radius:2px}
 .leg-normal{width:14px;height:14px;border-radius:3px;background:#f0f0f0;border:1px solid #ddd;flex-shrink:0}
 
-.phones-stage{display:flex;gap:20px;justify-content:center;align-items:flex-start;overflow-x:auto;padding:4px 0 16px}
-.phone-card{display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto}
+.phones-stage{display:flex;gap:24px;justify-content:center;align-items:flex-start;overflow-x:auto;padding:4px 0 16px}
+.phone-card{display:flex;flex-direction:column;align-items:center;gap:12px;flex:0 0 auto}
 .phone-kw{font-size:11px;font-weight:700;color:#555;background:#fff;border:1px solid var(--border);padding:4px 14px;border-radius:999px}
 
-/* iPhone 15 Pro frame */
-.phone{position:relative;width:216px;height:468px;filter:drop-shadow(0 10px 28px rgba(0,0,0,.18))}
-.bl1,.bl2,.bl3{position:absolute;left:-3px;border-radius:1.5px 0 0 1.5px;width:3px;background:linear-gradient(180deg,#48484a,#2c2c2e)}
-.bl1{top:76px;height:15px}.bl2{top:104px;height:20px}.bl3{top:129px;height:20px}
-.br1{position:absolute;right:-3px;top:112px;width:3px;height:24px;border-radius:0 1.5px 1.5px 0;background:linear-gradient(180deg,#48484a,#2c2c2e)}
-.frame{width:100%;height:100%;border-radius:30px;padding:3px;background:linear-gradient(160deg,#48484a,#3a3a3c 15%,#2c2c2e 40%,#1c1c1e 60%,#2c2c2e 80%,#3a3a3c)}
-.bezel{width:100%;height:100%;border-radius:28px;border:1px solid #050505;background:#fff;overflow:hidden;position:relative}
-.di{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:20;width:64px;height:18px;background:black;border-radius:999px}
-.glass{position:absolute;inset:0;border-radius:26px;z-index:30;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.02) 30%,transparent 50%)}
-.screen{width:100%;height:100%;border-radius:26px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
+/* ──────────────────────────────
+   iPhone 15 Pro frame
+────────────────────────────── */
+.phone{
+  position:relative;
+  width:216px;height:468px;
+  filter:
+    drop-shadow(0 18px 48px rgba(0,0,0,.2))
+    drop-shadow(0 4px 12px rgba(0,0,0,.12))
+    drop-shadow(0 1px 3px rgba(0,0,0,.1));
+}
 
-/* status bar */
-.sbar{display:flex;align-items:center;justify-content:space-between;padding:0 17px;height:28px;flex-shrink:0;background:#fff}
-.sbar-t{font-size:8.5px;font-weight:700;color:#000;margin-top:10px;letter-spacing:-.3px}
-.sbar-i{display:flex;align-items:center;gap:3px;margin-top:10px}
+/* Hardware buttons */
+.phbtn{position:absolute}
+/* Left: silent switch */
+.phbtn-l0{left:-2.5px;top:70px;width:2.5px;height:14px;
+  background:linear-gradient(90deg,#6c6c70,#b0b0b4 50%,#7c7c80);
+  border-radius:1.5px 0 0 1.5px}
+/* Left: vol + */
+.phbtn-l1{left:-2.5px;top:92px;width:2.5px;height:26px;
+  background:linear-gradient(90deg,#6c6c70,#b0b0b4 50%,#7c7c80);
+  border-radius:1.5px 0 0 1.5px}
+/* Left: vol - */
+.phbtn-l2{left:-2.5px;top:124px;width:2.5px;height:26px;
+  background:linear-gradient(90deg,#6c6c70,#b0b0b4 50%,#7c7c80);
+  border-radius:1.5px 0 0 1.5px}
+/* Right: power */
+.phbtn-r{right:-2.5px;top:108px;width:2.5px;height:36px;
+  background:linear-gradient(90deg,#b0b0b4,#6c6c70 50%,#8c8c90);
+  border-radius:0 1.5px 1.5px 0}
 
-/* IG search nav */
-.ig-nav{display:flex;align-items:center;padding:0 8px;height:34px;flex-shrink:0;gap:5px;background:#fff;border-bottom:1px solid #dbdbdb}
-.ig-back{font-size:18px;color:#262626;line-height:1;flex-shrink:0;font-weight:300}
-.ig-searchbar{flex:1;display:flex;align-items:center;background:#efefef;border-radius:10px;padding:4px 8px;gap:4px;min-width:0}
-.ig-kw{font-size:8px;color:#262626;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
-.ig-more{font-size:13px;color:#262626;flex-shrink:0;line-height:1;letter-spacing:.05em}
+/* Titanium outer frame */
+.frame{
+  width:100%;height:100%;
+  border-radius:38px;
+  padding:3px;
+  background:linear-gradient(152deg,
+    #d0d0d4 0%,   #888890 7%,
+    #c8c8cc 16%,  #9a9aa0 25%,
+    #dcdce0 36%,  #8e8e94 48%,
+    #d4d4d8 60%,  #929298 70%,
+    #cecece 80%,  #b0b0b6 89%,
+    #d6d6da 100%
+  );
+}
 
-/* tab bar — underline style */
-.ig-tabs{display:flex;flex-shrink:0;background:#fff;border-bottom:1px solid #dbdbdb;padding:0 4px}
-.ig-tab{flex:1;text-align:center;padding:7px 0 5px;font-size:7.5px;color:#8e8e8e;border-bottom:2px solid transparent;line-height:1;white-space:nowrap}
-.ig-tab.on{color:#262626;border-bottom-color:#262626;font-weight:700}
+/* Inner black ring */
+.bezel{
+  width:100%;height:100%;
+  border-radius:35px;
+  background:#0a0a0a;
+  padding:1.5px;
+  overflow:hidden;
+  position:relative;
+}
 
-/* reels grid */
+/* Screen */
+.screen{
+  width:100%;height:100%;
+  border-radius:33.5px;
+  overflow:hidden;
+  background:#fff;
+  display:flex;
+  flex-direction:column;
+  position:relative;
+}
+
+/* Dynamic Island */
+.di{
+  position:absolute;
+  top:10px;left:50%;transform:translateX(-50%);
+  z-index:20;
+  width:76px;height:23px;
+  background:#0a0a0a;
+  border-radius:999px;
+  box-shadow:inset 0 0 0 0.5px rgba(255,255,255,.06);
+}
+
+/* Glass highlight */
+.glass{
+  position:absolute;inset:0;
+  border-radius:33.5px;
+  z-index:30;pointer-events:none;
+  background:linear-gradient(148deg,
+    rgba(255,255,255,.13) 0%,
+    rgba(255,255,255,.06) 22%,
+    transparent 40%
+  );
+}
+
+/* ── Status bar ── */
+.sbar{
+  display:flex;align-items:center;justify-content:space-between;
+  height:46px;
+  padding:14px 18px 0;
+  flex-shrink:0;
+  background:#fff;
+}
+.sbar-t{font-size:9px;font-weight:700;color:#000;letter-spacing:-.4px}
+.sbar-i{display:flex;align-items:center;gap:4px}
+
+/* ── Instagram search nav ── */
+.ig-nav{
+  display:flex;align-items:center;
+  padding:4px 6px 4px 4px;
+  height:44px;
+  flex-shrink:0;
+  gap:4px;
+  background:#fff;
+}
+.ig-back{
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.ig-searchbar{
+  flex:1;
+  display:flex;align-items:center;
+  background:#efefef;
+  border-radius:12px;
+  padding:5px 10px;
+  gap:5px;
+  min-width:0;
+  height:34px;
+}
+.ig-kw{
+  font-size:8.5px;color:#262626;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  line-height:1;flex:1;
+}
+.ig-more-btn{
+  width:32px;height:32px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+
+/* ── Tab bar ── */
+.ig-tabs{
+  display:flex;flex-shrink:0;
+  background:#fff;
+  border-bottom:0.5px solid #dbdbdb;
+}
+.ig-tab{
+  flex:1;text-align:center;
+  padding:9px 0 8px;
+  font-size:7.5px;
+  color:#8e8e8e;
+  border-bottom:1.5px solid transparent;
+  line-height:1;
+  white-space:nowrap;
+  letter-spacing:-.1px;
+}
+.ig-tab.on{
+  color:#262626;
+  border-bottom-color:#262626;
+  font-weight:700;
+}
+
+/* ── Reels grid ── */
 .gwrap{flex:1;overflow:hidden;background:#000;position:relative;min-height:0}
 .gscroll{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .gscroll::-webkit-scrollbar{display:none}
 .rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px}
-.gfade{position:absolute;bottom:0;left:0;right:0;height:24px;background:linear-gradient(transparent,#000);pointer-events:none;z-index:5}
+.gfade{position:absolute;bottom:0;left:0;right:0;height:32px;background:linear-gradient(transparent,rgba(0,0,0,.65));pointer-events:none;z-index:5}
 
-/* reel cell */
 .rcell{aspect-ratio:9/16;position:relative;overflow:hidden;cursor:pointer;background:#111;transition:opacity .15s}
 .rcell:hover{opacity:.85}
-.rcell-rank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:rgba(255,255,255,.18);z-index:0;pointer-events:none}
+.rcell-rank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:rgba(255,255,255,.15);z-index:0;pointer-events:none}
 .rcell-thumb{position:absolute;inset:0;z-index:1}
 .rcell-thumb img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}
 .rcell-thumb img.loaded{opacity:1}
 .rcell-play{position:absolute;top:3px;right:3px;z-index:3;pointer-events:none}
 .rcell-overlay{position:absolute;bottom:0;left:0;right:0;padding:3px 4px;background:linear-gradient(transparent,rgba(0,0,0,.7));z-index:3;pointer-events:none}
 .rcell-views{font-size:5.5px;color:rgba(255,255,255,.9);font-weight:700;line-height:1}
-
-/* own company */
 .rcell.own{outline:2.5px solid var(--ig-pink);outline-offset:-2.5px;z-index:4}
 .rcell.own::after{content:'自社';position:absolute;top:0;left:0;right:0;z-index:6;font-size:6px;font-weight:800;background:var(--ig-pink);color:white;padding:2px 4px;text-align:center;letter-spacing:.05em}
-
-/* hover tooltip */
 .rcell:hover .rtip{display:flex}
-.rtip{display:none;flex-direction:column;gap:2px;position:absolute;inset:0;background:rgba(0,0,0,.9);padding:5px;z-index:10}
+.rtip{display:none;flex-direction:column;gap:2px;position:absolute;inset:0;background:rgba(0,0,0,.92);padding:5px;z-index:10}
 .rt-rank{font-size:8px;font-weight:800;color:var(--ig-pink)}
 .rt-name{font-size:6px;font-weight:700;color:#aaa;margin-top:1px}
 .rt-cap{font-size:5px;color:rgba(255,255,255,.7);line-height:1.4;flex:1;overflow:hidden;margin-top:2px}
 .rt-stats{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:3px}
 .rt-stat{font-size:5.5px;color:#f09433;font-weight:700}
 
-/* bottom nav */
-.ig-bnav{display:flex;align-items:center;justify-content:space-around;padding:6px 4px 5px;background:#fff;border-top:1px solid #dbdbdb;flex-shrink:0}
-.ig-bni{display:flex;align-items:center;justify-content:center;width:28px;height:28px}
+/* ── Bottom nav ── */
+.ig-bnav{
+  display:flex;align-items:center;justify-content:space-around;
+  padding:6px 4px 5px;
+  background:#fff;
+  border-top:0.5px solid #dbdbdb;
+  flex-shrink:0;
+}
+.ig-bni{display:flex;align-items:center;justify-content:center;width:38px;height:30px}
 
-/* stats panel */
+/* Home indicator */
+.homeind{
+  flex-shrink:0;
+  height:22px;
+  background:#fff;
+  display:flex;align-items:center;justify-content:center;
+}
+.homeind-pill{width:108px;height:4px;background:#000;border-radius:999px;opacity:.18}
+
+/* Stats panel */
 .phone-stats{width:216px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
 .ps-row{display:flex;justify-content:space-between;margin-bottom:5px}
 .ps-item{text-align:center}
@@ -138,24 +278,10 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 <div class="phones-stage" id="stage"></div>
 
 <script>
-/* ────────────────────────────────────────────────────────────
-  自社リールのショートコード
-  例: 'DX3y0s1sx1W'
-──────────────────────────────────────────────────────────── */
 const MY_IDS = new Set([
-  'DX308QwBi5u',  /* 自社投稿（両ハッシュタグに出現） */
+  'DX308QwBi5u',
 ]);
 
-/* ────────────────────────────────────────────────────────────
-  検索結果データ
-  post フィールド:
-    sc    : ショートコード  例) 'DX3y0s1sx1W'
-    n     : ユーザー名     例) 'emme_tokyo_jp'  (空でも可)
-    c     : キャプション冒頭                     (空でも可)
-    v     : 再生数表示     例) '12.3万'          (空でも可)
-    rv    : 再生数 数値    例) 123000            (空でも可)
-    likes : いいね数表示   例) '1.2万'           (省略可)
-──────────────────────────────────────────────────────────── */
 const DATA = [
 {tag:'#洗濯槽クリーナー', posts:[
   {sc:'DAndsupyhzR',n:'',c:'',v:'',rv:0},
@@ -193,7 +319,6 @@ const DATA = [
 ]},
 ];
 
-/* ── color palette for backgrounds ── */
 const PAL=[
   ['#f09433','#dc2743'],['#dc2743','#cc2366'],['#cc2366','#833ab4'],
   ['#833ab4','#5851db'],['#5851db','#405de6'],['#e6683c','#c13584'],
@@ -201,7 +326,6 @@ const PAL=[
 ];
 function gc(i){const c=PAL[i%PAL.length];return`linear-gradient(135deg,${c[0]},${c[1]})`}
 
-/* ── thumbnail loading (local first, then IG direct) ── */
 function loadAllThumbs(){
   document.querySelectorAll('img.igthumb').forEach(img=>{
     const cell=img.closest('[data-code]');
@@ -223,7 +347,6 @@ function loadAllThumbs(){
   });
 }
 
-/* ── result banner ── */
 function buildBanner(){
   const rb=document.getElementById('rb');
   const myCount=DATA.reduce((a,d)=>a+d.posts.filter(p=>MY_IDS.has(p.sc)).length,0);
@@ -248,7 +371,6 @@ function buildBanner(){
     </div>`;
 }
 
-/* ── phone builder ── */
 function buildPhones(){
   const stage=document.getElementById('stage');
   stage.innerHTML=DATA.map((d,di)=>{
@@ -263,7 +385,7 @@ function buildPhones(){
             <div class="rcell-rank">${i+1}</div>
             <div class="rcell-thumb" style="background:${bg}"><img class="igthumb" src="" alt=""/></div>
             <div class="rcell-play">
-              <svg width="9" height="9" viewBox="0 0 10 10" fill="white" opacity=".9"><path d="M2 1.5l7 3.5-7 3.5z"/></svg>
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="white" opacity=".85"><path d="M2 1.5l7 3.5-7 3.5z"/></svg>
             </div>
             <div class="rcell-overlay">
               <div class="rcell-views">${p.v?'▶ '+p.v:''}</div>
@@ -281,62 +403,128 @@ function buildPhones(){
     return`<div class="phone-card">
       <div class="phone-kw">${d.tag}</div>
       <div class="phone">
-        <div class="bl1"></div><div class="bl2"></div><div class="bl3"></div><div class="br1"></div>
+        <!-- side buttons -->
+        <div class="phbtn phbtn-l0"></div>
+        <div class="phbtn phbtn-l1"></div>
+        <div class="phbtn phbtn-l2"></div>
+        <div class="phbtn phbtn-r"></div>
+
         <div class="frame"><div class="bezel">
+          <!-- Dynamic Island -->
           <div class="di"></div>
+          <!-- glass sheen -->
           <div class="glass"></div>
           <div class="screen">
+
+            <!-- ① Status bar -->
             <div class="sbar">
               <span class="sbar-t">9:41</span>
               <div class="sbar-i">
-                <svg width="11" height="8" viewBox="0 0 11 8" fill="black"><rect x="0" y="3" width="2" height="5" rx=".4"/><rect x="3" y="2" width="2" height="6" rx=".4"/><rect x="6" y="1" width="2" height="7" rx=".4"/><rect x="9" y="0" width="2" height="8" rx=".4"/></svg>
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="black"><path d="M5 1.5C6.8 1.5 8.4 2.3 9.5 3.5L8.5 4.5C7.7 3.6 6.4 3 5 3s-2.7.6-3.5 1.5L.5 3.5C1.6 2.3 3.2 1.5 5 1.5zM5 4.5c.9 0 1.7.4 2.3 1L5 8 2.7 5.5C3.3 4.9 4.1 4.5 5 4.5z"/></svg>
-                <svg width="20" height="8" viewBox="0 0 20 8" fill="none"><rect x=".5" y="1.5" width="16" height="5" rx="1.5" stroke="black" stroke-width="1"/><rect x="17" y="3" width="1.5" height="2" rx=".75" fill="black" opacity=".4"/><rect x="1.5" y="2.5" width="12" height="3" rx="1" fill="black"/></svg>
+                <!-- cellular signal -->
+                <svg width="12" height="9" viewBox="0 0 12 9" fill="black">
+                  <rect x="0"  y="5"   width="2.2" height="4"   rx=".55"/>
+                  <rect x="3.3" y="3.2" width="2.2" height="5.8" rx=".55"/>
+                  <rect x="6.6" y="1.4" width="2.2" height="7.6" rx=".55"/>
+                  <rect x="9.9" y="0"   width="2.2" height="9"   rx=".55"/>
+                </svg>
+                <!-- wifi -->
+                <svg width="12" height="9" viewBox="0 0 12 9" fill="none">
+                  <path d="M6 7a.9.9 0 100 1.8A.9.9 0 006 7z" fill="black"/>
+                  <path d="M3.2 5C4 4.1 5 3.6 6 3.6S8 4.1 8.8 5" stroke="black" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+                  <path d="M.6 2.6C2.1 1.1 4 .2 6 .2S9.9 1.1 11.4 2.6" stroke="black" stroke-width="1.1" stroke-linecap="round" fill="none"/>
+                </svg>
+                <!-- battery -->
+                <svg width="24" height="9" viewBox="0 0 24 9" fill="none">
+                  <rect x=".5" y="1.2" width="20" height="6.6" rx="2" stroke="black" stroke-width=".9"/>
+                  <rect x="21.2" y="3.2" width="2" height="2.6" rx="1" fill="black" opacity=".4"/>
+                  <rect x="1.8" y="2.4" width="15" height="4.2" rx="1.2" fill="black"/>
+                </svg>
               </div>
             </div>
+
+            <!-- ② Search nav -->
             <div class="ig-nav">
-              <span class="ig-back">‹</span>
+              <div class="ig-back">
+                <svg width="10" height="17" viewBox="0 0 10 17" fill="none">
+                  <path d="M8.5 1L1.5 8.5 8.5 16" stroke="#262626" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
               <div class="ig-searchbar">
-                <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><circle cx="4" cy="4" r="3" stroke="#8e8e8e" stroke-width="1.2"/><path d="M6.5 6.5l2 2" stroke="#8e8e8e" stroke-width="1.2" stroke-linecap="round"/></svg>
+                <svg width="11" height="11" viewBox="0 0 13 13" fill="none">
+                  <circle cx="5.5" cy="5.5" r="4.5" stroke="#8e8e8e" stroke-width="1.4"/>
+                  <path d="M9 9l2.8 2.8" stroke="#8e8e8e" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
                 <span class="ig-kw">${d.tag}</span>
               </div>
-              <span class="ig-more">⋯</span>
+              <div class="ig-more-btn">
+                <svg width="17" height="4" viewBox="0 0 18 4" fill="#262626">
+                  <circle cx="2" cy="2" r="1.8"/>
+                  <circle cx="9" cy="2" r="1.8"/>
+                  <circle cx="16" cy="2" r="1.8"/>
+                </svg>
+              </div>
             </div>
+
+            <!-- ③ Tabs -->
             <div class="ig-tabs">
               <div class="ig-tab on">おすすめ</div>
               <div class="ig-tab">プロフィール</div>
               <div class="ig-tab">音源</div>
               <div class="ig-tab">タグ</div>
             </div>
+
+            <!-- ④ Grid -->
             <div class="gwrap">
               <div class="gscroll"><div class="rgrid">${cells}</div></div>
               <div class="gfade"></div>
             </div>
+
+            <!-- ⑤ Bottom nav -->
             <div class="ig-bnav">
-              <!-- ホーム -->
+              <!-- Home -->
               <div class="ig-bni">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="1.8" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V21a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/><path d="M9 22V12h6v10"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 10.8L12 3l9 7.8V21a1 1 0 01-1 1h-4.5v-5.5H8.5V22H4a1 1 0 01-1-1v-10.2z" stroke="#262626" stroke-width="1.7" stroke-linejoin="round"/>
+                </svg>
               </div>
-              <!-- 検索 -->
+              <!-- Search (active — bolder stroke) -->
               <div class="ig-bni">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="7.5"/><path d="M16.5 16.5L22 22" stroke-linecap="round"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="10.5" cy="10.5" r="7" stroke="#262626" stroke-width="2.2"/>
+                  <path d="M16.2 16.2L21.5 21.5" stroke="#262626" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
               </div>
-              <!-- 新規投稿 -->
+              <!-- New post -->
               <div class="ig-bni">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect x="2.5" y="2.5" width="19" height="19" rx="4" stroke="#262626" stroke-width="1.7"/>
+                  <path d="M12 7.5v9M7.5 12h9" stroke="#262626" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
               </div>
-              <!-- リール -->
+              <!-- Reels -->
               <div class="ig-bni">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="1.8"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="3.5"/><circle cx="7" cy="7" r="1" fill="#262626" stroke="none"/><path d="M2 8h20M8 2v4M16 2v4"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect x="2" y="2" width="20" height="20" rx="5" stroke="#262626" stroke-width="1.7"/>
+                  <circle cx="12" cy="12" r="3" stroke="#262626" stroke-width="1.7"/>
+                  <path d="M2 8.5h20M8.5 2v6.5M15.5 2v6.5" stroke="#262626" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
               </div>
-              <!-- プロフィール -->
+              <!-- Profile -->
               <div class="ig-bni">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke-linecap="round"/></svg>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="8" r="3.8" stroke="#262626" stroke-width="1.7"/>
+                  <path d="M4.5 21c0-4.1 3.4-7.5 7.5-7.5s7.5 3.4 7.5 7.5" stroke="#262626" stroke-width="1.7" stroke-linecap="round"/>
+                </svg>
               </div>
             </div>
-          </div>
-        </div></div>
-      </div>
+
+            <!-- ⑥ Home indicator -->
+            <div class="homeind"><div class="homeind-pill"></div></div>
+
+          </div><!-- /screen -->
+        </div></div><!-- /bezel /frame -->
+      </div><!-- /phone -->
+
       <div class="phone-stats">
         <div class="ps-row">
           <div class="ps-item"><div class="ps-val">${d.posts.length||'—'}</div><div class="ps-lbl">取得件数</div></div>
