@@ -3,10 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Instagram VSEOスマホモック — 検索結果確認</title>
+<title>Instagram VSEOスマホモック — リール検索結果確認</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#ffffff;--surface:#f8f8f8;--border:#e5e5e5;--ig-pink:#e1306c;--ig-grad:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);--text:#111;--muted:#888}
+:root{
+  --bg:#fafafa;--surface:#f0f0f0;--border:#dbdbdb;
+  --ig-pink:#e1306c;
+  --ig-grad:linear-gradient(45deg,#f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%);
+  --text:#262626;--muted:#8e8e8e
+}
 body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:28px 24px 80px}
 
 .hdr{text-align:center;margin-bottom:24px}
@@ -16,13 +21,11 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 .hdr-sub{font-size:24px;font-weight:900;background:var(--ig-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .hdr-desc{font-size:12px;color:var(--muted);margin-top:6px}
 
-.result-banner{max-width:900px;margin:0 auto 22px;background:#fff5f8;border:1.5px solid var(--ig-pink);border-radius:12px;padding:16px 22px}
+.result-banner{max-width:960px;margin:0 auto 22px;background:#fff5f8;border:1.5px solid var(--ig-pink);border-radius:12px;padding:16px 22px}
 .rb-title{font-size:13px;font-weight:800;color:var(--ig-pink);margin-bottom:10px;display:flex;align-items:center;gap:6px}
 .rb-kw{font-size:12px;margin-bottom:6px}
-.rb-kw strong{color:var(--ig-pink)}
-.rb-kw span{color:#333}
-.rb-kw.none strong{color:#bbb}
-.rb-kw.none span{color:#bbb}
+.rb-kw strong{color:var(--ig-pink)}.rb-kw span{color:#333}
+.rb-kw.none strong{color:#bbb}.rb-kw.none span{color:#bbb}
 .rb-note{font-size:11px;color:#999;margin-top:10px;padding-top:10px;border-top:1px solid #fce;display:flex;align-items:center;gap:6px}
 
 .legend{display:flex;align-items:center;justify-content:center;gap:20px;margin-bottom:18px;flex-wrap:wrap}
@@ -33,68 +36,75 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 
 .phones-stage{display:flex;gap:20px;justify-content:center;align-items:flex-start;overflow-x:auto;padding:4px 0 16px}
 .phone-card{display:flex;flex-direction:column;align-items:center;gap:10px;flex:0 0 auto}
-.phone-kw{font-size:11px;font-weight:700;color:#555;background:var(--surface);border:1px solid var(--border);padding:4px 14px;border-radius:999px}
+.phone-kw{font-size:11px;font-weight:700;color:#555;background:#fff;border:1px solid var(--border);padding:4px 14px;border-radius:999px}
 
-/* iPhone 15 Pro frame — identical to TikTok mockup */
+/* iPhone 15 Pro frame */
 .phone{position:relative;width:216px;height:468px;filter:drop-shadow(0 10px 28px rgba(0,0,0,.18))}
 .bl1,.bl2,.bl3{position:absolute;left:-3px;border-radius:1.5px 0 0 1.5px;width:3px;background:linear-gradient(180deg,#48484a,#2c2c2e)}
 .bl1{top:76px;height:15px}.bl2{top:104px;height:20px}.bl3{top:129px;height:20px}
 .br1{position:absolute;right:-3px;top:112px;width:3px;height:24px;border-radius:0 1.5px 1.5px 0;background:linear-gradient(180deg,#48484a,#2c2c2e)}
 .frame{width:100%;height:100%;border-radius:30px;padding:3px;background:linear-gradient(160deg,#48484a,#3a3a3c 15%,#2c2c2e 40%,#1c1c1e 60%,#2c2c2e 80%,#3a3a3c)}
 .bezel{width:100%;height:100%;border-radius:28px;border:1px solid #050505;background:#fff;overflow:hidden;position:relative}
-.di{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:20;width:64px;height:18px;background:black;border-radius:999px;box-shadow:0 0 0 1px rgba(255,255,255,.06)}
+.di{position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:20;width:64px;height:18px;background:black;border-radius:999px}
 .glass{position:absolute;inset:0;border-radius:26px;z-index:30;pointer-events:none;background:linear-gradient(135deg,rgba(255,255,255,.06) 0%,rgba(255,255,255,.02) 30%,transparent 50%)}
 .screen{width:100%;height:100%;border-radius:26px;overflow:hidden;background:#fff;display:flex;flex-direction:column}
 
-/* Status bar (light theme) */
+/* status bar */
 .sbar{display:flex;align-items:center;justify-content:space-between;padding:0 17px;height:28px;flex-shrink:0;background:#fff}
 .sbar-t{font-size:8.5px;font-weight:700;color:#000;margin-top:10px;letter-spacing:-.3px}
-.sbar-i{display:flex;align-items:center;gap:2.5px;margin-top:10px;font-size:7px;color:#000}
+.sbar-i{display:flex;align-items:center;gap:3px;margin-top:10px}
 
-/* Instagram top nav */
-.ig-topbar{display:flex;align-items:center;padding:0 10px;height:36px;border-bottom:1px solid #dbdbdb;flex-shrink:0}
-.ig-back{font-size:18px;color:#262626;margin-right:8px;line-height:1}
-.ig-topbar-title{font-size:11px;font-weight:700;color:#262626;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ig-topbar-more{font-size:14px;color:#262626}
+/* IG search nav */
+.ig-nav{display:flex;align-items:center;padding:0 8px;height:34px;flex-shrink:0;gap:5px;background:#fff;border-bottom:1px solid #dbdbdb}
+.ig-back{font-size:18px;color:#262626;line-height:1;flex-shrink:0;font-weight:300}
+.ig-searchbar{flex:1;display:flex;align-items:center;background:#efefef;border-radius:10px;padding:4px 8px;gap:4px;min-width:0}
+.ig-kw{font-size:8px;color:#262626;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1}
+.ig-more{font-size:12px;color:#262626;flex-shrink:0;line-height:1}
 
-/* Hashtag header */
-.ig-hdr{display:flex;gap:10px;align-items:center;padding:10px 10px 8px;flex-shrink:0}
-.ig-hdr-icon{width:48px;height:48px;border-radius:50%;background:var(--ig-grad);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#fff;flex-shrink:0}
-.ig-hdr-info h3{font-size:11px;font-weight:700;color:#262626}
-.ig-hdr-info p{font-size:9px;color:#8e8e8e;margin-top:1px}
-.ig-follow{margin-top:4px;background:#0095f6;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:9px;font-weight:600}
+/* tab bar */
+.ig-tabs{display:flex;border-bottom:1px solid #dbdbdb;flex-shrink:0;background:#fff}
+.ig-tab{flex:1;text-align:center;padding:7px 0 5px;font-size:7.5px;color:#8e8e8e;border-bottom:2px solid transparent;line-height:1}
+.ig-tab.on{color:#262626;border-bottom-color:#262626;font-weight:700}
 
-/* Tabs */
-.ig-tabs{display:flex;border-bottom:1px solid #dbdbdb;flex-shrink:0}
-.ig-tab{flex:1;text-align:center;padding:7px 0;font-size:8.5px;color:#8e8e8e;cursor:pointer;border-bottom:1.5px solid transparent}
-.ig-tab.on{color:#262626;border-bottom:1.5px solid #262626;font-weight:700}
-
-/* Grid */
-.gwrap{flex:1;overflow:hidden;position:relative}
+/* reels grid */
+.gwrap{flex:1;overflow:hidden;background:#000;position:relative}
 .gscroll{position:absolute;inset:0;overflow-y:auto;scrollbar-width:none}
 .gscroll::-webkit-scrollbar{display:none}
-.igrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px}
-.gfade{position:absolute;bottom:0;left:0;right:0;height:22px;background:linear-gradient(transparent,white);pointer-events:none;z-index:5}
+.rgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5px}
+.gfade{position:absolute;bottom:0;left:0;right:0;height:24px;background:linear-gradient(transparent,#000);pointer-events:none;z-index:5}
 
-/* Post cell */
-.pcell{aspect-ratio:1;position:relative;overflow:hidden;cursor:pointer;text-decoration:none;display:block}
-.pcell:hover{opacity:.85}
-.pcell-thumb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:rgba(255,255,255,.8)}
-.pcell-thumb img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;opacity:0;transition:opacity .4s}
-.pcell-thumb img.loaded{opacity:1}
-.pcell-overlay{position:absolute;bottom:0;left:0;right:0;padding:3px;background:linear-gradient(transparent,rgba(0,0,0,.6));z-index:2}
-.pcell-cap{font-size:4.5px;color:rgba(255,255,255,.85);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.pcell:hover .ptip{display:flex}
-.ptip{display:none;flex-direction:column;gap:2px;position:absolute;inset:0;background:rgba(0,0,0,.88);padding:5px;z-index:10}
-.pt-rank{font-size:8px;font-weight:800;color:var(--ig-pink)}
-.pt-cap{font-size:5px;color:rgba(255,255,255,.75);line-height:1.4;flex:1;overflow:hidden}
+/* reel cell */
+.rcell{aspect-ratio:9/16;position:relative;overflow:hidden;cursor:pointer;background:#111;transition:opacity .15s}
+.rcell:hover{opacity:.85}
+.rcell-rank{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:rgba(255,255,255,.18);z-index:0;pointer-events:none}
+.rcell-thumb{position:absolute;inset:0;z-index:1}
+.rcell-thumb img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .4s}
+.rcell-thumb img.loaded{opacity:1}
+.rcell-play{position:absolute;top:3px;right:3px;z-index:3;pointer-events:none}
+.rcell-overlay{position:absolute;bottom:0;left:0;right:0;padding:3px 4px;background:linear-gradient(transparent,rgba(0,0,0,.7));z-index:3;pointer-events:none}
+.rcell-views{font-size:5.5px;color:rgba(255,255,255,.9);font-weight:700;line-height:1}
 
-/* Own post highlight */
-.pcell.own{outline:3px solid var(--ig-pink);outline-offset:-3px;z-index:4}
-.pcell.own::after{content:'自社';position:absolute;top:0;left:0;right:0;z-index:5;font-size:6px;font-weight:800;background:var(--ig-pink);color:white;padding:2px 4px;text-align:center;letter-spacing:.05em}
+/* own company */
+.rcell.own{outline:2.5px solid var(--ig-pink);outline-offset:-2.5px;z-index:4}
+.rcell.own::after{content:'自社';position:absolute;top:0;left:0;right:0;z-index:6;font-size:6px;font-weight:800;background:var(--ig-pink);color:white;padding:2px 4px;text-align:center;letter-spacing:.05em}
 
-/* Stats panel */
-.phone-stats{width:216px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+/* hover tooltip */
+.rcell:hover .rtip{display:flex}
+.rtip{display:none;flex-direction:column;gap:2px;position:absolute;inset:0;background:rgba(0,0,0,.9);padding:5px;z-index:10}
+.rt-rank{font-size:8px;font-weight:800;color:var(--ig-pink)}
+.rt-name{font-size:6px;font-weight:700;color:#aaa;margin-top:1px}
+.rt-cap{font-size:5px;color:rgba(255,255,255,.7);line-height:1.4;flex:1;overflow:hidden;margin-top:2px}
+.rt-stats{display:flex;gap:5px;flex-wrap:wrap;margin-top:auto;padding-top:3px}
+.rt-stat{font-size:5.5px;color:#f09433;font-weight:700}
+
+/* bottom nav */
+.ig-bnav{display:flex;align-items:center;justify-content:space-around;padding:5px 6px 4px;background:#fff;border-top:1px solid #dbdbdb;flex-shrink:0}
+.ig-bni{display:flex;flex-direction:column;align-items:center;gap:1px}
+.ig-bnl{font-size:4px;color:#8a8a8a}
+.ig-bnl.active{color:#262626;font-weight:700}
+
+/* stats panel */
+.phone-stats{width:216px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
 .ps-row{display:flex;justify-content:space-between;margin-bottom:5px}
 .ps-item{text-align:center}
 .ps-val{font-size:14px;font-weight:800;background:var(--ig-grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -108,22 +118,19 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 <div class="hdr">
   <div class="hdr-top">
     <div class="logo-icon">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2">
+        <rect x="2" y="2" width="20" height="20" rx="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/>
       </svg>
     </div>
     <span class="hdr-badge">VSEO ANALYTICS</span>
   </div>
-  <div class="hdr-sub">Instagram 検索結果スマホモック</div>
-  <div class="hdr-desc">各ハッシュタグの検索結果に自社投稿が含まれているか確認</div>
+  <div class="hdr-sub">Instagram リール検索結果 スマホモック</div>
+  <div class="hdr-desc">各ハッシュタグのリール検索結果に自社投稿が含まれているか確認</div>
 </div>
 
-<div class="result-banner" id="rb">
-  <div class="rb-title">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#e1306c" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="#e1306c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    自社投稿 19本 — 突合結果
-  </div>
-</div>
+<div class="result-banner" id="rb"><div class="rb-title">読み込み中…</div></div>
 
 <div class="legend">
   <div class="leg-item"><div class="leg-my"></div><span>自社投稿（赤枠 + 自社バッジ）</span></div>
@@ -133,232 +140,56 @@ body{font-family:-apple-system,'Hiragino Sans',BlinkMacSystemFont,sans-serif;bac
 <div class="phones-stage" id="stage"></div>
 
 <script>
+/* ────────────────────────────────────────────────────────────
+  自社リールのショートコード
+  例: 'DX3y0s1sx1W'
+──────────────────────────────────────────────────────────── */
 const MY_IDS = new Set([
-  'DX3y0s1sx1W','DX3z63eOL9-','DX308QwBi5u','DX31bsXvsyu','DX33VXRSEQA',
-  'DWlpjMbj49B','DW50gAWzVU5','DW3rHXkCSBM','DW5m_WvE2qa','DW50V_uEs2_',
-  'DW5towQSWNO','DW6COPAS6e3','DW3daqev6Sp','DW_Ksvxk9NU','DW8ntgXEyD-',
-  'DX1XXfxSfrn','DX1OOMOtpOr','DX072HuPFmo','DX38HM5TxIc'
+  /* ← ここに自社ショートコードを追加 */
 ]);
 
+/* ────────────────────────────────────────────────────────────
+  検索結果データ
+  post フィールド:
+    sc    : ショートコード  例) 'DX3y0s1sx1W'
+    n     : ユーザー名     例) 'emme_tokyo_jp'  (空でも可)
+    c     : キャプション冒頭                     (空でも可)
+    v     : 再生数表示     例) '12.3万'          (空でも可)
+    rv    : 再生数 数値    例) 123000            (空でも可)
+    likes : いいね数表示   例) '1.2万'           (省略可)
+──────────────────────────────────────────────────────────── */
+const DATA = [
+{tag:'#洗濯槽クリーナー', posts:[
+  /* ← データを追加 */
+]},
+{tag:'#洗濯機掃除', posts:[
+  /* ← データを追加 */
+]},
+{tag:'#洗濯槽掃除', posts:[
+  /* ← データを追加 */
+]},
+{tag:'#洗濯', posts:[
+  /* ← データを追加 */
+]},
+];
+
+/* ── color palette for backgrounds ── */
 const PAL=[
   ['#f09433','#dc2743'],['#dc2743','#cc2366'],['#cc2366','#833ab4'],
   ['#833ab4','#5851db'],['#5851db','#405de6'],['#e6683c','#c13584'],
   ['#bc1888','#833ab4'],['#f09433','#e6683c'],['#c13584','#833ab4'],
 ];
 function gc(i){const c=PAL[i%PAL.length];return`linear-gradient(135deg,${c[0]},${c[1]})`}
-function ini(s){return(s||'').replace(/^[^a-zA-Z぀-龯]*/,'').slice(0,2)||'#'}
 
-const DATA=[
-{tag:'#洗濯槽クリーナー',posts:[
-  {u:'C4-Tk_xLGK6',c:'洗濯したはずなのに臭い解決 @pey_kurashi'},
-  {u:'DXbdIJ5S-bW',c:'洗濯機まるごとスプレーレビュー'},
-  {u:'DEeuF5CTQre',c:'ドラム式洗濯機水溜まり要注意'},
-  {u:'CGjHTbaga3_',c:'くらしのマーケット公式 2020'},
-  {u:'DRUD4AmkW4n',c:'四国化成工業 WASHMANIA Amazonブラックフライデー'},
-  {u:'DWlWN9wlZAp',c:'Yadeajapan 洗濯機の掃除術'},
-  {u:'DUky2NME9jO',c:'オーガニックファインバブル洗濯機アダプター'},
-  {u:'C9LtG4AiQJP',c:'洗濯槽のカビやばすぎた・泡パック洗剤'},
-  {u:'CUTiFzvPt8d',c:'moon 38歳2児ママの買い物 2021'},
-  {u:'Cvo7scfBSBr',c:'Seira低身長ママコーデ 2023'},
-  {u:'CzGNZqEL5Wa',c:'ぽべこ育児ラク @washmania_official'},
-  {u:'DXqBzprEU9n',c:'同じ洗剤なのに洗浄力が違う @sentaku.majin'},
-  {u:'DXs4l8WFNSn',c:'2026年4月投稿'},
-  {u:'DXW6QqiE7hV',c:'mimi 四国化成 WASHMANIA 2026'},
-  {u:'DBqk24IvQbJ',c:'@sentaku.majin SHARP ドラム式乾燥不良'},
-  {u:'DOBGWIeka0X',c:'博雲堂キレイ工房 2025'},
-  {u:'DPe5fFtE833',c:'hal 宮城仙台 @walch_japan 2025'},
-  {u:'DEl1ifbPQBp',c:'Rinenna New York 洗濯洗剤 2025'},
-  {u:'DW6B_tpguHR',c:'洗濯のNG5選 柔軟剤・ジッパー注意'},
-  {u:'C86xl39JXCz',c:'sua 人生を選び直す記録'},
-  {u:'DXlR5AXDw4u',c:'satopooh 2026'},
-  {u:'DJmB6YYppUP',c:'洗濯槽汚れはがし・わかめ大量'},
-  {u:'DXjV2kND5RX',c:'半年に1回カビ消えた @nagako_yuru_life'},
-  {u:'CkpzDUQrWQY',c:'Maimai @tornade_labo 2022'},
-  {u:'DW50E5ryODn',c:'ドラム式掃除ルーティン・泡スプレー5年'},
-  {u:'DUahwHFiRJR',c:'黒い服を白くする洗剤という矛盾'},
-  {u:'DLe3NW6z2HU',c:'半年に1回洗濯槽リセット'},
-  {u:'DL2Cf7UP9Yv',c:'WASHMANIA 生乾き臭おさらば'},
-  {u:'C7T0riZJDPn',c:'かえる 家庭学習 2024'},
-  {u:'Cwm0jtOSkv1',c:'maki 今日のキッチン便り'},
-  {u:'DX-jGsoSFqI',c:'シャボン玉の洗濯槽クリーナー・月1掃除'},
-  {u:'CWk59ROBOER',c:'夫婦で洗濯槽クリーナー初挑戦'},
-  {u:'DRTe5YUkuVw',c:'hichon @panasonicjp 2025'},
-  {u:'DXjTN5Tkst_',c:'洗濯槽後回しにしがち・カビ丸洗浄Professional'},
-  {u:'CzD_HKfhBxX',c:'洗濯機の隙間・裏側掃除'},
-  {u:'DQgcZzQEsPK',c:'くまさん @hakuundo_kireikobo 2025'},
-  {u:'DRwmxbHElU9',c:'ドラム式掃除手順 @hikari_.kurashi'},
-  {u:'DXmK0I3ErOB',c:'sakura 2026'},
-  {u:'ChEF-2KgLB1',c:'ドラム式掃除 カビキラー・竹串'},
-  {u:'DX3y0s1sx1W',c:'洗っても匂う…衣類の菌・ワンハンドプッシュ洗剤'},
-  {u:'DXoPTCiiaTt',c:'つけ置きやめた・洗濯と配管汚れに一本'},
-  {u:'DK6IaJCzp3F',c:'mai 2025'},
-  {u:'DST3XtzEv7e',c:'ミニマリストチャンネル @hakuundo_kireikobo'},
-  {u:'DQv4QoQkQpQ',c:'黒カビだらけの洗濯槽・月1掃除'},
-  {u:'C8Mf-tpPh_U',c:'激落ちくん超強力洗濯槽クリーナーで黒カビリセット'},
-  {u:'DOCtLvHEuLf',c:'毎日の洗濯で槽クリーナーも @mai_room_2ldk'},
-  {u:'DWA1BryjG2a',c:'洗濯槽分解洗浄・東海ガスおそうじ天使'},
-  {u:'C-KdRj8y7Zo',c:'酸素×浸透×発泡の力でカビ除去'},
-]},
-{tag:'#洗濯機掃除',posts:[
-  {u:'DXrCs_ZhVXp',c:'100均ダイソー vs 市販 洗濯槽クリーナー比較'},
-  {u:'C9r12v1J-Ih',c:'月1洗濯機そうじ・泡ハイター @ao_kurashi_'},
-  {u:'DJmB6YYppUP',c:'洗濯槽汚れはがし・わかめ @fumama_kurashi'},
-  {u:'CyOAWrBPRU1',c:'田久保夏鈴 @iroka.flair 2023'},
-  {u:'C6VzCCiyG4X',c:'ダイヤ株式会社 洗濯用品 2024'},
-  {u:'CSzHaU4hLaN',c:'AKIKO ビール大好きママ 2021'},
-  {u:'DT2g4gHEfZb',c:'絶対買ったらあかん・ハイター掃除レシピ'},
-  {u:'C8o0oDFyQQc',c:'みな お掃除わかりやすく 2024'},
-  {u:'CjXrTh7L2Gw',c:'簡単レシピまとめ 2022'},
-  {u:'C8WoD-myWPL',c:'梅雨前洗濯機カビ予防'},
-  {u:'DIbEA3_z0SP',c:'洗濯機の汚れは自分で1割しか取れない'},
-  {u:'Cd3C1ukvYZY',c:'暮らしラボ 2022'},
-  {u:'DS_FmEyElaZ',c:'ゆっち 4歳2歳姉弟ママ 2026'},
-  {u:'CZ1XTskv3KQ',c:'りんご キレイが続く掃除術 2022'},
-  {u:'DXzHxp_JdeA',c:'洗濯機の裏側・泡タイプ洗濯槽クリーナー'},
-  {u:'DPL3KSIEtmN',c:'あお 1分でわかる超かんたん掃除 2025'},
-  {u:'DNkkxrTSgzz',c:'ドラム式洗濯機メンテナンス @sentaku.majin'},
-  {u:'CoEzWVQAp0e',c:'ママサポ @mama_supp @inase_kawa'},
-  {u:'DRtq2GmEYdt',c:'洗濯機の大掃除・純正クリーナーの威力'},
-  {u:'DXT5GvQE1cb',c:'自動製氷機のお掃除も忘れずに'},
-  {u:'C2HQjaAPjXf',c:'sm@rt おそうじアイテム浮かせる収納 2024'},
-  {u:'DTNCJ90Ep6P',c:'こぶつ屋小牧店 リユース家電'},
-  {u:'DVi05mIki-b',c:'博雲堂 洗濯×洗濯槽兼用洗剤'},
-  {u:'C-e4thbytgV',c:'排水口・乾燥機詰まりクリーニング'},
-  {u:'DWqn6JtxIL3',c:'掃除コンテンツ主婦向け構成メモ'},
-  {u:'DK4Rm-Lh9y-',c:'洗濯機分解クリーニング6年ドラム式'},
-  {u:'DVNxAR8kxe0',c:'洗濯機遍歴・Comfee縦型サイズアップ'},
-  {u:'CbcecbyleFj',c:'ドラム式NGまとめ オキシ・ハイター・歯ブラシ'},
-  {u:'DP8um0wEoYI',c:'埃は溜まる一方 @sentaku.majin'},
-  {u:'CtG2C3mL-Dd',c:'槽洗浄・HITACHI ビッグドラム取扱説明書'},
-  {u:'DSpBcTSk0ma',c:'moeto_souji 年末洗濯機リセット'},
-  {u:'DLj6C1spkb7',c:'洗濯機お掃除職人の心がけ @sentaku.majin'},
-  {u:'DWYPTKLy_Jg',c:'ドラム式リアル洗浄・WASHMANIA @fuyu_ouchi'},
-  {u:'C8wPMXppI3J',c:'相澤奈由 @sentaku.majin 2024'},
-  {u:'DXRwRpukkw_',c:'縦型洗濯機クリーニング・ニオイ・黒い汚れ'},
-  {u:'DNF-omnS13F',c:'あお 1分でわかる掃除 2025'},
-  {u:'DKMdnHUTN1I',c:'梅雨NG・湿度高く雑菌増えやすい'},
-  {u:'DVf0IbTCb2K',c:'香り最高・王子製薬 arfum_japan'},
-  {u:'CcSmixSPdCu',c:'柔軟剤何使ってる？ランドリン'},
-  {u:'CYsKs-Pv1lb',c:'れいこ インテリアコーディネーター 2022'},
-  {u:'C-IO2KMvXZ1',c:'洗濯槽カビ・湿気対策 @un.k_kurashi'},
-  {u:'DOOJY2ZEvey',c:'3年放置ズボラママ・2ヶ月に1回洗濯槽'},
-  {u:'DGHNLWmzmzk',c:'Panasonic純正 衣料用ハイターの使い方'},
-  {u:'C9zJjklyVO7',c:'ハイアール感謝祭 洗濯機プレゼント'},
-  {u:'DYR1a3ZmlNA',c:'のー @tornade_labo 2026'},
-  {u:'DTkGO3rEwBU',c:'月1ドラム式洗濯機掃除 ホコリ乾燥故障'},
-  {u:'DQtGJ-uCXMP',c:'見えない部分で何をするか @kazu.__kurashi'},
-  {u:'DXTrrdjiryu',c:'乾燥フィルター奥のホコリ @kulu_kurashi'},
-]},
-{tag:'#洗濯槽掃除',posts:[
-  {u:'DBvvafvvnb7',c:'洗濯槽上の隙間汚れ・神アイテム @takapi_kurashi_'},
-  {u:'Cmghubtr7c1',c:'まな DIY-FUFU 2022'},
-  {u:'DXbnHrTRRNs',c:'普通はやらないとこまで洗濯機掃除する夫'},
-  {u:'DX88wibSjm4',c:'お湯ため方・ペットボトル活用法 義母の知恵'},
-  {u:'DHx3_xnT3e8',c:'Panasonic5年ドラム式クリーニング @sentaku.majin'},
-  {u:'DKrW55pz_Uw',c:'洗濯機の まじん 2025'},
-  {u:'DJJaYaxTOTY',c:'洗濯機おすすめメーカー @sentaku.majin'},
-  {u:'CzGNZqEL5Wa',c:'ぽべこ育児ラク @washmania_official 2023'},
-  {u:'DWV4QTCkhZD',c:'WASHMANIA 3/14以降全国販売'},
-  {u:'C_DUd6Kg18U',c:'月1洗濯槽クリーナー塩素系vs酸素系'},
-  {u:'DXrP0ZBE5Bc',c:'あお 1分でわかる掃除 2026'},
-  {u:'CgZMf-9Lz52',c:'かおり 暮らしの教科書 2022'},
-  {u:'DJ6eF3YBD65',c:'洗濯槽月1リセット 黒カスワカメ臭'},
-  {u:'DWQ1d1_Enzq',c:'洗濯ネットの意外な使い方3つ'},
-  {u:'DFH62gayg6k',c:'洗濯機分解クリーニング年間300台'},
-  {u:'DXgmhtsDzZ1',c:'半年以上サボった洗濯槽・人気クリーナー3つ検証'},
-  {u:'C0l2cUBpyVN',c:'ハンズ公式 2023'},
-  {u:'DYGbKjMp2tI',c:'WASHMANIA 梅雨前カビ予防・業務用塩素剤'},
-  {u:'DUvDoh9kgUM',c:'蛇口の分解掃除・浄水器交換'},
-  {u:'CSOiNuOhb9A',c:'ライフハックTV 2021'},
-  {u:'DX_cyRbBnph',c:'洗濯機の裏側・泡タイプ紹介 @chie.my_home'},
-  {u:'DWn7qJeE9OS',c:'ズボラ主婦・ドラムパッキン裏溝 @nana.__kurashi'},
-  {u:'DN7ycQWEtcK',c:'みどり ずぼら主婦ラクする暮らし 2025'},
-  {u:'DNnc1BBTGrz',c:'洗濯槽からワカメ！糸くずフィルター'},
-  {u:'C86xl39JXCz',c:'sua @sentaku_soudan 2024'},
-  {u:'DW50E5ryODn',c:'ドラム式掃除ルーティン・泡スプレー5年'},
-  {u:'DYHdIHvPo8t',c:'ドラム式洗濯機そうじ 乾燥フィルター'},
-  {u:'DUky2NME9jO',c:'オーガニックファインバブル洗濯機アダプター'},
-  {u:'CcsMiOdrp-6',c:'@keikun.simplelife 2022'},
-  {u:'CuEj5IRPK0h',c:'sayaka 整理収納片付けアドバイザー 2023'},
-  {u:'DYLt82tpP3y',c:'洗濯槽掃除つけ置きなし気軽にできる'},
-  {u:'CHurRlPAs-h',c:'ふゆ 大雑把に楽しく暮らしたい主婦 2020'},
-  {u:'DN8ATuEkkeh',c:'カビが生えないよう乾燥必須 @sentaku.majin'},
-  {u:'DX76PJ2TOmf',c:'泡スプレー関西弁レビュー'},
-  {u:'DBqk24IvQbJ',c:'@sentaku.majin SHARP ドラム式乾燥不良'},
-  {u:'CfOLPc-vnwg',c:'節約ノート @koro____life 2022'},
-  {u:'CzD_HKfhBxX',c:'洗濯機隙間・らくらく洗濯槽スプレー'},
-  {u:'Cjrba2KLmE0',c:'ぐーたらさんの教科書 @marina_saku 2022'},
-  {u:'CF3zkMugdu8',c:'節約ノート公式 @keikun.simplelife 2020'},
-  {u:'DXkswoqEzQV',c:'洗濯物臭わない？洗濯槽カビ原因・2ヶ月に1回'},
-  {u:'DL11o7czHH6',c:'WASHMANIA 黒カビを分解除去・除菌消臭'},
-  {u:'DRi2GhTD9Xn',c:'洗濯機裏側・泡タイプ紹介2 @chie.my_home'},
-  {u:'DXJssr8yzuz',c:'月1衣料用塩素系ハイターで洗濯槽カビ予防'},
-  {u:'CSeVwEjhCbO',c:'柔軟剤入れすぎ禁止・洗濯槽ベタベタカビ原因'},
-  {u:'DL3qnxeyyvk',c:'柔軟剤の匂いがしない原因は洗濯機・縦型凹凸'},
-  {u:'DXgmpCAkyaN',c:'主婦の知恵 @mina_37_heim 2023'},
-  {u:'Cvllip4Ml1y',c:'白い服の白さを保つ洗剤・蛍光増白剤注意'},
-  {u:'DXB4aCtjXsI',c:'— 2026'},
-]},
-{tag:'#洗濯',posts:[
-  {u:'DXEQoSUk8Pz',c:'ボールド&アリエール ジェルボール #PR'},
-  {u:'CkVgMEeLfH9',c:'ふゆ 大雑把 @washmania_official 2022'},
-  {u:'DIlaKBszcGO',c:'2児ママ・太陽のジェルボール部屋干し'},
-  {u:'DXd6_Knj0J8',c:'レノア超消臭 空手着の汗臭対策 @lenor_japan'},
-  {u:'DK4BLrDP6Da',c:'ともパパ 暮らしに便利のプロ 2025'},
-  {u:'DMraeT_TiQF',c:'ニトリ公式 インテリア・家具 2025'},
-  {u:'DVQmRk4Exw4',c:'ゆーな 子どもがいる家 @lenor_japan 2026'},
-  {u:'DRTe5YUkuVw',c:'hichon @panasonicjp 2025'},
-  {u:'DW6B_tpguHR',c:'洗濯のNG5選 スポーツウェア・ジッパー・白シャツ'},
-  {u:'DJL4P_5Nylr',c:'Babytime 子育て・育児 2025'},
-  {u:'CY1JIBFpOHy',c:'ひろこ 腸から人生変えるママ 2022'},
-  {u:'DW8giIoEYwW',c:'白洋舍 クリーニング公式 2026'},
-  {u:'CjkqIxuL8Bn',c:'みな お掃除わかりやすく 2022'},
-  {u:'DQxyl57knTq',c:'ウチコト 東京ガス @lidea_lion 2025'},
-  {u:'DRJsMyIEcRC',c:'sakko 大人の一人暮らし @arfum_japan 2025'},
-  {u:'DRJqLyvj9DD',c:'東芝ライフスタイル公式 2025'},
-  {u:'DVQXScOj0Dw',c:'TWC アパレル求人 2026'},
-  {u:'DQiyvLXj5hd',c:'芦川 玲一 @panasonicjp 2025'},
-  {u:'DDT8K88S2U9',c:'レノア柔軟剤モテ組み合わせ #PR'},
-  {u:'DUU-Dfjkz8O',c:'くらしのマーケット公式 2026'},
-  {u:'DXtutp7kxBT',c:'男の子ママ @lenor_japan 外遊び汗臭対策 #PR'},
-  {u:'DW_E32oBhWZ',c:'洗濯物ホームラン総集編② 主婦の味方'},
-  {u:'DXWQe-jE-Qe',c:'27歳ひとり暮らし掃除'},
-  {u:'DYPAbRByGCw',c:'ストライプ着こなし術・感動パンツ洗濯ok'},
-  {u:'DYOQWLtDy4o',c:'アイリスオーヤマ 公式 2026'},
-  {u:'DTxTnKxEXYZ',c:'みな お掃除わかりやすく 2026'},
-  {u:'DXPHV5WAeNz',c:'白い服が蘇る・黄ばみ→真っ白'},
-  {u:'C2kA1sTSvGY',c:'ハンズ公式 2024'},
-  {u:'DTxJemkAVn3',c:'TAILOR テイラー 2026'},
-  {u:'DEjnKC6zVjw',c:'1週間洗濯キャンセル メリノウール'},
-  {u:'DU5S_5oj9CR',c:'ヤマダデンキ 公式 2026'},
-  {u:'DPgjeswkoSm',c:'ベビータイムズ 子育て情報 2025'},
-  {u:'DTfMPoJEp2D',c:'あん ホワイトアイテム便利な暮らし 2026'},
-  {u:'BpzN9LkHEN8',c:'kurasumu 暮らしに役立つヒント 2018'},
-  {u:'DPVSK4Lj0yI',c:'LOWYA ロウヤ インテリア 2025'},
-  {u:'C3cmU-FyJjN',c:'Suki-na コスメ/美容 2024'},
-  {u:'DPE9X7fEniv',c:'ミニマリストチャンネル @hakuundo_kireikobo 2025'},
-  {u:'DXy2sJymnGa',c:'ぽん ズボラママ整う暮らし 2026'},
-  {u:'DXlTPWIEk_B',c:'ぴょこぴょこぴ 考えない家事 2026'},
-  {u:'DYMYFQZOJyx',c:'トゲトゲボール洗濯槽もキレイ・騒音軽減'},
-  {u:'DRUP4g1kb3Q',c:'らみ マネするだけ快適暮らし 2025'},
-  {u:'DXyy57VkQvn',c:'Rinenna Baby 布おむつ出産準備 2026'},
-  {u:'DXV7cfDDajx',c:'ファーファ FaFa 公式 一人暮らし洗濯Q&A 2026'},
-  {u:'DXTny1UEV1J',c:'Hinata life インテリア家電 衣替えアイテム 2026'},
-  {u:'DVA5_rMDwrX',c:'丹羽ハウジング 愛知/三重/岐阜 2026'},
-  {u:'DOYcfBSEnVY',c:'かおり 暮らしの教科書 2025'},
-  {u:'DW20NmhiUhm',c:'インスタバズ洗濯槽丸ごと泡スプレー使用レポ'},
-  {u:'DYLkwD9ATdk',c:'ARATAメディア 暮らしに役立つアイテム 2026'},
-]},
-];
-
+/* ── thumbnail loading (local first, then IG direct) ── */
 function loadAllThumbs(){
   document.querySelectorAll('img.igthumb').forEach(img=>{
     const cell=img.closest('[data-code]');
     if(!cell)return;
     const code=cell.dataset.code;
     const srcs=[
-      `ig-thumbs/${code}.jpg`,                              // ローカル保存済み（推奨）
-      `https://www.instagram.com/p/${code}/media/?size=m`,  // Instagram直接（要ログイン）
+      `ig-thumbs/${code}.jpg`,
+      `https://www.instagram.com/p/${code}/media/?size=m`,
       `https://www.instagram.com/reel/${code}/media/?size=m`,
     ];
     let idx=0;
@@ -372,83 +203,126 @@ function loadAllThumbs(){
   });
 }
 
+/* ── result banner ── */
 function buildBanner(){
   const rb=document.getElementById('rb');
+  const myCount=DATA.reduce((a,d)=>a+d.posts.filter(p=>MY_IDS.has(p.sc)).length,0);
   const rows=DATA.map(d=>{
-    const hits=d.posts.filter(p=>MY_IDS.has(p.u));
+    const hits=d.posts.filter(p=>MY_IDS.has(p.sc));
     if(hits.length){
       const ranks=hits.map(p=>d.posts.indexOf(p)+1);
       return`<div class="rb-kw"><strong>${d.tag}</strong> <span>✅ ${hits.length}件あり — ${ranks.map(r=>r+'位').join('・')}</span></div>`;
     }
-    return`<div class="rb-kw none"><strong>${d.tag}</strong> <span>❌ トップ${d.posts.length}件内に自社投稿なし</span></div>`;
+    const label=d.posts.length?`❌ トップ${d.posts.length}件内に自社投稿なし`:'— データ未設定';
+    return`<div class="rb-kw none"><strong>${d.tag}</strong> <span>${label}</span></div>`;
   }).join('');
   rb.innerHTML=`
     <div class="rb-title">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#e1306c" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="#e1306c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      自社投稿 19本 — 突合結果
+      ${myCount>0?`自社投稿 ${myCount}本 — 突合結果`:'自社投稿 突合結果'}
     </div>
     ${rows}
-    <div class="rb-note">※ 自社投稿と突合したのはスクレイピングで取得した上位件数のみ</div>`;
+    <div class="rb-note">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="5" stroke="#999" stroke-width="1"/><path d="M6 5v3M6 4v.01" stroke="#999" stroke-width="1.2" stroke-linecap="round"/></svg>
+      スクレイピングで取得したリール上位件数との突合
+    </div>`;
 }
 
+/* ── phone builder ── */
 function buildPhones(){
   const stage=document.getElementById('stage');
   stage.innerHTML=DATA.map((d,di)=>{
-    const matchCount=d.posts.filter(p=>MY_IDS.has(p.u)).length;
-    const cells=d.posts.map((p,i)=>{
-      const own=MY_IDS.has(p.u);
-      return`<a class="pcell${own?' own':''}" data-code="${p.u}" href="https://www.instagram.com/p/${p.u}/" target="_blank">
-        <div class="pcell-thumb" style="background:${gc(i+di*7)}"><span>${i+1}</span><img class="igthumb" src="" alt=""/></div>
-        <div class="pcell-overlay"><div class="pcell-cap">${p.c}</div></div>
-        <div class="ptip">
-          <div class="pt-rank">第${i+1}位</div>
-          <div class="pt-cap">${p.c}</div>
-        </div>
-      </a>`;
-    }).join('');
+    const matchCount=d.posts.filter(p=>MY_IDS.has(p.sc)).length;
+    const matchRanks=d.posts.filter(p=>MY_IDS.has(p.sc)).map(p=>d.posts.indexOf(p)+1);
+
+    const cells=d.posts.length
+      ? d.posts.map((p,i)=>{
+          const own=MY_IDS.has(p.sc);
+          const bg=gc(i+di*7);
+          return`<a class="rcell${own?' own':''}" data-code="${p.sc}" href="https://www.instagram.com/reel/${p.sc}/" target="_blank">
+            <div class="rcell-rank">${i+1}</div>
+            <div class="rcell-thumb" style="background:${bg}"><img class="igthumb" src="" alt=""/></div>
+            <div class="rcell-play">
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="white" opacity=".9"><path d="M2 1.5l7 3.5-7 3.5z"/></svg>
+            </div>
+            <div class="rcell-overlay">
+              <div class="rcell-views">${p.v?'▶ '+p.v:''}</div>
+            </div>
+            <div class="rtip">
+              <div class="rt-rank">第${i+1}位</div>
+              ${p.n?`<div class="rt-name">@${p.n}</div>`:''}
+              <div class="rt-cap">${p.c||''}</div>
+              ${(p.v||p.likes)?`<div class="rt-stats">${p.v?`<span class="rt-stat">▶ ${p.v}</span>`:''} ${p.likes?`<span class="rt-stat">♥ ${p.likes}</span>`:''}</div>`:''}
+            </div>
+          </a>`;
+        }).join('')
+      : `<div style="grid-column:1/-1;padding:20px;text-align:center;font-size:8px;color:#555;background:#111">データ未設定</div>`;
 
     return`<div class="phone-card">
       <div class="phone-kw">${d.tag}</div>
       <div class="phone">
-        <div class="bl1"></div><div class="bl2"></div><div class="bl3"></div>
-        <div class="br1"></div>
-        <div class="frame">
-          <div class="bezel">
-            <div class="di"></div>
-            <div class="glass"></div>
-            <div class="screen">
-              <div class="sbar">
-                <span class="sbar-t">9:41</span>
-                <div class="sbar-i">▌▌▌ ⌾ ▮▮</div>
+        <div class="bl1"></div><div class="bl2"></div><div class="bl3"></div><div class="br1"></div>
+        <div class="frame"><div class="bezel">
+          <div class="di"></div>
+          <div class="glass"></div>
+          <div class="screen">
+            <div class="sbar">
+              <span class="sbar-t">9:41</span>
+              <div class="sbar-i">
+                <svg width="11" height="8" viewBox="0 0 11 8" fill="black"><rect x="0" y="3" width="2" height="5" rx=".4"/><rect x="3" y="2" width="2" height="6" rx=".4"/><rect x="6" y="1" width="2" height="7" rx=".4"/><rect x="9" y="0" width="2" height="8" rx=".4"/></svg>
+                <svg width="10" height="8" viewBox="0 0 10 8" fill="black"><path d="M5 1.5C6.8 1.5 8.4 2.3 9.5 3.5L8.5 4.5C7.7 3.6 6.4 3 5 3s-2.7.6-3.5 1.5L.5 3.5C1.6 2.3 3.2 1.5 5 1.5zM5 4.5c.9 0 1.7.4 2.3 1L5 8 2.7 5.5C3.3 4.9 4.1 4.5 5 4.5z"/></svg>
+                <svg width="20" height="8" viewBox="0 0 20 8" fill="none"><rect x=".5" y="1.5" width="16" height="5" rx="1.5" stroke="black" stroke-width="1"/><rect x="17" y="3" width="1.5" height="2" rx=".75" fill="black" opacity=".4"/><rect x="1.5" y="2.5" width="12" height="3" rx="1" fill="black"/></svg>
               </div>
-              <div class="ig-topbar">
-                <span class="ig-back">‹</span>
-                <span class="ig-topbar-title">${d.tag}</span>
-                <span class="ig-topbar-more">⋯</span>
+            </div>
+            <div class="ig-nav">
+              <span class="ig-back">‹</span>
+              <div class="ig-searchbar">
+                <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><circle cx="4" cy="4" r="3" stroke="#8e8e8e" stroke-width="1.2"/><path d="M6.5 6.5l2 2" stroke="#8e8e8e" stroke-width="1.2" stroke-linecap="round"/></svg>
+                <span class="ig-kw">${d.tag}</span>
               </div>
-
-              <div class="ig-tabs">
-                <div class="ig-tab on">投稿</div>
-                <div class="ig-tab">リール</div>
-                <div class="ig-tab">タグ付け</div>
+              <span class="ig-more">⋯</span>
+            </div>
+            <div class="ig-tabs">
+              <div class="ig-tab">最新</div>
+              <div class="ig-tab on">リール</div>
+              <div class="ig-tab">タグ付け</div>
+            </div>
+            <div class="gwrap">
+              <div class="gscroll"><div class="rgrid">${cells}</div></div>
+              <div class="gfade"></div>
+            </div>
+            <div class="ig-bnav">
+              <div class="ig-bni">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>
+                <span class="ig-bnl">ホーム</span>
               </div>
-              <div class="gwrap">
-                <div class="gscroll">
-                  <div class="igrid">${cells}</div>
-                </div>
-                <div class="gfade"></div>
+              <div class="ig-bni">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#262626" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                <span class="ig-bnl active">検索</span>
+              </div>
+              <div class="ig-bni">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                <span class="ig-bnl">リール</span>
+              </div>
+              <div class="ig-bni">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="1.8"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+                <span class="ig-bnl">アクティビティ</span>
+              </div>
+              <div class="ig-bni">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8e8e8e" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                <span class="ig-bnl">プロフィール</span>
               </div>
             </div>
           </div>
-        </div>
+        </div></div>
       </div>
       <div class="phone-stats">
         <div class="ps-row">
-          <div class="ps-item"><div class="ps-val">${d.posts.length}</div><div class="ps-lbl">取得件数</div></div>
+          <div class="ps-item"><div class="ps-val">${d.posts.length||'—'}</div><div class="ps-lbl">取得件数</div></div>
           <div class="ps-item"><div class="ps-val">${matchCount||'—'}</div><div class="ps-lbl">自社投稿</div></div>
-          <div class="ps-item"><div class="ps-val">${matchCount>0?d.posts.filter(p=>MY_IDS.has(p.u)).map(p=>d.posts.indexOf(p)+1+'位').join('·'):'—'}</div><div class="ps-lbl">順位</div></div>
+          <div class="ps-item"><div class="ps-val">${matchRanks.length?matchRanks.map(r=>r+'位').join('·'):'—'}</div><div class="ps-lbl">順位</div></div>
         </div>
-        <div class="ps-match ${matchCount>0?'found':'notfound'}">${matchCount>0?`✅ 自社投稿 ${matchCount}件あり`:'❌ 自社投稿なし'}</div>
+        <div class="ps-match ${matchCount>0?'found':'notfound'}">${matchCount>0?`✅ 自社投稿 ${matchCount}件あり`:d.posts.length?'❌ 自社投稿なし':'— データ未設定'}</div>
       </div>
     </div>`;
   }).join('');
