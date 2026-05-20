@@ -175,7 +175,6 @@ async function loadThumbs() {
 
 function buildPhone(kwData) {
   const {kw, vids} = kwData;
-  const totalViews = vids.reduce((s,v)=>s+(v.rv||0),0);
   const matchCount = vids.filter(v=>v.vid&&MY_IDS.has(v.vid)).length;
   const cells = vids.map((v,i) => {
     if (v.vid) thumbQueue.push({vid:v.vid, url:v.url});
@@ -183,11 +182,11 @@ function buildPhone(kwData) {
     return `<a class="vcell${isMy?' my-video':''}" href="${v.url}" target="_blank" rel="noopener" data-vid="${v.vid||''}">
       <div class="vcell-thumb" style="background:${v.color}"><span>${ini(v.n)}</span><img class="thumb" src="" alt=""/></div>
       ${v.promo?'<div class="vcell-promo">PR</div>':''}
-      <div class="vcell-overlay"><div class="vcell-views">▶ ${v.v}</div><div class="vcell-dur">${v.d}</div></div>
+      <div class="vcell-overlay"><div class="vcell-dur">${v.d}</div></div>
       <div class="vtip">
         <div class="vt-name">${i+1}. @${v.id}</div>
         <div class="vt-title">${v.t||''}</div>
-        <div class="vt-stats"><span class="vt-stat">▶ ${v.v}</span><span class="vt-stat">♥ ${v.l}</span><span class="vt-stat">⬇ ${v.sv}</span></div>
+        <div class="vt-stats"><span class="vt-stat">♥ ${v.l}</span><span class="vt-stat">⬇ ${v.sv}</span></div>
         <div class="vt-tags">${(v.tags||[]).map(t=>`<span class="vt-tag">#${t}</span>`).join('')}</div>
       </div>
     </a>`;
@@ -237,9 +236,7 @@ function buildPhone(kwData) {
     </div>
     <div class="phone-stats">
       <div class="ps-row">
-        <div class="ps-item"><div class="ps-val">${fmtNum(totalViews)}</div><div class="ps-lbl">総再生数</div></div>
         <div class="ps-item"><div class="ps-val">${vids.length}</div><div class="ps-lbl">動画数</div></div>
-        <div class="ps-item"><div class="ps-val">${fmtNum(Math.round(totalViews/vids.length))}</div><div class="ps-lbl">平均再生数</div></div>
       </div>
       <div class="ps-match ${matchCount>0?'found':'notfound'}">
         ${matchCount>0?`✅ 自社動画 ${matchCount}本が入っています`:'❌ 自社動画は入っていませんでした'}
