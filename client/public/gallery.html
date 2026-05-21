@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSEO Analytics — モックアップ ギャラリー</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#0a0a0a;
+  --surface:#111111;
+  --surface2:#1a1a1a;
+  --border:rgba(255,255,255,.08);
+  --text:#f0f0f0;
+  --muted:#666;
+  --tt-red:#fe2c55;
+  --tt-cyan:#25f4ee;
+  --ig-grad:linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
+  --ig-pink:#e1306c;
+  --accent:#0095f6;
+}
+
+html{scroll-behavior:smooth}
+body{
+  font-family:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--bg);color:var(--text);
+  min-height:100vh;
+  line-height:1.5;
+}
+
+/* ── Noise texture overlay ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
+  background-size:200px 200px;
+  opacity:.5;
+}
+
+/* ── Header ── */
+header{
+  position:relative;z-index:1;
+  padding:52px 48px 40px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.logo-group{display:flex;align-items:center;gap:14px}
+.logo-mark{
+  width:40px;height:40px;border-radius:10px;
+  background:var(--ig-grad);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.logo-text{
+  display:flex;flex-direction:column;
+}
+.logo-title{font-size:13px;font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.5)}
+.logo-sub{font-size:18px;font-weight:700;color:#fff;letter-spacing:-.3px;line-height:1.1}
+.header-badge{
+  font-size:11px;font-weight:600;
+  color:rgba(255,255,255,.35);
+  border:1px solid rgba(255,255,255,.12);
+  padding:5px 12px;border-radius:999px;
+  letter-spacing:.06em;
+}
+
+/* ── Main ── */
+main{
+  position:relative;z-index:1;
+  max-width:1080px;margin:0 auto;
+  padding:56px 48px 96px;
+}
+
+/* ── Section ── */
+.section{margin-bottom:64px}
+.section-header{
+  display:flex;align-items:center;gap:12px;
+  margin-bottom:28px;
+}
+.section-icon{
+  width:32px;height:32px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.section-icon.tt{background:linear-gradient(135deg,#010101,#1a1a1a);border:1px solid rgba(254,44,85,.25)}
+.section-icon.ig{background:var(--ig-grad)}
+.section-label{
+  font-size:11px;font-weight:600;letter-spacing:.1em;
+  color:rgba(255,255,255,.35);
+  text-transform:uppercase;
+}
+.section-name{font-size:20px;font-weight:700;color:#fff;letter-spacing:-.3px;line-height:1}
+.section-divider{flex:1;height:1px;background:var(--border);margin-left:4px}
+
+/* ── Card grid ── */
+.card-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:16px;
+}
+
+/* ── Mockup card ── */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:16px;
+  overflow:hidden;
+  transition:border-color .2s,transform .2s,box-shadow .2s;
+  cursor:pointer;
+  text-decoration:none;color:inherit;
+  display:flex;flex-direction:column;
+}
+.card:hover{
+  border-color:rgba(255,255,255,.18);
+  transform:translateY(-2px);
+  box-shadow:0 12px 40px rgba(0,0,0,.4);
+}
+
+/* Card preview area */
+.card-preview{
+  height:160px;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+  overflow:hidden;
+}
+.card-preview.tt-preview{background:linear-gradient(135deg,#0a0a0a 0%,#1a0810 50%,#0a0a10 100%)}
+.card-preview.ig-preview{background:linear-gradient(135deg,#100008 0%,#180010 50%,#0a0010 100%)}
+
+/* Phone mini-render inside card */
+.mini-phone{
+  width:54px;height:110px;
+  border-radius:10px;
+  border:1.5px solid rgba(255,255,255,.15);
+  background:linear-gradient(145deg,#1e1e20,#2c2c2e);
+  box-shadow:0 8px 24px rgba(0,0,0,.6);
+  position:relative;overflow:hidden;
+  flex-shrink:0;
+}
+.mini-phone-screen{
+  position:absolute;inset:0;
+  border-radius:8.5px;
+  overflow:hidden;
+}
+.mini-phone-di{
+  position:absolute;top:5px;left:50%;transform:translateX(-50%);
+  width:18px;height:5px;
+  background:#000;border-radius:999px;z-index:10;
+}
+.mini-phone + .mini-phone{margin-left:-12px;opacity:.6}
+.mini-phone + .mini-phone + .mini-phone{margin-left:-12px;opacity:.35}
+.mini-phone + .mini-phone + .mini-phone + .mini-phone{margin-left:-12px;opacity:.18}
+
+/* Platform color strips inside mini phone */
+.mini-strip{width:100%;height:100%}
+
+/* Card body */
+.card-body{padding:18px 20px 20px;flex:1;display:flex;flex-direction:column;gap:6px}
+.card-platform{
+  font-size:10px;font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;
+  opacity:.45;
+}
+.card-title{font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px;line-height:1.3}
+.card-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-top:2px;flex:1}
+.card-tags{
+  display:flex;flex-wrap:wrap;gap:5px;
+  margin-top:10px;
+}
+.ctag{
+  font-size:10px;font-weight:500;
+  padding:3px 8px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.1);
+  color:rgba(255,255,255,.45);
+}
+.card-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 20px 18px;
+}
+.card-open{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;font-weight:600;
+  color:rgba(255,255,255,.7);
+  transition:color .15s;
+}
+.card:hover .card-open{color:#fff}
+.card-arrow{
+  width:20px;height:20px;border-radius:5px;
+  background:rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .15s,transform .15s;
+}
+.card:hover .card-arrow{background:rgba(255,255,255,.14);transform:translateX(2px)}
+
+/* ── Color dots for tags ── */
+.ctag.tt{border-color:rgba(254,44,85,.3);color:var(--tt-red)}
+.ctag.ig{border-color:rgba(225,48,108,.3);color:var(--ig-pink)}
+.ctag.standalone{border-color:rgba(0,149,246,.3);color:var(--accent)}
+.ctag.count{border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.4)}
+
+/* ── Preview illustrations ── */
+.preview-phones{display:flex;align-items:flex-end;gap:0;padding:0 16px}
+
+/* TikTok color grid inside mini phone */
+.tt-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  height:100%;background:#000;
+}
+.tt-cell{background:linear-gradient(135deg,#1a0010,#100020)}
+
+/* Instagram grid */
+.ig-grid{
+  display:flex;flex-direction:column;
+  height:100%;
+}
+.ig-topbar{height:16px;background:#fff;display:flex;align-items:center;padding:0 3px;gap:2px}
+.ig-topbar-dot{width:4px;height:4px;border-radius:999px;background:#efefef}
+.ig-topbar-line{flex:1;height:3px;background:#efefef;border-radius:2px}
+.ig-tab-mini{height:6px;background:#fff;display:flex;align-items:flex-end;padding:0 2px;gap:2px;border-bottom:0.5px solid #dbdbdb}
+.ig-tab-active{flex:1;height:4px;background:#262626;border-radius:1px 1px 0 0}
+.ig-tab-inactive{flex:1;height:0}
+.ig-grid-area{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:#000}
+.ig-cell{background:linear-gradient(135deg,#1a0010,#200020)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-group">
+    <div class="logo-mark">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <rect x="2" y="2" width="20" height="20" rx="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <span class="logo-title">VSEO ANALYTICS</span>
+      <span class="logo-sub">モックアップ ギャラリー</span>
+    </div>
+  </div>
+  <span class="header-badge">INTERNAL PREVIEW</span>
+</header>
+
+<main>
+
+  <!-- ════════════ TikTok Section ════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon tt">
+        <svg width="16" height="18" viewBox="0 0 16 18" fill="none">
+          <path d="M11.5 0c.3 2.3 1.6 3.8 4 4.2v2.8c-1.4 0-2.7-.4-4-1.2V12a5.5 5.5 0 11-5.5-5.5c.2 0 .5 0 .7.02v2.83a2.7 2.7 0 101.8 2.55V0h3z" fill="#fe2c55"/>
+        </svg>
+      </div>
+      <div>
+        <div class="section-label">Platform</div>
+        <div class="section-name">TikTok</div>
+      </div>
+      <div class="section-divider"></div>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- TikTok main mockup -->
+      <a class="card" href="tiktok-mockup.html" target="_blank">
+        <div class="card-preview tt-preview">
+          <div class="preview-phones">
+            <!-- 4 mini phones -->
+            <div class="mini-phone" style="transform:rotate(-4deg)">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen">
+                <div class="tt-grid">
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#ff7043)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#1a0010,#300028)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#0a9090)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#100020,#1a0030)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#cc0030)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0a0a,#1a1a2e)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#004444)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#200010,#100020)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#880018)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(-1deg);z-index:2">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen">
+                <div class="tt-grid">
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a1020,#1a2040)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#aa0020)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#100a20,#200a30)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#006060)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#1a0a20,#100020)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#ff5050)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0a18,#1a1a30)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#100028,#200038)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#008888)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(2deg);z-index:1">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen">
+                <div class="tt-grid">
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#cc0040)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0a20,#181828)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#200020,#300030)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#005555)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#150010,#100018)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#ff3060)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0a15,#151520)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#200018,#150025)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#007070)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(5deg)">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen">
+                <div class="tt-grid">
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#100018,#200028)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#bb0025)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#009090)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0020,#180030)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#1a0010,#280020)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#fe2c55,#ff4060)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#0a0a1a,#181828)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#25f4ee,#005050)"></div>
+                  <div class="tt-cell" style="background:linear-gradient(135deg,#100010,#200020)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-platform">TikTok</div>
+          <div class="card-title">TikTok 検索結果モック</div>
+          <div class="card-desc">洗濯槽・洗濯機キーワード4タブ。自社動画のランキング位置と再生数を可視化。</div>
+          <div class="card-tags">
+            <span class="ctag tt">#洗濯槽掃除</span>
+            <span class="ctag tt">#洗濯機掃除</span>
+            <span class="ctag count">4 tabs · 自社 5本</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-open">
+            開く
+            <span class="card-arrow">
+              <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M2 2h6v6M2 8L8 2" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </span>
+          </span>
+        </div>
+      </a>
+
+    </div>
+  </div><!-- /tiktok section -->
+
+  <!-- ════════════ Instagram Section ════════════ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon ig">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2">
+          <rect x="2" y="2" width="20" height="20" rx="5"/>
+          <circle cx="12" cy="12" r="4"/>
+          <circle cx="17.5" cy="6.5" r="1.5" fill="white" stroke="none"/>
+        </svg>
+      </div>
+      <div>
+        <div class="section-label">Platform</div>
+        <div class="section-name">Instagram</div>
+      </div>
+      <div class="section-divider"></div>
+    </div>
+
+    <div class="card-grid">
+
+      <!-- Instagram standalone (full, no server) -->
+      <a class="card" href="instagram-mockup-standalone.html" target="_blank">
+        <div class="card-preview ig-preview">
+          <div class="preview-phones">
+            <div class="mini-phone" style="transform:rotate(-4deg)">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen" style="background:#fff">
+                <div class="ig-topbar"><div class="ig-topbar-line"></div></div>
+                <div class="ig-tab-mini"><div class="ig-tab-active"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div></div>
+                <div class="ig-grid-area">
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#dc2743)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#e1306c,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#833ab4,#5851db)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#dc2743,#cc2366)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#e6683c)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#cc2366,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#bc1888,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#5851db,#405de6)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#c13584,#833ab4)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(-1deg);z-index:2">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen" style="background:#fff">
+                <div class="ig-topbar"><div class="ig-topbar-line"></div></div>
+                <div class="ig-tab-mini"><div class="ig-tab-active"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div></div>
+                <div class="ig-grid-area">
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#bc1888,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#dc2743)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#cc2366,#bc1888)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#833ab4,#5851db)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#e6683c,#c13584)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#dc2743,#cc2366)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#e6683c)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#5851db,#405de6)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#c13584,#833ab4)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(2deg);z-index:1">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen" style="background:#fff">
+                <div class="ig-topbar"><div class="ig-topbar-line"></div></div>
+                <div class="ig-tab-mini"><div class="ig-tab-active"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div></div>
+                <div class="ig-grid-area">
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#e6683c,#c13584)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#833ab4,#5851db)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#dc2743)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#cc2366,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#5851db,#405de6)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#bc1888,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#dc2743,#cc2366)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#e6683c)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#c13584,#e6683c)"></div>
+                </div>
+              </div>
+            </div>
+            <div class="mini-phone" style="transform:rotate(5deg)">
+              <div class="mini-phone-di"></div>
+              <div class="mini-phone-screen" style="background:#fff">
+                <div class="ig-topbar"><div class="ig-topbar-line"></div></div>
+                <div class="ig-tab-mini"><div class="ig-tab-active"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div><div class="ig-tab-inactive"></div></div>
+                <div class="ig-grid-area">
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#405de6,#5851db)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#dc2743)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#833ab4,#bc1888)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#e6683c,#c13584)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#cc2366,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#dc2743,#cc2366)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#bc1888,#833ab4)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#f09433,#e6683c)"></div>
+                  <div class="ig-cell" style="background:linear-gradient(135deg,#5851db,#405de6)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-platform">Instagram</div>
+          <div class="card-title">IG リール検索結果モック <span style="font-size:11px;font-weight:500;color:#0095f6;background:rgba(0,149,246,.12);padding:2px 7px;border-radius:999px;margin-left:4px">スタンドアロン</span></div>
+          <div class="card-desc">サーバー不要。ハッシュタグ4種の検索結果をiPhone 15 Proフレームで表示。自社リールの表示順位を突合。</div>
+          <div class="card-tags">
+            <span class="ctag ig">#洗濯槽クリーナー</span>
+            <span class="ctag ig">#洗濯槽掃除</span>
+            <span class="ctag standalone">サムネ内蔵</span>
+            <span class="ctag count">4 tabs · 18 thumbs</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-open">
+            開く（スタンドアロン）
+            <span class="card-arrow">
+              <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M2 2h6v6M2 8L8 2" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </span>
+          </span>
+        </div>
+      </a>
+
+      <!-- Instagram server version -->
+      <a class="card" href="instagram-mockup.html" target="_blank">
+        <div class="card-preview ig-preview" style="background:linear-gradient(135deg,#080008 0%,#120018 50%,#08000c 100%)">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(225,48,108,.5)" stroke-width="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="5"/>
+              <circle cx="12" cy="12" r="4"/>
+              <circle cx="17.5" cy="6.5" r="1.5" fill="rgba(225,48,108,.5)" stroke="none"/>
+            </svg>
+            <span style="font-size:10px;color:rgba(255,255,255,.25);font-weight:500">サーバー版</span>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="card-platform">Instagram</div>
+          <div class="card-title">IG リール検索結果モック <span style="font-size:11px;font-weight:500;color:rgba(255,255,255,.35);background:rgba(255,255,255,.06);padding:2px 7px;border-radius:999px;margin-left:4px">開発版</span></div>
+          <div class="card-desc">ローカルサーバー経由でサムネを読み込む開発・編集用ソース。データ更新時はこちらを編集。</div>
+          <div class="card-tags">
+            <span class="ctag ig">#洗濯槽クリーナー</span>
+            <span class="ctag ig">#洗濯槽掃除</span>
+            <span class="ctag count">要サーバー</span>
+          </div>
+        </div>
+        <div class="card-footer">
+          <span class="card-open">
+            開く
+            <span class="card-arrow">
+              <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M2 2h6v6M2 8L8 2" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+            </span>
+          </span>
+        </div>
+      </a>
+
+    </div>
+  </div><!-- /ig section -->
+
+</main>
+
+</body>
+</html>
