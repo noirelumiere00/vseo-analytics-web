@@ -699,18 +699,25 @@ export function findChromiumPath(): string {
     // puppeteer (full) が使えない場合はスキップ
   }
 
-  // .cache 内のPuppeteer Chromeを直接探す
+  // .cache 内のPuppeteer Chromeを直接探す（Linux / macOS / Windows 対応・バージョン非依存）
   const cacheDir = path.join(process.cwd(), ".cache", "puppeteer", "chrome");
   if (fs.existsSync(cacheDir)) {
     try {
-      const versions = fs.readdirSync(cacheDir).filter(d =>
-        d.startsWith("linux-")
-      );
-      for (const ver of versions.sort().reverse()) {
-        const chromePath = path.join(cacheDir, ver, "chrome-linux64", "chrome");
-        if (fs.existsSync(chromePath)) {
-          console.log(`[Puppeteer] Found cached Chrome at: ${chromePath}`);
-          return chromePath;
+      // 各バージョンディレクトリで、プラットフォーム別の実行ファイル候補を順に試す
+      const subPaths = [
+        ["chrome-linux64", "chrome"],
+        ["chrome-mac-arm64", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"],
+        ["chrome-mac-x64", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"],
+        ["chrome-win64", "chrome.exe"],
+      ];
+      const versions = fs.readdirSync(cacheDir).sort().reverse();
+      for (const ver of versions) {
+        for (const sub of subPaths) {
+          const chromePath = path.join(cacheDir, ver, ...sub);
+          if (fs.existsSync(chromePath)) {
+            console.log(`[Puppeteer] Found cached Chrome at: ${chromePath}`);
+            return chromePath;
+          }
         }
       }
     } catch {
@@ -720,12 +727,17 @@ export function findChromiumPath(): string {
 
   // 候補パスをチェック（優先度順 — snap版は最後に配置）
   const candidates = [
+    // Linux
     "/usr/bin/google-chrome-stable",
     "/usr/bin/google-chrome",
     "/opt/google/chrome/chrome",
     "/usr/bin/chromium",
     "/usr/bin/chromium-browser",
     "/snap/bin/chromium",
+    // macOS（システムにインストール済みの Chrome を最後の手段として利用）
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
   ];
 
   for (const candidate of candidates) {
