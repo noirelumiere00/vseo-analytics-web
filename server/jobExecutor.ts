@@ -23,6 +23,7 @@ import { expandPersonaToQueries, flattenTikTokVideo, computeCrossAnalysis, gener
 import { captureSnapshot } from "./campaignSnapshot";
 import { generateCampaignReport } from "./campaignReport";
 import { LLMQuotaExhaustedError } from "./_core/llm";
+import { ENV } from "./_core/env";
 
 export type ProgressInfo = {
   message: string;
@@ -50,6 +51,14 @@ export async function executeAnalysisJob(
 ) {
   const job = await db.getAnalysisJobById(jobId);
   if (!job) throw new Error(`Job ${jobId} not found`);
+
+  // 順位だけモード: LLM（センチメント/レポート/パターン分析）をスキップし、
+  // TikTok 収集＋表示順位の保存だけで完了扱いにする。
+  // RANKING_ONLY=true、または ANTHROPIC_API_KEY 未設定時に有効。
+  const rankingOnly = ENV.rankingOnly || !ENV.anthropicApiKey;
+  if (rankingOnly) {
+    console.log(`[Analysis] Job ${jobId}: ranking-only mode (LLM steps skipped)`);
+  }
 
   // 検索データが既に存在するかチェック（途中再開判定）
   const existingSearchResult = await db.getTripleSearchResultByJobId(jobId);
@@ -225,6 +234,19 @@ export async function executeAnalysisJob(
             continue;
           }
 
+          // 順位だけモードはセンチメント(LLM)をスキップ。動画登録は上で完了済み。
+          if (rankingOnly) {
+            processedCount = done;
+            onProgress({
+              message: `動画登録中... (${done}/${total})`,
+              percent: 42 + Math.floor((done / total) * 36),
+              failedVideos,
+              totalTarget,
+              processedCount,
+            });
+            continue;
+          }
+
           const p2Pct = 42 + Math.floor(((i + BATCH_SIZE * 0.5) / total) * 36);
           onProgress({
             message: `センチメント分析中... (${done}/${total})`,
@@ -276,6 +298,14 @@ export async function executeAnalysisJob(
         });
         await analyzeVideoFromUrl(jobId, url);
       }
+    }
+
+    // 順位だけモード: ここで完了。LLM レポート/パターン分析はスキップ。
+    if (rankingOnly) {
+      await db.updateAnalysisJobStatus(jobId, "completed", new Date());
+      onProgress({ message: "順位分析完了（レポートはスキップ）", percent: 100, failedVideos });
+      console.log(`[Analysis] Completed ranking-only analysis for job ${jobId}`);
+      return;
     }
 
     // レポート生成

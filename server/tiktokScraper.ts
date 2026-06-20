@@ -770,6 +770,12 @@ export function buildChromiumArgs(): string[] {
     "--window-size=1280,900",
     "--lang=ja-JP",
   ];
+  // TLS を傍受する egress プロキシ環境（例: Claude Code コンテナ、社内 MITM プロキシ）では
+  // Chromium が tiktok.com の証明書を ERR_CERT_AUTHORITY_INVALID と見なすことがある。
+  // その場合のみ SCRAPER_IGNORE_CERT_ERRORS=true で証明書エラーを無視する（自宅IPでは不要）。
+  if (process.env.SCRAPER_IGNORE_CERT_ERRORS === "true") {
+    args.push("--ignore-certificate-errors");
+  }
   if (process.env.PROXY_SERVER) {
     args.push(`--proxy-server=${process.env.PROXY_SERVER}`);
     if (process.env.PROXY_KYC_VERIFIED !== "true") {
