@@ -27,10 +27,21 @@ npx tsx scripts/scrape-ranking.ts "#ジャングリア沖縄" --sessions 3 --per
 
 # pnpm スクリプト経由でも可
 pnpm scrape:ranking "ハリアー"
+
+# 自社動画を赤枠でハイライト（@アカウント名 or 動画URL をカンマ区切りで）
+npx tsx scripts/scrape-ranking.ts "ハリアー" --own @harrier808
 ```
 
 - 標準出力に **dominanceScore 降順のランキング表**（順位 / 出現回数 / 各セッション順位 / 再生数 / いいね / 作者 / URL）が出ます。
-- `out/ranking-<キーワード>-<日時>.json` と `.csv` も書き出されます（`out/` は Git 管理外）。
+- 次のファイルが `out/ranking-<キーワード>-<日時>.*` に書き出されます（`out/` は Git 管理外）:
+  - **`.html`** … **iPhone風の TikTok スマホUI**で順位を表示（ブラウザで開く）。`--own` 指定時は**自社動画を赤枠＋「自社」バッジ**でハイライト。
+  - `.csv` … Excel/スプレッドシートで開ける（`isOwn` 列あり）。
+  - `.json` … 全データ。
+
+### 自社動画ハイライト（`--own`）
+- `--own @harrier808,@harrier_3` のように**自社アカウント名**を指定すると、そのアカウントの動画が全部「自社」扱い。
+- 特定の動画だけなら**動画URL**を渡す（例: `--own https://www.tiktok.com/@harrier808/video/7607...`）。
+- HTML を開くと、ランキング中の自社動画が**赤枠**で一目で分かる。コンソールにも「🔴 自社動画 N件ヒット（順位: …）」と出る。
 
 ### 順位の見方
 - **ranks (順位/順位/…)**: 各シークレット検索での表示順位（1始まり、未出現は `-`）。

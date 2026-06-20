@@ -6,12 +6,14 @@
  *   ランキング表を標準出力し、out/ に JSON / CSV を書き出す。
  *
  * 使い方:
- *   npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M]
+ *   npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M] [--own @acc1,@acc2]
  *
  * 例:
  *   npx tsx scripts/scrape-ranking.ts "ハリアー"
  *   npx tsx scripts/scrape-ranking.ts "#ジャングリア沖縄" --sessions 3 --per-session 30
+ *   npx tsx scripts/scrape-ranking.ts "ハリアー" --own @harrier808   # 自社動画を赤枠ハイライト
  *
+ * 出力: out/ranking-*.csv / *.json / *.html（HTML は iPhone風 TikTok UI。--own 指定で自社を赤枠表示）
  * Mac の自宅IPで実行すれば、日本の実際の表示順位が取れる。
  * PROXY_SERVER / PROXY_USERNAME / PROXY_PASSWORD を設定すればプロキシ経由でも動く。
  */
@@ -21,12 +23,15 @@ import * as path from "path";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "../shared/const";
 import { searchTikTokTriple, type TikTokVideo } from "../server/tiktokScraper";
 import { computeRankInfo } from "../server/ranking";
+import { buildOwnMatcher } from "./lib/ownMatch";
+import { renderFeedHtml, type FeedVideoVM } from "./lib/feedHtml";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
   let keyword = "";
   let sessions = SCRAPER_SESSION_COUNT;
   let perSession = SCRAPER_VIDEOS_PER_SESSION;
+  let own: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -34,11 +39,13 @@ function parseArgs(argv: string[]) {
       sessions = parseInt(args[++i], 10);
     } else if (a === "--per-session") {
       perSession = parseInt(args[++i], 10);
+    } else if (a === "--own") {
+      own = (args[++i] ?? "").split(",").map(s => s.trim()).filter(Boolean);
     } else if (!a.startsWith("--") && !keyword) {
       keyword = a;
     }
   }
-  return { keyword, sessions, perSession };
+  return { keyword, sessions, perSession, own };
 }
 
 function fmtNum(n: number): string {
@@ -57,17 +64,20 @@ function videoUrl(v: TikTokVideo): string {
 }
 
 async function main() {
-  const { keyword, sessions, perSession } = parseArgs(process.argv);
+  const { keyword, sessions, perSession, own } = parseArgs(process.argv);
 
   if (!keyword) {
-    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M]');
+    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M] [--own @acc1,@acc2]');
     process.exit(1);
   }
+
+  const ownMatcher = buildOwnMatcher(own);
 
   console.log(`\n=== TikTok 表示順位スクレイピング ===`);
   console.log(`キーワード : ${keyword}`);
   console.log(`セッション数: ${sessions} / 1セッションあたり取得: ${perSession}`);
-  console.log(`プロキシ    : ${process.env.PROXY_SERVER ? process.env.PROXY_SERVER : "なし（直結）"}\n`);
+  console.log(`プロキシ    : ${process.env.PROXY_SERVER ? process.env.PROXY_SERVER : "なし（直結）"}`);
+  console.log(`自社指定    : ${ownMatcher.isEmpty ? "なし（ハイライトなし）" : own.join(", ")}\n`);
 
   const result = await searchTikTokTriple(
     keyword,
@@ -121,7 +131,7 @@ async function main() {
       fmtNum(v.stats.diggCount).padStart(7),
       `@${v.author?.uniqueId ?? ""}`.slice(0, 18).padEnd(18),
       videoUrl(v),
-    ].join("  ");
+    ].join("  ") + (ownMatcher.isOwn(v) ? "  🔴自社" : "");
     console.log(row);
   });
 
@@ -152,6 +162,7 @@ async function main() {
       shareCount: v.stats.shareCount,
       collectCount: v.stats.collectCount,
       hashtags: v.hashtags,
+      isOwn: ownMatcher.isOwn(v),
     };
   });
 
@@ -173,7 +184,7 @@ async function main() {
     "utf-8",
   );
 
-  const header = "position,videoId,dominanceScore,avgRank,appearanceCount,ranksPerSession,playCount,diggCount,commentCount,shareCount,isAd,author,url,desc";
+  const header = "position,videoId,dominanceScore,avgRank,appearanceCount,ranksPerSession,playCount,diggCount,commentCount,shareCount,isAd,isOwn,author,url,desc";
   const rows = rankedDetailed.map(r =>
     [
       r.position,
@@ -187,6 +198,7 @@ async function main() {
       r.commentCount,
       r.shareCount,
       r.isAd,
+      r.isOwn,
       r.author,
       r.url,
       r.desc,
@@ -194,7 +206,41 @@ async function main() {
   );
   fs.writeFileSync(`${base}.csv`, [header, ...rows].join("\n"), "utf-8");
 
-  console.log(`\n出力: ${base}.json`);
+  // === HTML（iPhone風 TikTok UI・自社は赤枠ハイライト） ===
+  const feedVideos: FeedVideoVM[] = ranked.map((id, i) => {
+    const v = videoById.get(id)!;
+    return {
+      rank: i + 1,
+      videoId: id,
+      url: videoUrl(v),
+      coverUrl: v.coverUrl ?? "",
+      authorUniqueId: v.author?.uniqueId ?? "",
+      authorNickname: v.author?.nickname,
+      desc: v.desc ?? "",
+      playCount: v.stats?.playCount ?? 0,
+      diggCount: v.stats?.diggCount ?? 0,
+      isOwn: ownMatcher.isOwn(v),
+    };
+  });
+  const ownRanks = feedVideos.filter(f => f.isOwn).map(f => f.rank);
+  const html = renderFeedHtml({
+    keyword,
+    numSessions,
+    generatedAt: new Date().toLocaleString("ja-JP"),
+    videos: feedVideos,
+    ownRanks,
+  });
+  fs.writeFileSync(`${base}.html`, html, "utf-8");
+
+  if (!ownMatcher.isEmpty) {
+    console.log(
+      ownRanks.length > 0
+        ? `\n🔴 自社動画 ${ownRanks.length} 件ヒット（順位: ${ownRanks.join(" / ")}）`
+        : `\n自社動画は今回のランキングに見つかりませんでした`,
+    );
+  }
+  console.log(`\n出力: ${base}.html  ← ブラウザで開くと iPhone風UIで表示${ownMatcher.isEmpty ? "" : "（自社=赤枠）"}`);
+  console.log(`出力: ${base}.json`);
   console.log(`出力: ${base}.csv\n`);
   process.exit(0);
 }

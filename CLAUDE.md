@@ -51,11 +51,12 @@ Use these tokens for all new animations and transitions.
 実行コマンド（DB も LLM も不要のスタンドアロン CLI）:
 
 ```bash
-npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1
+npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1 [--own @自社アカウント]
 ```
 
 - `--sessions 1` = 1回検索＝そのままの表示順位（既定は3。毎回上位に出る「安定度/勝ちパターン」を見たい時だけ `--sessions 3`）。
-- 出力は `out/ranking-<キーワード>-<日時>.csv`（Excel可）と `.json`。実行後は**上位10〜20件を表で要約**して提示し、CSV/JSON の保存先パスも伝える。
+- `--own @acc1,@acc2`（または自社動画URL）を付けると、**生成HTMLで自社動画を赤枠＋「自社」バッジでハイライト**する。ユーザーが「自社動画も出して/ハイライトして」と言ったのに自社アカウント/URLが不明なら、**まず自社のTikTokアカウント名（@）を聞くこと**。
+- 出力は `out/ranking-<キーワード>-<日時>` の **`.html`（iPhone風 TikTok UI。ブラウザで開く）**・`.csv`（Excel可）・`.json`。実行後は**上位10〜20件を表で要約**して提示し、**HTML を含む保存先パス**を伝える（「ブラウザで開くとスマホUIで見られる」と案内）。
 - パッケージマネージャは pnpm ではなく **npm**（このユーザーは Mac の管理者権限が無い）。依存が未インストールなら先に `npm install --legacy-peer-deps`。
 - 「Browser was not found」が出たら `npx puppeteer browsers install chrome` を一度実行してから再試行（Chromium 検出は `findChromiumPath` がクロスプラットフォーム対応済み）。
 - 動画が 0 件のときは IP ブロックの可能性。Mac の自宅IPで動かしているか確認し、必要なら `PROXY_SERVER`（日本の住宅用プロキシ）を案内する。
