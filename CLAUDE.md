@@ -43,3 +43,21 @@ M3 design tokens are defined in `client/src/index.css`:
 - Shape: `--md-shape-xs` through `--md-shape-full`
 
 Use these tokens for all new animations and transitions.
+
+## TikTok 表示順位スクレイピング（Mac でこの Claude に依頼する用）
+
+ユーザーが「〇〇の順位を取って」「表示順位／ランキングを取って」等と頼んだら、**このリポジトリのある Mac 上で**次を実行して結果を返すこと。収集は**自宅IPの Mac でのみ安定**する（クラウド/CI のIPは TikTok にブロックされて動画 0 件になるため不可）。
+
+実行コマンド（DB も LLM も不要のスタンドアロン CLI）:
+
+```bash
+npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1
+```
+
+- `--sessions 1` = 1回検索＝そのままの表示順位（既定は3。毎回上位に出る「安定度/勝ちパターン」を見たい時だけ `--sessions 3`）。
+- 出力は `out/ranking-<キーワード>-<日時>.csv`（Excel可）と `.json`。実行後は**上位10〜20件を表で要約**して提示し、CSV/JSON の保存先パスも伝える。
+- パッケージマネージャは pnpm ではなく **npm**（このユーザーは Mac の管理者権限が無い）。依存が未インストールなら先に `npm install --legacy-peer-deps`。
+- 「Browser was not found」が出たら `npx puppeteer browsers install chrome` を一度実行してから再試行（Chromium 検出は `findChromiumPath` がクロスプラットフォーム対応済み）。
+- 動画が 0 件のときは IP ブロックの可能性。Mac の自宅IPで動かしているか確認し、必要なら `PROXY_SERVER`（日本の住宅用プロキシ）を案内する。
+
+詳しい手順は `docs/scrape-on-mac.md` を参照。
