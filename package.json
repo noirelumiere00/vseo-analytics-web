@@ -4,6 +4,9 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
+    "setup": "bash scripts/dev-setup.sh",
+    "seed:dev-user": "tsx scripts/seed-dev-user.ts",
+    "dev:all": "bash scripts/dev-setup.sh && NODE_ENV=development tsx watch server/_core/index.ts",
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:web": "SERVER_MODE=web NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:worker": "SERVER_MODE=worker NODE_ENV=development tsx watch server/_core/worker.ts",
@@ -18,6 +21,7 @@
     "postinstall": "node -e \"try { require('puppeteer').executablePath(); console.log('[Puppeteer] Chromium already installed'); } catch (e) { console.log('[Puppeteer] Installing Chromium...'); require('child_process').execSync('npx puppeteer browsers install chrome', { stdio: 'inherit' }); }\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@aws-sdk/client-bedrock-runtime": "^3.1000.0",
     "@aws-sdk/client-s3": "^3.693.0",
     "@aws-sdk/client-ses": "^3.1008.0",

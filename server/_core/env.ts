@@ -7,7 +7,10 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  // AWS Bedrock
+  // Anthropic Claude API（LLM 本体。Bedrock から移行）
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  anthropicModelId: process.env.ANTHROPIC_MODEL_ID ?? "claude-haiku-4-5",
+  // AWS（SES メール送信などで使用。LLM では未使用）
   awsRegion: process.env.AWS_REGION ?? "us-west-2",
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
