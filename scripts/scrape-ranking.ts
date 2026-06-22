@@ -219,6 +219,7 @@ async function main() {
       desc: v.desc ?? "",
       playCount: v.stats?.playCount ?? 0,
       diggCount: v.stats?.diggCount ?? 0,
+      isAd: !!v.isAd,
       isOwn: ownMatcher.isOwn(v),
     };
   });
