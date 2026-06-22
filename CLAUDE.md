@@ -62,3 +62,20 @@ npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1 [--own @自�
 - 動画が 0 件のときは IP ブロックの可能性。Mac の自宅IPで動かしているか確認し、必要なら `PROXY_SERVER`（日本の住宅用プロキシ）を案内する。
 
 詳しい手順は `docs/scrape-on-mac.md` を参照。
+
+### Instagram（ハッシュタグの表示順位）
+
+TikTok と同じ要領で、Instagram のハッシュタグ検索の表示順位も取れる（3列の IG 探索風 UI でHTML出力・自社は赤枠）。
+
+実行コマンド:
+
+```bash
+INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#ハッシュタグ>" [--max N] [--own @自社アカウント]
+```
+
+- **`INSTAGRAM_SESSION_ID` が必須**（ログイン済みブラウザの Instagram `sessionid` Cookie）。**環境変数で渡す**（`.env` に書いてもよいが**コミットしない**）。未指定でユーザーが順位取得を頼んだら、**まず「IG のセッションID（sessionid Cookie）を渡して」と聞くこと**。未設定の場合は `APIFY_API_TOKEN` があれば Apify フォールバックを試みる。
+- `--own @acc1,@acc2`（または `instagram.com/<ユーザー名>` のプロフィールURL）で、**生成HTMLの自社投稿を赤枠＋「自社」バッジ**でハイライト。自社が不明なら**自社の IG ユーザー名（@）を聞く**。
+- `--max`（既定 30）= 取得する上位件数。
+- 出力は `out/ig-ranking-<タグ>-<日時>` の **`.html`（iPhone風 Instagram UI。ブラウザで開く）**・`.csv`（`isOwn` 列あり）・`.json`。実行後は**上位を表で要約**し、**HTML を含む保存先パス**を伝える。
+- 0 件のときは `INSTAGRAM_SESSION_ID` の未設定/失効、または非日本/データセンターIPのブロックを疑う。**Mac の自宅IP**で実行する。
+- npm ショートカット: `npm run scrape:ig -- "<#ハッシュタグ>" --own @自社`（`INSTAGRAM_SESSION_ID` は環境変数で）。

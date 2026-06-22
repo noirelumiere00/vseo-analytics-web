@@ -7,6 +7,7 @@
     "setup": "bash scripts/dev-setup.sh",
     "seed:dev-user": "tsx scripts/seed-dev-user.ts",
     "scrape:ranking": "tsx scripts/scrape-ranking.ts",
+    "scrape:ig": "tsx scripts/scrape-ig-ranking.ts",
     "dev:all": "bash scripts/dev-setup.sh && NODE_ENV=development tsx watch server/_core/index.ts",
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:web": "SERVER_MODE=web NODE_ENV=development tsx watch server/_core/index.ts",

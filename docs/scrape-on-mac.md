@@ -48,6 +48,33 @@ npx tsx scripts/scrape-ranking.ts "ハリアー" --own @harrier808
 - **appearanceCount (出現)**: 何セッションに出たか（パーソナライズ排除後の「安定して上位に出る」指標）。
 - **dominanceScore**: `Σ(1/順位) / セッション数 × 100`。高いほど上位に安定表示＝勝ちパターン。
 
+## 2-IG. Instagram のハッシュタグ表示順位を取る
+
+TikTok と同じ要領で、Instagram ハッシュタグ検索の表示順位も取れます（3列の IG 探索風 UI でHTML出力・自社は赤枠）。
+セットアップ（`npm install --legacy-peer-deps` / `npx puppeteer browsers install chrome`）は TikTok と共通です。
+
+**`INSTAGRAM_SESSION_ID` が必須**です。ログイン済みのブラウザで instagram.com を開き、
+開発者ツール → Application/ストレージ → Cookie → `sessionid` の値をコピーして環境変数で渡します。
+
+```bash
+# 基本（環境変数でセッションIDを渡す）
+INSTAGRAM_SESSION_ID="<sessionidの値>" npx tsx scripts/scrape-ig-ranking.ts "#沖縄旅行"
+
+# 件数指定＋自社をハイライト
+INSTAGRAM_SESSION_ID="..." npx tsx scripts/scrape-ig-ranking.ts "#沖縄旅行" --max 30 --own @myshop
+
+# npm スクリプト経由でも可
+INSTAGRAM_SESSION_ID="..." npm run scrape:ig -- "#沖縄旅行" --own @myshop
+```
+
+- 先頭の `#` はあってもなくても可。`--own` は `@ユーザー名` か `instagram.com/<ユーザー名>` のプロフィールURLでOK（自社判定はユーザー名単位）。
+- 出力は `out/ig-ranking-<タグ>-<日時>.*`（`out/` は Git 管理外）:
+  - **`.html`** … **iPhone風の Instagram 探索UI**（3列正方形グリッド）で順位を表示。`--own` 指定時は**自社投稿を赤枠＋「自社」バッジ**でハイライト。
+  - `.csv` … Excel/スプレッドシートで開ける（`isOwn` 列あり）。
+  - `.json` … 全データ（取得方式 `puppeteer`/`apify` も記録）。
+- **`INSTAGRAM_SESSION_ID` は秘密情報**。`.env` に書く場合もコミットしないでください（`.env` は Git 管理外）。
+- 投稿が 0 件のときは sessionid の未設定/失効、または非日本/データセンターIPのブロックが主因です。**Mac の自宅IP**で実行してください（`INSTAGRAM_SESSION_ID` 未設定時は `APIFY_API_TOKEN` があれば Apify フォールバックを試みます）。
+
 ## 3. プロキシ経由にしたい場合（任意）
 
 自宅IPで十分ですが、日本の住宅用プロキシを使うなら環境変数で:
