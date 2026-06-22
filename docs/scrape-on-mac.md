@@ -30,8 +30,15 @@ pnpm scrape:ranking "ハリアー"
 
 # 自社動画を赤枠でハイライト（@アカウント名 or 動画URL をカンマ区切りで）
 npx tsx scripts/scrape-ranking.ts "ハリアー" --own @harrier808
+
+# 複数キーワードを1回で（各KWごとに HTML/CSV/JSON を出力）
+npx tsx scripts/scrape-ranking.ts "N高" "N高等学校" "#N高" "#N高等学校" --sessions 1 --own @acc1,@acc2
+
+# 各 plain KW の #付き版を自動追加（→ N高 / N高等学校 / #N高 / #N高等学校 の4本）
+npx tsx scripts/scrape-ranking.ts "N高" "N高等学校" --hashtag-variants --sessions 1
 ```
 
+- **複数KW**を並べると、最後に**全キーワード横断のサマリー**（KWごとの件数・自社ヒット件数・自社順位・出力パス一覧）が出ます。「どの動画が何位か」「自社がどの順位か」が一覧で分かります。
 - 標準出力に **dominanceScore 降順のランキング表**（順位 / 出現回数 / 各セッション順位 / 再生数 / いいね / 作者 / URL）が出ます。
 - 次のファイルが `out/ranking-<キーワード>-<日時>.*` に書き出されます（`out/` は Git 管理外）:
   - **`.html`** … **iPhone風の TikTok スマホUI**で順位を表示（ブラウザで開く）。`--own` 指定時は**自社動画を赤枠＋「自社」バッジ**でハイライト。

@@ -3,15 +3,17 @@
  *
  *   DB も LLM も Web サーバーも不要。Puppeteer で 3シークレット検索を回し、
  *   各動画の表示順位（avgRank / dominanceScore / 出現回数）を算出して
- *   ランキング表を標準出力し、out/ に JSON / CSV を書き出す。
+ *   ランキング表を標準出力し、out/ に JSON / CSV / HTML を書き出す。
+ *
+ *   キーワードは「複数」並べて1回で実行できる（各KWごとに HTML/CSV/JSON を出力）。
  *
  * 使い方:
- *   npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M] [--own @acc1,@acc2]
+ *   npx tsx scripts/scrape-ranking.ts "<KW1>" ["<KW2>" ...] [--sessions N] [--per-session M] [--own @a,@b] [--hashtag-variants]
  *
  * 例:
  *   npx tsx scripts/scrape-ranking.ts "ハリアー"
- *   npx tsx scripts/scrape-ranking.ts "#ジャングリア沖縄" --sessions 3 --per-session 30
- *   npx tsx scripts/scrape-ranking.ts "ハリアー" --own @harrier808   # 自社動画を赤枠ハイライト
+ *   npx tsx scripts/scrape-ranking.ts "N高" "N高等学校" "#N高" "#N高等学校" --sessions 1 --own @otoha_log
+ *   npx tsx scripts/scrape-ranking.ts "N高" "N高等学校" --hashtag-variants   # 各KWの #付き版も自動追加
  *
  * 出力: out/ranking-*.csv / *.json / *.html（HTML は iPhone風 TikTok UI。--own 指定で自社を赤枠表示）
  * Mac の自宅IPで実行すれば、日本の実際の表示順位が取れる。
@@ -23,15 +25,16 @@ import * as path from "path";
 import { SCRAPER_SESSION_COUNT, SCRAPER_VIDEOS_PER_SESSION } from "../shared/const";
 import { searchTikTokTriple, type TikTokVideo } from "../server/tiktokScraper";
 import { computeRankInfo } from "../server/ranking";
-import { buildOwnMatcher } from "./lib/ownMatch";
+import { buildOwnMatcher, type OwnMatcher } from "./lib/ownMatch";
 import { renderFeedHtml, type FeedVideoVM } from "./lib/feedHtml";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
-  let keyword = "";
+  let keywords: string[] = [];
   let sessions = SCRAPER_SESSION_COUNT;
   let perSession = SCRAPER_VIDEOS_PER_SESSION;
   let own: string[] = [];
+  let hashtagVariants = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -41,11 +44,23 @@ function parseArgs(argv: string[]) {
       perSession = parseInt(args[++i], 10);
     } else if (a === "--own") {
       own = (args[++i] ?? "").split(",").map(s => s.trim()).filter(Boolean);
-    } else if (!a.startsWith("--") && !keyword) {
-      keyword = a;
+    } else if (a === "--hashtag-variants" || a === "--with-hashtag") {
+      hashtagVariants = true;
+    } else if (!a.startsWith("--")) {
+      keywords.push(a);
     }
   }
-  return { keyword, sessions, perSession, own };
+
+  // --hashtag-variants: 各 plain KW につき「#KW」も追加
+  if (hashtagVariants) {
+    const extra = keywords.filter(k => !k.startsWith("#")).map(k => `#${k}`);
+    keywords = [...keywords, ...extra];
+  }
+  // 重複除去（順序維持）
+  const seen = new Set<string>();
+  keywords = keywords.filter(k => (seen.has(k) ? false : (seen.add(k), true)));
+
+  return { keywords, sessions, perSession, own, hashtagVariants };
 }
 
 function fmtNum(n: number): string {
@@ -63,26 +78,37 @@ function videoUrl(v: TikTokVideo): string {
   return `https://www.tiktok.com/@${v.author?.uniqueId ?? ""}/video/${v.id}`;
 }
 
-async function main() {
-  const { keyword, sessions, perSession, own } = parseArgs(process.argv);
+interface OwnHit {
+  rank: number;
+  author: string;
+  videoId: string;
+  url: string;
+}
 
-  if (!keyword) {
-    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<キーワード>" [--sessions N] [--per-session M] [--own @acc1,@acc2]');
-    process.exit(1);
-  }
+interface RunResult {
+  keyword: string;
+  numSessions: number;
+  total: number;
+  ownHits: OwnHit[];
+  htmlPath: string;
+  csvPath: string;
+  jsonPath: string;
+}
 
-  const ownMatcher = buildOwnMatcher(own);
-
-  console.log(`\n=== TikTok 表示順位スクレイピング ===`);
-  console.log(`キーワード : ${keyword}`);
-  console.log(`セッション数: ${sessions} / 1セッションあたり取得: ${perSession}`);
-  console.log(`プロキシ    : ${process.env.PROXY_SERVER ? process.env.PROXY_SERVER : "なし（直結）"}`);
-  console.log(`自社指定    : ${ownMatcher.isEmpty ? "なし（ハイライトなし）" : own.join(", ")}\n`);
+/** 1キーワード分の収集 → 順位算出 → 標準出力 → ファイル出力 を行い、サマリーを返す。 */
+async function runOne(
+  keyword: string,
+  ownMatcher: OwnMatcher,
+  opts: { sessions: number; perSession: number; outDir: string },
+): Promise<RunResult> {
+  console.log(`\n──────────────────────────────────────────`);
+  console.log(`▶ キーワード: ${keyword}`);
+  console.log(`──────────────────────────────────────────`);
 
   const result = await searchTikTokTriple(
     keyword,
-    perSession,
-    sessions,
+    opts.perSession,
+    opts.sessions,
     (msg: string, pct: number) => console.log(`[${String(pct).padStart(3)}%] ${msg}`),
   );
 
@@ -99,7 +125,7 @@ async function main() {
 
   if (allVideoIds.length === 0) {
     console.warn(
-      "\n⚠ 動画が1件も取得できませんでした。" +
+      `\n⚠ [${keyword}] 動画が1件も取得できませんでした。` +
       "\n  非日本/データセンターIPだと TikTok にブロック（CAPTCHA/空応答）されることがあります。" +
       "\n  Mac の自宅IPで実行するか、PROXY_SERVER（日本の住宅用プロキシ）を設定してください。\n",
     );
@@ -114,7 +140,7 @@ async function main() {
   });
 
   // === 標準出力（ランキング表） ===
-  console.log(`\n=== 表示順位ランキング（${numSessions}セッション / 重複率 ${result.duplicateAnalysis.overlapRate.toFixed(1)}%）===\n`);
+  console.log(`\n=== 表示順位ランキング「${keyword}」（${numSessions}セッション / 重複率 ${result.duplicateAnalysis.overlapRate.toFixed(1)}%）===\n`);
   console.log("  #  Dom    出現  順位        再生数   いいね   作者                URL");
   console.log("  ".padEnd(100, "-"));
   ranked.forEach((id, i) => {
@@ -136,11 +162,9 @@ async function main() {
   });
 
   // === ファイル出力 ===
-  const outDir = path.resolve(process.cwd(), "out");
-  fs.mkdirSync(outDir, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const safeKeyword = keyword.replace(/[^\p{L}\p{N}_-]/gu, "_").slice(0, 40);
-  const base = path.join(outDir, `ranking-${safeKeyword}-${ts}`);
+  const base = path.join(opts.outDir, `ranking-${safeKeyword}-${ts}`);
 
   const rankedDetailed = ranked.map((id, i) => {
     const v = videoById.get(id)!;
@@ -172,7 +196,7 @@ async function main() {
       {
         keyword,
         numSessions,
-        perSession,
+        perSession: opts.perSession,
         overlapRate: result.duplicateAnalysis.overlapRate,
         proxy: process.env.PROXY_SERVER ? "enabled" : "direct",
         generatedAt: new Date().toISOString(),
@@ -233,16 +257,97 @@ async function main() {
   });
   fs.writeFileSync(`${base}.html`, html, "utf-8");
 
+  const ownHits: OwnHit[] = feedVideos
+    .filter(f => f.isOwn)
+    .map(f => ({ rank: f.rank, author: f.authorUniqueId, videoId: f.videoId, url: f.url }));
+
   if (!ownMatcher.isEmpty) {
-    console.log(
-      ownRanks.length > 0
-        ? `\n🔴 自社動画 ${ownRanks.length} 件ヒット（順位: ${ownRanks.join(" / ")}）`
-        : `\n自社動画は今回のランキングに見つかりませんでした`,
-    );
+    if (ownHits.length > 0) {
+      console.log(`\n🔴 [${keyword}] 自社動画 ${ownHits.length} 件ヒット`);
+      for (const h of ownHits) {
+        console.log(`   ${String(h.rank).padStart(3)}位  @${h.author}  ${h.url}`);
+      }
+    } else {
+      console.log(`\n[${keyword}] 自社動画は今回のランキングに見つかりませんでした`);
+    }
   }
   console.log(`\n出力: ${base}.html  ← ブラウザで開くと iPhone風UIで表示${ownMatcher.isEmpty ? "" : "（自社=赤枠）"}`);
   console.log(`出力: ${base}.json`);
-  console.log(`出力: ${base}.csv\n`);
+  console.log(`出力: ${base}.csv`);
+
+  return {
+    keyword,
+    numSessions,
+    total: ranked.length,
+    ownHits,
+    htmlPath: `${base}.html`,
+    csvPath: `${base}.csv`,
+    jsonPath: `${base}.json`,
+  };
+}
+
+async function main() {
+  const { keywords, sessions, perSession, own } = parseArgs(process.argv);
+
+  if (keywords.length === 0) {
+    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<KW1>" ["<KW2>" ...] [--sessions N] [--per-session M] [--own @a,@b] [--hashtag-variants]');
+    process.exit(1);
+  }
+
+  const ownMatcher = buildOwnMatcher(own);
+
+  console.log(`\n=== TikTok 表示順位スクレイピング ===`);
+  console.log(`キーワード  : ${keywords.join("  /  ")}（${keywords.length}件）`);
+  console.log(`セッション数: ${sessions} / 1セッションあたり取得: ${perSession}`);
+  console.log(`プロキシ    : ${process.env.PROXY_SERVER ? process.env.PROXY_SERVER : "なし（直結）"}`);
+  console.log(`自社指定    : ${ownMatcher.isEmpty ? "なし（ハイライトなし）" : own.join(", ")}`);
+
+  const outDir = path.resolve(process.cwd(), "out");
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const results: RunResult[] = [];
+  const failed: string[] = [];
+
+  for (const kw of keywords) {
+    try {
+      results.push(await runOne(kw, ownMatcher, { sessions, perSession, outDir }));
+    } catch (e) {
+      console.error(`\n[${kw}] 取得失敗:`, e instanceof Error ? e.message : e);
+      failed.push(kw);
+    }
+  }
+
+  // === 全キーワード横断サマリー ===
+  console.log(`\n\n══════════════════════════════════════════`);
+  console.log(`  全キーワード サマリー（${results.length}/${keywords.length} 成功）`);
+  console.log(`══════════════════════════════════════════`);
+  if (results.length > 0) {
+    console.log(`\n  キーワード            件数   自社ヒット  自社順位`);
+    console.log("  " + "".padEnd(60, "-"));
+    for (const r of results) {
+      const ranksStr = r.ownHits.length > 0 ? r.ownHits.map(h => `${h.rank}位`).join(" / ") : "—";
+      console.log(
+        "  " +
+        r.keyword.slice(0, 18).padEnd(20) +
+        String(r.total).padStart(4) +
+        "   " +
+        String(r.ownHits.length).padStart(4) + " 件" +
+        "   " +
+        ranksStr,
+      );
+    }
+  }
+  if (failed.length > 0) {
+    console.log(`\n  ⚠ 取得失敗（0件/ブロックの可能性）: ${failed.join(" / ")}`);
+    console.log(`    → Mac の自宅IPで実行 or PROXY_SERVER を設定してください。`);
+  }
+
+  console.log(`\n  出力ファイル（ブラウザで .html を開く）:`);
+  for (const r of results) {
+    console.log(`    [${r.keyword}]  ${r.htmlPath}`);
+  }
+  console.log("");
+
   process.exit(0);
 }
 

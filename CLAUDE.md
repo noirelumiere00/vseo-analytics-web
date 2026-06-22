@@ -54,6 +54,9 @@ Use these tokens for all new animations and transitions.
 npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1 [--own @自社アカウント]
 ```
 
+- **キーワードは複数並べて1回で実行できる**（各KWごとに HTML/CSV/JSON を出力）。例: `npx tsx scripts/scrape-ranking.ts "N高" "N高等学校" "#N高" "#N高等学校" --sessions 1 --own @acc1,@acc2`。
+- `--hashtag-variants` を付けると、各 plain KW の **#付き版を自動追加**（例: `"N高" "N高等学校" --hashtag-variants` → `N高 / N高等学校 / #N高 / #N高等学校` の4本）。TikTok は「KW検索」と「#検索」で並びが変わるので、両方見たい時に便利。
+- 複数KW実行時は、最後に**全キーワード横断のサマリー**（KWごとの件数・自社ヒット件数・自社順位・出力パス一覧）を表示する。
 - `--sessions 1` = 1回検索＝そのままの表示順位（既定は3。毎回上位に出る「安定度/勝ちパターン」を見たい時だけ `--sessions 3`）。
 - `--own @acc1,@acc2`（または自社動画URL）を付けると、**生成HTMLで自社動画を赤枠＋「自社」バッジでハイライト**する。ユーザーが「自社動画も出して/ハイライトして」と言ったのに自社アカウント/URLが不明なら、**まず自社のTikTokアカウント名（@）を聞くこと**。
 - 出力は `out/ranking-<キーワード>-<日時>` の **`.html`（iPhone風 TikTok UI。ブラウザで開く）**・`.csv`（Excel可）・`.json`。実行後は**上位10〜20件を表で要約**して提示し、**HTML を含む保存先パス**を伝える（「ブラウザで開くとスマホUIで見られる」と案内）。
