@@ -73,11 +73,13 @@ TikTok と同じ要領で、Instagram のハッシュタグ検索の表示順位
 実行コマンド:
 
 ```bash
-INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#ハッシュタグ>" [--max N] [--own @自社アカウント]
+INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @自社アカウント] [--own-reels <file>]
 ```
 
-- **`INSTAGRAM_SESSION_ID` が必須**（ログイン済みブラウザの Instagram `sessionid` Cookie）。**環境変数で渡す**（`.env` に書いてもよいが**コミットしない**）。未指定でユーザーが順位取得を頼んだら、**まず「IG のセッションID（sessionid Cookie）を渡して」と聞くこと**。未設定の場合は `APIFY_API_TOKEN` があれば Apify フォールバックを試みる。
-- `--own @acc1,@acc2`（または `instagram.com/<ユーザー名>` のプロフィールURL）で、**生成HTMLの自社投稿を赤枠＋「自社」バッジ**でハイライト。自社が不明なら**自社の IG ユーザー名（@）を聞く**。
+- **ハッシュタグは複数並べて1回で実行できる**（各タグごとに HTML/CSV/JSON＋最後に全タグ横断サマリー）。例: `... "#N高" "#N高等学校" --own-reels out/ig-own-reels.txt`。
+- **`INSTAGRAM_SESSION_ID` が必須**（ログイン済みブラウザの Instagram `sessionid` Cookie）。**環境変数で渡す**（`.env` に書いてもよいが**コミットしない**）。未指定でユーザーが順位取得を頼んだら、**まず「IG のセッションID（sessionid Cookie）を渡して」と聞くこと**。未設定の場合は `APIFY_API_TOKEN` があれば Apify フォールバックを試みる。**IG はセッション付きならクラウド（このコンテナ）からでも取れることが多い**（TikTok と違いブロックされにくい。ダメなら Mac 自宅IP）。
+- `--own @acc1,@acc2`（または `instagram.com/<ユーザー名>` のプロフィールURL）で、**自社IGアカウント名（username 一致）**をハイライト。自社が不明なら**自社の IG ユーザー名（@）を聞く**。
+- `--own-reels <file>`（1行1URL）= **自社投稿URL一覧から reel/p の shortcode を抽出し、ランキング中の同 shortcode を自社扱い**。スプシの投稿リスト（reel URL に @ が無くても）をそのまま自社判定に使える。`--own` と併用可（isOwn = username 一致 or shortcode 一致）。
 - `--max`（既定 30）= 取得する上位件数。
 - 出力は `out/ig-ranking-<タグ>-<日時>` の **`.html`（iPhone風 Instagram UI。ブラウザで開く）**・`.csv`（`isOwn` 列あり）・`.json`。実行後は**上位を表で要約**し、**HTML を含む保存先パス**を伝える。
 - 0 件のときは `INSTAGRAM_SESSION_ID` の未設定/失効、または非日本/データセンターIPのブロックを疑う。**Mac の自宅IP**で実行する。
