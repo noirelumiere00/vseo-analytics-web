@@ -135,7 +135,8 @@ async function runOne(
   console.log(`──────────────────────────────────────────`);
 
   // リールのみ表示時は、画像/カルーセルで埋もれる分を見越して多めに集めてから絞る
-  const fetchMax = opts.reelsOnly ? Math.max(opts.max * 4, 120) : opts.max;
+  // （より深く集めるには env IG_MAX_SCROLLS でスクロール回数を増やす）
+  const fetchMax = opts.reelsOnly ? Math.max(opts.max * 8, 250) : opts.max;
   const result = await searchInstagramHashtag(tag, fetchMax, opts.ownUsernames);
 
   // username 一致（scraper 内蔵）に加え、shortcode 一致でも自社判定

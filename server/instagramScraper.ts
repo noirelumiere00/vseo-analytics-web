@@ -365,7 +365,7 @@ async function scrapeHashtagWithPuppeteer(
 
     // スクロールで追加データ取得（maxResults未達の場合）
     if (posts.length < maxResults && posts.length > 0) {
-      const maxScrolls = 10;
+      const maxScrolls = Number(process.env.IG_MAX_SCROLLS) || 10;
       let noProgressCount = 0;
       for (let scroll = 0; scroll < maxScrolls && posts.length < maxResults; scroll++) {
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
@@ -387,7 +387,7 @@ async function scrapeHashtagWithPuppeteer(
           console.log(`[Instagram Hashtag] Scroll ${scroll + 1}: ${posts.length} posts (${posts.filter(p => p.type === "reel").length} reels)`);
         } else {
           noProgressCount++;
-          if (noProgressCount >= 2) break;
+          if (noProgressCount >= 3) break;
         }
       }
     }
