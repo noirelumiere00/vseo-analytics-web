@@ -1,30 +1,22 @@
 /**
- * embedThumbs.ts — 提案デックのサムネ（thumbUrl）を base64 データURIに置換して自己完結化する。
+ * embedThumbs.ts — サムネ画像URLを取得して base64 データURIに変換するヘルパー。
  *
- * IG/TikTok の CDN 画像URLは時間が経つと失効する（後でHTMLを開くとサムネが空になる）。
- * クライアント提案HTMLとして配る前に、生成時点で画像を取得して inline base64 にしておけば、
- * いつ・どこで開いても表示される（リンク切れしない）。phone タイルと表は同じ thumbUrl を使うので、
- * ユニークURLを1回ずつ取得すれば両方に反映される。失敗/タイムアウトは元URLのまま（=フォールバック）。
+ * IG/TikTok の CDN 画像URLは時間が経つと失効する（後でHTMLを開くとサムネが空に）。
+ * 提案デックを配る前に、生成時点で画像を base64 化して inline しておけば、いつ・どこで開いても表示される。
+ * `fetchThumbMap` は URL集合 → dataURI の Map を返す（並列・タイムアウト・失敗時はスキップ）。
+ * スマホモック（device）と表は同じ cover URL を使うので、1回の取得で両方に適用できる。
  */
-import type { ProposalSlide } from "./proposalHtml";
 
-export async function embedThumbsInSlides(
-  slides: ProposalSlide[],
+/** URL群を取得して `Map<url, "data:...base64,...">` を返す。失敗/タイムアウトのURLはMapに含めない（=元URLのまま使う）。 */
+export async function fetchThumbMap(
+  urls: Iterable<string>,
   opts: { concurrency?: number; timeoutMs?: number } = {},
-): Promise<{ total: number; embedded: number; failed: number }> {
+): Promise<Map<string, string>> {
   const concurrency = opts.concurrency ?? 8;
   const timeoutMs = opts.timeoutMs ?? 12_000;
 
-  const urls = new Set<string>();
-  for (const s of slides) {
-    for (const it of s.items) {
-      if (it.thumbUrl && /^https?:\/\//.test(it.thumbUrl)) urls.add(it.thumbUrl);
-    }
-  }
-  const list = [...urls];
+  const list = [...new Set([...urls].filter((u) => /^https?:\/\//.test(u)))];
   const map = new Map<string, string>();
-  let embedded = 0;
-  let failed = 0;
   let idx = 0;
 
   async function worker() {
@@ -37,27 +29,23 @@ export async function embedThumbsInSlides(
           signal: ctrl.signal,
           headers: { "User-Agent": "Mozilla/5.0", Accept: "image/avif,image/webp,image/*,*/*" },
         }).finally(() => clearTimeout(timer));
-        if (!res.ok) { failed++; continue; }
+        if (!res.ok) continue;
         const ct = (res.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
-        if (!ct.startsWith("image/")) { failed++; continue; }
+        if (!ct.startsWith("image/")) continue;
         const buf = Buffer.from(await res.arrayBuffer());
-        if (buf.length === 0 || buf.length > 4_000_000) { failed++; continue; }
+        if (buf.length === 0 || buf.length > 4_000_000) continue;
         map.set(u, `data:${ct};base64,${buf.toString("base64")}`);
-        embedded++;
       } catch {
-        failed++;
+        /* skip on failure */
       }
     }
   }
 
   await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, () => worker()));
+  return map;
+}
 
-  for (const s of slides) {
-    for (const it of s.items) {
-      const d = map.get(it.thumbUrl);
-      if (d) it.thumbUrl = d;
-    }
-  }
-
-  return { total: list.length, embedded, failed };
+/** Map を使って URL を dataURI に置換（無ければ元のまま）。 */
+export function applyThumbMap(url: string, map: Map<string, string>): string {
+  return map.get(url) ?? url;
 }

@@ -72,8 +72,11 @@ export function renderFeedHtml(params: {
   generatedAt: string;
   videos: FeedVideoVM[];
   ownRanks: number[];
+  /** "page"=単体HTML（既定）。"embed"=summary/footer無し・透明背景で .device のみ（iframe内包用）。 */
+  variant?: "page" | "embed";
 }): string {
   const { keyword, numSessions, generatedAt, videos, ownRanks } = params;
+  const embed = (params.variant ?? "page") === "embed";
   const cards = videos.map(renderCard).join("\n");
   const ownLine =
     ownRanks.length > 0
@@ -191,6 +194,7 @@ export function renderFeedHtml(params: {
   .home-indicator i { width:134px; height:5px; border-radius:3px; background:#fff; display:block; }
 
   .foot { width:min(560px,100%); text-align:center; color:#7d7d88; font-size:11px; line-height:1.6; }
+  ${embed ? "body{background:transparent;padding:0;display:inline-block;gap:0;} .device{box-shadow:none;margin:0;} .summary,.foot{display:none;}" : ""}
 </style>
 </head>
 <body>

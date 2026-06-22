@@ -74,8 +74,11 @@ export function renderIgFeedHtml(params: {
   generatedAt: string;
   posts: IgPostVM[];
   ownRanks: number[];
+  /** "page"=単体HTML（既定）。"embed"=summary/footer無し・透明背景で .device のみ（iframe内包用）。 */
+  variant?: "page" | "embed";
 }): string {
   const { hashtag, generatedAt, posts, ownRanks } = params;
+  const embed = (params.variant ?? "page") === "embed";
   const tag = hashtag.replace(/^#/, "");
   const tiles = posts.map(renderTile).join("\n");
   const ownLine =
@@ -165,6 +168,7 @@ export function renderIgFeedHtml(params: {
   .home-indicator i { width:134px; height:5px; border-radius:3px; background:#000; display:block; }
 
   .foot { width:min(560px,100%); text-align:center; color:#7d7d88; font-size:11px; line-height:1.6; }
+  ${embed ? "body{background:transparent;padding:0;display:inline-block;gap:0;} .device{box-shadow:none;margin:0;} .summary,.foot{display:none;}" : ""}
 </style>
 </head>
 <body>

@@ -60,7 +60,8 @@ npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1 [--own @自�
 - `--sessions 1` = 1回検索＝そのままの表示順位（既定は3。毎回上位に出る「安定度/勝ちパターン」を見たい時だけ `--sessions 3`）。
 - `--own @acc1,@acc2`（または自社動画URL）を付けると、**生成HTMLで自社動画を赤枠＋「自社」バッジでハイライト**する。ユーザーが「自社動画も出して/ハイライトして」と言ったのに自社アカウント/URLが不明なら、**まず自社のTikTokアカウント名（@）を聞くこと**。
 - 出力は `out/ranking-<キーワード>-<日時>` の **`.html`（iPhone風 TikTok UI。ブラウザで開く）**・`.csv`（Excel可）・`.json`。実行後は**上位10〜20件を表で要約**して提示し、**HTML を含む保存先パス**を伝える（「ブラウザで開くとスマホUIで見られる」と案内）。
-- `--proposal`（`--pptx`）= **クライアント提案用の 16:9 デックHTML**（1920×1080・全KWを1ファイルに複数スライド）を `out/tiktok-proposal-<日時>.html` に追加出力。各スライドは**左=スマホモック（全順位・自社赤）／右=順位表（サムネ・順位・アカウント・URL）**。**表は自社投稿のみ**（自社0件のKWは「該当なし」表示）。**サムネは base64 埋め込みで自己完結**（CDN失効でも後から開いて表示・`--no-embed-thumbs` で無効化）。←→キーでページ送り、PPTXに画像として貼れる。
+- `--proposal`（`--pptx`）= **クライアント提案用の 16:9 デックHTML**（1920×1080・全KWを1ファイルに複数スライド）を `out/tiktok-proposal-<日時>.html` に追加出力。各スライドは**左=スマホモック（`feedHtml`/`igFeedHtml` の詳細モックを iframe で内包＝順位HTMLと同じ高品質UI・全順位・自社赤）／右=順位表（サムネ・順位・アカウント・URL）**。**表は自社投稿のみ**（自社0件のKWは「該当なし」表示）。**サムネは base64 埋め込みで自己完結**（CDN失効でも後から開いて表示・`--no-embed-thumbs` で無効化）。←→キーでページ送り、PPTXに画像として貼れる。
+- **TikTokとIGを1つの統合デックにまとめたい時** = `npx tsx scripts/build-proposal.ts out/ranking-*.json out/ig-ranking-*.json`。既存の順位JSON（TikTok/IG混在可）から **1ファイルの統合提案デック** `out/proposal-combined-<日時>.html` を生成（各JSON＝1スライド・左=詳細モック／右=自社のみ表・サムネbase64）。※TikTok JSON は最新スクリプトで `coverUrl` を含む（旧JSONは要再取得）。
 - パッケージマネージャは pnpm ではなく **npm**（このユーザーは Mac の管理者権限が無い）。依存が未インストールなら先に `npm install --legacy-peer-deps`。
 - 「Browser was not found」が出たら `npx puppeteer browsers install chrome` を一度実行してから再試行（Chromium 検出は `findChromiumPath` がクロスプラットフォーム対応済み）。
 - 動画が 0 件のときは IP ブロックの可能性。Mac の自宅IPで動かしているか確認し、必要なら `PROXY_SERVER`（日本の住宅用プロキシ）を案内する。

@@ -27,8 +27,8 @@ import { searchTikTokTriple, type TikTokVideo } from "../server/tiktokScraper";
 import { computeRankInfo } from "../server/ranking";
 import { buildOwnMatcher, type OwnMatcher } from "./lib/ownMatch";
 import { renderFeedHtml, type FeedVideoVM } from "./lib/feedHtml";
-import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
-import { embedThumbsInSlides } from "./lib/embedThumbs";
+import { renderProposalDeck, type ProposalSlide, type ProposalItem } from "./lib/proposalHtml";
+import { fetchThumbMap, applyThumbMap } from "./lib/embedThumbs";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -108,7 +108,7 @@ interface RunResult {
 async function runOne(
   keyword: string,
   ownMatcher: OwnMatcher,
-  opts: { sessions: number; perSession: number; outDir: string },
+  opts: { sessions: number; perSession: number; outDir: string; proposal: boolean; noEmbed: boolean },
 ): Promise<RunResult> {
   console.log(`\n──────────────────────────────────────────`);
   console.log(`▶ キーワード: ${keyword}`);
@@ -186,7 +186,9 @@ async function runOne(
       appearanceCount: r.appearanceCount,
       ranksPerSession: r.ranks,
       url: videoUrl(v),
+      coverUrl: v.coverUrl ?? "",
       author: v.author?.uniqueId ?? "",
+      authorNickname: v.author?.nickname ?? "",
       desc: v.desc,
       isAd: v.isAd,
       playCount: v.stats.playCount,
@@ -284,17 +286,36 @@ async function runOne(
   console.log(`出力: ${base}.json`);
   console.log(`出力: ${base}.csv`);
 
+  // proposal 用: 詳細モック（embed）＋自社のみ表。サムネは base64 埋め込み（リンク切れ対策）。
+  let deviceHtml = "";
+  let items: ProposalItem[] = [];
+  if (opts.proposal) {
+    const coverMap = opts.noEmbed ? new Map<string, string>() : await fetchThumbMap(feedVideos.map(f => f.coverUrl));
+    const vmsEmbed = feedVideos.map(f => ({ ...f, coverUrl: applyThumbMap(f.coverUrl, coverMap) }));
+    deviceHtml = renderFeedHtml({
+      keyword,
+      numSessions,
+      generatedAt: new Date().toLocaleString("ja-JP"),
+      videos: vmsEmbed,
+      ownRanks,
+      variant: "embed",
+    });
+    items = feedVideos
+      .filter(f => f.isOwn)
+      .map(f => ({
+        rank: f.rank,
+        account: f.authorUniqueId,
+        url: f.url,
+        thumbUrl: applyThumbMap(f.coverUrl ?? "", coverMap),
+        isOwn: true,
+      }));
+  }
   const slide: ProposalSlide = {
     platform: "tiktok",
     title: keyword,
     ownRanks,
-    items: feedVideos.map(f => ({
-      rank: f.rank,
-      account: f.authorUniqueId,
-      url: f.url,
-      thumbUrl: f.coverUrl ?? "",
-      isOwn: f.isOwn,
-    })),
+    deviceHtml,
+    items,
   };
 
   return {
@@ -333,7 +354,7 @@ async function main() {
 
   for (const kw of keywords) {
     try {
-      results.push(await runOne(kw, ownMatcher, { sessions, perSession, outDir }));
+      results.push(await runOne(kw, ownMatcher, { sessions, perSession, outDir, proposal, noEmbed }));
     } catch (e) {
       console.error(`\n[${kw}] 取得失敗:`, e instanceof Error ? e.message : e);
       failed.push(kw);
@@ -370,14 +391,9 @@ async function main() {
     console.log(`    [${r.keyword}]  ${r.htmlPath}`);
   }
 
-  // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
+  // === クライアント提案用 16:9 デック（左=詳細モック／右=自社のみ表。サムネは各runでbase64埋め込み済み） ===
   if (proposal && results.length > 0) {
     const slides = results.map((r) => r.slide);
-    if (!noEmbed) {
-      console.log(`\n  サムネをbase64埋め込み中…（リンク切れ対策）`);
-      const stat = await embedThumbsInSlides(slides);
-      console.log(`  サムネ埋め込み: ${stat.embedded}/${stat.total} 成功${stat.failed ? `（失敗 ${stat.failed}）` : ""}`);
-    }
     const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
     const deckPath = path.join(outDir, `tiktok-proposal-${deckTs}.html`);
     const deck = renderProposalDeck({

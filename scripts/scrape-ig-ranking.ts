@@ -28,8 +28,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { searchInstagramHashtag, type InstagramHashtagPost } from "../server/instagramScraper";
 import { renderIgFeedHtml, type IgPostVM } from "./lib/igFeedHtml";
-import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
-import { embedThumbsInSlides } from "./lib/embedThumbs";
+import { renderProposalDeck, type ProposalSlide, type ProposalItem } from "./lib/proposalHtml";
+import { fetchThumbMap, applyThumbMap } from "./lib/embedThumbs";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -136,7 +136,7 @@ interface RunResult {
 
 async function runOne(
   rawTag: string,
-  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string; reelsOnly: boolean },
+  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string; reelsOnly: boolean; proposal: boolean; noEmbed: boolean },
 ): Promise<RunResult> {
   const tag = rawTag.replace(/^#/, "").trim();
   console.log(`\n──────────────────────────────────────────`);
@@ -270,18 +270,35 @@ async function runOne(
   console.log(`出力: ${base}.json`);
   console.log(`出力: ${base}.csv`);
 
+  // proposal 用: 詳細モック（embed）＋自社のみ表。サムネは base64 埋め込み（リンク切れ対策）。
+  let deviceHtml = "";
+  let items: ProposalItem[] = [];
+  if (opts.proposal) {
+    const coverMap = opts.noEmbed ? new Map<string, string>() : await fetchThumbMap(vms.map((v) => v.coverUrl));
+    const vmsEmbed = vms.map((v) => ({ ...v, coverUrl: applyThumbMap(v.coverUrl, coverMap) }));
+    deviceHtml = renderIgFeedHtml({
+      hashtag: tag,
+      generatedAt: new Date().toLocaleString("ja-JP"),
+      posts: vmsEmbed,
+      ownRanks,
+      variant: "embed",
+    });
+    items = posts
+      .filter((p) => p.isOwn)
+      .map((p) => ({
+        rank: p.position,
+        account: p.username,
+        url: p.postUrl,
+        thumbUrl: applyThumbMap(p.coverUrl ?? "", coverMap),
+        isOwn: true,
+      }));
+  }
   const slide: ProposalSlide = {
     platform: "instagram",
     title: `#${tag}${opts.reelsOnly ? "（リール）" : ""}`,
     ownRanks,
-    items: posts.map((p) => ({
-      rank: p.position,
-      account: p.username,
-      url: p.postUrl,
-      thumbUrl: p.coverUrl ?? "",
-      isOwn: p.isOwn,
-      type: p.type,
-    })),
+    deviceHtml,
+    items,
   };
 
   return {
@@ -323,7 +340,7 @@ async function main() {
 
   for (const tag of tags) {
     try {
-      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir, reelsOnly }));
+      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir, reelsOnly, proposal, noEmbed }));
     } catch (e) {
       console.error(`\n[#${tag.replace(/^#/, "")}] 取得失敗:`, e instanceof Error ? e.message : e);
       failed.push(tag.replace(/^#/, ""));
@@ -360,14 +377,9 @@ async function main() {
     console.log(`    [#${r.tag}]  ${r.htmlPath}`);
   }
 
-  // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
+  // === クライアント提案用 16:9 デック（左=詳細モック／右=自社のみ表。サムネは各runでbase64埋め込み済み） ===
   if (proposal && results.length > 0) {
     const slides = results.map((r) => r.slide);
-    if (!noEmbed) {
-      console.log(`\n  サムネをbase64埋め込み中…（リンク切れ対策）`);
-      const stat = await embedThumbsInSlides(slides);
-      console.log(`  サムネ埋め込み: ${stat.embedded}/${stat.total} 成功${stat.failed ? `（失敗 ${stat.failed}）` : ""}`);
-    }
     const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
     const deckPath = path.join(outDir, `ig-proposal-${deckTs}.html`);
     const deck = renderProposalDeck({
