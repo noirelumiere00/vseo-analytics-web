@@ -60,6 +60,7 @@ npx tsx scripts/scrape-ranking.ts "<キーワード>" --sessions 1 [--own @自�
 - `--sessions 1` = 1回検索＝そのままの表示順位（既定は3。毎回上位に出る「安定度/勝ちパターン」を見たい時だけ `--sessions 3`）。
 - `--own @acc1,@acc2`（または自社動画URL）を付けると、**生成HTMLで自社動画を赤枠＋「自社」バッジでハイライト**する。ユーザーが「自社動画も出して/ハイライトして」と言ったのに自社アカウント/URLが不明なら、**まず自社のTikTokアカウント名（@）を聞くこと**。
 - 出力は `out/ranking-<キーワード>-<日時>` の **`.html`（iPhone風 TikTok UI。ブラウザで開く）**・`.csv`（Excel可）・`.json`。実行後は**上位10〜20件を表で要約**して提示し、**HTML を含む保存先パス**を伝える（「ブラウザで開くとスマホUIで見られる」と案内）。
+- `--proposal`（`--pptx`）= **クライアント提案用の 16:9 デックHTML**（1920×1080・全KWを1ファイルに複数スライド）を `out/tiktok-proposal-<日時>.html` に追加出力。各スライドは**左=スマホモック／右=順位表（サムネ・順位・アカウント・URL、自社は赤）**。←→キーでページ送り、PPTXに画像として貼れる。
 - パッケージマネージャは pnpm ではなく **npm**（このユーザーは Mac の管理者権限が無い）。依存が未インストールなら先に `npm install --legacy-peer-deps`。
 - 「Browser was not found」が出たら `npx puppeteer browsers install chrome` を一度実行してから再試行（Chromium 検出は `findChromiumPath` がクロスプラットフォーム対応済み）。
 - 動画が 0 件のときは IP ブロックの可能性。Mac の自宅IPで動かしているか確認し、必要なら `PROXY_SERVER`（日本の住宅用プロキシ）を案内する。
@@ -83,6 +84,7 @@ INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" 
 - `--max`（既定 30）= 取得する上位件数。
 - `--reels-only`（`--reels`）= **リール（縦型動画）だけに絞って再ランキング**。IG のハッシュタグ「トップ」グリッドは画像/カルーセルが多く、リール投稿（自社が全部リールのケース等）が埋もれるため、リール同士の順位を見たい時に使う。多めに集めてから type∈{reel, video} で抽出し 1..N に振り直す（IG は product_type 欠落時にリールを `video` と分類するため video も含める）。出力ファイル名は `-reels` 付き。
 - **件数をもっと増やしたい時** = `IG_MAX_SCROLLS=30`（環境変数。既定10）でスクロールを深くし、母数を増やす（例: `IG_MAX_SCROLLS=30 ... --reels-only --max 40`）。母数が増えるとリール件数・自社ヒットも増える（IG の最近フィードが尽きると頭打ち＝それが実上限）。深くするほど時間とブロックリスクは上がる。
+- `--proposal`（`--pptx`）= **クライアント提案用の 16:9 デックHTML**（1920×1080・全タグを1ファイルに複数スライド）を `out/ig-proposal-<日時>.html` に追加出力（TikTok と共通の `scripts/lib/proposalHtml.ts`）。左=スマホモック／右=順位表（サムネ・順位・アカウント・URL、自社は赤）。
 - 出力は `out/ig-ranking-<タグ>-<日時>` の **`.html`（iPhone風 Instagram UI。ブラウザで開く）**・`.csv`（`isOwn` 列あり）・`.json`。実行後は**上位を表で要約**し、**HTML を含む保存先パス**を伝える。
 - 0 件のときは `INSTAGRAM_SESSION_ID` の未設定/失効、または非日本/データセンターIPのブロックを疑う。**Mac の自宅IP**で実行する。
 - npm ショートカット: `npm run scrape:ig -- "<#ハッシュタグ>" --own @自社`（`INSTAGRAM_SESSION_ID` は環境変数で）。

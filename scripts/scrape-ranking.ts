@@ -27,6 +27,7 @@ import { searchTikTokTriple, type TikTokVideo } from "../server/tiktokScraper";
 import { computeRankInfo } from "../server/ranking";
 import { buildOwnMatcher, type OwnMatcher } from "./lib/ownMatch";
 import { renderFeedHtml, type FeedVideoVM } from "./lib/feedHtml";
+import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -35,6 +36,7 @@ function parseArgs(argv: string[]) {
   let perSession = SCRAPER_VIDEOS_PER_SESSION;
   let own: string[] = [];
   let hashtagVariants = false;
+  let proposal = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -46,6 +48,8 @@ function parseArgs(argv: string[]) {
       own = (args[++i] ?? "").split(",").map(s => s.trim()).filter(Boolean);
     } else if (a === "--hashtag-variants" || a === "--with-hashtag") {
       hashtagVariants = true;
+    } else if (a === "--proposal" || a === "--pptx") {
+      proposal = true;
     } else if (!a.startsWith("--")) {
       keywords.push(a);
     }
@@ -60,7 +64,7 @@ function parseArgs(argv: string[]) {
   const seen = new Set<string>();
   keywords = keywords.filter(k => (seen.has(k) ? false : (seen.add(k), true)));
 
-  return { keywords, sessions, perSession, own, hashtagVariants };
+  return { keywords, sessions, perSession, own, hashtagVariants, proposal };
 }
 
 function fmtNum(n: number): string {
@@ -93,6 +97,7 @@ interface RunResult {
   htmlPath: string;
   csvPath: string;
   jsonPath: string;
+  slide: ProposalSlide;
 }
 
 /** 1キーワード分の収集 → 順位算出 → 標準出力 → ファイル出力 を行い、サマリーを返す。 */
@@ -275,6 +280,19 @@ async function runOne(
   console.log(`出力: ${base}.json`);
   console.log(`出力: ${base}.csv`);
 
+  const slide: ProposalSlide = {
+    platform: "tiktok",
+    title: keyword,
+    ownRanks,
+    items: feedVideos.map(f => ({
+      rank: f.rank,
+      account: f.authorUniqueId,
+      url: f.url,
+      thumbUrl: f.coverUrl ?? "",
+      isOwn: f.isOwn,
+    })),
+  };
+
   return {
     keyword,
     numSessions,
@@ -283,14 +301,15 @@ async function runOne(
     htmlPath: `${base}.html`,
     csvPath: `${base}.csv`,
     jsonPath: `${base}.json`,
+    slide,
   };
 }
 
 async function main() {
-  const { keywords, sessions, perSession, own } = parseArgs(process.argv);
+  const { keywords, sessions, perSession, own, proposal } = parseArgs(process.argv);
 
   if (keywords.length === 0) {
-    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<KW1>" ["<KW2>" ...] [--sessions N] [--per-session M] [--own @a,@b] [--hashtag-variants]');
+    console.error('使い方: npx tsx scripts/scrape-ranking.ts "<KW1>" ["<KW2>" ...] [--sessions N] [--per-session M] [--own @a,@b] [--hashtag-variants] [--proposal]');
     process.exit(1);
   }
 
@@ -345,6 +364,19 @@ async function main() {
   console.log(`\n  出力ファイル（ブラウザで .html を開く）:`);
   for (const r of results) {
     console.log(`    [${r.keyword}]  ${r.htmlPath}`);
+  }
+
+  // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
+  if (proposal && results.length > 0) {
+    const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
+    const deckPath = path.join(outDir, `tiktok-proposal-${deckTs}.html`);
+    const deck = renderProposalDeck({
+      deckTitle: "TikTok 表示順位 提案",
+      generatedAt: new Date().toLocaleString("ja-JP"),
+      slides: results.map((r) => r.slide),
+    });
+    fs.writeFileSync(deckPath, deck, "utf-8");
+    console.log(`\n  📊 提案デック（1920×1080・${results.length}スライド）: ${deckPath}`);
   }
   console.log("");
 

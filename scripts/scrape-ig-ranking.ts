@@ -28,6 +28,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { searchInstagramHashtag, type InstagramHashtagPost } from "../server/instagramScraper";
 import { renderIgFeedHtml, type IgPostVM } from "./lib/igFeedHtml";
+import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -36,6 +37,7 @@ function parseArgs(argv: string[]) {
   let own: string[] = [];
   let ownReelsFile: string | null = null;
   let reelsOnly = false;
+  let proposal = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -47,6 +49,8 @@ function parseArgs(argv: string[]) {
       ownReelsFile = args[++i] ?? null;
     } else if (a === "--reels-only" || a === "--reels") {
       reelsOnly = true;
+    } else if (a === "--proposal" || a === "--pptx") {
+      proposal = true;
     } else if (!a.startsWith("--")) {
       tags.push(a);
     }
@@ -54,7 +58,7 @@ function parseArgs(argv: string[]) {
   // 重複除去（順序維持）
   const seen = new Set<string>();
   tags = tags.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
-  return { tags, max, own, ownReelsFile, reelsOnly };
+  return { tags, max, own, ownReelsFile, reelsOnly, proposal };
 }
 
 /** リール（縦型動画）とみなす種別。IG は product_type 欠落時に reel を "video" と分類することがあるため両方含める。 */
@@ -123,6 +127,7 @@ interface RunResult {
   htmlPath: string;
   csvPath: string;
   jsonPath: string;
+  slide: ProposalSlide;
 }
 
 async function runOne(
@@ -261,6 +266,20 @@ async function runOne(
   console.log(`出力: ${base}.json`);
   console.log(`出力: ${base}.csv`);
 
+  const slide: ProposalSlide = {
+    platform: "instagram",
+    title: `#${tag}${opts.reelsOnly ? "（リール）" : ""}`,
+    ownRanks,
+    items: posts.map((p) => ({
+      rank: p.position,
+      account: p.username,
+      url: p.postUrl,
+      thumbUrl: p.coverUrl ?? "",
+      isOwn: p.isOwn,
+      type: p.type,
+    })),
+  };
+
   return {
     tag,
     method: result.method,
@@ -269,15 +288,16 @@ async function runOne(
     htmlPath: `${base}.html`,
     csvPath: `${base}.csv`,
     jsonPath: `${base}.json`,
+    slide,
   };
 }
 
 async function main() {
-  const { tags, max, own, ownReelsFile, reelsOnly } = parseArgs(process.argv);
+  const { tags, max, own, ownReelsFile, reelsOnly, proposal } = parseArgs(process.argv);
 
   if (tags.length === 0) {
     console.error(
-      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @a,@b] [--own-reels <file>] [--reels-only]',
+      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @a,@b] [--own-reels <file>] [--reels-only] [--proposal]',
     );
     process.exit(1);
   }
@@ -334,6 +354,19 @@ async function main() {
   console.log(`\n  出力ファイル（ブラウザで .html を開く）:`);
   for (const r of results) {
     console.log(`    [#${r.tag}]  ${r.htmlPath}`);
+  }
+
+  // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
+  if (proposal && results.length > 0) {
+    const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
+    const deckPath = path.join(outDir, `ig-proposal-${deckTs}.html`);
+    const deck = renderProposalDeck({
+      deckTitle: "Instagram 表示順位 提案",
+      generatedAt: new Date().toLocaleString("ja-JP"),
+      slides: results.map((r) => r.slide),
+    });
+    fs.writeFileSync(deckPath, deck, "utf-8");
+    console.log(`\n  📊 提案デック（1920×1080・${results.length}スライド）: ${deckPath}`);
   }
   console.log("");
 
