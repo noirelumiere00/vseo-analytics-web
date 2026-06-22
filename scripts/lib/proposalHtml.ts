@@ -90,7 +90,18 @@ function renderPhone(slide: ProposalSlide): string {
 }
 
 function renderTable(slide: ProposalSlide): string {
-  const rows = slide.items
+  // 表は「自社投稿のみ」を表示（クライアント提案向け・1枚に収める）
+  const ownItems = slide.items.filter((it) => it.isOwn);
+  if (ownItems.length === 0) {
+    return (
+      `<div class="empty">` +
+      `<div class="empty-i">—</div>` +
+      `<div class="empty-t">自社投稿は上位 ${slide.items.length} 件中に該当なし</div>` +
+      `<div class="empty-s">（左のランキングに自社の投稿は入っていません）</div>` +
+      `</div>`
+    );
+  }
+  const rows = ownItems
     .map((it) => {
       const thumb = it.thumbUrl
         ? `<img src="${esc(it.thumbUrl)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">`
@@ -236,18 +247,24 @@ export function renderProposalDeck(params: {
   .table-wrap{ flex:1; min-height:0; overflow:auto; border:1px solid #e7e8ee; border-radius:16px; background:#fff;
                box-shadow:0 20px 40px rgba(20,22,40,.06); }
   .table-wrap::-webkit-scrollbar{ width:8px; } .table-wrap::-webkit-scrollbar-thumb{ background:#d6d8e0; border-radius:8px; }
-  .rank-table{ width:100%; border-collapse:collapse; font-size:15px; }
-  .rank-table thead th{ position:sticky; top:0; background:#fafbfc; z-index:2; text-align:left; font-size:12px; font-weight:800;
-                        color:#8a8b96; letter-spacing:.05em; padding:9px 16px; border-bottom:2px solid #eceef3; }
-  .rank-table td{ padding:4px 16px; border-bottom:1px solid #f1f2f6; vertical-align:middle; }
+  .rank-table{ width:100%; border-collapse:collapse; font-size:19px; }
+  .rank-table thead th{ position:sticky; top:0; background:#fafbfc; z-index:2; text-align:left; font-size:13px; font-weight:800;
+                        color:#8a8b96; letter-spacing:.05em; padding:14px 18px; border-bottom:2px solid #eceef3; }
+  .rank-table td{ padding:12px 18px; border-bottom:1px solid #f1f2f6; vertical-align:middle; }
   .rank-table tbody tr:last-child td{ border-bottom:0; }
-  .c-thumb{ width:50px; } .th{ position:relative; width:30px; height:40px; border-radius:6px; overflow:hidden; background:#eef0f4; }
+  .c-thumb{ width:76px; } .th{ position:relative; width:52px; height:68px; border-radius:9px; overflow:hidden; background:#eef0f4; }
   .th img{ width:100%; height:100%; object-fit:cover; }
-  .th .row-own{ position:absolute; inset:auto 0 0 0; background:var(--red); color:#fff; font-size:7px; font-weight:800; text-align:center; padding:1px 0; }
-  .c-rank{ width:54px; font-size:18px; font-weight:900; color:var(--ink); }
-  .c-acc{ font-weight:700; white-space:nowrap; }
-  .c-url{ max-width:520px; }
-  .c-url a{ color:#3a6df0; text-decoration:none; font-size:14px; word-break:break-all; }
+  .th .row-own{ position:absolute; inset:auto 0 0 0; background:var(--red); color:#fff; font-size:9px; font-weight:800; text-align:center; padding:1px 0; }
+  .c-rank{ width:74px; font-size:30px; font-weight:900; color:var(--red); }
+  .c-acc{ font-weight:800; white-space:nowrap; font-size:20px; }
+  .c-url{ max-width:560px; }
+  .c-url a{ color:#3a6df0; text-decoration:none; font-size:16px; word-break:break-all; }
+
+  .empty{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:#9a9ba6;
+          border:1px dashed #d6d8e0; border-radius:16px; background:#fafbfc; }
+  .empty .empty-i{ font-size:54px; line-height:1; color:#cfd2db; }
+  .empty .empty-t{ font-size:24px; font-weight:800; color:#6b6b78; margin-top:10px; }
+  .empty .empty-s{ font-size:15px; margin-top:6px; }
   .c-url a:hover{ text-decoration:underline; }
   tr.own td{ background:rgba(255,45,75,.06); }
   tr.own .c-rank{ color:var(--red); }

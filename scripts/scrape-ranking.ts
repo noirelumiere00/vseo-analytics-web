@@ -28,6 +28,7 @@ import { computeRankInfo } from "../server/ranking";
 import { buildOwnMatcher, type OwnMatcher } from "./lib/ownMatch";
 import { renderFeedHtml, type FeedVideoVM } from "./lib/feedHtml";
 import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
+import { embedThumbsInSlides } from "./lib/embedThumbs";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -37,6 +38,7 @@ function parseArgs(argv: string[]) {
   let own: string[] = [];
   let hashtagVariants = false;
   let proposal = false;
+  let noEmbed = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -50,6 +52,8 @@ function parseArgs(argv: string[]) {
       hashtagVariants = true;
     } else if (a === "--proposal" || a === "--pptx") {
       proposal = true;
+    } else if (a === "--no-embed-thumbs") {
+      noEmbed = true;
     } else if (!a.startsWith("--")) {
       keywords.push(a);
     }
@@ -64,7 +68,7 @@ function parseArgs(argv: string[]) {
   const seen = new Set<string>();
   keywords = keywords.filter(k => (seen.has(k) ? false : (seen.add(k), true)));
 
-  return { keywords, sessions, perSession, own, hashtagVariants, proposal };
+  return { keywords, sessions, perSession, own, hashtagVariants, proposal, noEmbed };
 }
 
 function fmtNum(n: number): string {
@@ -306,7 +310,7 @@ async function runOne(
 }
 
 async function main() {
-  const { keywords, sessions, perSession, own, proposal } = parseArgs(process.argv);
+  const { keywords, sessions, perSession, own, proposal, noEmbed } = parseArgs(process.argv);
 
   if (keywords.length === 0) {
     console.error('使い方: npx tsx scripts/scrape-ranking.ts "<KW1>" ["<KW2>" ...] [--sessions N] [--per-session M] [--own @a,@b] [--hashtag-variants] [--proposal]');
@@ -368,12 +372,18 @@ async function main() {
 
   // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
   if (proposal && results.length > 0) {
+    const slides = results.map((r) => r.slide);
+    if (!noEmbed) {
+      console.log(`\n  サムネをbase64埋め込み中…（リンク切れ対策）`);
+      const stat = await embedThumbsInSlides(slides);
+      console.log(`  サムネ埋め込み: ${stat.embedded}/${stat.total} 成功${stat.failed ? `（失敗 ${stat.failed}）` : ""}`);
+    }
     const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
     const deckPath = path.join(outDir, `tiktok-proposal-${deckTs}.html`);
     const deck = renderProposalDeck({
       deckTitle: "TikTok 表示順位 提案",
       generatedAt: new Date().toLocaleString("ja-JP"),
-      slides: results.map((r) => r.slide),
+      slides,
     });
     fs.writeFileSync(deckPath, deck, "utf-8");
     console.log(`\n  📊 提案デック（1920×1080・${results.length}スライド）: ${deckPath}`);

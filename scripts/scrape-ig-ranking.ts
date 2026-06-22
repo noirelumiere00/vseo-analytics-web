@@ -29,6 +29,7 @@ import * as path from "path";
 import { searchInstagramHashtag, type InstagramHashtagPost } from "../server/instagramScraper";
 import { renderIgFeedHtml, type IgPostVM } from "./lib/igFeedHtml";
 import { renderProposalDeck, type ProposalSlide } from "./lib/proposalHtml";
+import { embedThumbsInSlides } from "./lib/embedThumbs";
 
 function parseArgs(argv: string[]) {
   const args = argv.slice(2);
@@ -38,6 +39,7 @@ function parseArgs(argv: string[]) {
   let ownReelsFile: string | null = null;
   let reelsOnly = false;
   let proposal = false;
+  let noEmbed = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -51,6 +53,8 @@ function parseArgs(argv: string[]) {
       reelsOnly = true;
     } else if (a === "--proposal" || a === "--pptx") {
       proposal = true;
+    } else if (a === "--no-embed-thumbs") {
+      noEmbed = true;
     } else if (!a.startsWith("--")) {
       tags.push(a);
     }
@@ -58,7 +62,7 @@ function parseArgs(argv: string[]) {
   // 重複除去（順序維持）
   const seen = new Set<string>();
   tags = tags.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
-  return { tags, max, own, ownReelsFile, reelsOnly, proposal };
+  return { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed };
 }
 
 /** リール（縦型動画）とみなす種別。IG は product_type 欠落時に reel を "video" と分類することがあるため両方含める。 */
@@ -293,7 +297,7 @@ async function runOne(
 }
 
 async function main() {
-  const { tags, max, own, ownReelsFile, reelsOnly, proposal } = parseArgs(process.argv);
+  const { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed } = parseArgs(process.argv);
 
   if (tags.length === 0) {
     console.error(
@@ -358,12 +362,18 @@ async function main() {
 
   // === クライアント提案用 16:9 デック（左モック＋右順位表） ===
   if (proposal && results.length > 0) {
+    const slides = results.map((r) => r.slide);
+    if (!noEmbed) {
+      console.log(`\n  サムネをbase64埋め込み中…（リンク切れ対策）`);
+      const stat = await embedThumbsInSlides(slides);
+      console.log(`  サムネ埋め込み: ${stat.embedded}/${stat.total} 成功${stat.failed ? `（失敗 ${stat.failed}）` : ""}`);
+    }
     const deckTs = new Date().toISOString().replace(/[:.]/g, "-");
     const deckPath = path.join(outDir, `ig-proposal-${deckTs}.html`);
     const deck = renderProposalDeck({
       deckTitle: "Instagram 表示順位 提案",
       generatedAt: new Date().toLocaleString("ja-JP"),
-      slides: results.map((r) => r.slide),
+      slides,
     });
     fs.writeFileSync(deckPath, deck, "utf-8");
     console.log(`\n  📊 提案デック（1920×1080・${results.length}スライド）: ${deckPath}`);
