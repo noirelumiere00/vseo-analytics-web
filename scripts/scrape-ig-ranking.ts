@@ -35,6 +35,7 @@ function parseArgs(argv: string[]) {
   let max = 30;
   let own: string[] = [];
   let ownReelsFile: string | null = null;
+  let reelsOnly = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -44,6 +45,8 @@ function parseArgs(argv: string[]) {
       own = (args[++i] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
     } else if (a === "--own-reels") {
       ownReelsFile = args[++i] ?? null;
+    } else if (a === "--reels-only" || a === "--reels") {
+      reelsOnly = true;
     } else if (!a.startsWith("--")) {
       tags.push(a);
     }
@@ -51,7 +54,12 @@ function parseArgs(argv: string[]) {
   // 重複除去（順序維持）
   const seen = new Set<string>();
   tags = tags.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
-  return { tags, max, own, ownReelsFile };
+  return { tags, max, own, ownReelsFile, reelsOnly };
+}
+
+/** リール（縦型動画）とみなす種別。IG は product_type 欠落時に reel を "video" と分類することがあるため両方含める。 */
+function isReelLike(type: string): boolean {
+  return type === "reel" || type === "video";
 }
 
 /** @handle / プロフィールURL / handle を Instagram の username に正規化（小文字化は scraper 側） */
@@ -119,20 +127,31 @@ interface RunResult {
 
 async function runOne(
   rawTag: string,
-  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string },
+  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string; reelsOnly: boolean },
 ): Promise<RunResult> {
   const tag = rawTag.replace(/^#/, "").trim();
   console.log(`\n──────────────────────────────────────────`);
-  console.log(`▶ ハッシュタグ: #${tag}`);
+  console.log(`▶ ハッシュタグ: #${tag}${opts.reelsOnly ? "（リールのみ）" : ""}`);
   console.log(`──────────────────────────────────────────`);
 
-  const result = await searchInstagramHashtag(tag, opts.max, opts.ownUsernames);
+  // リールのみ表示時は、画像/カルーセルで埋もれる分を見越して多めに集めてから絞る
+  const fetchMax = opts.reelsOnly ? Math.max(opts.max * 4, 120) : opts.max;
+  const result = await searchInstagramHashtag(tag, fetchMax, opts.ownUsernames);
 
   // username 一致（scraper 内蔵）に加え、shortcode 一致でも自社判定
-  const posts = result.topPosts.map((p: InstagramHashtagPost) => ({
+  let posts = result.topPosts.map((p: InstagramHashtagPost) => ({
     ...p,
     isOwn: p.isOwn || opts.ownShortcodes.has(p.shortcode),
   }));
+
+  // --reels-only: リール（縦型動画）だけに絞り、リール内順位として 1..N に振り直す
+  if (opts.reelsOnly) {
+    posts = posts
+      .filter((p) => isReelLike(p.type))
+      .slice(0, opts.max)
+      .map((p, i) => ({ ...p, position: i + 1 }));
+  }
+
   const ownRanks = posts.filter((p) => p.isOwn).map((p) => p.position);
 
   if (posts.length === 0) {
@@ -144,7 +163,7 @@ async function runOne(
   }
 
   // === 標準出力（ランキング表） ===
-  console.log(`\n=== IG 表示順位「#${tag}」（method: ${result.method} / ${posts.length}件）===\n`);
+  console.log(`\n=== IG 表示順位「#${tag}」${opts.reelsOnly ? "【リールのみ】" : ""}（method: ${result.method} / ${posts.length}件）===\n`);
   console.log("  #  種別      いいね   再生数   @ユーザー名             URL");
   console.log("  ".padEnd(100, "-"));
   for (const p of posts) {
@@ -163,7 +182,7 @@ async function runOne(
   // === ファイル出力 ===
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const safeTag = tag.replace(/[^\p{L}\p{N}_-]/gu, "_").slice(0, 40);
-  const base = path.join(opts.outDir, `ig-ranking-${safeTag}-${ts}`);
+  const base = path.join(opts.outDir, `ig-ranking-${safeTag}${opts.reelsOnly ? "-reels" : ""}-${ts}`);
 
   fs.writeFileSync(
     `${base}.json`,
@@ -253,11 +272,11 @@ async function runOne(
 }
 
 async function main() {
-  const { tags, max, own, ownReelsFile } = parseArgs(process.argv);
+  const { tags, max, own, ownReelsFile, reelsOnly } = parseArgs(process.argv);
 
   if (tags.length === 0) {
     console.error(
-      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @a,@b] [--own-reels <file>]',
+      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @a,@b] [--own-reels <file>] [--reels-only]',
     );
     process.exit(1);
   }
@@ -267,7 +286,7 @@ async function main() {
 
   console.log(`\n=== Instagram 表示順位スクレイピング ===`);
   console.log(`ハッシュタグ: ${tags.map((t) => `#${t.replace(/^#/, "")}`).join("  /  ")}（${tags.length}件）`);
-  console.log(`取得上限    : ${max} 件/タグ`);
+  console.log(`取得上限    : ${max} 件/タグ${reelsOnly ? "（リールのみ抽出）" : ""}`);
   console.log(`セッション  : ${process.env.INSTAGRAM_SESSION_ID ? "設定あり（env）" : "未設定（Apifyフォールバック）"}`);
   console.log(`自社指定    : username ${ownUsernames.length}個 / shortcode ${ownShortcodes.size}個`);
 
@@ -279,7 +298,7 @@ async function main() {
 
   for (const tag of tags) {
     try {
-      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir }));
+      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir, reelsOnly }));
     } catch (e) {
       console.error(`\n[#${tag.replace(/^#/, "")}] 取得失敗:`, e instanceof Error ? e.message : e);
       failed.push(tag.replace(/^#/, ""));

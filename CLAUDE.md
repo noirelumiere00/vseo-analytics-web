@@ -81,6 +81,7 @@ INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" 
 - `--own @acc1,@acc2`（または `instagram.com/<ユーザー名>` のプロフィールURL）で、**自社IGアカウント名（username 一致）**をハイライト。自社が不明なら**自社の IG ユーザー名（@）を聞く**。
 - `--own-reels <file>`（1行1URL）= **自社投稿URL一覧から reel/p の shortcode を抽出し、ランキング中の同 shortcode を自社扱い**。スプシの投稿リスト（reel URL に @ が無くても）をそのまま自社判定に使える。`--own` と併用可（isOwn = username 一致 or shortcode 一致）。
 - `--max`（既定 30）= 取得する上位件数。
+- `--reels-only`（`--reels`）= **リール（縦型動画）だけに絞って再ランキング**。IG のハッシュタグ「トップ」グリッドは画像/カルーセルが多く、リール投稿（自社が全部リールのケース等）が埋もれるため、リール同士の順位を見たい時に使う。多めに集めてから type∈{reel, video} で抽出し 1..N に振り直す（IG は product_type 欠落時にリールを `video` と分類するため video も含める）。出力ファイル名は `-reels` 付き。
 - 出力は `out/ig-ranking-<タグ>-<日時>` の **`.html`（iPhone風 Instagram UI。ブラウザで開く）**・`.csv`（`isOwn` 列あり）・`.json`。実行後は**上位を表で要約**し、**HTML を含む保存先パス**を伝える。
 - 0 件のときは `INSTAGRAM_SESSION_ID` の未設定/失効、または非日本/データセンターIPのブロックを疑う。**Mac の自宅IP**で実行する。
 - npm ショートカット: `npm run scrape:ig -- "<#ハッシュタグ>" --own @自社`（`INSTAGRAM_SESSION_ID` は環境変数で）。
