@@ -31,6 +31,29 @@ interface Parsed {
   buildItems: (map: Map<string, string>) => ProposalItem[];
 }
 
+function htmlUnescape(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+/** TikTok順位HTML（feedHtmlのpage出力）から videoId→coverUrl を抽出（JSONにcoverUrlが無い旧データ救済） */
+function readCoversFromHtml(htmlPath: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!fs.existsSync(htmlPath)) return map;
+  const html = fs.readFileSync(htmlPath, "utf-8");
+  const re = /class="card[^"]*"\s+href="([^"]+)"[^>]*>\s*<img class="cover" src="([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    const vid = (m[1].match(/\/video\/(\d+)/) || [])[1];
+    if (vid) map.set(vid, htmlUnescape(m[2]));
+  }
+  return map;
+}
+
 function parseJson(file: string): Parsed | null {
   let json: any;
   try {
@@ -42,6 +65,10 @@ function parseJson(file: string): Parsed | null {
 
   // Instagram: { hashtag, posts:[...], ownRanks }
   if (Array.isArray(json.posts)) {
+    if (json.posts.length === 0) {
+      console.warn(`  …空（0件）のためスキップ: ${path.basename(file)}`);
+      return null;
+    }
     const tag: string = json.hashtag ?? path.basename(file);
     const posts = json.posts as any[];
     const covers = posts.map((p) => p.coverUrl ?? "").filter(Boolean);
@@ -87,10 +114,17 @@ function parseJson(file: string): Parsed | null {
 
   // TikTok: { keyword, numSessions, ranking:[...] }
   if (Array.isArray(json.ranking)) {
+    if (json.ranking.length === 0) {
+      console.warn(`  …空（0件）のためスキップ: ${path.basename(file)}`);
+      return null;
+    }
     const keyword: string = json.keyword ?? path.basename(file);
     const numSessions: number = json.numSessions ?? 1;
     const rk = json.ranking as any[];
-    const covers = rk.map((v) => v.coverUrl ?? "").filter(Boolean);
+    // coverUrl は JSON 優先、無ければ同basenameの順位HTMLから補完（旧JSON救済）
+    const htmlCovers = readCoversFromHtml(file.replace(/\.json$/, ".html"));
+    const coverOf = (v: any): string => v.coverUrl || htmlCovers.get(String(v.videoId)) || "";
+    const covers = rk.map(coverOf).filter(Boolean);
     const ownRanks: number[] = rk.filter((v) => v.isOwn).map((v) => v.position);
     return {
       platform: "tiktok",
@@ -102,7 +136,7 @@ function parseJson(file: string): Parsed | null {
           rank: v.position,
           videoId: v.videoId ?? "",
           url: v.url ?? "",
-          coverUrl: applyThumbMap(v.coverUrl ?? "", map),
+          coverUrl: applyThumbMap(coverOf(v), map),
           authorUniqueId: v.author ?? "",
           authorNickname: v.authorNickname ?? "",
           desc: "",
@@ -127,7 +161,7 @@ function parseJson(file: string): Parsed | null {
             rank: v.position,
             account: v.author ?? "",
             url: v.url ?? "",
-            thumbUrl: applyThumbMap(v.coverUrl ?? "", map),
+            thumbUrl: applyThumbMap(coverOf(v), map),
             isOwn: true,
           })),
     };
@@ -156,9 +190,21 @@ async function main() {
     process.exit(1);
   }
 
-  const parsed = files.map(parseJson).filter((p): p is Parsed => p !== null);
+  // 同一 platform+title が複数（複数回スクレイプ）ある場合は、ファイル名のISO時刻が最新のものだけ採用。
+  // 出現順（＝ユーザーが渡した順）でスライド順序を維持。
+  const byKey = new Map<string, { file: string; p: Parsed }>();
+  const order: string[] = [];
+  for (const file of files) {
+    const p = parseJson(file);
+    if (!p) continue;
+    const key = `${p.platform}::${p.title}`;
+    if (!byKey.has(key)) order.push(key);
+    const prev = byKey.get(key);
+    if (!prev || file > prev.file) byKey.set(key, { file, p }); // 後勝ち=最新タイムスタンプ
+  }
+  const parsed = order.map((k) => byKey.get(k)!.p);
   if (parsed.length === 0) {
-    console.error("有効な JSON がありませんでした。");
+    console.error("有効な JSON がありませんでした（0件/形式不明のみ）。");
     process.exit(1);
   }
 
