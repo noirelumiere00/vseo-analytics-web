@@ -22,21 +22,31 @@ const PptxGenJS = require("pptxgenjs");
 // PowerPoint 16:9（ワイド）= 13.333in × 7.5in（1920×1080 と同比）
 const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
-const FONT = "Yu Gothic";
 
 interface RowData { rank: string; account: string; url: string; thumb: string }
 interface SlideData {
   platform: "tiktok" | "instagram";
-  title: string;
+  titleMain: string;
+  titleSub: string;
   ownLine: string;
   ownHit: boolean;
   empty: boolean;
-  emptyText: string;
   rows: RowData[];
   mockPng: Buffer;
   mockW: number;
   mockH: number;
 }
+
+const FONT_JA = "Yu Gothic";
+const FONT_EN = "Archivo";
+const INK = "1A1A1A";
+const MUTED = "6E6E68";
+const FAINT = "9A988E";
+const LINE = "E4E1D8";
+const ACCENT = "C8472F";
+const PAPER = "FAF9F6";
+
+function pad2(n: number): string { return String(n).padStart(2, "0"); }
 
 /** PNG バッファから幅・高さ（px）を読む */
 function pngSize(buf: Buffer): { w: number; h: number } {
@@ -50,23 +60,29 @@ function shortUrl(u: string): string {
 /** ブラウザ側で全 .slide の右パネルデータを抽出する式（**文字列**で渡す＝tsx の __name 注入を回避）。 */
 const BROWSER_EXTRACT = `
 [].slice.call(document.querySelectorAll('.slide')).map(function(node){
-  function txt(sel){ var e=node.querySelector(sel); return e ? e.textContent.trim() : ''; }
-  var platEl = node.querySelector('.plat');
-  var platform = (platEl && platEl.classList.contains('ig')) ? 'instagram' : 'tiktok';
-  var h1 = node.querySelector('.r-head h1');
-  var title = ((h1 && h1.childNodes[0] && h1.childNodes[0].textContent) || (h1 && h1.textContent) || '').trim();
-  var pill = node.querySelector('.own-pill');
-  var ownLine = pill ? pill.textContent.trim() : '';
-  var ownHit = pill ? pill.classList.contains('hit') : false;
+  var kl = node.querySelector('.kick .kl');
+  var klt = kl ? kl.textContent.trim() : '';
+  var platform = klt.indexOf('INSTAGRAM') === 0 ? 'instagram' : 'tiktok';
+  var ttl = node.querySelector('.ttl');
+  var sub = node.querySelector('.ttl-sub');
+  var titleSub = sub ? sub.textContent.trim() : '';
+  var titleMain = ttl ? ((ttl.childNodes[0] && ttl.childNodes[0].textContent) || ttl.textContent || '').trim() : '';
+  var meta = node.querySelector('.meta');
+  var ownLine = meta ? meta.textContent.trim() : '';
   var empty = !!node.querySelector('.empty');
-  var emptyText = empty ? (txt('.empty-t') || '自社投稿は今回のランキングに該当なし') : '';
-  var rows = [].slice.call(node.querySelectorAll('.rank-table tbody tr')).map(function(tr){
-    function g(s){ var e=tr.querySelector(s); return e ? e.textContent.trim() : ''; }
-    var a = tr.querySelector('.c-url a');
-    var img = tr.querySelector('.th img');
-    return { rank: g('.c-rank'), account: g('.c-acc'), url: a ? a.getAttribute('href') : '', thumb: img ? img.getAttribute('src') : '' };
+  var rows = [].slice.call(node.querySelectorAll('.list .row')).map(function(li){
+    var rk = li.querySelector('.rk');
+    var b = li.querySelector('.who b');
+    var a = li.querySelector('.who .url');
+    var img = li.querySelector('.th img');
+    return {
+      rank: rk ? rk.textContent.trim() : '',
+      account: b ? b.textContent.trim() : '',
+      url: a ? a.getAttribute('href') : '',
+      thumb: img ? img.getAttribute('src') : ''
+    };
   });
-  return { platform: platform, title: title, ownLine: ownLine, ownHit: ownHit, empty: empty, emptyText: emptyText, rows: rows };
+  return { platform: platform, titleMain: titleMain, titleSub: titleSub, ownLine: ownLine, ownHit: rows.length > 0, empty: empty, rows: rows };
 })
 `;
 
@@ -127,98 +143,89 @@ async function captureFlat(htmlAbs: string, scale: number): Promise<Buffer[]> {
   }
 }
 
-/** ハイブリッド: 左=モック画像／右=ネイティブ（編集可能テキスト＋サムネ画像） */
+/** ハイブリッド: 左=モック画像／右=ネイティブ（スイス・エディトリアル／編集可能テキスト＋サムネ画像） */
 function buildHybridSlide(pptx: any, d: SlideData, idx: number, total: number) {
   const slide = pptx.addSlide();
-  slide.background = { color: "FFFFFF" };
-  const igColor = "D62976";
-  const ttColor = "111111";
-  const accent = d.platform === "instagram" ? igColor : ttColor;
-  // 上部アクセントバー
-  slide.addText("", { x: 0, y: 0, w: SLIDE_W_IN, h: 0.12, fill: { color: accent } });
+  slide.background = { color: PAPER };
+  const PLAT = d.platform === "instagram" ? "INSTAGRAM" : "TIKTOK";
+  const MX = 0.72; // 左右マージン
+  const hair = (x: number, y: number, w: number) => slide.addText("", { x, y, w, h: 0.011, fill: { color: LINE } });
 
-  // --- 左: スマホモック画像（縦長アスペクト維持・中央寄せ・ソフトシャドウ） ---
-  const aspect = d.mockW / d.mockH; // ≈0.5
-  const imgH = 6.4;
-  const imgW = imgH * aspect;
-  const imgX = 0.55;
-  const imgY = (SLIDE_H_IN - imgH) / 2 + 0.05;
-  slide.addImage({
-    data: "data:image/png;base64," + d.mockPng.toString("base64"),
-    x: imgX, y: imgY, w: imgW, h: imgH,
-    shadow: { type: "outer", blur: 14, offset: 5, angle: 90, color: "8A8AA0", opacity: 0.45 },
+  // --- キッカー（左ラベル ／ 右 通し番号）＋ 罫 ---
+  slide.addText(`${PLAT}  ·  表示順位`, {
+    x: MX, y: 0.5, w: 7, h: 0.3, fontFace: FONT_JA, fontSize: 11, bold: true, color: INK, charSpacing: 2.4, valign: "middle",
   });
-
-  // --- 右: ネイティブ要素 ---
-  const x0 = imgX + imgW + 0.55;
-  const rightW = SLIDE_W_IN - x0 - 0.5;
-
-  // プラットフォーム pill
-  slide.addText(d.platform === "instagram" ? "Instagram" : "TikTok", {
-    x: x0, y: 0.5, w: 1.7, h: 0.36, fontFace: FONT, fontSize: 12, bold: true,
-    color: "FFFFFF", align: "center", valign: "middle", fill: { color: accent },
-  });
-  // タイトル
   slide.addText(
     [
-      { text: d.title, options: { bold: true, fontSize: 30, color: "15151C" } },
-      { text: "   表示順位", options: { fontSize: 16, color: "8A8A96" } },
+      { text: pad2(idx + 1), options: { fontSize: 40, bold: true, color: INK } },
+      { text: ` / ${pad2(total)}`, options: { fontSize: 15, color: FAINT } },
     ],
-    { x: x0, y: 0.98, w: rightW, h: 0.7, fontFace: FONT, valign: "middle" },
+    { x: SLIDE_W_IN - MX - 3, y: 0.34, w: 3, h: 0.6, fontFace: FONT_EN, align: "right", valign: "middle" },
   );
-  // 自社ピル
-  slide.addText(d.ownLine || (d.ownHit ? "" : "自社の該当なし"), {
-    x: x0, y: 1.74, w: rightW, h: 0.42, fontFace: FONT, fontSize: 14, valign: "middle", align: "left",
-    color: d.ownHit ? "C81E3A" : "6B6B78", fill: { color: d.ownHit ? "FBE6EA" : "EEF0F4" },
-  });
+  hair(MX, 1.0, SLIDE_W_IN - 2 * MX);
+
+  // --- 左: スマホモック画像（影なし・縦長アスペクト維持） ---
+  const aspect = d.mockW / d.mockH; // ≈0.5
+  const imgH = 5.55;
+  const imgW = imgH * aspect;
+  const imgX = MX;
+  const imgY = 1.45;
+  slide.addImage({ data: "data:image/png;base64," + d.mockPng.toString("base64"), x: imgX, y: imgY, w: imgW, h: imgH });
+
+  // --- 右: ネイティブ ---
+  const x0 = imgX + imgW + 0.7;
+  const rightW = SLIDE_W_IN - x0 - MX;
+
+  slide.addText(d.titleMain, { x: x0, y: 1.2, w: rightW, h: 0.95, fontFace: FONT_JA, fontSize: 42, bold: true, color: INK, valign: "top" });
+  slide.addText(d.titleSub || "表示順位", { x: x0, y: 2.12, w: rightW, h: 0.3, fontFace: FONT_JA, fontSize: 13, color: MUTED });
+
+  // 自社サマリ（件数のみ朱）
+  const ownNum = (d.ownLine.match(/自社\s*(\d+)/) || [])[1];
+  const ranks = (d.ownLine.match(/順位\s*(.+)$/) || [])[1] || "";
+  if (ownNum && Number(ownNum) > 0) {
+    slide.addText(
+      [
+        { text: "自社 ", options: { color: MUTED } },
+        { text: ownNum, options: { color: ACCENT, bold: true, fontSize: 14 } },
+        { text: " 件   順位 ", options: { color: MUTED } },
+        { text: ranks, options: { color: INK } },
+      ],
+      { x: x0, y: 2.55, w: rightW, h: 0.3, fontFace: FONT_JA, fontSize: 12.5, valign: "middle" },
+    );
+  } else {
+    slide.addText("自社の該当なし", { x: x0, y: 2.55, w: rightW, h: 0.3, fontFace: FONT_JA, fontSize: 12.5, color: MUTED, valign: "middle" });
+  }
+  hair(x0, 2.98, rightW);
 
   if (d.empty || d.rows.length === 0) {
-    slide.addText(d.emptyText || "自社投稿は今回のランキングに該当なし", {
-      x: x0, y: 2.7, w: rightW, h: 1.4, fontFace: FONT, fontSize: 16, bold: true,
-      color: "8A8B96", align: "center", valign: "middle",
-      fill: { color: "FAFBFC" }, line: { color: "D6D8E0", width: 1, dashType: "dash" },
-    });
+    slide.addText("— 自社の該当なし", { x: x0, y: 3.2, w: rightW, h: 0.4, fontFace: FONT_JA, fontSize: 14, color: FAINT });
   } else {
-    // 列ジオメトリ
-    const cThumb = x0;
-    const cRank = x0 + 0.7;
-    const cAcc = x0 + 1.45;
-    const cUrl = x0 + 3.35;
-    const urlW = rightW - (cUrl - x0);
-    // ヘッダ
-    const hy = 2.42;
-    const hOpt = { y: hy, h: 0.3, fontFace: FONT, fontSize: 11, bold: true, color: "8A8B96", valign: "middle" as const };
-    slide.addText("サムネ", { x: cThumb, w: 0.65, ...hOpt });
-    slide.addText("順位", { x: cRank, w: 0.7, ...hOpt });
-    slide.addText("アカウント", { x: cAcc, w: 1.85, ...hOpt });
-    slide.addText("URL", { x: cUrl, w: urlW, ...hOpt });
-    slide.addText("", { x: x0, y: 2.74, w: rightW, h: 0.02, fill: { color: "ECEEF3" } }); // 区切り線
-
-    const startY = 2.84;
-    const rowH = Math.min(0.74, (7.0 - startY) / d.rows.length);
+    const startY = 3.12;
+    const rowH = Math.min(0.6, (6.95 - startY) / d.rows.length);
     d.rows.forEach((r, i) => {
       const y = startY + i * rowH;
+      // 順位（朱）
+      slide.addText(r.rank, { x: x0, y, w: 0.82, h: rowH, fontFace: FONT_EN, fontSize: 23, bold: true, color: ACCENT, valign: "middle" });
+      // サムネ
       if (r.thumb.startsWith("data:image")) {
-        slide.addImage({ data: r.thumb, x: cThumb, y: y + 0.04, w: 0.5, h: rowH - 0.12 });
+        slide.addImage({ data: r.thumb, x: x0 + 0.9, y: y + 0.06, w: 0.4, h: rowH - 0.16 });
       }
-      slide.addText(r.rank, { x: cRank, y, w: 0.7, h: rowH, fontFace: FONT, fontSize: 21, bold: true, color: "FF2D4B", valign: "middle" });
-      slide.addText(r.account, { x: cAcc, y, w: 1.85, h: rowH, fontFace: FONT, fontSize: 14, bold: true, color: "15151C", valign: "middle" });
+      // アカウント＋URL（2段）
+      const cx = x0 + 1.45;
+      const cw = rightW - 1.45;
+      slide.addText(r.account, { x: cx, y: y + 0.02, w: cw, h: rowH * 0.55, fontFace: FONT_EN, fontSize: 14, bold: true, color: INK, valign: "bottom" });
       slide.addText(shortUrl(r.url), {
-        x: cUrl, y, w: urlW, h: rowH, fontFace: FONT, fontSize: 10.5, color: "3A6DF0", valign: "middle",
+        x: cx, y: y + rowH * 0.5, w: cw, h: rowH * 0.5, fontFace: FONT_EN, fontSize: 9, color: FAINT, valign: "top",
         hyperlink: { url: r.url }, breakLine: false,
       });
-      slide.addText("", { x: x0, y: y + rowH - 0.012, w: rightW, h: 0.012, fill: { color: "F1F2F6" } });
+      if (i < d.rows.length - 1) hair(x0, y + rowH - 0.006, rightW);
     });
   }
 
-  // フッタ
-  slide.addText(
-    [
-      { text: "VSEO Analytics", options: { bold: true, color: "9A9BA6" } },
-      { text: `     ${idx + 1} / ${total}`, options: { color: "9A9BA6" } },
-    ],
-    { x: 0.55, y: 7.04, w: 12, h: 0.3, fontFace: FONT, fontSize: 10, valign: "middle" },
-  );
+  // --- フッタ ---
+  hair(MX, 7.0, SLIDE_W_IN - 2 * MX);
+  slide.addText("VSEO ANALYTICS", { x: MX, y: 7.08, w: 5, h: 0.28, fontFace: FONT_EN, fontSize: 9, bold: true, color: FAINT, charSpacing: 2, valign: "middle" });
+  slide.addText(`${PLAT}  ·  ${d.titleMain}`, { x: SLIDE_W_IN - MX - 7, y: 7.08, w: 7, h: 0.28, fontFace: FONT_JA, fontSize: 9, color: FAINT, charSpacing: 1.5, align: "right", valign: "middle" });
 }
 
 async function main() {
@@ -262,7 +269,7 @@ async function main() {
     if (data.length === 0) { console.error("  ⚠ .slide が見つかりません"); process.exit(1); }
     data.forEach((d, i) => {
       buildHybridSlide(pptx, d, i, data.length);
-      console.log(`    slide ${i + 1}: ${d.title}  （表 ${d.rows.length} 行 / ${d.empty ? "該当なし" : "自社あり"}）`);
+      console.log(`    slide ${i + 1}: ${d.titleMain}  （表 ${d.rows.length} 行 / ${d.empty ? "該当なし" : "自社あり"}）`);
     });
   }
 
