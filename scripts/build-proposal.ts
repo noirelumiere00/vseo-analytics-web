@@ -73,9 +73,17 @@ function parseJson(file: string): Parsed | null {
     const posts = json.posts as any[];
     const covers = posts.map((p) => p.coverUrl ?? "").filter(Boolean);
     const ownRanks: number[] = json.ownRanks ?? posts.filter((p) => p.isOwn).map((p) => p.position);
+    // ファイル名でモードを判定（ig-keyword-… = キーワード検索 / -reels- = リールのみ）
+    const bn = path.basename(file);
+    const isKeyword = bn.startsWith("ig-keyword-");
+    const isReels = /-reels-/.test(bn);
+    const cleanTag = String(tag).replace(/^#/, "");
+    const title = isKeyword
+      ? `${cleanTag}（キーワード検索${isReels ? "・リール" : ""}）`
+      : `#${cleanTag}${isReels ? "（リール）" : ""}`;
     return {
       platform: "instagram",
-      title: `#${String(tag).replace(/^#/, "")}`,
+      title,
       ownRanks,
       covers,
       renderDevice: (map) => {
