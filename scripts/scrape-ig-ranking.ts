@@ -26,7 +26,7 @@
 import "dotenv/config";
 import * as fs from "fs";
 import * as path from "path";
-import { searchInstagramHashtag, type InstagramHashtagPost } from "../server/instagramScraper";
+import { searchInstagramHashtag, searchInstagramKeyword, type InstagramHashtagPost } from "../server/instagramScraper";
 import { renderIgFeedHtml, type IgPostVM } from "./lib/igFeedHtml";
 import { renderProposalDeck, type ProposalSlide, type ProposalItem } from "./lib/proposalHtml";
 import { fetchThumbMap, applyThumbMap } from "./lib/embedThumbs";
@@ -40,6 +40,7 @@ function parseArgs(argv: string[]) {
   let reelsOnly = false;
   let proposal = false;
   let noEmbed = false;
+  let keyword = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -51,6 +52,8 @@ function parseArgs(argv: string[]) {
       ownReelsFile = args[++i] ?? null;
     } else if (a === "--reels-only" || a === "--reels") {
       reelsOnly = true;
+    } else if (a === "--keyword" || a === "--kw") {
+      keyword = true;
     } else if (a === "--proposal" || a === "--pptx") {
       proposal = true;
     } else if (a === "--no-embed-thumbs") {
@@ -62,7 +65,7 @@ function parseArgs(argv: string[]) {
   // 重複除去（順序維持）
   const seen = new Set<string>();
   tags = tags.filter((t) => (seen.has(t) ? false : (seen.add(t), true)));
-  return { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed };
+  return { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed, keyword };
 }
 
 /** リール（縦型動画）とみなす種別。IG は product_type 欠落時に reel を "video" と分類することがあるため両方含める。 */
@@ -136,17 +139,22 @@ interface RunResult {
 
 async function runOne(
   rawTag: string,
-  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string; reelsOnly: boolean; proposal: boolean; noEmbed: boolean },
+  opts: { max: number; ownUsernames: string[]; ownShortcodes: Set<string>; outDir: string; reelsOnly: boolean; proposal: boolean; noEmbed: boolean; keyword: boolean },
 ): Promise<RunResult> {
   const tag = rawTag.replace(/^#/, "").trim();
+  // 表示・出力ラベル（keyword=「<語>」 / hashtag=#<タグ>）
+  const label = opts.keyword ? `「${tag}」` : `#${tag}`;
+  const kindWord = opts.keyword ? "キーワード" : "ハッシュタグ";
   console.log(`\n──────────────────────────────────────────`);
-  console.log(`▶ ハッシュタグ: #${tag}${opts.reelsOnly ? "（リールのみ）" : ""}`);
+  console.log(`▶ ${kindWord}: ${label}${opts.reelsOnly ? "（リールのみ）" : ""}`);
   console.log(`──────────────────────────────────────────`);
 
   // リールのみ表示時は、画像/カルーセルで埋もれる分を見越して多めに集めてから絞る
-  // （より深く集めるには env IG_MAX_SCROLLS でスクロール回数を増やす）
+  // （hashtag は env IG_MAX_SCROLLS でスクロール回数、keyword は内部で next_max_id ページ送り）
   const fetchMax = opts.reelsOnly ? Math.max(opts.max * 8, 250) : opts.max;
-  const result = await searchInstagramHashtag(tag, fetchMax, opts.ownUsernames);
+  const result = opts.keyword
+    ? await searchInstagramKeyword(tag, fetchMax, opts.ownUsernames)
+    : await searchInstagramHashtag(tag, fetchMax, opts.ownUsernames);
 
   // username 一致（scraper 内蔵）に加え、shortcode 一致でも自社判定
   let posts = result.topPosts.map((p: InstagramHashtagPost) => ({
@@ -166,14 +174,14 @@ async function runOne(
 
   if (posts.length === 0) {
     console.warn(
-      `\n⚠ [#${tag}] 投稿が1件も取得できませんでした。` +
+      `\n⚠ [${label}] 投稿が1件も取得できませんでした。` +
         "\n  INSTAGRAM_SESSION_ID の未設定/失効、または 非日本/データセンターIP のブロック（ログイン/チャレンジ転送）が原因のことがあります。" +
         "\n  Mac の自宅IPで、有効な sessionid を渡して実行してください。\n",
     );
   }
 
   // === 標準出力（ランキング表） ===
-  console.log(`\n=== IG 表示順位「#${tag}」${opts.reelsOnly ? "【リールのみ】" : ""}（method: ${result.method} / ${posts.length}件）===\n`);
+  console.log(`\n=== IG 表示順位 ${label} ${opts.reelsOnly ? "【リールのみ】" : ""}（method: ${result.method} / ${posts.length}件）===\n`);
   console.log("  #  種別      いいね   再生数   @ユーザー名             URL");
   console.log("  ".padEnd(100, "-"));
   for (const p of posts) {
@@ -192,7 +200,8 @@ async function runOne(
   // === ファイル出力 ===
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const safeTag = tag.replace(/[^\p{L}\p{N}_-]/gu, "_").slice(0, 40);
-  const base = path.join(opts.outDir, `ig-ranking-${safeTag}${opts.reelsOnly ? "-reels" : ""}-${ts}`);
+  const filePrefix = opts.keyword ? "ig-keyword" : "ig-ranking";
+  const base = path.join(opts.outDir, `${filePrefix}-${safeTag}${opts.reelsOnly ? "-reels" : ""}-${ts}`);
 
   fs.writeFileSync(
     `${base}.json`,
@@ -258,12 +267,12 @@ async function runOne(
   const ownSpecified = opts.ownUsernames.length > 0 || opts.ownShortcodes.size > 0;
   if (ownSpecified) {
     if (ownHits.length > 0) {
-      console.log(`\n🔴 [#${tag}] 自社投稿 ${ownHits.length} 件ヒット`);
+      console.log(`\n🔴 [${label}] 自社投稿 ${ownHits.length} 件ヒット`);
       for (const h of ownHits) {
         console.log(`   ${String(h.rank).padStart(3)}位  @${h.username || "?"}  ${h.url}`);
       }
     } else {
-      console.log(`\n[#${tag}] 自社投稿は今回のランキングに見つかりませんでした`);
+      console.log(`\n[${label}] 自社投稿は今回のランキングに見つかりませんでした`);
     }
   }
   console.log(`\n出力: ${base}.html  ← ブラウザで開くと iPhone風 IG UIで表示${ownSpecified ? "（自社=赤枠）" : ""}`);
@@ -295,7 +304,7 @@ async function runOne(
   }
   const slide: ProposalSlide = {
     platform: "instagram",
-    title: `#${tag}${opts.reelsOnly ? "（リール）" : ""}`,
+    title: `${label}${opts.reelsOnly ? "（リール）" : ""}`,
     ownRanks,
     deviceHtml,
     items,
@@ -314,11 +323,12 @@ async function runOne(
 }
 
 async function main() {
-  const { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed } = parseArgs(process.argv);
+  const { tags, max, own, ownReelsFile, reelsOnly, proposal, noEmbed, keyword } = parseArgs(process.argv);
 
   if (tags.length === 0) {
     console.error(
-      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--max N] [--own @a,@b] [--own-reels <file>] [--reels-only] [--proposal]',
+      '使い方: INSTAGRAM_SESSION_ID=<sessionid> npx tsx scripts/scrape-ig-ranking.ts "<#tag1>" ["<#tag2>" ...] [--keyword] [--max N] [--own @a,@b] [--own-reels <file>] [--reels-only] [--proposal]\n' +
+        "  --keyword … ハッシュタグではなく「キーワード検索」(/popular/<語> = アプリ版の検索) の表示順位を取得",
     );
     process.exit(1);
   }
@@ -327,9 +337,10 @@ async function main() {
   const ownShortcodes = loadOwnShortcodes(ownReelsFile);
 
   console.log(`\n=== Instagram 表示順位スクレイピング ===`);
-  console.log(`ハッシュタグ: ${tags.map((t) => `#${t.replace(/^#/, "")}`).join("  /  ")}（${tags.length}件）`);
-  console.log(`取得上限    : ${max} 件/タグ${reelsOnly ? "（リールのみ抽出）" : ""}`);
-  console.log(`セッション  : ${process.env.INSTAGRAM_SESSION_ID ? "設定あり（env）" : "未設定（Apifyフォールバック）"}`);
+  console.log(`モード      : ${keyword ? "キーワード検索（/popular・アプリ版）" : "ハッシュタグ検索"}`);
+  console.log(`${keyword ? "キーワード  " : "ハッシュタグ"}: ${tags.map((t) => (keyword ? `「${t.replace(/^#/, "")}」` : `#${t.replace(/^#/, "")}`)).join("  /  ")}（${tags.length}件）`);
+  console.log(`取得上限    : ${max} 件/${keyword ? "語" : "タグ"}${reelsOnly ? "（リールのみ抽出）" : ""}`);
+  console.log(`セッション  : ${process.env.INSTAGRAM_SESSION_ID ? "設定あり（env）" : "未設定" + (keyword ? "（keyword はセッション必須）" : "（Apifyフォールバック）")}`);
   console.log(`自社指定    : username ${ownUsernames.length}個 / shortcode ${ownShortcodes.size}個`);
 
   const outDir = path.resolve(process.cwd(), "out");
@@ -340,7 +351,7 @@ async function main() {
 
   for (const tag of tags) {
     try {
-      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir, reelsOnly, proposal, noEmbed }));
+      results.push(await runOne(tag, { max, ownUsernames, ownShortcodes, outDir, reelsOnly, proposal, noEmbed, keyword }));
     } catch (e) {
       console.error(`\n[#${tag.replace(/^#/, "")}] 取得失敗:`, e instanceof Error ? e.message : e);
       failed.push(tag.replace(/^#/, ""));
@@ -348,17 +359,18 @@ async function main() {
   }
 
   // === 全タグ横断サマリー ===
+  const labelOf = (t: string) => (keyword ? `「${t}」` : `#${t}`);
   console.log(`\n\n══════════════════════════════════════════`);
-  console.log(`  全ハッシュタグ サマリー（${results.length}/${tags.length} 成功）`);
+  console.log(`  全${keyword ? "キーワード" : "ハッシュタグ"} サマリー（${results.length}/${tags.length} 成功）`);
   console.log(`══════════════════════════════════════════`);
   if (results.length > 0) {
-    console.log(`\n  タグ                 件数   自社ヒット  自社順位`);
+    console.log(`\n  ${keyword ? "キーワード" : "タグ"}             件数   自社ヒット  自社順位`);
     console.log("  " + "".padEnd(60, "-"));
     for (const r of results) {
       const ranksStr = r.ownHits.length > 0 ? r.ownHits.map((h) => `${h.rank}位`).join(" / ") : "—";
       console.log(
         "  " +
-          `#${r.tag}`.slice(0, 18).padEnd(20) +
+          labelOf(r.tag).slice(0, 18).padEnd(20) +
           String(r.total).padStart(4) +
           "   " +
           String(r.ownHits.length).padStart(4) + " 件" +
@@ -368,13 +380,13 @@ async function main() {
     }
   }
   if (failed.length > 0) {
-    console.log(`\n  ⚠ 取得失敗（0件/ブロックの可能性）: ${failed.map((t) => `#${t}`).join(" / ")}`);
+    console.log(`\n  ⚠ 取得失敗（0件/ブロックの可能性）: ${failed.map(labelOf).join(" / ")}`);
     console.log(`    → Mac の自宅IPで、有効な INSTAGRAM_SESSION_ID を渡して実行してください。`);
   }
 
   console.log(`\n  出力ファイル（ブラウザで .html を開く）:`);
   for (const r of results) {
-    console.log(`    [#${r.tag}]  ${r.htmlPath}`);
+    console.log(`    [${labelOf(r.tag)}]  ${r.htmlPath}`);
   }
 
   // === クライアント提案用 16:9 デック（左=詳細モック／右=自社のみ表。サムネは各runでbase64埋め込み済み） ===

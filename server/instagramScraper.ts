@@ -211,7 +211,7 @@ export interface InstagramHashtagPost {
 export interface InstagramHashtagResult {
   hashtag: string;
   totalFetched: number;
-  method: "puppeteer" | "apify";
+  method: "puppeteer" | "apify" | "api";
   topPosts: InstagramHashtagPost[];
   ownRanks: number[];
 }
@@ -250,6 +250,82 @@ export async function searchInstagramHashtag(
 
   // Apify フォールバック
   return scrapeHashtagWithApify(tag, maxResults, ownNamesLower);
+}
+
+/**
+ * Instagram の「キーワード検索」（ハッシュタグではない、スマホアプリ版の検索＝`/popular/<KW>`）の
+ * 表示順位を取得する。
+ *
+ * `/popular/<KW>` ページが JS で叩く **fbsearch keyword SERP**（`/api/v1/fbsearch/web/top_serp/`）を
+ * Node fetch で直接認証付きリクエストする（Chromium 不要・TLS は検証済み）。
+ * Cookie は `sessionid` ＋ `ds_user_id`（sessionid 先頭の user id）が必須。`X-IG-App-ID` も付与。
+ * `next_max_id` でページ送りして maxResults 件まで集める。レスポンスの `media_grid.sections[].layout_content.medias[].media`
+ * は既存 `parseGraphQLData` がそのまま解釈できる。戻り値の形は `searchInstagramHashtag` と同一
+ * （`hashtag` フィールドにクエリ文字列を格納）。
+ */
+export async function searchInstagramKeyword(
+  query: string,
+  maxResults: number = 30,
+  ownAccountNames: string[] = [],
+): Promise<InstagramHashtagResult> {
+  const ownNamesLower = new Set(ownAccountNames.map(n => n.toLowerCase().replace(/^@/, "")));
+  const term = query.replace(/^#/, "").trim();
+  const empty: InstagramHashtagResult = { hashtag: term, totalFetched: 0, method: "api", topPosts: [], ownRanks: [] };
+
+  const sessionId = getValidatedSessionId();
+  if (!sessionId) {
+    console.warn("[Instagram Keyword] INSTAGRAM_SESSION_ID 未設定 — キーワード検索にはセッションが必須です");
+    return empty;
+  }
+  const dsUserId = sessionId.split(/%3A|:/)[0]; // sessionid 先頭が user id
+  const headers: Record<string, string> = {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "X-IG-App-ID": "936619743392459",
+    Referer: "https://www.instagram.com/",
+    Accept: "*/*",
+    Cookie: `sessionid=${sessionId}; ds_user_id=${dsUserId}`,
+  };
+
+  const merged: InstagramHashtagPost[] = [];
+  const seen = new Set<string>();
+  let nextMaxId: string | null = null;
+  try {
+    for (let page = 0; page < 8 && merged.length < maxResults; page++) {
+      let url =
+        `https://www.instagram.com/api/v1/fbsearch/web/top_serp/?query=${encodeURIComponent(term)}` +
+        `&enable_metadata=true&search_surface=web_top_search_page`;
+      if (nextMaxId) url += `&next_max_id=${encodeURIComponent(nextMaxId)}`;
+
+      const res = await fetch(url, { headers, redirect: "manual" });
+      if (res.status !== 200) {
+        console.warn(`[Instagram Keyword] "${term}" HTTP ${res.status}（セッション失効/未認証 or IPブロックの可能性）`);
+        break;
+      }
+      const json: any = await res.json();
+      const pagePosts = parseGraphQLData([json], ownNamesLower);
+      let added = 0;
+      for (const p of pagePosts) {
+        if (!seen.has(p.shortcode)) {
+          seen.add(p.shortcode);
+          merged.push(p);
+          added++;
+        }
+      }
+      const mg = json.media_grid || {};
+      console.log(`[Instagram Keyword] "${term}" page ${page + 1}: +${added} (total ${merged.length})`);
+      if (!mg.has_more || !mg.next_max_id || added === 0) break;
+      nextMaxId = mg.next_max_id;
+    }
+  } catch (e) {
+    console.error(`[Instagram Keyword] fetch failed for "${term}":`, e);
+    if (merged.length === 0) return empty;
+  }
+
+  const top = merged.slice(0, maxResults).map((p, i) => ({ ...p, position: i + 1 }));
+  const ownRanks = top.filter(p => p.isOwn).map(p => p.position);
+  console.log(`[Instagram Keyword] "${term}": ${top.length} posts (自社 ${ownRanks.length} 件)`);
+  return { hashtag: term, totalFetched: top.length, method: "api", topPosts: top, ownRanks };
 }
 
 /**
