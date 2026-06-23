@@ -290,8 +290,10 @@ export async function searchInstagramKeyword(
   const merged: InstagramHashtagPost[] = [];
   const seen = new Set<string>();
   let nextMaxId: string | null = null;
+  // reels-only 等で maxResults が大きい時は深くページ送りする（リールは希少なため母数を確保）
+  const maxPages = Math.max(8, Math.ceil(maxResults / 15));
   try {
-    for (let page = 0; page < 8 && merged.length < maxResults; page++) {
+    for (let page = 0; page < maxPages && merged.length < maxResults; page++) {
       let url =
         `https://www.instagram.com/api/v1/fbsearch/web/top_serp/?query=${encodeURIComponent(term)}` +
         `&enable_metadata=true&search_surface=web_top_search_page`;
