@@ -204,15 +204,11 @@ function buildHybridSlide(pptx: any, d: SlideData, idx: number, total: number) {
     const rowH = Math.min(0.6, (6.95 - startY) / d.rows.length);
     d.rows.forEach((r, i) => {
       const y = startY + i * rowH;
-      // 順位（朱）
-      slide.addText(r.rank, { x: x0, y, w: 0.82, h: rowH, fontFace: FONT_EN, fontSize: 23, bold: true, color: ACCENT, valign: "middle" });
-      // サムネ
-      if (r.thumb.startsWith("data:image")) {
-        slide.addImage({ data: r.thumb, x: x0 + 0.9, y: y + 0.06, w: 0.4, h: rowH - 0.16 });
-      }
+      // 順位（墨）
+      slide.addText(r.rank, { x: x0, y, w: 0.7, h: rowH, fontFace: FONT_EN, fontSize: 18, bold: true, color: INK, valign: "middle" });
       // アカウント＋URL（2段）
-      const cx = x0 + 1.45;
-      const cw = rightW - 1.45;
+      const cx = x0 + 0.9;
+      const cw = rightW - 0.9;
       slide.addText(r.account, { x: cx, y: y + 0.02, w: cw, h: rowH * 0.55, fontFace: FONT_EN, fontSize: 14, bold: true, color: INK, valign: "bottom" });
       slide.addText(shortUrl(r.url), {
         x: cx, y: y + rowH * 0.5, w: cw, h: rowH * 0.5, fontFace: FONT_EN, fontSize: 9, color: FAINT, valign: "top",

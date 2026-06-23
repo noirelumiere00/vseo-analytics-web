@@ -71,13 +71,9 @@ function renderList(slide: ProposalSlide): string {
     `<ul class="list">` +
     ownItems
       .map((it) => {
-        const thumb = it.thumbUrl
-          ? `<img src="${esc(it.thumbUrl)}" referrerpolicy="no-referrer" onerror="this.style.visibility='hidden'">`
-          : "";
         return (
           `<li class="row">` +
           `<span class="rk">${it.rank}</span>` +
-          `<span class="th">${thumb}</span>` +
           `<span class="who"><b>@${esc(it.account)}</b>` +
           `<a class="url" href="${esc(it.url)}" target="_blank" rel="noopener">${shortUrl(it.url)}</a></span>` +
           `</li>`
@@ -173,12 +169,10 @@ export function renderProposalDeck(params: {
 
   .list{ list-style:none; margin-top:4px; overflow:auto; }
   .list::-webkit-scrollbar{ width:0; }
-  .row{ display:flex; align-items:center; gap:26px; padding:20px 2px; border-bottom:1px solid var(--line); }
+  .row{ display:flex; align-items:center; gap:28px; padding:20px 2px; border-bottom:1px solid var(--line); }
   .row:last-child{ border-bottom:0; }
-  .rk{ flex:none; width:78px; font-size:40px; font-weight:600; color:var(--accent); letter-spacing:-.02em;
+  .rk{ flex:none; width:60px; font-size:30px; font-weight:600; color:var(--ink); letter-spacing:-.02em;
        font-feature-settings:"tnum" 1; text-align:left; }
-  .th{ flex:none; width:50px; height:64px; overflow:hidden; background:#ecebe4; border:1px solid var(--line); }
-  .th img{ width:100%; height:100%; object-fit:cover; }
   .who{ display:flex; flex-direction:column; min-width:0; gap:4px; }
   .who b{ font-size:21px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .who .url{ font-size:13px; color:var(--faint); text-decoration:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
