@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { ENV } from "./env";
 
 export class LLMQuotaExhaustedError extends Error {
@@ -205,11 +206,11 @@ export type ResponseFormat =
   | { type: "json_schema"; json_schema: JsonSchema };
 
 // ================================================================
-// Bedrock Converse API 用ヘルパー
+// メッセージ整形ヘルパー（プロバイダ非依存）
 // ================================================================
 
 /**
- * 絵文字・制御文字・サロゲートペア等を除去して Bedrock Converse API の JSON シリアライゼーションエラーを防ぐ
+ * 絵文字・制御文字・サロゲートペア等を除去して JSON シリアライゼーションエラーを防ぐ
  */
 function sanitizeForBedrock(text: string): string {
   if (!text) return '';
@@ -304,16 +305,17 @@ function stripCodeFences(text: string): string {
   return trimmed;
 }
 
-function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult {
-  const rawText = bedrockRes.output?.message?.content
-    ?.map((c: any) => c.text || "")
-    .join("") || "";
+function convertAnthropicResponse(res: Anthropic.Message, modelId: string): InvokeResult {
+  // content ブロックから text のみを連結（image/file は callers 未使用）
+  const rawText = (res.content || [])
+    .map((b: any) => (b?.type === "text" ? b.text || "" : ""))
+    .join("");
   const outputText = stripCodeFences(rawText);
 
   return {
-    id: bedrockRes.$metadata?.requestId || "",
+    id: res.id || "",
     created: Math.floor(Date.now() / 1000),
-    model: modelId,
+    model: res.model || modelId,
     choices: [
       {
         index: 0,
@@ -321,14 +323,16 @@ function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult 
           role: "assistant",
           content: outputText,
         },
-        finish_reason: bedrockRes.stopReason || "end_turn",
+        // Anthropic の stop_reason は "max_tokens" 等をそのまま返すため、
+        // callers の finish_reason === "max_tokens" 判定がそのまま機能する
+        finish_reason: res.stop_reason || "end_turn",
       },
     ],
-    usage: bedrockRes.usage
+    usage: res.usage
       ? {
-          prompt_tokens: bedrockRes.usage.inputTokens || 0,
-          completion_tokens: bedrockRes.usage.outputTokens || 0,
-          total_tokens: (bedrockRes.usage.inputTokens || 0) + (bedrockRes.usage.outputTokens || 0),
+          prompt_tokens: res.usage.input_tokens || 0,
+          completion_tokens: res.usage.output_tokens || 0,
+          total_tokens: (res.usage.input_tokens || 0) + (res.usage.output_tokens || 0),
         }
       : undefined,
   };
@@ -339,51 +343,53 @@ function convertBedrockResponse(bedrockRes: any, modelId: string): InvokeResult 
 // ================================================================
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  // AWS SDK は動的 import（トップレベルで import するとビルドサイズが膨れるため）
-  const { BedrockRuntimeClient, ConverseCommand } = await import(
-    "@aws-sdk/client-bedrock-runtime"
-  );
+  if (!ENV.anthropicApiKey) {
+    throw new Error(
+      "LLM invoke failed: ANTHROPIC_API_KEY が未設定です（.env またはコンテナ環境変数に設定してください）"
+    );
+  }
 
-  const client = new BedrockRuntimeClient({
-    region: ENV.awsRegion,
-    ...(ENV.awsAccessKeyId && ENV.awsSecretAccessKey
-      ? {
-          credentials: {
-            accessKeyId: ENV.awsAccessKeyId,
-            secretAccessKey: ENV.awsSecretAccessKey,
-          },
-        }
-      : {}),
-  });
+  const client = new Anthropic({ apiKey: ENV.anthropicApiKey });
 
-  const modelId = ENV.bedrockModelId;
+  const modelId = ENV.anthropicModelId;
   const maxTokens = params.maxTokens || params.max_tokens || 8192;
 
-  // メッセージを Bedrock 形式に変換
+  // messages から system を分離（system はトップレベル引数で渡す）
   const { system, bedrockMessages } = extractSystemAndMessages(params.messages);
 
-  // response_format の json_schema をプロンプトに注入
+  // response_format の json_schema をプロンプト末尾に注入（現行挙動を維持。
+  // native structured outputs には移行せず、callers が依存する parseLLMJson の挙動を保つ）
   const resolvedFormat =
     params.responseFormat || params.response_format || undefined;
   injectJsonSchemaInstruction(bedrockMessages, resolvedFormat);
 
-  const command = new ConverseCommand({
-    modelId,
-    system,
-    messages: bedrockMessages,
-    inferenceConfig: {
-      maxTokens,
-      temperature: 0.7,
-    },
-  });
+  // Anthropic Messages API 形式へ整形
+  const systemText = system.map(s => s.text).filter(Boolean).join("\n\n");
+  const messages: Anthropic.MessageParam[] = bedrockMessages.map(m => ({
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.content.map(c => c.text).join("\n"),
+  }));
+
+  // Anthropic は最低1つの user メッセージを要求する（全 system のみの呼び出し対策）
+  if (messages.length === 0) {
+    messages.push({ role: "user", content: " " });
+  }
 
   try {
-    const response = await client.send(command);
-    return convertBedrockResponse(response, modelId);
+    const response = await client.messages.create({
+      model: modelId,
+      max_tokens: maxTokens,
+      ...(systemText ? { system: systemText } : {}),
+      messages,
+    });
+    return convertAnthropicResponse(response, modelId);
   } catch (error: any) {
     if (
-      error.name === "ThrottlingException" ||
-      error.message?.includes("Too many requests") ||
+      error instanceof Anthropic.RateLimitError ||
+      error?.status === 429 ||
+      error?.error?.type === "rate_limit_error" ||
+      error?.error?.type === "overloaded_error" ||
+      error.message?.includes("rate_limit") ||
       error.message?.includes("quota")
     ) {
       throw new LLMQuotaExhaustedError(

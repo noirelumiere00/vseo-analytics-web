@@ -87,6 +87,9 @@ jspm_packages/
 # Puppeteer browser cache
 .cache/puppeteer
 
+# scrape-ranking CLI 出力
+out/
+
 # Next.js build output
 .next
 

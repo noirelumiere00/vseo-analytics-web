@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import { computeRankInfo, computeVideoAppearanceCount, computeAppearanceCountMap } from "./ranking";
 import { TRPCError } from "@trpc/server";
 import { generateAnalysisReportDocx } from "./pdfGenerator";
 import { generateExportToken } from "./_core/exportToken";
@@ -160,61 +161,16 @@ export const appRouter = router({
         // セッション数を searchData から動的に取得
         const numSessions = tripleSearchData?.searchData?.length ?? 0;
 
-        // 各動画の出現回数を searchData から動的に計算
-        const videoAppearanceCount = new Map<string, number>();
-        if (tripleSearchData?.searchData) {
-          for (const session of tripleSearchData.searchData) {
-            const seen = new Set<string>();
-            for (const vid of session.videoIds) {
-              if (!seen.has(vid)) {
-                seen.add(vid);
-                videoAppearanceCount.set(vid, (videoAppearanceCount.get(vid) || 0) + 1);
-              }
-            }
-          }
-        }
-
-        // 出現回数別にグループ化（API返却用）
-        const appearanceCountMap: Record<number, string[]> = {};
-        for (let c = numSessions; c >= 1; c--) {
-          appearanceCountMap[c] = [];
-        }
-        for (const [videoId, count] of videoAppearanceCount.entries()) {
-          const clamped = Math.min(count, numSessions || count);
-          if (!appearanceCountMap[clamped]) appearanceCountMap[clamped] = [];
-          appearanceCountMap[clamped].push(videoId);
-        }
-
-        // 各動画の順位情報を searchData から計算（重複率分析の高度化）
-        // dominanceScore: 各セッションでの順位の逆数の平均 × 100（高いほど上位に安定して表示される）
-        const rankInfo: Record<string, {
-          ranks: (number | null)[];
-          avgRank: number;
-          dominanceScore: number;
-          appearanceCount: number;
-        }> = {};
-        if (tripleSearchData?.searchData && numSessions > 0) {
-          const allVideoIds = [
-            ...(tripleSearchData.appearedInAll3Ids ?? []),
-            ...(tripleSearchData.appearedIn2Ids ?? []),
-            ...(tripleSearchData.appearedIn1OnlyIds ?? []),
-          ];
-          for (const videoId of allVideoIds) {
-            const ranks: (number | null)[] = new Array(numSessions).fill(null);
-            for (const session of tripleSearchData.searchData) {
-              const idx = session.videoIds.indexOf(videoId);
-              if (idx !== -1 && session.sessionIndex < numSessions) {
-                ranks[session.sessionIndex] = idx + 1;
-              }
-            }
-            const presentRanks = ranks.filter((r): r is number => r !== null);
-            const avgRank = presentRanks.length > 0
-              ? presentRanks.reduce((a, b) => a + b, 0) / presentRanks.length
-              : 999;
-            const dominanceScore = presentRanks.reduce((sum, r) => sum + (1 / r), 0) / numSessions * 100;
-            rankInfo[videoId] = { ranks, avgRank, dominanceScore, appearanceCount: videoAppearanceCount.get(videoId) ?? 0 };
-          }
-        }
+        // 出現回数・出現回数別グループ・順位情報を共通ロジックで算出（server/ranking.ts）
+        const rankSearchData = tripleSearchData?.searchData ?? [];
+        const videoAppearanceCount = computeVideoAppearanceCount(rankSearchData);
+        const appearanceCountMap = computeAppearanceCountMap(videoAppearanceCount, numSessions);
+        const rankVideoIds = [
+          ...(tripleSearchData?.appearedInAll3Ids ?? []),
+          ...(tripleSearchData?.appearedIn2Ids ?? []),
+          ...(tripleSearchData?.appearedIn1OnlyIds ?? []),
+        ];
+        const rankInfo = computeRankInfo(rankSearchData, rankVideoIds, numSessions, videoAppearanceCount);
 
         return {
           job,

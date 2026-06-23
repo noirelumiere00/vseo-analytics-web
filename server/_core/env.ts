@@ -5,9 +5,16 @@ export const ENV = {
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
+  // 順位だけモード: LLM 分析（センチメント/レポート/パターン）をスキップし、
+  // TikTok 収集＋表示順位の保存だけ行って job を完了扱いにする。
+  // RANKING_ONLY=true、または ANTHROPIC_API_KEY 未設定時に有効化する（jobExecutor 側で判定）。
+  rankingOnly: process.env.RANKING_ONLY === "true",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  // AWS Bedrock
+  // Anthropic Claude API（LLM 本体。Bedrock から移行）
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  anthropicModelId: process.env.ANTHROPIC_MODEL_ID ?? "claude-haiku-4-5",
+  // AWS（SES メール送信などで使用。LLM では未使用）
   awsRegion: process.env.AWS_REGION ?? "us-west-2",
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
