@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "TikTok 検索スクレイパ (Puppeteer 実ブラウザ + 内部API傍受)。tiktok-suite の01-acquireモジュール本体。",
+  "description": "TikTok 検索スクレイパ (Puppeteer 実ブラウザ + 内部API傍受)。tiktok-suite の tiktok-acquire モジュール本体。",
   "bin": { "tiktok-search": "./search.mjs" },
   "dependencies": {
     "puppeteer-core": "^23.0.0"
