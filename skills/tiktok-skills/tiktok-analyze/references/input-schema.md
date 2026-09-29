@@ -28,7 +28,7 @@
 
 ## 入力 JSON の項目（`search.mjs` 検索モード）
 
-形は `{"ok", "query", "videos": [...], "diag": {...}, "order_basis", "errorCode"}`。`tiktok_report.py` が保存する `videos` の配列だけの JSON も受ける。`build_dataset.py` が読む項目は次のとおり。
+形は `{"ok", "query", "videos": [...], "diag": {...}, "order_basis", "errorCode"}`。`tiktok_report.py` の `.json` も同じ形。古い `tiktok_report.py` が保存していた `videos` の配列だけの JSON も受ける（`order_basis` が無いので `unknown` 扱い。取り直すのが望ましい）。`build_dataset.py` が読む項目は次のとおり。
 
 | 項目 | 使い道 | 無いとき |
 |---|---|---|
@@ -36,8 +36,8 @@
 | `videos[].url` | 動画URL（取得・証拠リンクの基点） | 同上 |
 | `videos[].desc` | キャプション（タグ文字列を含む） | 空のまま残す（ハッシュタグのみ・無言投稿も実在の検索結果） |
 | `videos[].hashtags[]` | ハッシュタグ・`#PR` 判定 | 空 |
-| `videos[].author.{uniqueId,nickname,followerCount,verified,signature,avatarUrl}` | 投稿者情報 | 空・0 |
-| `videos[].stats.{playCount,diggCount,collectCount,shareCount,commentCount}` | 再生・反応 | 数値は 0 のまま、`stats_missing: true` で「未取得」と区別する |
+| `videos[].author.{uniqueId,nickname,followerCount,verified,signature,avatarUrl}` | 投稿者情報 | 空（`followerCount` が `null` のときは `follower_count` も `null`＝未取得。0 にしない） |
+| `videos[].stats.{playCount,diggCount,collectCount,shareCount,commentCount}` | 再生・反応 | 数値は 0 のまま、`stats_missing: true` で「未取得」と区別する（`stats` 自体が無い、または `missingFields` に `stats.playCount` がある） |
 | `videos[].duration` / `mediaType` / `imageCount` | 尺・動画/写真の別・写真枚数 | `mediaType` 無しは動画扱い |
 | `videos[].isAd` | TikTok 側の広告フラグ（`is_ad_platform_flag`） | false |
 | `videos[].createTime` / `music` / `coverUrl` / `poi` / `textLanguage` | 投稿日時・音源・カバー・位置・言語 | 空 |

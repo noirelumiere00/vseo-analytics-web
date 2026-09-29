@@ -29,6 +29,7 @@
   URL・タイトルに含まれる検索語そのもの（『顔認証』『#verified』等）では判定しない
 - `diag.cdnDenied` / `cdnDeniedReference`: CDN（Akamai）の Access Denied と問い合わせ番号
 - `diag.apiNonZeroStatus`: 内部APIが返した 0 以外の `status_code`（あれば 0件でも `TRULY_EMPTY` にしない）
+- `fetched_at`（UTC の ISO 時刻）/ `fetched_on`（実行したPCのローカル日付 YYYY-MM-DD）: 取得した日時。初訪資料の「取得日」はこれを使う（ファイルの更新日時はコピーで変わるので使わない）
 - `stop_reason`（`diag.stop_reason` にも同じ値）: 走査の終わり方。`exhausted`＝has_more=false が上限回数続いた（この検索で取れる全件＝下限値）/
   `no_new`＝新規0が上限回数続いた / `capped`＝`--max`・ページ数・スクロール回数の上限で止めた（母数未確定）/
   `unknown`＝それ以外（例外で中断、複数セッションで終わり方がばらばら等）。tiktok-deck の付録が読む

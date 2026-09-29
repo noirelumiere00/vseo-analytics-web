@@ -14,7 +14,8 @@ still gets sampled. Total frames per video is capped (--max-frames).
 
 写真投稿は <id>_photos/NN.jpg そのものが読み取り対象（フレーム抽出しない）。
 写真投稿の音声は BGM のみで投稿者の発話が無いため not_applicable とし、
-文字起こしもしない（歌詞をキーワード言及として数えないため）。
+文字起こしもしない（歌詞をキーワード言及として数えないため）。写真投稿が
+スライドショー動画として取得された場合（videos.jsonl の media_type=photo）も同じ。
 
 faster-whisper が未導入・読み込み失敗のときは止めずに、動画の音声経路を
 unmeasured（未計測。0件ではない）として記録する。
@@ -975,6 +976,8 @@ def _load_json_object(path, fallback):
 
 def _reusable_asr(signal_path, acquisition, requested_model):
     """Reuse full-audio ASR when dense mode only changes visual sampling."""
+    if acquisition.get("_photo_bgm_only"):
+        return None  # 写真投稿の BGM は文字起こししない。以前の文字起こしも再利用しない
     signal = _load_json_object(signal_path, {})
     if signal.get("status") != "ok":
         return None
@@ -1009,6 +1012,10 @@ def _dense_review_complete(review_manifest, video_id):
 
 def _signal_uses_requested_asr(signal, acquisition, requested_model):
     media_type = acquisition.get("media_type") or "video"
+    if acquisition.get("_photo_bgm_only"):
+        # 動画ファイルとして取得した写真投稿。BGM を文字起こしした古い signal（measured）は
+        # 完了とみなさず作り直す。
+        return signal.get("voice_channel") == "not_applicable"
     # 写真投稿の音声は not_applicable で文字起こししない（BGMのみ）。
     asr_required = (
         False if media_type == "photo"
@@ -1191,6 +1198,16 @@ def main():
         video_id: record for video_id, record in acquisitions.items()
         if record.get("status") == "ok" and record.get("media_type") in (None, "video", "photo")
     }
+    # 写真投稿なのに動画ファイルとして取得されたもの（search.mjs の yt-dlp フォールバックが
+    # スライドショー動画を保存した等）。台帳の media_type だけで分けると BGM を文字起こしして
+    # voice_channel=measured になり、歌詞がキーワード言及と ASR の分母に混ざっていた。
+    # 検索結果（videos.jsonl）の media_type と台帳の voice_channel も見て、写真投稿の音声は
+    # not_applicable に揃える。印はメモリ上だけで、台帳には書き戻さない。
+    for video_id, record in ok_acquisitions.items():
+        if (record.get("media_type") or "video") != "photo" and (
+                (videos.get(video_id) or {}).get("media_type") == "photo"
+                or record.get("voice_channel") == "not_applicable"):
+            record["_photo_bgm_only"] = True
 
     signals_dir = run_dir / "signals"
     signals_dir.mkdir(parents=True, exist_ok=True)
@@ -1386,6 +1403,7 @@ def main():
     needs_asr = any(
         video_id not in asr_reuse
         and record.get("media_type") != "photo" and record.get("has_audio") is not False
+        and not record.get("_photo_bgm_only")
         for video_id, record in ok_acquisitions.items() if video_id in to_process
     )
     model = None
@@ -1462,7 +1480,10 @@ def main():
                         "error": f"duration exceeds safety limit {args.max_duration_seconds}s; rerun with an explicit higher limit after review",
                     }
                 else:
-                    has_audio = acquisition.get("has_audio") is not False
+                    # 写真投稿を動画ファイルとして取得したもの（_photo_bgm_only）は、音声が
+                    # BGM のみなので文字起こしせず not_applicable にする（写真パスと同じ扱い）。
+                    photo_bgm_only = bool(acquisition.get("_photo_bgm_only"))
+                    has_audio = acquisition.get("has_audio") is not False and not photo_bgm_only
                     if dense_mode:
                         result = process_video_dense(
                             video_record, media_path, model, args.dense_fps, brand, product,
@@ -1478,6 +1499,11 @@ def main():
                             has_audio=has_audio, frames_root=(run_dir / "frames"),
                             requested_whisper_model=args.whisper_model,
                             asr_unavailable_reason=asr_unavailable_reason)
+                    if photo_bgm_only:
+                        result["voice_channel_reason"] = (
+                            "写真投稿（動画ファイルとして取得）。BGMのみで投稿者の発話が無い前提。"
+                            "楽曲歌詞の誤計上を避けるためASR対象外")
+                        result["asr_status"] = "not_applicable_photo_bgm"
                     incomplete_reasons = result.pop("_incomplete_reasons", [])
                     result["status"] = "error" if incomplete_reasons else "ok"
                     if incomplete_reasons:

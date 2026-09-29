@@ -50,9 +50,9 @@ OPTIONAL_MODULES = {
 def sibling_module(*names):
     """兄弟モジュールのディレクトリを探す。
 
-    リポジトリでは 01-acquire / 03-deck、配布後は tiktok-acquire / tiktok-deck に
-    名前が変わる。parents[2] からリポジトリ名で引くと、配布先で必ず外れる
-    （実際に install 後の check が全部落ちた）。両方の名前を順に探す。
+    リポジトリも配布後も tiktok-acquire / tiktok-deck。番号付きの旧フォルダ名
+    （01-acquire / 03-deck）は古い配置のために後ろで見る。parents[2] から1つの名前だけで
+    引くと配置によって外れる（実際に install 後の check が全部落ちた）ので、名前を順に探す。
     """
     base = Path(__file__).resolve().parents[2]
     for n in names:
@@ -94,7 +94,7 @@ def check_node_module():
         return False
     result = subprocess.run(
         ["node", "-e", "require.resolve('puppeteer-core')"],
-        cwd=str((sibling_module("01-acquire", "tiktok-acquire") or Path.cwd()) / "scripts"),
+        cwd=str((sibling_module("tiktok-acquire", "01-acquire") or Path.cwd()) / "scripts"),
         capture_output=True, text=True, timeout=15,
     )
     return result.returncode == 0
@@ -187,7 +187,7 @@ def main():
     # 資料生成は pptxgenjs で描く。node があっても pptxgenjs が無ければ1枚も作れない。
     # doctor.sh 側だけで見ていたため、ここは ok=true を返して直後に落ちていた
     if needed({"deck"}):
-        deck_root = sibling_module("03-deck", "tiktok-deck")
+        deck_root = sibling_module("tiktok-deck", "03-deck")
         if deck_root is None:
             problems.append({
                 "component": "node:pptxgenjs", "issue": "tiktok-deck が見つからない",

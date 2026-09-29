@@ -6,7 +6,8 @@
       → validate_input.py → normalize_dataset.py → normalized/videos.jsonl
 
 本スクリプトのフロー:
-    search.mjs --max all --sessions 2 → JSON
+    search.mjs --max all → JSON（単一セッション。--sessions 2 以上は並びが検索表示順でなくなり、
+      order_basis=frequency_then_playcount として順位の章・初訪ツールで止まる）
       → build_dataset.py → normalized/videos.jsonl（Excel を経由しない）
 
 Excel を作らないので、列の表記ゆれ・並び替え事故・カバー画像の埋め込み解釈が
@@ -69,7 +70,7 @@ def load_scraper_json(path: Path):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         fail(f"JSON が壊れています ({path}): {exc}")
-    # search.mjs 単体出力 / tiktok_report.py の .json（配列）の両方を受ける
+    # search.mjs / tiktok_report.py の結果オブジェクト（dict）と、古い tiktok_report.py の配列の両方を受ける
     error_code = None
     if isinstance(data, list):
         videos, diag, ok = data, None, True
@@ -112,7 +113,9 @@ def to_record(v, rank, source_label, source_file, role):
     engagement = ((likes + comments + shares + saves) / views * 100) if views else 0.0
     # stats 自体が無い投稿は、下の数値が「0」ではなく「未取得」。数値の形は下流（資料側）の
     # 計算が前提にしているので変えず、未取得であることを別の項目で残す。
-    stats_missing = not isinstance(v.get("stats"), dict) or v.get("stats", {}).get("playCount") is None
+    # search.mjs は後方互換で欠けた stats を 0 で出し、missingFields に列挙する。
+    stats_missing = (not isinstance(v.get("stats"), dict) or v.get("stats", {}).get("playCount") is None
+                     or "stats.playCount" in (v.get("missingFields") or []))
     posted_at = ""
     if v.get("createTime"):
         posted_at = datetime.fromtimestamp(int(v["createTime"]), JST).isoformat()
@@ -132,7 +135,8 @@ def to_record(v, rank, source_label, source_file, role):
         "hashtags_raw": hashtags_raw,
         "creator_id": author.get("uniqueId") or "",
         "creator_name": author.get("nickname") or "",
-        "follower_count": author.get("followerCount") or 0,
+        # 取れなかったときは None（未取得）のまま。0 で埋めると「フォロワー1万未満」に数えられる。
+        "follower_count": author.get("followerCount"),
         "creator_verified": bool(author.get("verified")),
         # プロフィール文。企業公式か個人かの判定で最も効く材料なので落とさない。
         "creator_signature": author.get("signature") or "",
@@ -243,7 +247,7 @@ def main():
         except (OSError, json.JSONDecodeError):
             order_bases.append("unknown")
             continue
-        # tiktok_report.py の保存形式は配列（order_basis を持たない）。dict 前提で .get すると落ちる。
+        # 古い tiktok_report.py の保存形式は配列（order_basis を持たない）。dict 前提で .get すると落ちる。
         order_bases.append((raw.get("order_basis") if isinstance(raw, dict) else None) or "unknown")
     bad = [b for b in order_bases if b not in ("search_display_order", "unknown")]
     if bad:

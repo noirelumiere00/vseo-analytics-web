@@ -228,7 +228,7 @@ def compute_findings(recs, axes_count, rules, status=None, ref=None):
     JST = timezone(timedelta(hours=9))
 
     photo = sum(1 for r in recs if r.get("media_type") == "photo")
-    # フォロワー数は取れなかった投稿が 0 で入っている（build_dataset）。分母から外して件数も示す
+    # フォロワー数が取れなかった投稿は None（古い build_dataset では 0）。分母から外して件数も示す
     known = [r for r in recs if (r.get("follower_count") or 0) > 0]
     small = sum(1 for r in known if r["follower_count"] < 10000)
     recent, dated = 0, 0
@@ -337,14 +337,15 @@ def _files_state(case_dir, rel):
     if isinstance(d, dict) and d.get("ok") is False:
         if d.get("errorCode") == "TIKTOK_TRULY_EMPTY":
             # 0件の語は case.json に入れたままだと取得・組み立てが止まる。「検索されていない語」という発見として返し、語を替える
-            return False, "0件（TIKTOK_TRULY_EMPTY＝検索されていない語）。この語は使わず別の語に替える"
+            return False, ("0件（TIKTOK_TRULY_EMPTY）。時間を置いて同じ条件で1回取り直し、"
+                           "2回とも0件なら検索されていない語として別の語に替える")
         return False, f"取得失敗（{d.get('errorCode') or d.get('error')}）"
     vs = d.get("videos") if isinstance(d, dict) else d
     return True, len(vs or [])
 
 
 def _is_empty(state):
-    """_files_state の理由が「0件（検索されていない語）」か。取り直しても同じなので語を替える"""
+    """_files_state の理由が「0件（TIKTOK_TRULY_EMPTY）」か。同じ条件で取り直しても0件なら語を替える"""
     return isinstance(state, str) and state.startswith("0件")
 
 
@@ -460,8 +461,9 @@ def fv_next_steps(case_dir, items, deck, dry):
         if m.get("file"):
             (empty if m.get("empty") else acq).append((m.get("query"), m.get("file")))
     for q, f in empty:
-        # 同じ語で取り直しても0件。0件のファイルを置いたままにすると組み立てが止まる
-        steps.append(f"「{q}」は0件（検索されていない語）。営業にそう伝え、case.json の語を替えて {f} を取り直す")
+        # 1回の TRULY_EMPTY では確定しない。0件のファイルを置いたままにすると組み立てが止まる
+        steps.append(f"「{q}」は0件（TIKTOK_TRULY_EMPTY）。時間を置いて同じ条件で1回取り直し、"
+                     f"2回とも0件なら検索されていない語として営業に伝え、case.json の語を替えて {f} を取り直す")
     for q, f in acq:
         steps.append(f'cd <tiktok-acquire>/scripts && node search.mjs --query "{q}" --max 50 --out {C}/{f}')
     if acq or (st.get("acquired_on") or {}).get("state") == "todo":

@@ -13,6 +13,6 @@ Pillow>=11,<13
 # 「未計測（0件ではない）」として記録する（紙面にもそう明記する）。音声も計測するなら入れる。
 # faster-whisper>=1.1,<2
 #
-# シーン検出。既定のコマ抽出は 03-deck/tools/extract_frames.py（ffmpegのみ）で足りる。
+# シーン検出。既定のコマ抽出は tiktok-deck/tools/extract_frames.py（ffmpegのみ）で足りる。
 # 未導入でも動くが、その場合は等間隔になる旨の警告が出る。
 # scenedetect[opencv]>=0.6.4,<0.7

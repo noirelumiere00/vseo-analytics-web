@@ -811,6 +811,11 @@ async function mainComments() {
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
+  // 取得した日時。資料の「◯年◯月◯日取得」はこれを使う（ファイルの更新日時はコピーや展開で変わる）。
+  // fetched_on は実行したPCのローカル日付（日本で取れば日本の日付）
+  const now = new Date();
+  result.fetched_at = now.toISOString();
+  result.fetched_on = now.toLocaleDateString('sv-SE');
   const out = JSON.stringify(result);
   if (args.out) fs.writeFileSync(args.out, out);
   process.stdout.write(out, () => process.exit(result.ok ? 0 : 2));
@@ -1360,9 +1365,9 @@ function ledgerRecordFor(it, hasAudio) {
       // 写真投稿の音声は基本 BGM のみで、投稿者自身の発話は入らない前提。楽曲の歌詞を
       // キーワード一致として拾うと「音声で言及された」という誤った計上になるため、
       // 音声経路（voice_channel）は「対象外」とする。
-      // 注意: これは取得側の記録で、ASR を実際に走らせるかは分析側が決める。
-      // extract_signals.py はこの項目を読まず、audio_path があれば BGM も文字起こしする
-      // （その結果は signals 側でも voice_channel=not_applicable として計上から外される）。
+      // 注意: これは取得側の記録で、ASR を走らせるかは分析側が決める。extract_signals.py は
+      // 写真投稿（台帳の media_type=photo、または videos.jsonl の media_type=photo）の BGM を
+      // 文字起こししない（signals 側も voice_channel=not_applicable）。
       voice_channel: "not_applicable",
       voice_channel_reason: "写真投稿はBGMのみで投稿者の発話が無い前提。楽曲歌詞の誤計上を避けるため音声経路の計上対象外",
       bytes: it.bytes, method: "search.mjs:fetch(embed)", url: it.url,
@@ -1749,6 +1754,11 @@ async function main() {
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
+  // 取得した日時。資料の「◯年◯月◯日取得」はこれを使う（ファイルの更新日時はコピーや展開で変わる）。
+  // fetched_on は実行したPCのローカル日付（日本で取れば日本の日付）
+  const now = new Date();
+  result.fetched_at = now.toISOString();
+  result.fetched_on = now.toLocaleDateString('sv-SE');
   const out = JSON.stringify(result);
   if (args.out) fs.writeFileSync(args.out, out);
   process.stdout.write(out, () => process.exit(result.ok ? 0 : 2));
