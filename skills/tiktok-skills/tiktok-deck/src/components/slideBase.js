@@ -73,7 +73,8 @@ function addSlide(pptx, opts = {}) {
     s.addText(opts.conclusion, {
       x: H.qX, y: H.titleY + 0.64, w: cw, h: ch,
       fontFace: T.font.mincho,
-      fontSize: fitBalanced(opts.conclusion, cw, ch, { base: 33, min: 19, lineHeight: 1.18, minTail: 6 }),
+      fontSize: fitBalanced(opts.conclusion, cw, ch, { base: 33, min: 19, lineHeight: 1.18, minTail: 6,
+        warn: `結論の大見出し（${opts.qLabel || opts.title || '?'}）` }),
       bold: true, color: T.color.text, align: 'left', valign: 'middle',
     });
     if (opts.conclusionSub) {
@@ -153,9 +154,13 @@ function addDivider(pptx, { partNo, partIndex, name, desc, items, footerLeft }) 
       color: T.color.darkSub, valign: 'top', lineSpacingMultiple: 1.5,
     });
   }
-  // 右下のQ一覧
+  // 右下のQ一覧。6行までしか入らない。7件以上を slice で切ると Q6-7 以降が扉から黙って消えたので、
+  // 5件＋「ほかN件」にして、載らなかった件数を必ず見せる
   const ix = 13.30; const iw = T.slide.w - T.margin.r - ix;
-  const list = (items || []).slice(0, 6);
+  const all = items || [];
+  const list = all.length > 6
+    ? [...all.slice(0, 5), { q: '…', text: `ほか${all.length - 5}件（${all[5].q}〜${all[all.length - 1].q}）` }]
+    : all;
   const rowH = Math.min(0.95, 3.9 / Math.max(1, list.length));
   let y = 6.35;
   list.forEach((it) => {

@@ -283,7 +283,7 @@ INPUT_LABEL = {
     "own_brand_search_excel": "自社ブランド検索結果Excel",
     "competitor_search_excels": "競合各社の検索結果Excel",
     "search_result_excels": "分析対象の検索結果Excel",
-    "analysis_evidence": "検索結果Excelまたは②の確定資料",
+    "analysis_evidence": "検索結果（search.mjs のJSON）または②の確定資料",
     "campaign_goal": "投稿・施策の目的",
     "creative_constraints": "制作条件・表現上の制約",
     "prior_analysis_data": "②の確定資料または既存の分析データ",
@@ -394,16 +394,28 @@ def normalize(value: str) -> str:
     return unicodedata.normalize("NFKC", value or "").strip().lower()
 
 
+EXCLUSION_MARKERS = ("不要", "いらない", "要らない", "除外", "含めない", "入れない")
+
+
 def match_is_negated(text: str, match: re.Match[str]) -> bool:
     """Return True when a matched request item is locally excluded."""
     before = text[max(0, match.start() - 10):match.start()]
     after = text[match.end():match.end() + 18]
     if re.search(r"(?:不要な|除外する|省く)\s*$", before):
         return True
-    return bool(re.match(
-        r"(?:は|を|が|については|に関しては)?\s*(?:" + "|".join(NEGATIVE_MARKERS) + r")",
+    # 「#PRの比較は不要」のように、項目と否定語のあいだに「の◯◯」が挟まる言い方も否定として読む。
+    # 助詞の直後しか見ていなかったため、除外を指示した項目が作成モジュールに入っていた（2026-09 監査）
+    if re.match(
+        r"(?:の[^。、\n]{0,8}?)?(?:は|を|が|については|に関しては)?\s*(?:" + "|".join(NEGATIVE_MARKERS) + r")",
         after,
-    ))
+    ):
+        return True
+    # 抜き出した除外指示（extract_constraints と同じ規則）の中に入っている一致も否定扱い
+    for marker in EXCLUSION_MARKERS:
+        for span in re.finditer(rf"([^。\n、]{{1,30}}?)(?:は|を)?{marker}", text):
+            if span.start() <= match.start() and match.end() <= span.end():
+                return True
+    return False
 
 
 def extract_output_formats(text: str) -> list[str]:
@@ -423,7 +435,7 @@ def extract_constraints(text: str) -> dict[str, list[str] | str | None]:
     )
     page_counts = re.findall(r"[0-9]+\s*(?:ページ|枚)", text)
     exclusions = []
-    for marker in ("不要", "いらない", "要らない", "除外", "含めない", "入れない"):
+    for marker in EXCLUSION_MARKERS:
         for match in re.finditer(rf"([^。\n、]{{1,30}}?)(?:は|を)?{marker}", text):
             exclusions.append(match.group(0).strip())
     return {
@@ -467,6 +479,23 @@ def parse_available_inputs(values: Iterable[str]) -> tuple[set[str], dict[str, s
         if separator and raw_value.strip():
             received_values[key] = raw_value.strip()
     return keys, received_values
+
+
+def split_available_inputs(raw: str) -> list[str]:
+    """--available-inputs をカンマで分ける。値の中のカンマ（general_search_keywords=コンビニ,スイーツ）は
+    次の断片がキーでも key=value でもなければ前の値へ戻す。単純に分けると「スイーツ」という
+    不明キーが生まれ、値が「コンビニ」だけになっていた（2026-09 監査）"""
+    reverse = input_alias_map()
+    out: list[str] = []
+    for piece in (p.strip() for p in str(raw or "").split(",")):
+        if not piece:
+            continue
+        is_key = "=" in piece or normalize(piece) in reverse
+        if not is_key and out and "=" in out[-1]:
+            out[-1] = out[-1] + "," + piece
+        else:
+            out.append(piece)
+    return out
 
 
 def canonicalize_inputs(values: Iterable[str]) -> set[str]:
@@ -713,7 +742,9 @@ def missing_inputs(required: Sequence[str], available: set[str]) -> list[str]:
             if not ({"own_post_results", "post_management_sheet"} & available):
                 missing.append(key)
         elif key == "analysis_evidence":
+            # analysis_evidence そのものを渡しても満たされず、構成提案が永遠に作れなかった（2026-09 監査）
             alternatives = {
+                "analysis_evidence",
                 "prior_analysis_data",
             }
             if not (alternatives & available):
@@ -1075,8 +1106,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--available-inputs", default="",
         help=(
             "Comma-separated canonical input keys already supplied. "
-            "Use key=value to preserve a confirmed value in the reply."
+            "Use key=value to preserve a confirmed value in the reply. "
+            "A value that itself contains commas is kept together when the next piece is not a key; "
+            "use --input for such values to be explicit."
         ),
+    )
+    parser.add_argument(
+        "--input", action="append",
+        help="One supplied input as key=value (repeatable). Values may contain commas.",
     )
     args = parser.parse_args(argv)
     # 標準入出力を UTF-8 に固定する。日本語 Windows のパイプでは cp932 になり、依頼文の絵文字を
@@ -1088,7 +1125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             except (ValueError, OSError):
                 pass
     request = args.request if args.request is not None else sys.stdin.read()
-    available = [item.strip() for item in args.available_inputs.split(",") if item.strip()]
+    available = split_available_inputs(args.available_inputs) + [x for x in (args.input or []) if x.strip()]
     try:
         result = route_request(request, available)
     except ValueError as exc:

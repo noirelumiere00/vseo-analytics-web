@@ -3,7 +3,7 @@
 const T = require('../theme');
 const D = require('../helpers/data');
 const { val, num, PLACEHOLDER_DATA } = D;
-const { fit, subSentences } = require('../helpers/text');
+const { fit, subSentences, splitSentences } = require('../helpers/text');
 const { addSlide } = require('../components/slideBase');
 const { addInsightBox, insightHeight, addExampleColumn } = require('../components/insightBox');
 const { addBrandHeading, addBarMetric, addModule, addCard } = require('../components/metricCard');
@@ -82,10 +82,19 @@ const SUB_BUDGET = 170;
  *  2社目は全文・3社目は1文だけ、という不均衡な切れ方をしていた（p5で3社目が1文）。
  *  ブランド数で予算を割り、各社を「完結した文」で同じだけ載せる。
  *  それでも入らない分は黙って捨てず QA に残す。 */
-function conclusionOf(chunk, pick) {
-  const lines = chunk.map((b) => `${val(b.brand_name)}／${val(pick(b))}`).filter((t) => !/\[DATA NOT PROVIDED\]/.test(t));
+//
+// 見出しは先頭ブランドの所見の「1文目」だけにする。所見全文を明朝33ptの見出しにしていたため、
+// 長い所見は下限19ptでも収まらず、Qラベル・設問・補足行に重なって描かれた。2文目以降は補足行の先頭へ回す。
+// 分割ページ（Q1-2 等）の2枚目以降は、全ページの先頭に再掲される自社ではなく、そのページで初めて出る
+// 競合の所見を見出しにする。自社を見出しにしていたため Q1-1 と Q1-2 が同じ見出しになり、
+// 2枚目以降の競合の所見は小さな補足行にしか載らなかった
+function conclusionOf(chunk, pick, repeatedHead = false) {
+  const shown = repeatedHead && chunk.length > 1 ? chunk.slice(1) : chunk;
+  const lines = shown.map((b) => `${val(b.brand_name)}／${val(pick(b))}`).filter((t) => !/\[DATA NOT PROVIDED\]/.test(t));
   if (!lines.length) return { head: '', sub: '' };
-  const rest = lines.slice(1, 3);
+  const first = splitSentences(lines[0]);
+  const headRest = first.slice(1).join('').trim();
+  const rest = [...(headRest ? [headRest] : []), ...lines.slice(1, 3)];
   const per = Math.floor(SUB_BUDGET / Math.max(1, rest.length));
   const cut = rest.map((t) => {
     const kept = subSentences(t, per);
@@ -94,7 +103,12 @@ function conclusionOf(chunk, pick) {
     }
     return kept;
   });
-  return { head: lines[0], sub: cut.join('　') };
+  return { head: first[0].trim(), sub: cut.join('　') };
+}
+
+/** 分割ページの2枚目以降で、先頭ブランドが前のページからの再掲か（chunkWithOwn が自社を毎ページ先頭に置く） */
+function headRepeated(chunk, ci, chunks) {
+  return !!(ci > 0 && chunks && chunks[0] && chunk[0] && chunks[0][0] === chunk[0]);
 }
 
 /** そのブランドに割り当てられた色番号（ページを跨いでも同じ色にする） */
@@ -112,7 +126,7 @@ const TIERS = [['nano', 'ナノ', '〜1万'], ['micro', 'マイクロ', '1〜10�
 
 function slideQ1(pptx, d, chunk, ci, chunks, footer, offset) {
   const s = addSlide(pptx, {
-    ...(() => { const c = conclusionOf(chunk, (b) => (b.q1 || {}).insight); return { conclusion: c.head, conclusionSub: c.sub }; })(),
+    ...(() => { const c = conclusionOf(chunk, (b) => (b.q1 || {}).insight, headRepeated(chunk, ci, chunks)); return { conclusion: c.head, conclusionSub: c.sub }; })(),
     qLabel: `Q1${chunks.length > 1 ? `-${ci + 1}` : ''}`,
     title: `誰が取り上げていて、フォロワー階層ごとの効果は？${pageSuffix(chunks, ci)}`,
     partTag: PART1, lead: 'インフルエンサー階層別パフォーマンス',
@@ -181,13 +195,30 @@ function slideQ1(pptx, d, chunk, ci, chunks, footer, offset) {
 }
 
 // ───────────────────────────────── Q2 PRかオーガニックか
+/** PR の内訳（isAd／#PRタグ）。build_input_md の数値キー、無ければ pr_definition_note の文から読む。
+ *  どちらも無ければ null（推測で書かない） */
+function prBreakdown(q) {
+  const qq = q || {};
+  let ad = qq.pr_isad_count;
+  let tg = qq.pr_tag_count;
+  if (D.isMissing(ad) || D.isMissing(tg)) {
+    const m = /isAd\s*(\d+)本[／/]#PRタグ\s*(\d+)本/.exec(String(qq.pr_definition_note || ''));
+    if (!m) return null;
+    [, ad, tg] = m;
+  }
+  const unk = parseInt(String(qq.pr_isad_unknown || '0'), 10) || 0;
+  return `内訳：isAd ${ad}本／#PRタグ ${tg}本${unk ? `（isAd 未取得 ${unk}本）` : ''}`;
+}
+
 function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
   const s = addSlide(pptx, {
-    ...(() => { const c = conclusionOf(chunk, (b) => (b.q2 || {}).insight); return { conclusion: c.head, conclusionSub: c.sub }; })(),
+    ...(() => { const c = conclusionOf(chunk, (b) => (b.q2 || {}).insight, headRepeated(chunk, ci, chunks)); return { conclusion: c.head, conclusionSub: c.sub }; })(),
     qLabel: `Q2${chunks.length > 1 ? `-${ci + 1}` : ''}`,
     title: `伸びているのは、PR投稿かオーガニックか？${pageSuffix(chunks, ci)}`,
     partTag: PART1,
-    lead: 'PRはisAdまたは#PRタグのいずれか（内訳は各ページに併記）。「#PR表記なし」はオーガニックを意味しない。',
+    // 「内訳は各ページに併記」は、実際に内訳を描けるときだけ書く（以前は描いていないのに書いていた）
+    lead: `PRはisAdまたは#PRタグのいずれか${chunk.some((b) => prBreakdown(b.q2)) ? '（内訳は各ブランドに併記）' : ''}。`
+      + '「#PR表記なし」はオーガニックを意味しない。',
     accent: brandColor(colorOf(chunk[0] || brands[0] || {})), footerLeft: footer,
   });
   const n = chunk.length;
@@ -213,6 +244,16 @@ function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
       name: clip(val(b.brand_name), 20),
       sub: `PR（isAdまたは#PRタグ）　${val(q.pr_count)} / ${val(q.total_count)}本（${val(q.pr_share)}）`,
     });
+    // 2定義の内訳。定義で比率が大きく変わる軸があるので、付録の約束どおり各ブランドに併記する
+    const bd = prBreakdown(q);
+    if (bd) {
+      s.addText(bd, {
+        x: x + 0.70, y: cardY + 1.40, w: cw - 1.10, h: 0.34,
+        fontFace: T.font.gothic,
+        fontSize: fit(bd, cw - 1.10, 0.34, { base: T.size.caption, min: 9.5, lineHeight: 1.1 }),
+        color: T.color.sub, valign: 'middle',
+      });
+    }
     // 母数を出さないと、n=1 の平均と n=47 の平均が同じ体裁・同じ満尺で並んでしまう
     const prN = Number(String(val(q.pr_count)).replace(/[^0-9]/g, ''));
     const totN = Number(String(val(q.total_count)).replace(/[^0-9]/g, ''));
@@ -240,18 +281,19 @@ function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
 // ───────────────────────────────── Q3 界隈
 function slideQ3(pptx, d, brands, footer, ci, chunks, offset = 0) {
   const s = addSlide(pptx, {
-    ...(() => { const c = conclusionOf(brands, (b) => (b.q3 || {}).insight); return { conclusion: c.head, conclusionSub: c.sub }; })(),
+    ...(() => { const c = conclusionOf(brands, (b) => (b.q3 || {}).insight, headRepeated(brands, ci, chunks)); return { conclusion: c.head, conclusionSub: c.sub }; })(),
     qLabel: `Q3${chunks && chunks.length > 1 ? `-${ci + 1}` : ''}`,
     title: `どんな切り口・界隈で語られているか？${chunks ? pageSuffix(chunks, ci) : ''}`,
-    partTag: PART1, lead: '内容タイプ別のクラスタ。各ブランドの上位3クラスタを掲載。',
+    // 中身は頻出ハッシュタグ（本文の分類ではない）。「内容タイプ」と呼ぶと分類したように読める
+    partTag: PART1, lead: '頻出ハッシュタグ別の集計（ブランド名・PR表記・汎用タグは除く）。各ブランドの上位3タグを掲載。',
     accent: brandColor(colorOf(brands[0] || {})), footerLeft: footer,
   });
-  const head = ['ブランド', '内容タイプ', { text: '本数', align: 'right' },
+  const head = ['ブランド', 'ハッシュタグ', { text: '本数', align: 'right' },
     { text: '平均再生数', align: 'right' }, { text: '平均EG率' }, { text: '平均保存率', align: 'right' }];
   const colW = [3.30, 3.20, 1.15, 2.15, 2.60, 1.85];
 
   const all = [];
-  const PER_BRAND = 3;   // 対ページ間で掲載基準を揃える（CLAUDE.md §5）
+  const PER_BRAND = 3;   // ページ間で掲載基準を揃える
   // バーの満尺は全ブランド共通（分割ページ間で長さを比較できるように）
   (d.brands || brands).forEach((b) => ((b.q3 || {}).clusters || []).slice(0, PER_BRAND)
     .forEach((c) => all.push(pctNum(c.avg_eg))));
@@ -288,7 +330,7 @@ function slideQ3(pptx, d, brands, footer, ci, chunks, offset = 0) {
 // ───────────────────────────────── Q4 商品・タグ
 function slideQ4(pptx, d, chunk, ci, chunks, footer, offset) {
   const s = addSlide(pptx, {
-    ...(() => { const c = conclusionOf(chunk, (b) => (b.q4 || {}).insight); return { conclusion: c.head, conclusionSub: c.sub }; })(),
+    ...(() => { const c = conclusionOf(chunk, (b) => (b.q4 || {}).insight, headRepeated(chunk, ci, chunks)); return { conclusion: c.head, conclusionSub: c.sub }; })(),
     qLabel: `Q4${chunks.length > 1 ? `-${ci + 1}` : ''}`,
     title: `どの商品が、どんな文脈で語られているか？${pageSuffix(chunks, ci)}`,
     partTag: PART1, lead: '頻出ハッシュタグと、名前が出ている商品。',
@@ -332,7 +374,7 @@ function slideQ4(pptx, d, chunk, ci, chunks, footer, offset) {
       // build_input_md は「そのタグを付けた動画数」で数える（同じ動画が同じタグを2回持つ
       // 投稿があり、延べ出現数だと動画数と食い違う）。見出しを「出現数」にすると
       // 表示値と名前が一致しない（#daiso が 32 と表示され、出現数は 34 だった）
-      label: '頻出ハッシュタグ（そのタグを付けた動画数）', body: tags || PLACEHOLDER_DATA, accent: c, bodySize: tagSize,
+      label: '頻出ハッシュタグ（付けた動画数。ブランド名・PR表記は除く）', body: tags || PLACEHOLDER_DATA, accent: c, bodySize: tagSize,
     });
     const sku = [...allSku.slice(0, skuN).map(line), ...more(allSku, skuN)].join('\n');
     addModule(s, {
@@ -415,7 +457,7 @@ function slideQ5(pptx, d, brands, footer) {
       fontFace: T.font.gothic, fontSize: T.size.caption, bold: true, color: T.color.text, valign: 'middle',
     });
     y += 0.42;
-    s.addText(clip(val(v.creator), 16), {
+    s.addText(clip(D.name(v.creator), 16), {
       x, y, w: cw, h: 0.34,
       fontFace: T.font.gothic, fontSize: T.size.bodySm, bold: true, color: T.color.text, valign: 'middle',
     });

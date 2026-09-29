@@ -549,7 +549,18 @@ def save(case_dir, doc):
         json.dump(doc, f, ensure_ascii=False, indent=1)
 
 
+
+def _utf8_stdio():
+    """日本語 Windows のパイプ（cp932）で絵文字入りのキャプションを print すると落ちる。置換して続ける"""
+    for st_ in (sys.stdout, sys.stderr):
+        if hasattr(st_, "reconfigure"):
+            try:
+                st_.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
 def main() -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--case", required=True)
     g = ap.add_mutually_exclusive_group(required=True)

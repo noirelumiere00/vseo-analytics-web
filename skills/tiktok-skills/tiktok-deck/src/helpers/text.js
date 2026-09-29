@@ -1,4 +1,4 @@
-// text.js — 文字量に応じたフォント段階縮小（DESIGN.md §9：詰め込まない）
+// text.js — 文字量に応じたフォント段階縮小（詰め込まない。収まらないものは QA ログへ）
 const T = require('../theme');
 const { stats } = require('./data');
 
@@ -114,6 +114,14 @@ function fitBalanced(text, boxWIn, boxHIn, opts = {}) {
     if (lines <= 1) return size;
     const tail = total - perLine * (lines - 1);
     if (tail >= minTail) return size;          // 最終行に十分な文字が残る
+  }
+  // 下限でも収まらないのに黙って下限を返すと、結論の大見出しが Q ラベル・補足行に重なったまま
+  // QA ログにも何も残らなかった。呼び出し側が warn を渡したときだけ記録する
+  // （初訪のストーリー型は文字数の上限で先に止めているので、ここでは記録を増やさない）
+  if (firstFit === null && opts.warn) {
+    stats.qaFixes.push(
+      `${opts.warn}が下限${min}ptでも収まらない可能性: "${String(text).replace(/\n/g, ' ').slice(0, 30)}…"`
+    );
   }
   return firstFit !== null ? firstFit : min;
 }

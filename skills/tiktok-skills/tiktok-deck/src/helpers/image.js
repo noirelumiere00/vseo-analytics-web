@@ -1,4 +1,4 @@
-// image.js — 画像解決（BUILD_SPEC.md §3-§5）。生成画像による穴埋めは行わない。
+// image.js — 画像解決（案件ディレクトリ基準）。生成画像による穴埋めは行わない。
 const fs = require('fs');
 const path = require('path');
 const { isMissing, stats } = require('./data');

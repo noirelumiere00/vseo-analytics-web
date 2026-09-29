@@ -1,4 +1,4 @@
-// data.js — 欠損判定と表記統一（CLAUDE.md §6：入力にない数値は補完しない）
+// data.js — 欠損判定と表記統一（原則：入力にない数値は補完しない）
 const PLACEHOLDER_DATA = '[DATA NOT PROVIDED]';
 const PLACEHOLDER_IMAGE = '[IMAGE NOT PROVIDED]';
 
@@ -51,7 +51,21 @@ function val(v) {
     stats.missingData += 1;
     return PLACEHOLDER_DATA;
   }
-  return stripMarkdown(scrubAssetNames(String(v).trim()));
+  const s = String(v).trim();
+  // URL は書き換えない。コマ名の置換（12.jpg→「12のコマ」）や * の除去が URL にもかかり、
+  // 口コミの出典リンク（R4 ではハイパーリンク先にもなる）が別の URL に変わっていた
+  if (/^https?:\/\/\S+$/i.test(s)) return s;
+  return stripMarkdown(scrubAssetNames(s));
+}
+
+/** 固有名（投稿者名・ブランド名など）。欠損の扱いは val と同じだが、書き換えない。
+ *  「*MIKA*」「Frame 07 Studio」のような名前が val では別の名前になる */
+function name(v) {
+  if (isMissing(v)) {
+    stats.missingData += 1;
+    return PLACEHOLDER_DATA;
+  }
+  return String(v).trim();
 }
 
 /** 数値は桁区切り。数値化できなければそのまま（欠損はプレースホルダ） */
@@ -76,7 +90,7 @@ function eg(v) {
   return String(v).trim();
 }
 
-/** 仮説文。事実と区別するため接頭辞を付ける（CLAUDE.md §6） */
+/** 仮説文。事実と区別するため接頭辞を付ける */
 function hypothesis(v) {
   if (isMissing(v)) {
     stats.missingData += 1;
@@ -98,7 +112,7 @@ function isPlaceholderText(s) {
   return s === PLACEHOLDER_DATA || s === PLACEHOLDER_IMAGE;
 }
 
-/** ブランドを1ページあたり最大 max 件に分割する（CLAUDE.md §5） */
+/** ブランドを1ページあたり最大 max 件に分割する（ページ間で掲載基準を揃える） */
 function chunkBrands(brands, max) {
   const size = Math.max(1, max || 3);
   const out = [];
@@ -124,4 +138,4 @@ function chunkWithOwn(brands, max = 3, isOwn = () => false) {
 
 module.exports = { colorIndexOf, stripMarkdown,
   PLACEHOLDER_DATA, PLACEHOLDER_IMAGE,
-  stats, isMissing, val, num, eg, hypothesis, padList, isPlaceholderText, chunkBrands, chunkWithOwn };
+  stats, isMissing, val, name, num, eg, hypothesis, padList, isPlaceholderText, chunkBrands, chunkWithOwn };

@@ -17,7 +17,16 @@ const stats = { slides: 0, missingData: 0, missingImage: 0, images: 0,
 const EX_W = 3.05;                          // 右端の実例列
 const MAIN_W = T.content.w - EX_W - 0.55;   // 本体側
 
-function brandColor(i) { return T.brandColors[i % T.brandColors.length]; }
+// 色は7色。剰余で回すと8社目が1色目（自社の赤）に戻り、他社が自社に見える
+// （theme.js が避けたいと書いている事象そのもの）。8社目以降は識別色を持たない灰にし、QA に1行残す
+// （フラグで1回にすると、試し組みの後に QA を巻き戻すため本番のログから消える）
+function brandColor(i) {
+  const n = T.brandColors.length;
+  if (i < n) return T.brandColors[i];
+  const msg = `ブランド・面が${n}を超えたため、${n + 1}番目以降は識別色の無い灰色で描いた（色で区別できない）`;
+  if (!stats.qaFixes.includes(msg)) stats.qaFixes.push(msg);
+  return T.color.bar;
+}
 
 // 絵文字は明朝・ゴシックに字形が無く、書き出すと豆腐（□）になる。表示名からは落とす。
 const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FFFD}]/gu;
@@ -79,7 +88,7 @@ function ratioOf(v, max) {
 /** Q1の実例（そのブランドの再生TOP1）をサムネ＋キャプションにする */
 function exampleOf(b) {
   const e = (b.q1 && b.q1.example) || {};
-  const cap = `${D.val(e.creator)}\nフォロワー${D.val(e.followers)}／${D.val(e.views)}再生・EG${D.val(e.eg)}`;
+  const cap = `${D.name(e.creator)}\nフォロワー${D.val(e.followers)}／${D.val(e.views)}再生・EG${D.val(e.eg)}`;
   return { image: img(e.image_path), caption: cap, url: e.url };
 }
 

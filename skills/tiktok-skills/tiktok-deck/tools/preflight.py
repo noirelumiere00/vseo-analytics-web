@@ -6,6 +6,7 @@
 
 検出するもの:
   [崩れ] 本文領域より下へ出た要素（フッター・ページ番号との衝突）
+  [崩れ] スライドの右端・左端の外へ出た要素（4列目の見出しが右端33in に置かれた事故）
   [崩れ] テキスト枠どうしの重なり
   [漏れ] 切り詰め記号（…）で終わるセル・本文＝文章が途中で消えている
   [漏れ] 空のテキスト枠／プレースホルダ（[DATA NOT PROVIDED] 等）
@@ -35,6 +36,14 @@ from collections import defaultdict
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+# 日本語 Windows ではパイプ・リダイレクト越しの標準出力が cp932 になり、「—」（ページ0の指摘で必ず使う）で
+# UnicodeEncodeError になって終了コード1で落ちていた。崩れ（終了コード1）と区別できないので、表示できない字だけ置き換える
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
     "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
@@ -45,6 +54,7 @@ EMU = 914400.0
 # レイアウトの約束（theme.js と揃える）
 CONTENT_BOTTOM_IN = 10.20
 SLIDE_H_IN = 11.25
+SLIDE_W_IN = 20.0
 # フッターは「実在する要素」から見つける。全ページにあると決め打ちすると
 # 表紙（フッターを持たない）を誤検出する。
 # ページ番号は「NN / NN」。初訪（storySlide.js）は総数が未確定だと「NN / --」を出すので、それも拾う
@@ -276,6 +286,17 @@ def main() -> int:
                     add("重大", page, "フッター衝突",
                         f"要素の下端 {bottom:.2f}in がフッター(上端 {ftop:.2f}in)へ入る "
                         f"「{s['text'][:26]}」")
+
+            # ── 崩れ: 左右へのはみ出し。下端しか見ていなかったため、表の列が右端の外
+            # （33.85in）に置かれ、その列のデータが描かれていなくても通っていた
+            for s in shapes:
+                if s["kind"] == "sp" and not s["text"].strip():
+                    continue                      # 文字の無い図形（罫線・背景）は対象外
+                right = s["x"] + s["w"]
+                if right > SLIDE_W_IN + 0.02 or s["x"] < -0.02:
+                    add("致命的", page, "スライド外",
+                        f"要素がスライドの左右の外へ出る 左端 {s['x']:.2f}in／右端 {right:.2f}in"
+                        f"（幅 {SLIDE_W_IN}in）「{s['text'][:26] or '画像'}」")
 
             # ── 崩れ: テキスト枠の重なり
             for i in range(len(body)):
@@ -517,7 +538,17 @@ def main() -> int:
                 # カードが減るのは縮退として正常なこともある。止めないが、必ず目に入れる
                 add("情報", int(fm.group(1)), "FVカード不足", t)
                 continue
-            if "可能性" in t:
+            if t.startswith("補足行に入らず非掲載"):
+                # その文は紙面に載っていない（SKILL.md「前検」）。情報に置くと既定の表示で隠れ、
+                # 終了コード0のまま所見の一部が消えた資料が出ていた。短く書き直すまで止める
+                add("重大", 0, "補足行の非掲載", t)
+            elif t.startswith("章の欠落"):
+                # モードが含む章を、入力が無いため出していない。止めないが必ず目に入れる
+                add("情報", 0, "章の欠落", t)
+            elif t.startswith("表セルを"):
+                # 読める字で要点を出すための意図的な切り詰め。止めないが、隠さず毎回見せる
+                add("情報", 0, "表セルの切り詰め", t)
+            elif "可能性" in t:
                 add("情報", 0, "生成時のQA警告(要目視)", t)
                 maybe += 1
             elif "収まらない" in t or "スライド外" in t:
@@ -556,7 +587,8 @@ def main() -> int:
     print(f"  致命的 {counts['致命的']} / 重大 {counts['重大']} / 情報 {counts['情報']}\n")
     # 情報のうち、人が手を動かさないと閉じないものは既定でも必ず出す。
     # --json の中に隠すと、目視の宿題が誰にも渡らないまま提出される
-    ALWAYS_SHOW = ("目視の宿題", "生成ログなし", "FVカード不足", "付録が足りない")
+    ALWAYS_SHOW = ("目視の宿題", "生成ログなし", "FVカード不足", "付録が足りない",
+                   "章の欠落", "表セルの切り詰め")
     for f in findings:
         if f["severity"] == "情報" and f["kind"] not in ALWAYS_SHOW:
             continue

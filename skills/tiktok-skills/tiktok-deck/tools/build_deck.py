@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """モジュールを選んで資料の中身を組み立てる（FMT）。
 
+※ 今の位置づけ（2026-09）: tiktok-intake の gaps.py が「不足入力の検出」に呼ぶ道具。
+  出力の deck_spec.json は PPTX の生成には使われない。資料にどの章が載るかの正本は
+  src/generate.js の MODES と SKILL.md「ステータスと章」の表で、modules.json の章割り
+  （例: 初訪に 2-1・3-3 が入る）とは一致しない。初訪は tools/build_first_visit.py で作る。
+  章の有無をここで判断して資料を語らないこと。
+
 従来は「初回版／詳細版／統合版」の固定3種しか出せなかった。
 本スクリプトは modules.json のモジュール定義（①〜⑥ / 1-1〜6-3）を読み、
 **必要な章だけ**を選んで資料仕様（deck_spec.json）を組み立てる。
@@ -75,7 +81,7 @@ def detect_inputs(run_dir: Path):
             except json.JSONDecodeError:
                 continue
             # status!=ok は「解析対象外」。未計測と混ぜると分母が食い違う
-            # （02-analyze は ok だけを数え、こちらが全件を数えていた）。
+            # （tiktok-analyze は ok だけを数え、こちらが全件を数えていた）。
             if sg.get("status") == "ok":
                 signals.append(sg)
             else:

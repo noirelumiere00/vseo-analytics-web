@@ -23,7 +23,8 @@ const EX_X = T.slide.w - T.margin.r - EX_W;
 // 表の1セルに入れるのはキャプション全文ではなく、タグを落とした先頭の実文だけ。
 // ハッシュタグの途中で切れると打ち間違いに見えるので、タグは丸ごと落とす
 function captionGist(cap) {
-  const t = String(D.val(cap));
+  // 投稿本文は書き換えない（val はコマ名の置換や * の除去をかけるため、本文が別の文になる）
+  const t = String(D.name(cap));
   if (D.isPlaceholderText(t)) return t;
   // タグを丸ごと落として実文だけ残す。先頭からタグが並ぶ投稿もあるため
   // 「最初の#まで」ではなく全タグを除去する
@@ -60,7 +61,7 @@ function slideKwHead(pptx, kw, ki, footer) {
   const maxEg = Math.max(...rows0.map((h) => pctNum(h.eg)).filter((v) => v !== null), 0.01);
   const rows = rows0.map((h) => [
     { text: val(h.rank), align: 'right' },
-    { text: clip(val(h.creator), 13), url: h.url }, clip(captionGist(h.caption), 22), val(h.tier),
+    { text: clip(D.name(h.creator), 13), url: h.url }, clip(captionGist(h.caption), 22), val(h.tier),
     { text: num(h.views), align: 'right' },
     // バーはブランド識別色を使わない（赤＝自社の色が他社投稿のバーに出て意味が入れ替わる）
     { text: val(h.eg), bold: true, bar: { ratio: ratioOf(pctNum(h.eg), maxEg), color: T.color.bar } },
@@ -97,7 +98,7 @@ function slideKwHead(pptx, kw, ki, footer) {
   addExampleColumn(s, {
     x: EX_X, y: T.content.top, w: EX_W, imgH: 4.55, title: '上位の実例',
     image: img(top.image_path),
-    caption: `${val(top.creator)}\n検索${val(top.rank)}位／${val(top.views)}再生・EG${val(top.eg)}\n保存率${val(top.save_rate)}`,
+    caption: `${D.name(top.creator)}\n検索${val(top.rank)}位／${val(top.views)}再生・EG${val(top.eg)}\n保存率${val(top.save_rate)}`,
     url: top.url,
     bottom: T.content.bottom - insightHeight(body, opt) - 0.24,
   });
@@ -140,7 +141,7 @@ function slideKwSaves(pptx, kw, ki, footer, d) {
   const rows0 = (kw.saveTop || []).slice(0, 5);
   const maxSr = Math.max(...rows0.map((v) => pctNum(v.save_rate)).filter((v) => v !== null), 0.01);
   const rows = rows0.map((v) => [
-    { text: val(v.rank), align: 'right' }, { text: clip(val(v.creator), 12), url: v.url }, clip(captionGist(v.caption), 18),
+    { text: val(v.rank), align: 'right' }, { text: clip(D.name(v.creator), 12), url: v.url }, clip(captionGist(v.caption), 18),
     val(v.media),
     { text: num(v.views), align: 'right' }, { text: num(v.saves), align: 'right' },
     { text: val(v.save_rate), bold: true, bar: { ratio: ratioOf(pctNum(v.save_rate), maxSr), color: brandColor(ki) } },
@@ -158,23 +159,22 @@ function slideKwSaves(pptx, kw, ki, footer, d) {
     // 「保存TOP1」だと本文の保存率1位（別投稿）と同じラベルになり、0.51%と1.40%が矛盾して見える
     x: EX_X, y: T.content.top, w: EX_W, imgH: 4.55, title: '保存率1位',
     image: img(top.image_path), url: top.url,
-    caption: `${val(top.creator)}\n保存${val(top.saves)}（${val(top.save_rate)}）\nEG${val(top.eg)}／#PR ${val(top.is_pr)}`,
+    caption: `${D.name(top.creator)}\n保存${val(top.saves)}（${val(top.save_rate)}）\nEG${val(top.eg)}／#PR ${val(top.is_pr)}`,
     bottom: T.content.bottom - 0.20,
   });
-  // ブランド別の本数。自社が0本でも必ず末尾に出す（3面で扱いを揃え、不在を明示する）
-  // 社名の既定値をコードに置かない（無い案件で前の案件の社名が別の資料に出る）
-  const own = String(D.val(((d.clients || [])[0] || {}).client_name) || '').trim()
-    || String(D.val((((d.clients || [])[0] || {}).brands || [])[0] || {}).brand_name || '').trim();
+  // ブランド別の本数。自社が0本でも全社を並べるので、自社の行は必ず出る（3面で扱いを揃え、不在を明示する）。
+  // 以前は client_name（社名）を自社として別に足していたため、社名とブランド名が違う案件で
+  // 実在しない「株式会社◯◯ 0本」が足され、同じ資料の Q6総括の値と食い違った。行は brands だけから作る
   // 上位5件で切ると面ごとに欠けるブランドが変わり、3面で扱いが揃わない。全社を本数降順で出す
   const known = (((d.clients || [])[0] || {}).brands || []).map((b) => val(b.brand_name));
+  // 本数が無いブランドを 0 と書かない（build_input_md は全ブランドの行を出すので、無いのは入力の欠け）
   const got = new Map((kw.brandExposure || []).map((x) => [val(x.brand), val(x.count)]));
-  const exp = known.map((b) => ({ b, c: got.has(b) ? got.get(b) : '0' }))
+  const exp = known.map((b) => ({ b, c: got.has(b) ? got.get(b) : D.PLACEHOLDER_DATA }))
     .sort((p1, p2) => (parseInt(p2.c, 10) || 0) - (parseInt(p1.c, 10) || 0));
-  if (!exp.some((x) => String(x.b).includes(own))) exp.push({ b: own, c: '0' });
   // 1ブランド1行だと5社で5行になり、行間1.5では9ptでも枠に入らない（フッターへ潜る）。
   // 横並びにすれば同じ情報が1〜2行で収まり、順位の比較もしやすい
-  const be = exp.map((x) => `${x.b} ${x.c}本`).join('　／　');
-  s.addText('この面のブランド別本数（自社を含む）', {
+  const be = exp.map((x) => (D.isPlaceholderText(x.c) ? `${x.b} ${x.c}` : `${x.b} ${x.c}本`)).join('　／　');
+  s.addText('この面でブランド名を含む投稿の本数（自社を含む）', {
     x: T.margin.l, y: afterTable, w: MAIN_W, h: 0.36,
     fontFace: T.font.gothic, fontSize: T.size.moduleLabel, bold: true, color: brandColor(ki),
   });
@@ -212,8 +212,10 @@ function slideKwSummary(pptx, d, footer) {
   })();
   const head = ['検索ワード', '取得本数', { text: '#PR率', align: 'right' },
     { text: `保存率${basis}` },
-    '保存を集めていた型', { text: '自社露出', align: 'right' }];
-  const colW = [3.05, 3.40, 1.45, 2.95, 5.55, 1.30];
+    // 数えているのは「本文・タグに自社ブランド名を含む投稿」（第三者の投稿を含む）。
+    // 「自社露出」と書くと公式アカウントの露出と読まれる（status-output-spec が戒める取り違え）
+    '保存を集めていた型', { text: '自社名を含む投稿', align: 'right' }];
+  const colW = [3.05, 3.40, 1.45, 2.95, 4.85, 2.00];   // 右端の見出しが長くなったぶん「型」の列から回す
   const maxSv = Math.max(...rows0.map((r) => pctNum(r.avg_save_rate)).filter((v) => v !== null), 0.01);
   const rows = rows0.map((r, i) => [
     val(r.keyword), val(r.total_count), { text: val(r.pr_share), align: 'right' },

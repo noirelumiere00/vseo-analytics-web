@@ -1,6 +1,6 @@
 ---
 name: tiktok-deck
-description: TikTok検索面の取得データから、営業ステータス別の提案資料（PPTX）を作る。初訪（約8枚・画像＋ワンフレーズのストーリー型。カテゴリで伸びている型と競合の発信の2軸）／具体提案／構成提案／競合差再提案／レポート。初訪は投稿を固定語彙から選んで分類（選択式）し、関連を確認した投稿だけを例に使う。二次提案以降は組み合わせて出力できる。動画をダウンロードしてコマ単位で構成を解剖し、そのコマをAIが実際に見て所見を書く。提出前に版面の崩れ・画像とキャプションのズレ・資料内の数値矛盾を機械で検査する。「TikTokの提案資料を作って」「初訪資料にして」「競合差の再提案を出して」等で発動。取得は tiktok-acquire、計測は tiktok-analyze が担当する。
+description: TikTok検索面の取得データから、営業ステータス別の提案資料（PPTX）を作る。初訪（約8枚・画像＋ワンフレーズのストーリー型。カテゴリで伸びている型と競合の発信の2軸）／具体提案／構成提案／競合差再提案（レポート＝施策前後比較は未実装で、指定するとエラーで止まる）。初訪は投稿を固定語彙から選んで分類（選択式）し、関連を確認した投稿だけを例に使う。二次提案以降は組み合わせて出力できる。動画をダウンロードしてコマ単位で構成を解剖し、そのコマをAIが実際に見て所見を書く。提出前に版面の崩れ・画像とキャプションのズレ・資料内の数値矛盾を機械で検査する。「TikTokの提案資料を作って」「初訪資料にして」「競合差の再提案を出して」等で発動。取得は tiktok-acquire、計測は tiktok-analyze が担当する。
 ---
 
 
@@ -144,6 +144,7 @@ Copy-Item C:\path\to\*.json raw\
 スキル本体に案件データを混ぜないため。
 
 `case.json` に「誰を・何で検索したか」を書く。**数値は書かない**（機械が数える）。
+（初訪用に作った case.json をそのまま使える。二次提案で使うのは下の欄）
 
 ```json
 {
@@ -159,6 +160,15 @@ Copy-Item C:\path\to\*.json raw\
 `acquisition` は取得ログの終わり方を記録する。付録の「母数が確定しているか」の記述がここから出る。
 値は `exhausted`（検索が終端を返した）／`no_new`（同じ結果が返り続けて打ち切り）／
 `capped`（取得上限）／`unknown`（ログ無し）。**本数のしきい値で推測しない。**
+書いていない軸は `unknown`（母数未確定）になる（取得JSONに `stop_reason` があればそれを使う）。
+
+- `own: true` は**ちょうど1ブランド**。自社の強調・自社露出・口コミの自社行はすべてこれで決まる
+  （`client_name` は社名でよい。自社の判定には使わない）。無ければ自社露出は `[DATA NOT PROVIDED]` で出る
+- `match` は本文・タグに対する正規表現。**取得した投稿に1件も当たらないと止まる**
+  （以前は黙って全件をそのブランドとして数えていた）。全件を使うなら `"match": ""`
+- 取得JSONの `order_basis` が `search_display_order` 以外（tiktok-acquire の `--sessions 2` 以上）の軸は止まる。
+  並びが検索の表示順ではなく、順位として使えないため。その軸は `--sessions 1` で取り直す
+- 軸の中の同じ動画IDは1本にまとめる（件数を表示する）。別の軸に同じ動画が出るのは正常で、それぞれで数える
 
 ---
 
@@ -180,9 +190,35 @@ python3 tools/extract_frames.py --media-dir media/ --out frames/
 
 **時間の空白が6秒を超えると終了コード1で落ちる。** その動画は「全コマを見た」と書けない。
 
-出力の `contact.jpg` が一覧シート。**AIはまずこれを1枚見て全体構成を掴む。**
+出力は `frames/<動画ID>/001.jpg, 002.jpg …`（3桁・001から）と `frames.json`（尺・時刻）、`contact.jpg`。
+`contact.jpg` が一覧シート。**AIはまずこれを1枚見て全体構成を掴む。**
 
 静止画カルーセルはコマ送りが無いため解剖の対象外。**紙面にその旨を明記する。**
+
+### 解剖する動画の宣言（video_manifest.json）
+
+どの動画を解剖し、紙面にどのコマを並べるかを案件直下の `video_manifest.json` に書く。
+**これが無いと PART「実際に動画を確認する」（Q7/Q8）は1枚も出ない。**
+
+```json
+[
+  { "brand_id": "brand_01", "video_no": "video_01", "video_id": "7500005383427972088",
+    "sb_frames": "001/004/009/013/018" }
+]
+```
+
+| キー | 必須 | 中身 |
+|---|---|---|
+| `brand_id` | ○ | `brand_01` の形。case.json の `brands` の並び順 |
+| `video_no` | ○ | `video_01` の形。authored.md の対象 `brand_01/video_01` になる |
+| `video_id` | ○ | 動画ID。`frames/<video_id>/` と raw の同じ動画を引く |
+| `sb_frames` | ○ | 紙面に並べるコマ番号（`frames/<video_id>/` のファイル名。最大5つ、`/` 区切り） |
+| `url` `creator` `title_src` | 任意 | 無ければ raw から引く |
+
+- 再生・保存率・EG は **raw から動画IDで引く**（手書きしない）。raw に無い動画だけ manifest の `views` `save_rate` `eg` を使う
+- コマ数・範囲・尺は `frames/<video_id>/` と `frames.json` から数える
+- 画像は `frames/<video_id>/<番号>.jpg` をそのまま使う（写しは要らない。`verify_assets.py` がコマ番号まで照合する）
+- 形が違う（必須キーが無い・番号の形が違う・brand_id が無い）ときは、どの行の何が悪いかを出して止まる
 
 ---
 
@@ -193,9 +229,11 @@ OCR や音声認識は使わない（環境依存を増やさないため）。*
 ### 手順
 
 1. `frames/<video_id>/contact.jpg` を開いて全体構成を掴む
-2. 気になるコマを原寸（`000.jpg` 等）で開く
-3. `authored.md` に**必須8軸**を書く
+2. 気になるコマを原寸（`001.jpg` 等）で開く
+3. `authored.md` に**必須8軸**を `## FIELD brand_01/video_01 <キー>` の形で書く
    フック(0〜3秒)／視覚演出／テロップ／価格・スペック／商品識別／CTA／勝因仮説／本質1行
+   （キー名は `merge_authored.py --list-keys`。紙面のコマの見出しは `sb1_label` 〜 `sb5_label` に
+   `001: 冒頭で手元の実物を見せる` のように**コマ番号から**書く。番号がずれると `verify_assets` が止める）
 
 ### 守ること
 
@@ -218,13 +256,20 @@ OCR や音声認識は使わない（環境依存を増やさないため）。*
 ## 4〜5. INPUT.md と生成
 
 ```bash
-python3 tools/build_input_md.py --case .     # 機械欄（数値）
+python3 tools/fetch_covers.py --case . --top 1000   # カバーを assets/covers/<動画ID>.jpg に（全投稿）
+python3 tools/build_input_md.py --case .     # 機械欄（数値）。カバーは動画ID名の画像を優先して使う
 # authored.md に散文を書く
 python3 tools/merge_authored.py --case .     # 機械欄＋散文 → INPUT.md
 node src/generate.js --case . --mode 具体提案
 ```
 
+カバーは順位ではなく**動画ID名**で持つ（順位名の画像は順位の決め方が変わると別人の投稿に付く）。
+`labels.json`（初訪のラベル）がある案件では `fetch_covers.py` がラベルの投稿しか取らないので、
+二次提案で `[IMAGE NOT PROVIDED]` が残ったら、どの投稿の画像が無いかを `generation_log*.md` で確かめる。
+
 **数値は機械欄、散文は authored.md。** 混ぜると再生成のたびに散文が消える（実際に失った）。
+`merge_authored.py` は INPUT.md に合成の印を付け、**前回の合成のあとで INPUT.md が手で直されていたら止まる**
+（直した散文を authored.md へ移してから再実行。捨ててよいときだけ `--force`）。
 
 ### authored.md の書き方（ここを外すと1行も反映されない）
 
@@ -242,18 +287,20 @@ node src/generate.js --case . --mode 具体提案
 ...
 ```
 
-`<対象>` は `brand_01` のようなブランド番号、`kw_01` のようなキーワード番号、
-または全体にかかるものは `global`。
+`<対象>` は次のどれか（`global` という対象は無い）。
 
-主なキー名。
+| 対象 | 主なキー名 | 何を書くか |
+|---|---|---|
+| `brand_01` | `q1_insight` 〜 `q5_insight` | 各設問ページの発見（1文目が大見出し、残りは補足行） |
+| `brand_01` | `q4_products` | 名前が出ている商品（1行1商品） |
+| `brand_01/top_01` | `content_summary` | Q5 の上位投稿の中身を一言 |
+| `brand_01/video_01` | `hook_0_3_sec` `visual_killer` `text_note` `price` `brand_exposure` `cta` `success_or_failure_hypothesis` `one_line_essence` `sb1_label`〜 | 解剖した動画の8軸とコマの見出し |
+| `kw_01` | `head_insight` `save_pattern` `cluster_mix` `composition_insight` `save_type` | 検索ワード面 |
+| `kw_cross` | `whitespace` | 検索ワード横断の空白地帯（Q6総括の結論） |
 
-| キー名 | 何を書くか |
-|---|---|
-| `q1_insight` 〜 `q5_insight` | 各設問ページの発見 |
-| `head_insight` | 検索上位に何が出ているか |
-| `save_pattern` | 保存されている投稿の共通点 |
-| `cluster_mix` | 話題の内訳についての読み |
-| `composition_insight` | 動画の構成から言えること |
+示唆（KEEP/IMPROVE/TRY・結論）、Q8、勝ちパターン、口コミ、他プラットフォーム、検索ワード面の動画解剖は
+キーではなく `## APPEND <名前>` の下に**見出しごと**書く。雛形は `--list-keys` の末尾に出る
+（見出しの形を変えると読まれず、その欄が `[DATA NOT PROVIDED]` のまま残る）。
 
 **使えるキー名は必ずこれで確認してください。** 記憶で書くと0件になります。
 
@@ -261,18 +308,31 @@ node src/generate.js --case . --mode 具体提案
 python3 tools/merge_authored.py --case . --list-keys
 ```
 
-動画1本ごとの8軸（フック・視覚演出・テロップ・価格・商品識別・CTA・勝因仮説・本質1行）は、
-`authored.md` ではなく **INPUT.md の VIDEO ANALYSIS 節に直接書きます**。
-ここだけ流し込みの仕組みを通りません。
+動画1本ごとの8軸も上の `brand_01/video_01` で authored.md に書く。**INPUT.md に直接書かない**
+（以前はそう案内していたが、次の合成で全部消えた）。
 
 流し込んだあと、必ず「流し込んだ散文: N 欄」の N を見ること。0 なら書式が合っていない。
 
-### 02-analyze の計測を資料に載せる
+### 口コミ章（# REVIEWS）— 具体提案・競合差再提案
 
-`02-analyze` を回した案件では、その run ディレクトリを渡す。
+口コミ章を含むステータス（具体提案・競合差再提案）では、先に `review-scraper` で口コミを取る。
+`INPUT.md` の `# REVIEWS` は変換ツールではなく、review-scraper の出力（`summary.md`・`reviews.csv`）を読んで
+authored.md の `## APPEND REVIEWS` に書く。
+
+- 件数・評価は `summary.md` から。評価は「平均（元の段階）」の数字をそのサイトの満点のまま（5段階換算しない）
+- Love／Churn（理由｜言及数）・Quotes（原文｜出典URL）・ACTIONS（離脱理由｜打ち手）は口コミを読んで書く
+- 媒体名の既定は @cosme / LIPS。**LIPS は review-scraper では取れない**ので、楽天・Yahoo! を使うなら
+  `media_a_label`・`media_b_label` を書き換え、各媒体の満点を `scale_note` に必ず書く（無いと R5 に欠損が出て前検で止まる）
+- 手順と欄の対応は `review-scraper/SKILL.md` の「tiktok-deck の口コミ章（`# REVIEWS`）に使うとき」
+
+`# REVIEWS` が無いまま口コミ章を含むモードで生成すると、章を出さずに `generation_log*.md` に「章の欠落」を残す。
+
+### tiktok-analyze の計測を資料に載せる
+
+`tiktok-analyze` を回した案件では、その run ディレクトリを渡す。
 
 ```bash
-python3 tools/build_input_md.py --case . --analyze-run <02-analyze の run ディレクトリ>
+python3 tools/build_input_md.py --case . --analyze-run <tiktok-analyze の run ディレクトリ>
 ```
 
 省略しても止まらない。案件内の `analyze_run/` `analyze/` `measurement/` を自動で探し、
@@ -295,19 +355,31 @@ python3 tools/build_input_md.py --case . --analyze-run <02-analyze の run デ�
 | Q1 誰が / Q2 PR比 | ○ | ✗ | ○ |
 | Q3 クラスタ / Q4 商品 | ○ | ✗ | ○ |
 | Q5 上位投稿 | ○ | ○ | ○ |
-| Q6 検索ワード面 | ○ | ✗ | ○ |
-| Q7/Q8 動画の構成解剖 | ○ | ○ | ✗ |
-| 口コミ / 他プラットフォーム | ○ | ✗ | ○ |
-| 勝ちパターン | ○ | ○ | ✗ |
-| 実測の枚数（5社の案件） | 43枚 | 32枚 | 26枚 |
+| 全ブランド横断サマリー | ○ | ✗ | ○ |
+| Q6 検索ワード面（上位・保存率上位・横断） | ○ | ✗ | ○ |
+| 言及回数（tiktok-analyze の計測がある案件だけ） | ○ | ○ | ○ |
+| Q7/Q8 動画の構成解剖（video_manifest.json がある案件だけ） | ○ | ○ | ✗ |
+| 検索ワード面の動画解剖（`# KEYWORD VIDEO ANALYSIS` がある案件だけ） | ○ | ○ | ✗ |
+| 口コミ（`# REVIEWS`）/ 他プラットフォーム（`# OTHER PLATFORMS`） | ○ | ✗ | ○ |
+| 勝ちパターン（`### Winning Patterns` がある案件だけ） | ○ | ○ | ✗ |
+| 実測の枚数（5社の案件・2026-09 改修前） | 43枚 | 32枚 | 26枚 |
 
-- 組み合わせ可：`--mode "具体提案,競合差再提案"`（章は和集合）。初訪は組み合わせない
+表は `src/generate.js` の MODES（q1q2 / q3 / q4 / q5 / allBrandSummary / kwHead・kwSaves / mentions /
+videoAnatomy / kwVideos / reviews・platforms / patterns）と同じ。変えるときは両方を直す。
+
+- 枚数は改修前の実測。構成提案は Q1/Q2/Q6 を外したので少なくなり、口コミ・他プラットフォームには章扉が1枚ずつ付く
+- 組み合わせ可：`--mode "具体提案,競合差再提案"`（章は和集合）。初訪は組み合わせない（終了コード2）
 - 別名：`deep`=具体提案（`quick`=初訪）
-- **未知の名前はエラーで止まる**（黙って全ページ出さない）
-- **レポートは基準データ（`baseline_period`）が無いとエラーで止まる。**
-  後から取った値を施策前と偽らないため
+- モードは `--mode` → 環境変数 `DECK_MODE` → case.json の `settings.deck_mode` → INPUT.md の `deck_mode` の順に見る。
+  **未知の名前はエラーで止まる**（黙って全ページ出さない）
+- **レポート（施策前後比較）は未実装で、指定するとエラーで止まる。** 比較のページが無いまま出すと、
+  後から取った現状を「効果測定」と偽ることになるため（施策前の基準データは同じ条件で取って保存しておく）
+- **章の並びは固定**：PART 検索面の実態 → 検索ワード → 他プラットフォーム → 口コミ → 動画の構成解剖 → 総括・示唆 → 付録
+  （営業ステータスでは ①現状 → ⑤競合差 → ⑥クチコミ → ②方向性 → ③実行案）。`--mode` の書き順には従わない。
+  PART の番号は載せた章の順に振る（競合差再提案で 1→2→4 と飛ばない）
 
-表紙・手法・章扉・次アクションの文言もステータスに連動する。
+表紙・手法・章扉・次アクションの文言もステータスと**中身の有無**に連動する。
+検索ワード0件なら Q6 を、解剖0本なら Q7/Q8・「実動画を取得」を書かない。
 **載せない章を「明らかにする」と書かないため。**
 
 ---
@@ -318,23 +390,31 @@ python3 tools/build_input_md.py --case . --analyze-run <02-analyze の run デ�
 python3 tools/preflight.py output/<file>.pptx      # 版面の崩れ・資料内の矛盾
 python3 tools/verify_assets.py --case .            # 画像とキャプションのズレ
 python3 tools/render_pptx_any.py output/<file>.pptx render_out 130   # 画像化
+python3 tools/render_pptx_any.py output/<file>.pptx output 130 --keep-pdf   # 配布用 PDF も残す（最後の行に {"pdf_ok": true, "pdf_path": …} の JSON）
 ```
+
+PDF は generate.js では作らない（`--pdf` を渡しても出ない。注意を出す）。配布用 PDF は `--keep-pdf` で作る。
+
+Windows（PowerShell）では `python3` を `py -3` に、`echo $?` を `echo $LASTEXITCODE` に読み替える
+（PowerShell の `$?` は真偽値で、終了コードではない）。
 
 **提出ゲートは2本とも通ること。どちらかが落ちたら出さない。**
 
 - `preflight` が「致命的0／重大0」
-- `verify_assets` が **終了コード0**（`tail` 越しだと 0 に見えるので、必ず `echo $?` で確かめる）
+- `verify_assets` が **終了コード0**（`tail` 越しだと 0 に見えるので、必ず `echo $?`（PowerShell は `$LASTEXITCODE`）で確かめる）
 
 `verify_assets` が拾うのは「キャプションと違う投稿の画像が貼られている」事故で、目視では気づけない。実際に納品済みの資料で、別クリエイターの投稿に他人の画像が付いたまま出ていた例がある。
 
 | 検査 | 捕まえるもの |
 |---|---|
-| `preflight` | 文字のスライド外・フッター衝突・図形の重なり・未解決トークン・**同じ数値が別ページで最高とも最低とも語られている矛盾**・平均と中央値の取り違え |
+| `preflight` | 文字のスライド外（下端・左右）・フッター衝突・図形の重なり・未解決トークン・**同じ数値が別ページで最高とも最低とも語られている矛盾**・平均と中央値の取り違え・補足行の非掲載（生成ログ） |
 | `verify_assets` | 同じ動画を指す画像の食い違い・別動画の画像の使い回し・**コマ番号とバッジのズレ**・PPTXに案件外の画像が混入 |
 | 画像化 → 目視 | 上2つで拾えない読みにくさ |
 
-`generation_log.md` の QA警告も必ず読む。**「補足行に入らず非掲載」が出ていたら、
-その文は紙面に載っていない。**短く書き直す。
+生成ログ（`output/generation_log{接尾辞}.md`。具体提案は `generation_log.md`、構成提案は `generation_log_構成.md` 等。
+preflight は PPTX の名前から対応するログを読む）の QA警告も必ず読む。
+**「補足行に入らず非掲載」は preflight で重大になる。その文は紙面に載っていないので、短く書き直す。**
+「表セルを◯字分切り詰めた」「章の欠落」は止まらないが毎回表示されるので、意図どおりか確かめる。
 
 ---
 
@@ -347,6 +427,9 @@ python3 tools/render_pptx_any.py output/<file>.pptx render_out 130   # 画像化
 | 同じ数値が2か所で食い違う | 散文に数値を書いた | 数値は機械欄のみ |
 | 画像がキャプションと違う | 画像がランク名（top01.jpg）で保存され、順位が変わった | `verify_assets.py` が検出する |
 | 「全部見た」と書けない | コマの時間カバーが足りない | `extract_frames.py` が終了コード1で止める |
+| build_input_md が order_basis で止まる | `--sessions 2` 以上で取得した軸（並びが表示順ではない） | その軸を `--sessions 1` で取り直す |
+| build_input_md が match で止まる | 正規表現が本文・タグに1件も当たらない | 表記ゆれ・英字表記を足す |
+| Q7/Q8 が1枚も出ない | `video_manifest.json` が無い | 「2. 動画とコマの抽出」の形で書く |
 
 ---
 
@@ -359,4 +442,5 @@ python3 tools/render_pptx_any.py output/<file>.pptx render_out 130   # 画像化
 | コマ抽出・AI目視・資料化・前検 | **本スキル** |
 | 営業からのヒアリングとステータス判定 | `tiktok-intake` |
 
-旧 python-pptx 方式は `legacy/v1-python-pptx/` に退避してある。
+`tools/build_deck.py`・`tools/modules.json` は tiktok-intake（gaps.py）が不足入力の検出に使う道具で、
+資料の章は決めない。章の正本は `src/generate.js` の MODES と上の「ステータスと章」の表。

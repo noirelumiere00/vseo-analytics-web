@@ -1,6 +1,6 @@
 // imageBox.js — 画像の実寸を読み、枠内に縦横比を保って収める箱を返す。
 // pptxgenjs の sizing:'contain' は書き出し結果に反映されなかったため、こちらで座標を決める。
-// BUILD_SPEC §7「縦横比の破壊」禁止に対応する。
+// 縦横比を壊さない（tools/preflight.py が「縦横比」として検査する）。
 const fs = require('fs');
 
 const cache = new Map();

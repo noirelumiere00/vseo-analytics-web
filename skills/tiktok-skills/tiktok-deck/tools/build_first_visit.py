@@ -1024,7 +1024,18 @@ document.getElementById('cp').onclick=()=>{{
         pass
 
 
+
+def _utf8_stdio():
+    """日本語 Windows のパイプ（cp932）で絵文字入りのキャプションを print すると落ちる。置換して続ける"""
+    for st_ in (sys.stdout, sys.stderr):
+        if hasattr(st_, "reconfigure"):
+            try:
+                st_.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
 def main() -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--case", required=True)
     ap.add_argument("--dry-run", action="store_true", help="何も書かない")

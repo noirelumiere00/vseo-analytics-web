@@ -1,5 +1,6 @@
 // inputParser.js — INPUT.md を構造化データへ変換する
-// INPUT_TEMPLATE.md の見出し階層を前提とし、存在しないセクションは欠損として扱う（落ちない）。
+// 見出し階層は tools/build_input_md.py の出力と、authored.md の APPEND ブロック
+// （雛形は `python3 tools/merge_authored.py --list-keys`）が正。存在しないセクションは欠損として扱う（落ちない）。
 const fs = require('fs');
 
 const PLACEHOLDER_DATA = '[DATA NOT PROVIDED]';
@@ -47,7 +48,9 @@ function items(node) {
     if (!m) m = /^\s*-\s+(.*)$/.exec(line);
     if (!m) continue;
     const v = m[1].trim();
-    if (/^[A-Za-z0-9_]+\s*:/.test(v)) continue; // key: value 形式は除外
+    // key: value 形式（小文字の snake_case キー）だけを除く。英数字なら何でも除いていたため、
+    // 「- CTA: 最後に保存を促す」「- PR: 表記ありを検証」のような本文の項目が KEEP/TRY から黙って消えた
+    if (/^[a-z0-9_]+\s*:/.test(v)) continue;
     if (v) out.push(v);
   }
   return out;
@@ -95,7 +98,7 @@ function parseTiers(q1node) {
 }
 
 // VIDEO ANALYSIS 配下では `###### VIDEO 01` と `###### Images` `###### Hook` … が
-// 同じ見出しレベルで並ぶ（INPUT_TEMPLATE.md の構造）。そのため親子ではなく
+// 同じ見出しレベルで並ぶ（build_input_md.py が出す構造）。そのため親子ではなく
 // 「次の VIDEO 見出しが来るまで」を1本分としてまとめる。
 function groupVideoNodes(vaNode, head = 'VIDEO') {
   const groups = [];
@@ -159,6 +162,8 @@ function parseBrand(node) {
   return {
     brand_id: b.brand_id || node.title,
     brand_name: b.brand_name,
+    // 自社の判定は case.json の brands[].own（build_input_md が is_own で運ぶ）を正にする
+    is_own: b.is_own === undefined ? undefined : String(b.is_own).trim().toLowerCase() === 'true',
     company_name: b.company_name,
     search_keyword: b.search_keyword,
     total_video_count: b.total_video_count,
@@ -258,7 +263,6 @@ function parseCrossAnalysis(node, clientName) {
     lowEg: items(child(c, 'Low EG')),
     patterns,
     final_message: kv(child(c, 'Final Message'))['final_message'],
-    final_message: kv(child(c, 'Final Message'))['final_message'],
     keep: items(child(finalRoot, 'KEEP')),
     improve: items(child(finalRoot, 'IMPROVE')),
     try: items(child(finalRoot, 'TRY')),
@@ -281,7 +285,7 @@ function parse(mdPath) {
     return { ...basic, client_id: basic.client_id || cn.title, brands };
   });
 
-  // 02-analyze の計測結果（動画の中で何回言われたか）。
+  // tiktok-analyze の計測結果（動画の中で何回言われたか）。
   // セクションが無い＝未計測。null にせず status を持たせて、
   // 「測っていない」を「0回」と読ませない（付録に必ず出す）
   const mentionsRoot = child(root, 'MEASURED MENTIONS');
@@ -348,8 +352,10 @@ function parse(mdPath) {
         String(settings.individual_video_page_per_video).toLowerCase() !== 'false',
       allow_generated_images: String(settings.allow_generated_images).toLowerCase() === 'true',
       video_list_top_n: settings.video_list_top_n,
-      // 初訪モード（QUICK MODULES を1枚1モジュールで描く）と深掘りモードの切り替え
-      deck_mode: String(settings.deck_mode || 'deep').trim().toLowerCase() === 'quick' ? 'quick' : 'deep',
+      // 資料モードはそのまま渡し、generate.js の resolveMode で検証する。
+      // ここで quick/deep の2値に潰していたため「deck_mode: 構成提案」や綴り間違いが
+      // 黙って具体提案（全章）になっていた
+      deck_mode: settings.deck_mode,
     },
     tierDef,
     clients,

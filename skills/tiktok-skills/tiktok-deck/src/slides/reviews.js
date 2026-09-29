@@ -9,13 +9,31 @@ const { addDataTable } = require('../components/comparisonTable');
 const { addInsightBox } = require('../components/insightBox');
 
 const ACCENT = T.brandColors[0];
-const PART = 'REVIEWS';
+// 右上の帯。章扉の番号（PART n）は章の並びで変わるので generate.js が setPart で渡す
+let PART = 'REVIEWS';
+function setPart(tag) { PART = tag || 'REVIEWS'; }
 
-/** 自社名は INPUT の client_name から引く。レンダラに社名を書くと次案件で他社が自社色になる */
+/** 自社名。generate.js が case.json の own（is_own）から決めた自社ブランド名を正にし、
+ *  無い古い INPUT だけ client_name を使う。client_name は社名（株式会社◯◯）のことがあり、
+ *  ブランド名と一致しないと自社の行が強調されなかった */
 function ownNameOf(d) {
+  const own = String((d || {}).ownBrandName || '').trim();
+  if (own && !D.isPlaceholderText(own)) return own;
   const c = ((d || {}).clients || [])[0] || {};
   const n = String(val(c.client_name) || '').trim();
   return (n && !D.isPlaceholderText(n)) ? n : null;
+}
+
+// 媒体名。既定は美容案件の @cosme / LIPS。食品・日用品では SURVEY の media_a_label / media_b_label で
+// 楽天・Yahoo! 等に差し替える（review-scraper は LIPS を取れない）。R1・R5 で同じ値を使う
+// （R1 だけ「@cosme n件／LIPS n件」と焼き込まれたままで、R5 の見出しと食い違っていた）
+const DEFAULT_MEDIA = ['@cosme', 'LIPS'];
+function mediaLabels(d) {
+  const survey = ((d || {}).reviews || {}).survey || {};
+  const pick = (v, dflt) => (D.isMissing(v) ? dflt : val(v));
+  const a = pick(survey.media_a_label, DEFAULT_MEDIA[0]);
+  const b = pick(survey.media_b_label, DEFAULT_MEDIA[1]);
+  return { a, b, isDefault: a === DEFAULT_MEDIA[0] && b === DEFAULT_MEDIA[1] };
 }
 
 function isOwnName(text, ownName) {
@@ -28,10 +46,11 @@ function isOwnBrand(brand, ownName) {
 }
 
 function paddedBrands(brands, count = 7) {
-  // 実在ブランド数を超えて空行で水増しすると、余った行が [DATA NOT PROVIDED] で並ぶ。
-  // 取得できたブランド数（最低3行）までに抑える。
+  // 実在ブランド数を超えて空行で水増しすると、余った行が [DATA NOT PROVIDED] や「—」で並ぶ。
+  // 以前は最低3行にしていたため、2社の案件に架空の「—」行が足されていた。実在の数だけ出す
+  // （0社のときだけ欠損の1行を残し、章の入力が無いことを紙面で分かるようにする）
   const real = (brands || []).length;
-  const target = Math.min(count, Math.max(real, 3));
+  const target = Math.min(count, Math.max(real, 1));
   const out = (brands || []).slice(0, target);
   while (out.length < target) out.push({});
   return out;
@@ -54,11 +73,12 @@ function summedCount(brands, key) {
   return `${values.reduce((sum, value) => sum + value, 0).toLocaleString('ja-JP')}件`;
 }
 
-function sourceTotal(brands) {
-  const cosme = summedCount(brands, 'cosme_count');
-  const lips = summedCount(brands, 'lips_count');
-  if (cosme === PLACEHOLDER_DATA && lips === PLACEHOLDER_DATA) return PLACEHOLDER_DATA;
-  return `@cosme ${cosme}／LIPS ${lips}`;
+function sourceTotal(brands, media) {
+  // cosme_count / lips_count は「媒体A / 媒体B の件数」の欄名（歴史的な名前）。表示は媒体名で出す
+  const a = summedCount(brands, 'cosme_count');
+  const b = summedCount(brands, 'lips_count');
+  if (a === PLACEHOLDER_DATA && b === PLACEHOLDER_DATA) return PLACEHOLDER_DATA;
+  return `${media.a} ${a}／${media.b} ${b}`;
 }
 
 function countLabel(value) {
@@ -114,7 +134,7 @@ function slideSurvey(pptx, d, footer) {
   const rows = [[
     val(survey.media),
     names.length ? names.join('／') : PLACEHOLDER_DATA,
-    sourceTotal(brands),
+    sourceTotal(brands, mediaLabels(d)),
     summedCount(brands, 'reviews_read'),
   ]];
   const tblY = T.content.topPlain + 1.08;
@@ -274,12 +294,12 @@ function slideRatingOrigins(pptx, d, footer) {
       { text: val(brand.lips_pr_ratio), align: 'right', color },
     ];
   });
-  // 媒体名は INPUT の REVIEWS > SURVEY で差し替えられる（既定は美容案件の @cosme / LIPS）。
-  // 食品・日用品など他ジャンルでは media_a_label / media_b_label に「楽天」「Yahoo!」等を入れる。
+  // 媒体名は INPUT の REVIEWS > SURVEY で差し替えられる（mediaLabels）。
   const survey = (d.reviews || {}).survey || {};
-  const mediaA = D.isPlaceholderText(val(survey.media_a_label)) ? '@cosme' : val(survey.media_a_label);
-  const mediaB = D.isPlaceholderText(val(survey.media_b_label)) ? 'LIPS' : val(survey.media_b_label);
-  const colC = D.isPlaceholderText(val(survey.media_c_label)) ? `${mediaB} PR比率` : val(survey.media_c_label);
+  const media = mediaLabels(d);
+  const mediaA = media.a;
+  const mediaB = media.b;
+  const colC = D.isMissing(survey.media_c_label) ? `${mediaB} PR比率` : val(survey.media_c_label);
   addDataTable(s, {
     x: T.margin.l, y: T.content.topPlain, w: T.content.w,
     head: ['ブランド', { text: `${mediaA}評価`, align: 'right' }, { text: `${mediaA}件数`, align: 'right' },
@@ -290,19 +310,29 @@ function slideRatingOrigins(pptx, d, footer) {
   });
   // 案件固有の実測可否はレンダラに書かない（他案件の資料にその事実が混入する）。
   // INPUT の REVIEWS > SURVEY > scale_note があればそれを出し、無ければ尺度の違いだけを述べる
-  const scaleNote = val(((d.reviews || {}).survey || {}).scale_note);
+  // 満点の既定（@cosme 7点・LIPS 5点）は既定の媒体のときだけ使える。媒体を差し替えたのに
+  // この文を出すと、楽天・Yahoo! の資料に「@cosmeは7点満点」と印字される（実際に出た）。
+  // 差し替えたときは scale_note を必須にする。無ければ欠損として出し、前検（preflight）で止める
+  const scaleNote = D.isMissing(survey.scale_note) ? null : val(survey.scale_note);
+  if (!scaleNote && !media.isDefault) {
+    D.stats.qaFixes.push(`R5: 媒体名を ${mediaA}／${mediaB} に差し替えたのに SURVEY の scale_note が無い。`
+      + '各媒体の満点（例: 楽天・Yahoo! は5点満点）を scale_note に書くこと');
+  }
   addInsightBox(s,
-    D.isPlaceholderText(scaleNote)
-      ? '媒体ごとに評価尺度・投稿者構成・レビュー件数が異なるため、評価点の単純比較はできない（@cosmeは7点満点、LIPSは5点満点）。各媒体のPR・サンプル比率の実測可否は媒体ごとに異なる。'
-      : scaleNote,
+    scaleNote || ('媒体ごとに評価尺度・投稿者構成・レビュー件数が異なるため、評価点の単純比較はできない'
+      + (media.isDefault ? '（@cosmeは7点満点、LIPSは5点満点）' : `（各媒体の満点：${PLACEHOLDER_DATA}）`)
+      + '。各媒体のPR・サンプル比率の実測可否は媒体ごとに異なる。'),
     { label: '注記', h: 1.25, maxH: 1.50, chipColor: ACCENT });
   return s;
 }
 
 function slideActions(pptx, d, footer) {
   const reviews = d.reviews || {};
+  // 打ち手は書かれた数だけ出す。3件に満たない分を空行で水増しすると、
+  // [DATA NOT PROVIDED] が並んで前検が「重大」になり、書いた1件の資料が提出できなかった。
+  // 1件も無いときだけ欠損の1行を残す（章の入力が無いことを隠さない）
   const actions = (reviews.actions || []).slice(0, 5);
-  while (actions.length < 3) actions.push({});
+  if (!actions.length) actions.push({});
   const s = addSlide(pptx, {
     qLabel: 'R6', title: '口コミの離脱理由を、具体的な打ち手へ変える', partTag: PART,
     lead: '左の離脱理由と、右の対応施策を一対一で接続する。',
@@ -365,7 +395,7 @@ function addReviewSlides(pptx, d, footer) {
   slideActions(pptx, d, footer);
 }
 
-module.exports = { addReviewSlides };
+module.exports = { addReviewSlides, setPart };
 
 /* ─────────────────────────────────────────────────────────────
    データ駆動の汎用ページ。

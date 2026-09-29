@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """render_pptx_any.py — PPTX の全スライドを PNG にする（Windows / macOS / Linux）
 
-目視QA（BUILD_SPEC.md §10）用。従来の render_pptx.sh は Keynote 依存で macOS 専用だったため、
+提出前の目視QA（SKILL.md「6. 前検」）用。従来の render_pptx.sh は Keynote 依存で macOS 専用だったため、
 どのPCでも同じQAループが回るように経路を3本持つ。
 
 経路の優先順位:
@@ -13,16 +13,29 @@ PDF → PNG は pdftoppm（poppler）→ pypdfium2 → PyMuPDF の順に使え�
 
 使い方:
   python3 tools/render_pptx_any.py output/deck.pptx output/render 110
+  python3 tools/render_pptx_any.py output/deck.pptx output 110 --keep-pdf   # 配布用 PDF も残す
   python3 tools/render_pptx_any.py --list-engines
+
+--keep-pdf を付けると、途中で作る PDF を <出力先>/<PPTX名>.pdf に残し、最後の行に JSON を1行出す:
+  {"pdf_ok": true, "pdf_path": "<パス>"}   作れなければ {"pdf_ok": false, "pdf_error": "<理由>"}（終了コード1）
+generate.js には PDF を出す機能が無い（--pdf を渡しても PDF は出ない）ので、配布用 PDF はこれで作る。
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+for _s in (sys.stdout, sys.stderr):
+    # 日本語 Windows（cp932）のパイプ越しで表示できない字があっても落とさない
+    try:
+        _s.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 
 # ─────────────────────────────── PPTX → PDF
@@ -172,13 +185,15 @@ def main() -> int:
     if "--list-engines" in sys.argv:
         list_engines()
         return 0
-    if len(sys.argv) < 3:
+    keep_pdf = "--keep-pdf" in sys.argv
+    argv = [a for a in sys.argv if a != "--keep-pdf"]
+    if len(argv) < 3:
         print(__doc__)
         return 2
 
-    pptx = Path(sys.argv[1]).resolve()
-    out_dir = Path(sys.argv[2]).resolve()
-    dpi = int(sys.argv[3]) if len(sys.argv) > 3 else 110
+    pptx = Path(argv[1]).resolve()
+    out_dir = Path(argv[2]).resolve()
+    dpi = int(argv[3]) if len(argv) > 3 else 110
 
     if not pptx.exists():
         print(f"[ERROR] 入力がありません: {pptx}", file=sys.stderr)
@@ -200,6 +215,10 @@ def main() -> int:
     else:
         print("[ERROR] PDF化の手段がありません。LibreOffice を入れてください "
               "（https://www.libreoffice.org/）", file=sys.stderr)
+        if keep_pdf:
+            print(json.dumps({"pdf_ok": False,
+                              "pdf_error": "PDF化の手段がありません（LibreOffice / PowerPoint / Keynote のどれも使えない）"},
+                             ensure_ascii=False))
         return 1
 
     # PDF → PNG
@@ -214,11 +233,19 @@ def main() -> int:
     else:
         print("[ERROR] PNG化の手段がありません。poppler か pypdfium2 を入れてください",
               file=sys.stderr)
+        if keep_pdf:
+            # PDF はできている。配布用 PDF の成否と、目視用 PNG の失敗は分けて返す
+            print(json.dumps({"pdf_ok": True, "pdf_path": str(pdf), "png_error": "PNG化の手段が無い"},
+                             ensure_ascii=False))
         return 1
 
     n = normalize_names(out_dir) or len(list(out_dir.glob("slide-*.png")))
-    pdf.unlink(missing_ok=True)
+    if not keep_pdf:
+        pdf.unlink(missing_ok=True)
     print(f"{n} 枚を書き出しました → {out_dir}")
+    if keep_pdf:
+        # 受付（intake）などが機械で読めるよう、最後の行に1行の JSON で返す
+        print(json.dumps({"pdf_ok": True, "pdf_path": str(pdf)}, ensure_ascii=False))
 
     # レンダラごとの解釈差は残る。何で出したかを必ず残す
     (out_dir / "_render_info.txt").write_text(

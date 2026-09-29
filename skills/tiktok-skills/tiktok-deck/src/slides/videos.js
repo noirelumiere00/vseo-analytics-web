@@ -18,8 +18,8 @@ const TABLE_MAX = T.content.bottom - 1.55 - T.content.topPlain;
 const LIST_MAX = T.content.bottom - 1.15 - T.content.topPlain;
 
 const { brandColor, clip, img, stats } = C;
-const PART2 = 'PART 3 — 動画の構成解剖';   // 中扉の PART 3 と揃える
-const PARTK = 'PART 2 — 検索ワードの露出実態';
+// 中扉の番号は章の並びで変わるので generate.js が partTag で渡す。渡されないときの既定
+const PART2 = 'PART 3 — 動画の構成解剖';
 
 const IMG_X = T.margin.l;
 const IMG_Y = T.content.top;                 // 結論見出しの下から始める
@@ -52,16 +52,16 @@ function frameBadges(v, count) {
 }
 
 /** 動画1本の構成解剖ページ */
-function slideVideoDetail(pptx, b, v, bi, vi, footer, labelBase) {
+function slideVideoDetail(pptx, b, v, bi, vi, footer, labelBase, partTag) {
   const accent = brandColor(bi);
-  const title = `${clip(val(b.brand_name), 22)}　|　${clip(val(v.creator), 26)}`;
+  const title = `${clip(val(b.brand_name), 22)}　|　${clip(D.name(v.creator), 26)}`;
   // 結論（本質1行）は上。その下に投稿本文の引用を補足として置く
   const ess0 = val((v.essence || {}).one_line_essence);
-  const cap = `「${clip(val(v.title), 46)}」${frameNote(v)}`;
+  const cap = `「${clip(D.name(v.title), 46)}」${frameNote(v)}`;
   const s = addSlide(pptx, {
     qLabel: labelBase ? `${labelBase}-${vi + 1}` : `Q7-${vi + 1}`, title,
     ...(D.isPlaceholderText(ess0) ? {} : { conclusion: ess0, conclusionSub: cap }),
-    partTag: labelBase ? PARTK : PART2, accent, footerLeft: footer,
+    partTag: partTag || PART2, accent, footerLeft: footer,
   });
   // 指標チップは本文領域の右上へ。結論の大見出し・補足行のどちらとも重ならない位置
   const chipY = T.content.top - 0.62;
@@ -126,12 +126,15 @@ function slideVideoDetail(pptx, b, v, bi, vi, footer, labelBase) {
 }
 
 /** 分析した動画の一覧（各ブランド上位N本） */
-function slideVideoTable(pptx, brands, footer, topN, ci, total, deckAnalyzed) {
+function slideVideoTable(pptx, brands, footer, topN, ci, total, deckAnalyzed, opts = {}) {
   const s = addSlide(pptx, {
     qLabel: '一覧', title: `検索上位の実績と、構成解剖の対象${total > 1 ? `（${ci + 1}/${total}）` : ''}`,
-    partTag: PART2,
-    lead: `ブランド名での検索（Part 2 のカテゴリ3面とは別条件）の上位${topN}本ずつ。`
-      + `次章（Q7）の解剖対象は検索順位ではなく「保存率が最も高い1本」という別基準で選ぶため、一致しない。投稿者名がリンクです。`,
+    partTag: opts.partTag || PART2,
+    // 面の数・解剖対象の選び方を固定文で書かない。「カテゴリ3面」「保存率が最も高い1本」と焼き込んでいたため、
+    // 2ワードの案件や別の基準で選んだ案件でも同じ文が出ていた（選び方は video_manifest.json に記録が無い）
+    // リード枠は1行（下限11ptで約75字）。長いと「収まらない可能性」になる
+    lead: `ブランド名検索${opts.hasKw ? '（カテゴリ検索とは別条件）' : ''}の上位${topN}本ずつ。`
+      + 'Q7の解剖対象は別に選ぶため、この順位と一致しないことがある。投稿者名がリンク。',
     accent: brandColor(0), footerLeft: footer,
   });
   // 同じ投稿者が同条件で複数本ある（ユンスの1・2位など）と行が見分けられない。
@@ -167,7 +170,7 @@ function slideVideoTable(pptx, brands, footer, topN, ci, total, deckAnalyzed) {
           // ページ内の並び順でなくブランドで色を引く。順で引くと別ブランドが同色になる
           color: i === 0 ? brandColor(D.colorIndexOf(b)) : T.color.text },
         { text: val(v.search_rank), align: 'right' },
-        { text: clip(val(v.creator), 12), url: v.url }, clip(val(v.topic), hasCluster ? 16 : 28),
+        { text: clip(D.name(v.creator), 12), url: v.url }, clip(D.name(v.topic), hasCluster ? 16 : 28),
         val(v.media),
         { text: val(v.views), align: 'right' }, { text: val(v.eg), align: 'right' },
         { text: val(v.save_rate), align: 'right' }, val(v.is_pr),
@@ -186,7 +189,7 @@ function slideVideoTable(pptx, brands, footer, topN, ci, total, deckAnalyzed) {
     // 画像下端から注記帯の上端までを予算にして、その中に収める
     const capY = T.content.topPlain + (LIST_IMG_W * 16) / 9 + 0.18;
     const capH = Math.max(0.42, LIST_MAX + T.content.topPlain - capY - 0.10);
-    const capText = `${clip(val(hero.creator), 14)}\n${num(hero.views)}再生・EG${val(hero.eg)}／保存率${val(hero.save_rate)}`;
+    const capText = `${clip(D.name(hero.creator), 14)}\n${num(hero.views)}再生・EG${val(hero.eg)}／保存率${val(hero.save_rate)}`;
     s.addText(capText, {
       x: T.margin.l, y: capY, w: LIST_IMG_W, h: capH,
       fontFace: T.font.gothic,
@@ -221,11 +224,11 @@ function slideVideoTable(pptx, brands, footer, topN, ci, total, deckAnalyzed) {
 }
 
 /** Q8 横断の構成分析 */
-function slideQ8(pptx, d, footer) {
+function slideQ8(pptx, d, footer, partTag) {
   const c = d.cross || {};
   const s = addSlide(pptx, {
     qLabel: 'Q8', title: '動画の構成から見える共通パターン',
-    partTag: PART2, lead: 'フック・視覚演出・最終コマと保存率を横断で突き合わせる。',
+    partTag: partTag || PART2, lead: 'フック・視覚演出・最終コマと保存率を横断で突き合わせる。',
     accent: brandColor(0), footerLeft: footer,
   });
   const gap = 0.55;
@@ -278,7 +281,7 @@ const SB_RULE_Y = SB_CAP_Y + SB_CAP_H + 0.17;
 const SB_FLOW_Y = SB_RULE_Y + 0.16;
 
 /** 5コマのサムネイルで「どう始まり、どう終わるか」を1枚で見せる */
-function slideVideoStoryboard(pptx, b, v, bi, vi, footer, labelBase) {
+function slideVideoStoryboard(pptx, b, v, bi, vi, footer, labelBase, partTag) {
   const accent = brandColor(bi);
   const sb = v.storyboard || {};
   // 定義の無いコマ枠は「未解決画像」に数えない（2コマ投稿を欠損扱いにしないため）
@@ -288,19 +291,25 @@ function slideVideoStoryboard(pptx, b, v, bi, vi, footer, labelBase) {
     .filter((x) => x.path);
   if (shots.length < 2) return null;          // 画像2枚の投稿もそのまま2コマで見せる（水増ししない）
 
+  // 5コマ未満のときの説明。以前は「この投稿は4コマで全部（[DATA NOT PROVIDED]）」と出ていた。
+  // 尺は INPUT に無く欠損が紙面に漏れ、15秒の動画から4コマ抜いただけなのに投稿全体が4コマのように読めた。
+  // 「全部」と言えるのは静止画カルーセルだけ。動画は「抽出したコマから N コマ（全 X 秒）」と書く
+  const dur = parseFloat(String(v.duration_sec || '').replace(/[^0-9.]/g, ''));
+  const durTxt = Number.isFinite(dur) && dur > 0 ? `（全${dur}秒の動画から抽出）` : '';
+  const shotNote = shots.length >= 5
+    ? '5コマで見る「どう始まり、何を見せ、どう終わるか」。'
+    : (/写真/.test(String(v.media || ''))
+      ? `静止画カルーセルの${shots.length}枚を並べている。`
+      : `抽出したコマから${shots.length}コマを並べている${durTxt}。`);
   const s = addSlide(pptx, {
     qLabel: labelBase ? `${labelBase}-${vi + 1}b` : `Q7-${vi + 1}b`,
-    title: `${clip(val(b.brand_name), 22)}　|　${clip(val(v.creator), 26)}　構成`,
-    partTag: labelBase ? PARTK : PART2,
+    title: `${clip(val(b.brand_name), 22)}　|　${clip(D.name(v.creator), 26)}　構成`,
+    partTag: partTag || PART2,
     // 結論（本質1行）を上に。従来のリード文は補足として結論の下へ回す
     ...(D.isPlaceholderText(val((v.essence || {}).one_line_essence))
-      ? { lead: (shots.length >= 5
-          ? '5コマで見る「どう始まり、何を見せ、どう終わるか」。'
-          : `この投稿は${shots.length}コマで全部（${val(v.duration)}）。取得できた実コマのみを並べている。`) + frameNote(v) }
+      ? { lead: shotNote + frameNote(v) }
       : { conclusion: val((v.essence || {}).one_line_essence),
-          conclusionSub: (shots.length >= 5
-            ? '5コマで見る「どう始まり、何を見せ、どう終わるか」。'
-            : `この投稿は${shots.length}コマで全部（${val(v.duration)}）。取得できた実コマのみを並べている。`) + frameNote(v) }),
+          conclusionSub: shotNote + frameNote(v) }),
     accent, footerLeft: footer,
   });
 

@@ -3,7 +3,7 @@
 //   ・20 × 11.25in ／ クリーム地 ／ 見出しは明朝、本文と数値はゴシック
 //   ・比較する数値には横棒を添える
 //   ・分析ページには必ず実例サムネイル（検索結果の実カバー画像）を置く
-// 正本: FORMAT.md（構成） / DESIGN.md（見せ方） / BUILD_SPEC.md（実装） / CLAUDE.md（ルール）
+// 手順と章構成の正本は SKILL.md（ステータスと章の表）と、下の MODES。
 const fs = require('fs');
 const path = require('path');
 const PptxGenJS = require('pptxgenjs');
@@ -74,10 +74,13 @@ function slideCover(pptx, d, M) {
     bold: true, color: T.color.text, valign: 'middle', lineSpacingMultiple: 1.15,
   });
   // 表紙で約束する工程は、実際にページがある工程だけにする
+  // （M は generate の main で「章の中身があるか」まで見て決めた値。検索ワード面・解剖が0件なら書かない）
+  const kwShown = !(M && M.kwHead === false);
+  const axes = kwShown ? '「ブランド名」「カテゴリ名」' : '「ブランド名」';
   const lead = (M && M.videoAnatomy === false)
-    ? '「ブランド名」「カテゴリ名」で検索・言及されている動画を実データで全件解析し、'
+    ? `${axes}で検索・言及されている動画を実データで全件解析し、`
       + '競合が実際に何をやっているか（誰が・どう語り・何が伸びているか）を明らかにする。'
-    : '「ブランド名」「カテゴリ名」で検索・言及されている動画を実データ・実動画で解剖し、'
+    : `${axes}で検索・言及されている動画を実データ・実動画で解剖し、`
       + '競合が実際に何をやっているか（誰が・どう語り・何が伸びているか）を明らかにする。';
   s.addText(lead, {
     x: T.margin.l, y: 6.00, w: 10.2, h: 1.30,
@@ -96,17 +99,23 @@ function slideCover(pptx, d, M) {
 
   let my = 8.10;
   const meta = [
-    ['手法', 'TikTokでブランド名・カテゴリ名を検索（並び替え・フィルターなしのデフォルト表示順）→ 上位表示データを取得 → 全件を同一定義で定量解析'
+    ['手法', `TikTokで${kwShown ? 'ブランド名・カテゴリ名' : 'ブランド名'}を検索（並び替え・フィルターなしのデフォルト表示順）→ 上位表示データを取得 → 全件を同一定義で定量解析`
       + ((M && M.videoAnatomy === false) ? '' : ' → 上位動画の本体を取得 → フレーム単位で構成解剖')],
     ['対象', d.clients.flatMap((c) => c.brands.map((b) => {
-      // 自社と競合を区別しないと、見出しの「競合4ブランド」と数が合わないように見える
-      const role = d.clients.map((cl) => `${val(cl.client_role)} ${val(cl.client_note)}`).join(' ');
-      const head = String(val(b.brand_name)).split(/[ 　]/)[0];
-      const own = head && role.includes(head);
+      // 自社と競合を区別しないと、見出しの「競合4ブランド」と数が合わないように見える。
+      // 自社は case.json の own（d.ownBrand）で決める。古い INPUT だけ client_role の文字で推す
+      let own;
+      if (d.ownDeclared) own = b === d.ownBrand;
+      else {
+        const role = d.clients.map((cl) => `${val(cl.client_role)} ${val(cl.client_note)}`).join(' ');
+        const head = String(val(b.brand_name)).split(/[ 　]/)[0];
+        own = head && role.includes(head);
+      }
       return `${val(b.brand_name)}${own ? '（自社）' : ''} ${String(val(b.total_video_count)).split('（')[0]}本`;
     })).join('／')],
   ];
-  const kw = (d.keywords || []).map((k) => `${val(k.keyword)} ${val(k.total_count)}本`).join('／');
+  // 検索ワード面のページを載せない資料（構成提案など）で、表紙に面の本数を並べない
+  const kw = kwShown ? (d.keywords || []).map((k) => `${val(k.keyword)} ${val(k.total_count)}本`).join('／') : '';
   if (kw) meta.push(['検索面', kw]);
   meta.forEach(([k, v]) => {
     s.addShape('line', { x: T.margin.l, y: my, w: 11.6, h: 0, line: { color: T.color.ruleThin, width: 0.9 } });
@@ -144,28 +153,33 @@ function slideMethod(pptx, d, footer, M) {
     accent: brandColor(0), footerLeft: footer,
   });
   // 本編ページ・PART扉と同じ番号を持たせる（自動採番だとズレる）
+  // 本編に実際にある章だけを、本編と同じ順・同じ番号で掲げる（m は main で中身の有無まで見た値）
+  const kwShown = m.kwHead !== false;
   const qs = [
-    ['Q1', '誰が取り上げていて、階層ごとの効果は？'],
-    ['Q2', '伸びているのは、PRかオーガニックか？'],
+    m.q1q2 === false ? null : ['Q1', '誰が取り上げていて、階層ごとの効果は？'],
+    m.q1q2 === false ? null : ['Q2', '伸びているのは、PRかオーガニックか？'],
     m.q3 === false ? null : ['Q3', 'どんな切り口（界隈）で語られているか？'],
     m.q4 === false ? null : ['Q4', 'どの商品が、どんな文脈で語られるか？'],
     m.q5 === false ? null : ['Q5', '最も伸びている動画は何か？'],
-    ['Q6', '検索ワードの面で何が起きているか？'],
-    m.videoAnatomy === false ? null : ['Q7', '上位動画はどんな構成か？'],
-    m.videoAnatomy === false ? null : ['Q8', '動画の構成に共通パターンはあるか？'],
+    kwShown ? ['Q6', '検索ワードの面で何が起きているか？'] : null,
     // 他プラットフォーム章を載せるなら、設計ページにも掲げる。
     // 掲げていない章が本編に出てくると「調べる約束をしていないことをやった」形になる
     ...((m.platforms === false ? [] : (d.platforms || []))
       .map((pf, i) => [`他面${i + 1}`, `${val(pf.name)}ではどんな発信がされているか？`])),
+    m.reviewsShown ? ['口コミ', '買い続ける理由・離れる理由は何か？'] : null,
+    m.videoAnatomy === false ? null : ['Q7', '上位動画はどんな構成か？'],
+    (m.videoAnatomy === false || m.q8 === false) ? null : ['Q8', '動画の構成に共通パターンはあるか？'],
     ['総括', m.videoAnatomy === false ? '次に何を確かめるか？' : '再現可能な勝ちパターンは何か？'],
   ].filter(Boolean);
+  const search = `TikTokで${kwShown ? 'ブランド名・カテゴリ名' : 'ブランド名'}を検索`;
+  const plat = (m.platforms === false || !(d.platforms || []).length) ? []
+    : ['他プラットフォームの発信を検索して型を記述'];
   const steps = (m.videoAnatomy === false)
-    ? ['TikTokでブランド名・カテゴリ名を検索', '上位表示データを取得（デフォルト表示順）',
-      '全件を同一定義で定量解析', '検索ワード面の露出を集計', '自社の空白地帯を特定']
-    : ['TikTokでブランド名・カテゴリ名を検索', '上位表示データを取得（デフォルト表示順）',
-      '全件を同一定義で定量解析', '上位動画を選定', '実動画を取得', 'フレーム単位で構成解剖',
-      ...((m.platforms === false || !(d.platforms || []).length) ? []
-        : ['他プラットフォームの発信を検索して型を記述']),
+    ? [search, '上位表示データを取得（デフォルト表示順）',
+      '全件を同一定義で定量解析', ...(kwShown ? ['検索ワード面の露出を集計'] : []), ...plat,
+      kwShown ? '自社の空白地帯を特定' : '自社と競合の差を特定']
+    : [search, '上位表示データを取得（デフォルト表示順）',
+      '全件を同一定義で定量解析', ...plat, '上位動画を選定', '実動画を取得', 'フレーム単位で構成解剖',
       '横断分析', '勝ちパターン抽出'];
   const nb = d.clients.flatMap((c) => c.brands || []).length;
   const nk = (d.keywords || []).length;
@@ -291,7 +305,10 @@ function slideAllBrandSummary(pptx, d, brands, footer) {
 // （ステータス別に別レンダラを作ると、直した内容が片方に反映されず食い違う）。
 //
 // 「レポート」は施策前後の比較データが要る。FMT は単発スナップショットしか
-// 持たないので、黙って現状資料を出さずエラーで止める（偽の効果測定を作らない）。
+// 持たず、前後比較のページも無いので、黙って現状資料を出さずエラーで止める（偽の効果測定を作らない）。
+//
+// 章の出し分けは SKILL.md「ステータスと章」の表と一致させる（q1q2＝Q1/Q2、kwHead＝Q6 検索ワード面）。
+// 以前は Q1/Q2 と Q6 がフラグを持たず全モードで出ていて、構成提案の資料が表と食い違っていた。
 const MODES = {
   初訪: {
     // 2026-09 上長FBで作り直した。ストーリー型の専用レンダラ（src/slides/firstVisit.js）で組み、
@@ -302,7 +319,7 @@ const MODES = {
   },
   具体提案: {
     label: '具体提案', suffix: '', alias: ['deep', 'full', '提案'],
-    q3: true, q4: true, q5: true, allBrandSummary: true,
+    q1q2: true, q3: true, q4: true, q5: true, allBrandSummary: true, kwHead: true,
     kwSaves: true, kwVideos: true, videoAnatomy: true,
     mentions: true,
     reviews: true, patterns: true, platforms: true,
@@ -310,7 +327,7 @@ const MODES = {
   構成提案: {
     // 動画の作り方を決める資料。定量は最小限にして構成解剖に寄せる
     label: '構成提案', suffix: '_構成', alias: ['構成'],
-    q3: false, q4: false, q5: true, allBrandSummary: false,
+    q1q2: false, q3: false, q4: false, q5: true, allBrandSummary: false, kwHead: false,
     kwSaves: false, kwVideos: true, videoAnatomy: true,
     mentions: true,
     reviews: false, patterns: true, platforms: false,
@@ -318,20 +335,26 @@ const MODES = {
   競合差再提案: {
     // 競合との差だけを見る。動画解剖は入れず、定量比較に寄せる
     label: '競合差再提案', suffix: '_競合差', alias: ['競合差', '再提案'],
-    q3: true, q4: true, q5: true, allBrandSummary: true,
+    q1q2: true, q3: true, q4: true, q5: true, allBrandSummary: true, kwHead: true,
     kwSaves: true, kwVideos: false, videoAnatomy: false,
     mentions: true,
     reviews: true, patterns: false, platforms: true,
   },
   レポート: {
+    // 名前は受け付けるが生成しない。baseline_period を INPUT に手で足すと、競合差再提案と同じ
+    // スナップショット資料が「レポート」として出ていた（基準の値はどのページにも出ない）。
+    // 前後比較のページを実装するまでは、何を足しても止める
     label: 'レポート', suffix: '_レポート', alias: ['report', '効果測定'],
-    requiresBaseline: true,
-    q3: true, q4: true, q5: true, allBrandSummary: true,
-    kwSaves: true, kwVideos: false, videoAnatomy: false,
-    mentions: true,
-    reviews: false, patterns: false, platforms: false,
+    unimplemented: true,
   },
 };
+
+function reportError() {
+  return new Error('レポート（施策前後比較）はまだ生成できません。\n'
+    + '  前後比較のページが無いので、出すと現状のスナップショットを「効果測定」と偽ることになります。\n'
+    + '  施策前の基準データ（同じ検索語・同じ条件の取得）を保存しておき、比較は手作業で行ってください。\n'
+    + '  現状の資料が要る場合は --mode 競合差再提案 等で出し、表紙で「効果測定ではない」と伝えてください。');
+}
 
 /** 別名（quick / deep 等）を正式なステータス名に寄せる */
 function canonicalMode(name) {
@@ -345,19 +368,32 @@ function canonicalMode(name) {
 /** 複数ステータスを1資料に統合する。章は和集合を取る */
 function mergeModes(names) {
   if (names.includes('初訪')) throw fvComboError();
+  if (names.some((n) => MODES[n].unimplemented)) throw reportError();
   const base = { label: names.join('＋'), suffix: '_' + names.join('') };
-  const keys = ['q3', 'q4', 'q5', 'allBrandSummary', 'kwSaves', 'kwVideos', 'mentions',
+  const keys = ['q1q2', 'q3', 'q4', 'q5', 'allBrandSummary', 'kwHead', 'kwSaves', 'kwVideos', 'mentions',
     'videoAnatomy', 'reviews', 'patterns', 'platforms'];
   keys.forEach((k) => { base[k] = names.some((n) => MODES[n][k]); });
-  base.requiresBaseline = names.some((n) => MODES[n].requiresBaseline);
   return base;
+}
+
+/** case.json の settings.deck_mode（--mode・DECK_MODE が無いときに使う） */
+function caseDeckMode() {
+  try {
+    const cj = JSON.parse(fs.readFileSync(path.join(ROOT, 'case.json'), 'utf8'));
+    const v = ((cj || {}).settings || {}).deck_mode;
+    return D.isMissing(v) ? null : String(v);
+  } catch (e) { return null; }
 }
 
 function resolveMode(d) {
   const i = process.argv.indexOf('--mode');
   const cli = i >= 0 ? process.argv[i + 1] : null;
-  const raw = String(cli || process.env.DECK_MODE
-    || val((d.settings || {}).deck_mode) || '具体提案').trim();
+  // 優先順: --mode → DECK_MODE → case.json の settings.deck_mode → INPUT.md の deck_mode → 具体提案。
+  // INPUT 側は D.isMissing で見る。val() は欠損を [DATA NOT PROVIDED] という「値」で返すので、
+  // そのまま || に入れると未知のモード扱いになる
+  const inInput = (d.settings || {}).deck_mode;
+  const raw = String(cli || process.env.DECK_MODE || caseDeckMode()
+    || (D.isMissing(inInput) ? null : inInput) || '具体提案').trim();
   // 「初訪,競合差再提案」のように複数指定できる
   const parts = raw.split(/[,、＋+]/).map((x) => x.trim()).filter(Boolean);
   const names = parts.map((p) => {
@@ -365,7 +401,7 @@ function resolveMode(d) {
     if (!c) {
       // 黙って既定へ落とすと、初訪のつもりで全ページが出る
       throw new Error(`未知の資料モード: ${p}\n`
-        + `  使えるのは ${Object.keys(MODES).join(' / ')}`
+        + `  使えるのは ${Object.keys(MODES).filter((k) => !MODES[k].unimplemented).join(' / ')}`
         + `（別名: quick=初訪, deep=具体提案）`);
     }
     return c;
@@ -375,18 +411,28 @@ function resolveMode(d) {
     if (names.length > 1) throw fvComboError();
     throw new Error('初訪は first_visit.json から作ります。node src/generate.js --case <案件> --mode 初訪 で実行してください');
   }
+  if (names.some((n) => MODES[n].unimplemented)) throw reportError();
   const m = names.length === 1
     ? { name: names[0], ...MODES[names[0]] }
     : { name: names.join('＋'), ...mergeModes(names) };
-  if (m.requiresBaseline) {
-    const bl = val((d.project || {}).baseline_period);
-    if (!bl || D.isPlaceholderText(bl)) {
-      throw new Error('レポート資料には施策前の基準データが要ります。\n'
-        + '  PROJECT に baseline_period が無いため生成を止めました。\n'
-        + '  基準が無いまま出すと、後から取った値を施策前と偽ることになります。');
+  return m;
+}
+
+/** 知らない引数を黙って無視しない。受付（intake）が --pdf を渡しても何も起きず、
+ *  「PDF が出る」と思ったまま PPTX だけが残っていた */
+function warnUnknownArgs() {
+  const known = new Set(['--case', '--mode']);
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    if (known.has(a)) { i += 1; continue; }
+    if (a === '--pdf') {
+      console.error('[注意] --pdf は generate.js では扱いません。PDF は次で作ります:\n'
+        + '  python3 tools/render_pptx_any.py <出力.pptx> <出力先> --keep-pdf');
+    } else if (a.startsWith('--')) {
+      console.error(`[注意] 知らない引数を無視しました: ${a}（使えるのは --case と --mode）`);
     }
   }
-  return m;
 }
 
 // ───────────────────────────────── 初訪（ストーリー型）
@@ -468,6 +514,7 @@ function buildFirstVisitDeck() {
 
 // ───────────────────────────────── main
 function main() {
+  warnUnknownArgs();
   const early = earlyModeNames();
   if (early && early.includes('初訪')) {
     if (early.length > 1) throw fvComboError();
@@ -477,12 +524,13 @@ function main() {
   if (!fs.existsSync(inputPath)) {
     throw new Error(`INPUT.md がありません: ${inputPath}\n`
       + '  案件ディレクトリを --case で渡してください。例:\n'
-      + '    node src/generate.js --case ../案件_XXX --mode 初訪\n'
-      + '  先に build_input_md.py と merge_authored.py を同じ --case で実行しておくこと');
+      + '    node src/generate.js --case ../案件_XXX --mode 具体提案\n'
+      + '  先に build_input_md.py と merge_authored.py を同じ --case で実行しておくこと\n'
+      + '  （初訪は INPUT.md を使わない: --mode 初訪 で first_visit.json から作る）');
   }
   const d = parse(inputPath);
   countMissing(d);
-  const M = resolveMode(d);
+  const M0 = resolveMode(d);
 
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'FMT', width: T.slide.w, height: T.slide.h });
@@ -490,62 +538,107 @@ function main() {
 
   const brands = d.clients.flatMap((c) => c.brands);
   d.brands = brands;   // 各Qのバー満尺を「全ブランド共通の最大値」に固定するため（ページ間で長さを比較可能に）
+  // 自社は case.json の brands[].own（INPUT の is_own）だけで決める。client_name の部分一致と
+  // build_input_md の own の2系統があり、社名とブランド名が違う案件で数字が食い違った。
+  // is_own を持たない古い INPUT だけ、従来どおり client_name の部分一致（無ければ先頭）で探す
+  const declared = brands.some((b) => b.is_own !== undefined);
+  let ownBrand = null;
+  if (declared) {
+    const owns = brands.filter((b) => b.is_own === true);
+    if (owns.length !== 1) {
+      stats.qaFixes.push(`自社ブランド（case.json の own: true）が ${owns.length} 件。1件にしてから作り直すこと`
+        + '（自社の強調・フッター・口コミの自社行が決められない）');
+    }
+    ownBrand = owns.length === 1 ? owns[0] : null;
+  } else {
+    const ownKey = String(val((d.clients[0] || {}).client_name) || '').trim();
+    ownBrand = (ownKey && !D.isPlaceholderText(ownKey)
+      ? brands.find((b) => String(b.brand_name || '').toLowerCase().includes(ownKey.toLowerCase()))
+      : null) || brands[0] || null;
+  }
+  const ownName = val((ownBrand || {}).brand_name);
+  d.ownBrand = ownBrand;
+  d.ownDeclared = declared;
+  d.ownBrandName = ownBrand ? ownName : null;
   // 先頭2社だけ並べると7ブランド比較の資料が「2社案件」に見える。自社×競合数で表す
-  // 社名の既定値をコードに置かない。INPUT に client_name が無ければ先頭ブランドを自社として扱う
-  const ownKey = String(val((d.clients[0] || {}).client_name) || '').trim();
-  const ownName = val(((ownKey
-    ? brands.find((b) => String(b.brand_name || '').toLowerCase().includes(ownKey.toLowerCase()))
-    : null) || brands[0] || {}).brand_name);
   const footer = brands.length > 2
     ? `TIKTOK SEARCH DEEP-DIVE — ${ownName} × 競合${brands.length - 1}ブランド`
     : `TIKTOK SEARCH DEEP-DIVE — ${brands.map((b) => val(b.brand_name)).slice(0, 2).join(' × ')}`;
   // ブランドごとに色を固定する。ページ単位でずらすと、同じ社が別ページで別色になり
   // 7社目が自社の色に回り込む（p6で比較ブランドが自社の色になっていた）
   brands.forEach((b, i) => { b.colorIndex = i; });
-  const isOwnBrand = (b) => (ownKey
-    ? String(b.brand_name || '').toLowerCase().includes(ownKey.toLowerCase())
-    : b === brands[0]);
+  const isOwnBrand = (b) => !!ownBrand && b === ownBrand;
   const chunks = chunkWithOwn(brands, (d.settings && d.settings.max_brands_per_comparison_slide) || 3, isOwnBrand);
   const kws = d.keywords || [];
   const analyzed = [];
   brands.forEach((b, bi) => (b.videos || []).forEach((v) => analyzed.push({ b, v, bi })));
+  const kwv = M0.kwVideos ? (d.keywordVideos || []) : [];
   const patterns = (d.cross || {}).patterns || [];
+  const plats = M0.platforms === false ? [] : (d.platforms || []);
+  // 章があるかは、モードのフラグだけでなく中身の有無で決める。フラグだけで決めていたため、
+  // 検索ワード0件でも「Q6 検索ワードの面で何が起きているか？」、解剖0本でも「Q7/Q8」
+  // 「実動画を取得」「フレーム単位で構成解剖」を表紙・設計ページで約束していた
+  const M = {
+    ...M0,
+    kwHead: !!M0.kwHead && kws.length > 0,
+    videoAnatomy: !!M0.videoAnatomy && (analyzed.length > 0 || kwv.length > 0),
+    q8: !!M0.videoAnatomy && analyzed.length > 0,
+    reviewsShown: !!M0.reviews && !!d.reviews,
+  };
+  if (M0.reviews && !d.reviews) {
+    // 黙って章ごと落とすと、口コミ章を含むはずの資料から章が消えたことに誰も気づかない
+    console.error('[注意] この資料モードは口コミ章を含むが、INPUT.md に # REVIEWS が無いので出していない');
+  }
+  const PART_KW = 'PART 2 — 検索ワードの露出実態';   // keywords.js の帯と同じ（PART 1 は必ずあるので常に 2）
 
   // ページ総数は手計算だと構成を変えるたびにズレる。
   // 一度そのまま組み立てて実数を数え、その値でフッターを入れて本番を組み直す。
+  //
+  // 章の並びは status-output-spec.md の「①現状 → ⑤競合差 → ⑥クチコミ → ②方向性 → ③実行案」に揃える。
+  // 以前は他プラットフォーム（⑤）が動画の章（②③）の後ろ、検索ワード面の動画解剖（②③）が口コミの前にあり、
+  // 扉の番号も固定（競合差再提案で PART 1→2→4 と飛んだ）だった。番号は載せた章の順に振る。
+  // --mode の並び順には従わない（常にこの順。SKILL.md に明記）
   const buildAll = (deck) => {
+    let partNo = 0;
+    const nextPart = () => { partNo += 1; return partNo; };
+    if (M0.reviews && !d.reviews) {
+      stats.qaFixes.push('章の欠落: この資料モードは口コミ章（REVIEWS）を含むが、INPUT.md に # REVIEWS が無いため出していない。'
+        + 'review-scraper の出力を読んで authored.md の ## APPEND REVIEWS に書く（SKILL.md「口コミ章」）');
+    }
     slideCover(deck, d, M);
     slideMethod(deck, d, footer, M);
 
+    // ── PART 1 検索面の実態（Q5 は全モードにあるので、この章は必ず1番目）
+    const n1 = nextPart();
     addDivider(deck, {
-      partIndex: 1, name: '検索面の実態',
-      // 説明文も載せるページから組む。固定文にすると初訪版で
-      // 「クラスタ・商品別・最上位動画を明らかにする」と書いたページが1枚も無くなる
+      partIndex: n1, name: '検索面の実態',
+      // 説明文も載せるページから組む。固定文にすると載せないページを「明らかにする」と書くことになる
       desc: '各ブランドの検索結果を全件解析し、'
-        + ['フォロワー階層別のパフォーマンス', 'PRとオーガニックの効果差',
+        + [M.q1q2 ? 'フォロワー階層別のパフォーマンス' : null, M.q1q2 ? 'PRとオーガニックの効果差' : null,
           M.q3 ? '語られ方のクラスタ' : null,
           M.q4 ? '商品別の取り上げられ方' : null,
           M.q5 ? '最上位動画' : null].filter(Boolean).join('・')
         + 'を明らかにする。',
       items: [
-        { q: 'Q1', text: '誰が取り上げていて、階層ごとの効果は？' },
-        { q: 'Q2', text: '伸びているのは、PRかオーガニックか？' },
+        M.q1q2 ? { q: 'Q1', text: '誰が取り上げていて、階層ごとの効果は？' } : null,
+        M.q1q2 ? { q: 'Q2', text: '伸びているのは、PRかオーガニックか？' } : null,
         M.q3 ? { q: 'Q3', text: 'どんな切り口（界隈）で語られているか？' } : null,
         M.q4 ? { q: 'Q4', text: 'どの商品が、どんな文脈で語られるか？' } : null,
         M.q5 ? { q: 'Q5', text: '最も伸びている動画は何か？' } : null,
       ].filter(Boolean),
       footerLeft: footer,
     });
-    chunks.forEach((ch, ci) => A.slideQ1(deck, d, ch, ci, chunks, footer, ci * 3));
-    chunks.forEach((ch, ci) => A.slideQ2(deck, d, ch, ci, chunks, footer, ci * 3));
+    if (M.q1q2) chunks.forEach((ch, ci) => A.slideQ1(deck, d, ch, ci, chunks, footer, ci * 3));
+    if (M.q1q2) chunks.forEach((ch, ci) => A.slideQ2(deck, d, ch, ci, chunks, footer, ci * 3));
     if (M.q3) chunks.forEach((ch, ci) => A.slideQ3(deck, d, ch, footer, ci, chunks, ci * 3));
     if (M.q4) chunks.forEach((ch, ci) => A.slideQ4(deck, d, ch, ci, chunks, footer, ci * 3));
     if (M.q5) A.slideQ5(deck, d, brands, footer);
     if (M.allBrandSummary) slideAllBrandSummary(deck, d, brands, footer);
 
-    if (kws.length) {
+    // ── PART 2 検索ワードの露出実態（⑤競合差：市場の空白地帯）
+    if (M.kwHead) {
       addDivider(deck, {
-        partIndex: 2, name: '検索ワードの露出実態',
+        partIndex: nextPart(), name: '検索ワードの露出実態',
         desc: 'ブランド名ではなくカテゴリ名で検索したときに、どんな動画が上位に出て、何が保存されているかを見る。'
           + '自社が出ていない面（空白地帯）を特定する。',
         items: kws.map((k, i) => ({ q: `Q6-${i + 1}`, text: `「${val(k.keyword)}」の上位と保存` })),
@@ -557,82 +650,104 @@ function main() {
       });
       K.slideKwSummary(deck, d, footer);
     }
-    // 02-analyze を回した案件だけ、動画の中での言及回数を1枚出す。
-    // 回していない場合は付録の「言及回数の計測」行が未計測であることを述べる
-    if (M.mentions !== false) MN.slideMentions(deck, d, footer);
-    {
-      // 検索ワード面の上位投稿を1本ずつ解剖（ブランド軸の Q7 と同じ2ページ構成）
-      const kwv = M.kwVideos ? (d.keywordVideos || []) : [];
-      kwv.forEach((v, i) => {
-        const pseudo = { brand_name: `「${val(v.axis_name)}」` };
-        V.slideVideoDetail(deck, pseudo, v, 0, i, footer, 'KW');
-        V.slideVideoStoryboard(deck, pseudo, v, 0, i, footer, 'KW');
-      });
+    // tiktok-analyze を回した案件だけ、動画の中での言及回数を1枚出す。
+    // 回していない場合は付録の「言及回数の計測」行が未計測であることを述べる。
+    // PART 2 が無い資料で「PART 2」の帯を付けない
+    if (M.mentions !== false) {
+      MN.slideMentions(deck, d, footer, M.kwHead ? PART_KW : 'MEASUREMENT — 動画の中での言及');
     }
 
-    // 口コミ章（⑥）は競合差（PART1/2）の直後・動画構成（PART3=方向性②/実行案③）の前に置く。
-    // 章の流れ:「現状把握①＋競合差 → 市場の空白地帯 → クチコミ → 方向性②＋実行案③ → 締め」。
-    if (M.reviews && d.reviews) {
-      const rp = (d.reviews.pages || []).filter((p) => p && p.label);
-      // `## PAGE Rx` があればそれを正としてページ順に描く（章の構成は INPUT 側で決める）
-      if (rp.length) rp.forEach((page) => R.addReviewPage(deck, page, footer, ownName));
-      else R.addReviewSlides(deck, d, footer);
-    }
-
-    // 動画を1本も解剖していない案件（初訪モード等）では PART 3 ごと出さない。
-    // 出すと「一覧」「Q7」「Q8」が全欠損のページとして並ぶ
-    if (M.videoAnatomy && analyzed.length) {
-    addDivider(deck, {
-      partIndex: 3, name: '実際に動画を確認する',
-      desc: `各ブランドの実績上位から選んだ動画を、フレーム単位で構成解剖する。`
-        + (() => {
-          // 「取得できた◯本」と書くと、取得の限界で本数が決まったように読める。
-          // 実際は取得成功10本から6本を選定していた（p22で誤読を招いた）
-          const got = parseInt(String(val((d.project || {}).media_acquired)).replace(/[^0-9]/g, ''), 10);
-          // 静止画カルーセルはコマ送りが無く、この解剖の対象にできない。
-          // 書かないと「選ばれなかった＝良くなかった」と読まれる
-          const excl = 'なお静止画カルーセルの投稿はコマ送りが無いため、本章の構成解剖の対象外である'
-            + '（各面の写真比率は Part 2 の各ページに記載）。';
-          return Number.isFinite(got) && got > analyzed.length
-            ? `検索上位の候補を一覧で示したうえで、動画実体を取得できた ${got} 本から選んだ ${analyzed.length} 本を1本ずつ解剖する。${excl}`
-            : `検索上位の候補を一覧で示したうえで、動画実体まで取得できた ${analyzed.length} 本を1本ずつ解剖する。${excl}`;
-        })(),
-      items: [
-        { q: '一覧', text: '構成解剖の対象にした動画' },
-        { q: 'Q7', text: '動画ごとの構成解剖' },
-        { q: 'Q8', text: '動画構成から見える共通パターン' },
-        { q: '総括', text: '実動画から見える勝ちパターン' },
-      ],
-      footerLeft: footer,
-    });
-    const topN = parseInt(val((d.settings || {}).video_list_top_n), 10) || 4;
-    chunks.forEach((ch, ci) => V.slideVideoTable(deck, ch, footer, topN, ci, chunks.length, analyzed.length));
-    analyzed.forEach((a, i) => {
-      V.slideVideoDetail(deck, a.b, a.v, a.bi, i, footer);
-      V.slideVideoStoryboard(deck, a.b, a.v, a.bi, i, footer);   // 5コマの構成ページを続けて置く
-    });
-    V.slideQ8(deck, d, footer);
-    }
-
-    // 他プラットフォーム章。TikTok以外の面での語られ方を提案版だけに足す
-    const plats = M.platforms === false ? [] : (d.platforms || []);
+    // ── 他プラットフォーム（⑤競合差の続き）。TikTok以外の面での語られ方
     if (plats.length) {
+      const np = nextPart();
       addDivider(deck, {
-        partIndex: 4, name: '他プラットフォームの発信実態',
+        partIndex: np, name: '他プラットフォームの発信実態',
         desc: 'TikTok検索面の外で、同じブランドがどう語られているかを見る。'
           + '面ごとに取得できる指標が違うため、反応量ではなく「発信の型」と「誰が発信しているか」で並べる。',
         items: plats.map((pf, i) => ({ q: `他面${i + 1}`, text: `${val(pf.name)}での発信の型` })),
         footerLeft: footer,
       });
+      const tag = `PART ${np} — 他プラットフォームの発信実態`;
       plats.forEach((pf, i) => {
-        PL.slidePlatform(deck, pf, i, footer);
-        PL.slidePlatformAccounts(deck, pf, i, footer);
+        PL.slidePlatform(deck, pf, i, footer, tag);
+        PL.slidePlatformAccounts(deck, pf, i, footer, tag);
       });
+    }
+
+    // ── 口コミ（⑥）。競合差の直後・動画構成（②方向性/③実行案）の前。
+    // 章の流れ:「現状把握①＋競合差 → 市場の空白地帯 → クチコミ → 方向性②＋実行案③ → 締め」
+    if (M.reviewsShown) {
+      const nr = nextPart();
+      const rp = (d.reviews.pages || []).filter((p) => p && p.label);
+      addDivider(deck, {
+        partIndex: nr, name: '口コミで見る購買と離脱',
+        desc: '購入者の口コミから、買い続ける理由と離れる理由をブランド横断で読み、打ち手につなげる。',
+        items: rp.length
+          ? rp.map((p) => ({ q: val(p.label), text: val(p.title) }))
+          : [{ q: 'R1', text: '調査条件' }, { q: 'R2', text: '好きな理由の横断比較' },
+            { q: 'R3', text: '離脱した理由の横断比較' }, { q: 'R4', text: `${ownName}の口コミ深掘り` },
+            { q: 'R5', text: '評価点の出自' }, { q: 'R6', text: '離脱理由への打ち手' }],
+        footerLeft: footer,
+      });
+      R.setPart(`PART ${nr} — 口コミ`);
+      // `## PAGE Rx` があればそれを正としてページ順に描く（章の構成は INPUT 側で決める）
+      if (rp.length) rp.forEach((page) => R.addReviewPage(deck, page, footer, ownName));
+      else R.addReviewSlides(deck, d, footer);
+      R.setPart(null);
+    }
+
+    // ── 動画の構成解剖（②方向性＋③実行案）。ブランド軸の解剖と、検索ワード面の上位投稿の解剖を同じ章に置く。
+    // 動画を1本も解剖していない案件では章ごと出さない（「一覧」「Q7」「Q8」が全欠損のページとして並ぶ）
+    if (M.videoAnatomy) {
+      const nv = nextPart();
+      const vtag = `PART ${nv} — 動画の構成解剖`;
+      addDivider(deck, {
+        partIndex: nv, name: '実際に動画を確認する',
+        desc: `${analyzed.length ? '各ブランドの実績上位' : '検索ワード面の上位'}から選んだ動画を、フレーム単位で構成解剖する。`
+          + (() => {
+            // 「取得できた◯本」と書くと、取得の限界で本数が決まったように読める。
+            // 実際は取得成功10本から6本を選定していた（p22で誤読を招いた）
+            const n = analyzed.length + kwv.length;
+            const got = parseInt(String(val((d.project || {}).media_acquired)).replace(/[^0-9]/g, ''), 10);
+            // 静止画カルーセルはコマ送りが無く、この解剖の対象にできない。
+            // 書かないと「選ばれなかった＝良くなかった」と読まれる
+            const excl = 'なお静止画カルーセルの投稿はコマ送りが無いため、本章の構成解剖の対象外である'
+              + (M.kwHead ? '（各面の写真比率は PART 2 の各ページに記載）。' : '。');
+            const pre = analyzed.length ? '検索上位の候補を一覧で示したうえで、' : '';
+            return Number.isFinite(got) && got > n
+              ? `${pre}動画実体を取得できた ${got} 本から選んだ ${n} 本を1本ずつ解剖する。${excl}`
+              : `${pre}動画実体まで取得できた ${n} 本を1本ずつ解剖する。${excl}`;
+          })(),
+        items: [
+          analyzed.length ? { q: '一覧', text: '構成解剖の対象にした動画' } : null,
+          analyzed.length ? { q: 'Q7', text: '動画ごとの構成解剖' } : null,
+          kwv.length ? { q: 'KW', text: '検索ワード面の上位投稿の構成解剖' } : null,
+          M.q8 ? { q: 'Q8', text: '動画構成から見える共通パターン' } : null,
+          (M.patterns && patterns.length) ? { q: '総括', text: '実動画から見える勝ちパターン' } : null,
+        ].filter(Boolean),
+        footerLeft: footer,
+      });
+      if (analyzed.length) {
+        const topN = parseInt(val((d.settings || {}).video_list_top_n), 10) || 4;
+        chunks.forEach((ch, ci) => V.slideVideoTable(deck, ch, footer, topN, ci, chunks.length, analyzed.length,
+          { partTag: vtag, hasKw: kws.length > 0 }));
+        analyzed.forEach((a, i) => {
+          V.slideVideoDetail(deck, a.b, a.v, a.bi, i, footer, undefined, vtag);
+          V.slideVideoStoryboard(deck, a.b, a.v, a.bi, i, footer, undefined, vtag);   // 5コマの構成ページを続けて置く
+        });
+      }
+      // 検索ワード面の上位投稿を1本ずつ解剖（ブランド軸の Q7 と同じ2ページ構成）
+      kwv.forEach((v, i) => {
+        const pseudo = { brand_name: `「${val(v.axis_name)}」` };
+        V.slideVideoDetail(deck, pseudo, v, 0, i, footer, 'KW', vtag);
+        V.slideVideoStoryboard(deck, pseudo, v, 0, i, footer, 'KW', vtag);
+      });
+      if (M.q8) V.slideQ8(deck, d, footer, vtag);
     }
 
     if (M.patterns && patterns.length) S.slidePatterns(deck, patterns, footer);
     S.slideFinal(deck, d, footer, M);
-    S.slideAppendix(deck, d, footer);
+    S.slideAppendix(deck, d, footer, M);
   };
 
   const PptxCtor = pptx.constructor;

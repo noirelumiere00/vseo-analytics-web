@@ -390,9 +390,12 @@ node src/generate.js --case <案件ディレクトリ> --mode <ステータス�
 `希望形式` に PDF が含まれていたら、PPTX のあとで変換を試し、**PDF ができたかを必ず確かめる**。
 
 ```bash
-soffice --headless --convert-to pdf --outdir <案件>/output <案件>/output/<資料>.pptx
-ls <案件>/output/<資料>.pdf     # 無ければ失敗
+python3 tools/render_pptx_any.py <案件>/output/<資料>.pptx <案件>/render 110 --keep-pdf
+# 最後の行の JSON を読む: {"pdf_ok": true, "pdf_path": ...} なら成功、{"pdf_ok": false, "pdf_error": ...} なら失敗
 ```
+
+（`render_pptx_any.py` は LibreOffice／PowerPoint／Keynote のうち使えるものを選ぶ。全ページの画像化も同時に行うので、
+目視の確認にもそのまま使える）
 
 LibreOffice（`soffice`）が無い・変換に失敗した環境では、**その旨と PowerPoint の
 「ファイル→エクスポート→PDF」の手順を伝える**。成功したフリをしない。

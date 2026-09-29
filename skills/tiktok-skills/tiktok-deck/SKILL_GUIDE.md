@@ -28,20 +28,22 @@ tiktok-analyze（計測）   キーワード登場率・勝ちパターンを計
 tiktok-deck（資料化）    ステータス別にPPTXを生成 ← 本体
 ```
 
-補助：`review-scraper`（クチコミ収集）… 楽天/Yahoo!/@cosme の口コミを集めて集計。tiktok-deck の `# REVIEWS` 章の入力になる。標準ライブラリのみで動作（pip不要）。
+補助：`review-scraper`（クチコミ収集）… 楽天/Yahoo!/@cosme の口コミを集めて集計。出力（summary.md・reviews.csv）を読んで INPUT.md の `# REVIEWS` を書く。件数・評価（元の段階）は summary.md から、Love/Churn・Quotes・ACTIONS は口コミを読んで記述（手順は review-scraper/SKILL.md「tiktok-deck の口コミ章に使うとき」）。LIPS は取得対象外。標準ライブラリのみで動作（pip不要）。
 
 ### 資料の章の流れ（改修後の並び）
 統合資料（複数ステータスを1本化）にすると、次の順序で並びます。
 
 | 順 | パート | 対応ステージ | 中身 |
 |---|---|---|---|
-| 1 | **PART1 検索面の実態** | 現状把握＋競合差 | 誰が出ているか／PR比／クラスタ／商品／上位投稿 |
-| 2 | **PART2 検索ワードの露出実態** | 競合差（市場の空白地帯） | カテゴリ名検索での上位・保存・自社の不在 |
-| 3 | **REVIEWS 口コミ** | クチコミ | 件数・好意/離脱理由・評価の出自・打ち手 |
-| 4 | **PART3 動画の構成解剖** | 方向性＋実行案 | 勝ちパターン・実動画のコマ解剖・台本方向 |
-| 5 | **SUMMARY 総括** | 締め | 勝ちパターン総括 → KEEP/IMPROVE/TRY |
+| 1 | **検索面の実態** | 現状把握＋競合差 | 誰が出ているか／PR比／クラスタ／商品／上位投稿 |
+| 2 | **検索ワードの露出実態** | 競合差（市場の空白地帯） | カテゴリ名検索での上位・保存・自社名を含む投稿 |
+| 3 | **他プラットフォームの発信実態** | 競合差 | X・Instagram 等での発信の型（入力があるときだけ） |
+| 4 | **口コミ** | クチコミ | 件数・好意/離脱理由・評価の出自・打ち手 |
+| 5 | **動画の構成解剖** | 方向性＋実行案 | 実動画のコマ解剖（ブランド軸・検索ワード面）・共通パターン |
+| 6 | **SUMMARY 総括** | 締め | 勝ちパターン総括 → KEEP/IMPROVE/TRY |
 
 > 「証拠（現状・競合・顧客の声）→ 判断（方向性）→ 実行（構成案）」の順に読ませる設計です。
+> 並びは固定（`--mode` の書き順には従わない）。PART の番号は載せた章の順に 1 から振る。
 
 ### 守っていること
 - TikTokにログインしない／CAPTCHAを突破しない／UA・IP偽装をしない
@@ -73,21 +75,21 @@ tiktok-deck（資料化）    ステータス別にPPTXを生成 ← 本体
 ### review-scraper（クチコミ収集）
 - 役割：EC/口コミサイトのレビューを集めてCSV・JSONL・集計サマリーにする
 - 対応：楽天市場／Yahoo!ショッピング／@cosme（Amazon・LIPS・Qoo10 は自動アクセス拒否のため対象外）
-- 特徴：標準ライブラリのみで動作（pip不要）。集計結果を tiktok-deck の `# REVIEWS` 章へ流し込む
+- 特徴：標準ライブラリのみで動作（pip不要）。出力（summary.md・reviews.csv）を読んで INPUT.md の `# REVIEWS` を書く。件数・評価（元の段階）は summary.md から、Love/Churn・Quotes・ACTIONS は口コミを読んで記述（手順は review-scraper/SKILL.md「tiktok-deck の口コミ章に使うとき」）。LIPS は取得対象外
 - 主なスクリプト：`scripts/collect.py`、`scripts/sites/{rakuten,yahoo,cosme}.py`
 
 ### tiktok-deck（資料化）※本体・今回改修
 - 役割：ステータス別にPPTXを生成
 - 工程：
   1. `case.json`（誰を・何で検索したか。数値は書かない）
-  2. `tools/extract_frames.py`（動画→コマ抽出、contact.jpgで全体把握）
-  3. **AI目視**：コマを実際に開き、8軸（フック／視覚演出／テロップ／価格/スペック／商品識別／CTA／勝因仮説／本質1行）で記述
-  4. `tools/build_input_md.py`（機械欄）＋ `authored.md`（散文）→ `tools/merge_authored.py` → `INPUT.md`
+  2. `tools/extract_frames.py`（動画→コマ抽出、contact.jpgで全体把握）＋ `video_manifest.json`（解剖する動画とコマの宣言）
+  3. **AI目視**：コマを実際に開き、8軸（フック／視覚演出／テロップ／価格/スペック／商品識別／CTA／勝因仮説／本質1行）を `authored.md` に記述（`## FIELD brand_01/video_01 <キー>`）
+  4. `tools/fetch_covers.py`（カバーを動画ID名で取得）→ `tools/build_input_md.py`（機械欄）＋ `authored.md`（散文）→ `tools/merge_authored.py` → `INPUT.md`（書けるキーと APPEND の雛形は `merge_authored.py --list-keys`）
   5. `node src/generate.js --case <案件> --mode <ステータス>`（章はステータスで決まる。複数指定で統合＝`--mode "具体提案,構成提案"`。初訪は別の作り方で単独専用→③）
   6. 前検：`tools/preflight.py`（版面崩れ・数値矛盾）、`tools/verify_assets.py`（画像とキャプションのズレ）
-- 生成の章順（改修点）：`generate.js` 内で **REVIEWS（口コミ）章を PART3（動画構成）の前** に出すよう変更
-- 口コミ章の入力：`INPUT.md` の `# REVIEWS` セクション
-  - `## SURVEY`：`media`／`method`／`asymmetry_note`／`scale_note`／**`media_a_label`・`media_b_label`・`media_c_label`**（評価出自表の媒体名。既定は @cosme / LIPS。食品等では「楽天」「Yahoo!」等に差し替え可）
+- 生成の章順（改修点）：`generate.js` 内で **口コミ章を動画構成の章の前**、他プラットフォームをさらにその前に出す
+- 口コミ章の入力：`INPUT.md` の `# REVIEWS` セクション（authored.md の `## APPEND REVIEWS` に書く。無いと章は出ず、生成ログに「章の欠落」が残る）
+  - `## SURVEY`：`media`／`method`／`asymmetry_note`／`scale_note`／**`media_a_label`・`media_b_label`・`media_c_label`**（媒体名。既定は @cosme / LIPS。R1 の総件数と R5 の見出しの両方に使う。LIPS は review-scraper で取れないので、楽天・Yahoo! 等に差し替えたときは各媒体の満点を `scale_note` に必ず書く。無いと R5 に欠損が出て前検で止まる）
   - `## BRAND REVIEWS` → `### BRAND`：`reviews_read`／`cosme_rating`(=媒体A評価)／`cosme_count`／`lips_rating`(=媒体B評価)／`lips_count`／`lips_pr_ratio`(=媒体C列)／`#### Love`・`#### Churn`（理由｜言及数）・`#### Quotes`（原文｜出典）
   - `## CROSS`：`love_patterns`／`churn_patterns`／`love_conclusion`／`churn_conclusion`
   - `## ACTIONS`：離脱理由｜対応する打ち手
@@ -99,7 +101,8 @@ tiktok-deck（資料化）    ステータス別にPPTXを生成 ← 本体
 | 不具合修正 | 口コミ「自社深掘り(R4)」で `find` の引数取り違えにより落ちる問題を修正 |
 | 表示改善 | 比較表がブランド数を超えて空行を水増しし `[DATA NOT PROVIDED]` が並ぶ問題を、実ブランド数までに抑制 |
 | 表示改善 | 好意/離脱理由が3件未満のとき、空欄を `[DATA NOT PROVIDED]` ではなく「—」で表示 |
-| 汎用化 | 評価出自表(R5)の媒体名を `SURVEY` から差し替え可能に（既定 @cosme/LIPS、食品等で楽天/Yahoo!に対応） |
+| 汎用化 | 媒体名を `SURVEY` から差し替え可能に（R1 総件数・R5 評価出自表。既定 @cosme/LIPS、食品等で楽天/Yahoo!に対応。差し替え時は `scale_note` 必須） |
+| 表示改善 | 打ち手(R6)・好意/離脱の比較表(R2/R3)を、書かれた件数だけ出す（空行で水増ししない） |
 
 ---
 
@@ -131,24 +134,29 @@ tiktok-deck（資料化）    ステータス別にPPTXを生成 ← 本体
 - `--mode "初訪,…"` の統合はしない（二次提案は別資料）
 
 ### 二次提案以降の型と含まれる章
-| 章 | 具体提案 | 構成提案 | 競合差再提案 | レポート |
-|---|:---:|:---:|:---:|:---:|
-| Q1 誰が / Q2 PR比 | ○ | ✗ | ○ | ○ |
-| Q3 クラスタ / Q4 商品 | ○ | ✗ | ○ | ○ |
-| Q5 上位投稿 | ○ | ○ | ○ | ○ |
-| Q6 検索ワード面 | ○ | ✗ | ○ | ○ |
-| Q7/Q8 動画の構成解剖 | ○ | ○ | ✗ | ✗ |
-| REVIEWS 口コミ | ○ | ✗ | ○ | ✗ |
-| 他プラットフォーム | ○ | ✗ | ○ | ✗ |
-| 勝ちパターン総括 | ○ | ○ | ✗ | ✗ |
-| 施策前後比較 | ✗ | ✗ | ✗ | ○（基準必須） |
+| 章 | 具体提案 | 構成提案 | 競合差再提案 |
+|---|:---:|:---:|:---:|
+| Q1 誰が / Q2 PR比 | ○ | ✗ | ○ |
+| Q3 クラスタ / Q4 商品 | ○ | ✗ | ○ |
+| Q5 上位投稿 | ○ | ○ | ○ |
+| 全ブランド横断サマリー | ○ | ✗ | ○ |
+| Q6 検索ワード面 | ○ | ✗ | ○ |
+| 言及回数（tiktok-analyze の計測があるとき） | ○ | ○ | ○ |
+| Q7/Q8 動画の構成解剖 | ○ | ○ | ✗ |
+| REVIEWS 口コミ | ○ | ✗ | ○ |
+| 他プラットフォーム | ○ | ✗ | ○ |
+| 勝ちパターン総括 | ○ | ○ | ✗ |
+
+（`src/generate.js` の MODES と同じ。入力が無い章は○でも出ない）
+
+レポート（施策前後比較）は**生成コードが未対応**（前後比較のページが無い）。`--mode レポート` はエラーで止まる。
 
 ### 各型の目的と標準枚数
 - **初訪（quick）**：現状→競合の発信→足りない発信→伸びている型の順に見せ、二次提案の約束を取る。本編最大8枚＋付録2枚
 - **具体提案（deep）**：上位の共通点と保存理由から次の方向を合意する。10〜16ページ
 - **構成提案**：合意した方向を、制作が実行できる企画・構成・台本へ変換。10〜20ページ
 - **競合差再提案**：競合との差だけを定量比較し、差別化の打ち手を示す。単独/統合どちらも可
-- **レポート**：施策前後の検索露出と自社投稿結果を検証。**施策前の基準データが無いと生成不可**
+- **レポート**：施策前後の検索露出と自社投稿結果を検証する資料。**生成コードは未対応**（指定すると止まる）。施策前の基準データは同じ検索語・同じ条件で取って保存しておく
 
 ### 呼び出し例（案件ディレクトリを --case で渡す）
 ```bash
@@ -159,7 +167,8 @@ node src/generate.js --case <案件> --mode 初訪
 node src/generate.js --case <案件> --mode 競合差再提案
 node src/generate.js --case <案件> --mode "競合差再提案,具体提案,構成提案"   # 1本に統合
 
-# 別名：quick=初訪 / deep=具体提案。PDF は tools/render_pptx_any.py（要 LibreOffice）で作る
+# 別名：quick=初訪 / deep=具体提案
+# PDF は generate.js では作らない。tools/render_pptx_any.py <pptx> <出力先> --keep-pdf（要 LibreOffice）
 ```
 
 ### 注意

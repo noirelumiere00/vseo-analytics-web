@@ -1,4 +1,4 @@
-// mentions.js — 動画の中でキーワードが何回言われたか（02-analyze の計測結果）
+// mentions.js — 動画の中でキーワードが何回言われたか（tiktok-analyze の計測結果）
 //
 // このページの原則:
 //   経路（本文・タグ・テロップ・音声）ごとに分母が違う。
@@ -15,7 +15,8 @@ const C = require('./common');
 
 const { brandColor } = C;
 // 中扉の PART 2 と同じ文言にする。ここだけ別名にすると、
-// 同じ章の中でページの帯だけが変わって別章に見える
+// 同じ章の中でページの帯だけが変わって別章に見える。
+// PART 2（検索ワード）が無い資料では generate.js が別の帯を渡す（無い章の番号を名乗らない）
 const PART = 'PART 2 — 検索ワードの露出実態';
 const CHANNELS = ['caption', 'hashtag', 'ocr', 'asr'];
 
@@ -30,7 +31,7 @@ function rateOnly(rate) {
   return String(val(rate)).replace(/（.*$/, '').trim();
 }
 
-function slideMentions(pptx, d, footer) {
+function slideMentions(pptx, d, footer, partTag) {
   const m = d.mentions || {};
   // 未計測のページは作らない。開示は付録の「言及回数の計測」行が担う
   if (String(m.status || '').trim() !== 'measured') return [];
@@ -52,13 +53,13 @@ function slideMentions(pptx, d, footer) {
     const s = addSlide(pptx, {
       qLabel: `言及${i + 1}`,
       title: `「${val(m.keyword)}」は動画の中でどう言われているか`,
-      partTag: PART,
+      partTag: partTag || PART,
       lead: `${val(ax.label)}｜解析できた ${val(ax.videos_processed)} 本／`
         + `対象 ${val(ax.videos_in_file)} 本。`
         + `いずれかの経路で言及があったのは ${val(ax.videos_with_keyword)} 本（${val(ax.appearance_rate)}）。`,
       accent: brandColor(0), footerLeft: footer,
     });
-    // coverage_note は 02-analyze が三値で書いた開示文。要約せず載せる
+    // coverage_note は tiktok-analyze が三値で書いた開示文。要約せず載せる
     const body = [
       val(m.coverage_note),
       '経路ごとに分母が異なる。除外した本数は0件ではなく、対象外または未計測。',

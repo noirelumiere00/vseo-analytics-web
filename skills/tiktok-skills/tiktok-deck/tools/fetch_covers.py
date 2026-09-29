@@ -286,7 +286,18 @@ def fetch_one(v: dict, dst: str, media_dirs: list[str], ffmpeg: str | None,
     return None, errs
 
 
+
+def _utf8_stdio():
+    """日本語 Windows のパイプ（cp932）で絵文字入りのキャプションを print すると落ちる。置換して続ける"""
+    for st_ in (sys.stdout, sys.stderr):
+        if hasattr(st_, "reconfigure"):
+            try:
+                st_.reconfigure(errors="replace")
+            except (ValueError, OSError):
+                pass
+
 def main() -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--case", required=True, help="案件ディレクトリ（case.json がある場所）")
     ap.add_argument("--media-dir", action="append", default=[],
@@ -296,6 +307,9 @@ def main() -> int:
                     help="labels.json が無いとき、各軸の表示順上位を何本まで取るか（既定30）")
     ap.add_argument("--no-network", action="store_true", help="coverUrl / oEmbed を使わない")
     ap.add_argument("--refresh", action="store_true", help="既にある画像も取り直す（既定は上書きしない）")
+    ap.add_argument("--all", action="store_true",
+                    help="labels.json があっても各軸の上位 --top 本を対象にする（二次提案以降の資料で、"
+                         "保存率などで選ばれた投稿のカバーも揃えたいとき）")
     args = ap.parse_args()
 
     case_dir = os.path.abspath(os.path.expanduser(args.case))
@@ -312,7 +326,7 @@ def main() -> int:
         print("  ! ffmpeg が見つかりません。取得済み動画からは抜けず、WebP のカバーも変換できません")
 
     idx = raw_index(case_dir, cfg)
-    lp = label_posts(case_dir)
+    lp = None if args.all else label_posts(case_dir)
     if lp is not None:
         targets = []
         for p in lp:

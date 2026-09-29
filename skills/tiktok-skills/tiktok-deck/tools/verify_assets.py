@@ -38,6 +38,13 @@ import sys
 import zipfile
 from collections import defaultdict
 
+# 日本語 Windows（cp932）のパイプ越しで表示できない字があっても落とさない（落ちると終了コード1で問題ありと区別できない）
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 ND = "[DATA NOT PROVIDED]"
 # レンダラ（src/generate.js）が付ける出力名の接頭辞。
 # ここを変えるときは generate.js の出力名も合わせること
@@ -371,10 +378,12 @@ def check_storyboard(case_dir, recs):
                 continue
             if digest(src) != digest(dst):
                 out.append(f"[致命的] コマ {num} の画像が元フレームと違う: {rel} ≠ frames/{vid}/{num}.jpg")
-            # バッジ番号（ラベル先頭の「NN:」）と sb_frames の並びがずれていないか
+            # バッジ番号（ラベル先頭の「NNN:」）と sb_frames の並びがずれていないか。
+            # extract_frames.py は 001.jpg からの3桁で書く。2桁決め打ちだと、正しい「001:」は照合されず
+            # （誤った「005:」も通り）、「01:」は正しいのに致命的になっていた。桁数ではなく数で比べる
             lab = b.get(f"sb{i}_label", "")
-            lm = re.match(r"\s*(\d{2})\s*[:：]", lab)
-            if lm and lm.group(1) != num:
+            lm = re.match(r"\s*(\d{1,4})\s*[:：]", lab)
+            if lm and num.isdigit() and int(lm.group(1)) != int(num):
                 out.append(f"[致命的] コマ番号の食い違い: {rel} は {num} のはずが"
                            f"ラベルは「{lm.group(1)}:」（{url}）")
     return out
