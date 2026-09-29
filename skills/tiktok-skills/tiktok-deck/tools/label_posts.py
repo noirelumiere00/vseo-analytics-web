@@ -16,9 +16,11 @@
 
 見た証拠:
   --contact が軸ごとの一覧シート（review/contact_<軸コード>_NN.jpg）を作り、各タイルに
-  3文字のコードを焼き込む。コードは画像の中にしか無い（labels.json にはハッシュだけ）。
-  patch にはそのコードを書く。見ていない投稿を「見た」扱いにできない
-  （過去に「未実見」と書いたコマを紙面に載せた事故がある）。
+  タイル番号（K1-3 など）と4文字のコードを焼き込む。コードは画像の中にしか無い
+  （labels.json には遅いハッシュ PBKDF2 だけを置く。総当たりで復元するには1タイルに数時間かかる）。
+  patch にはタイル番号とそのコードを書く。見ていない投稿を「見た」扱いにしない
+  （過去に「未実見」と書いたコマを紙面に載せた事故がある）。判定は、シートで見せた画像に結び付けて記録し、
+  あとでカバーが差し替わっていたら確定を拒む。
 
 使い方:
   python3 tools/label_posts.py --case . --init             # 候補を選ぶ（選択欄は空のまま。機械の推定は guess にだけ）
@@ -30,10 +32,10 @@
   python3 tools/label_posts.py --case . --lint-vocab       # 語彙の検査だけ
 
 patch の形（CSV。見出し行必須。値は id・表示名・短縮名のどれでもよい）:
-  code,relevance,angle,appeal
-  K7Q,関連,アレンジ調理,
-  C3M,関連,実食レビュー,おいしさ
-  X9P,無関係,,
+  tile,code,relevance,angle,appeal
+  K1-1,K7QA,関連,アレンジ調理,
+  C1-3,C3MZ,関連,実食レビュー,おいしさ
+  C1-4,X9PE,無関係,,
 
 依存: 標準ライブラリ（一覧シートだけ Pillow。無ければ作れないので案内して止まる）
 """
@@ -51,8 +53,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from fvlib import (load_case, load_vocab, load_json, load_axis, pr_basis,  # noqa: E402
-                   is_domestic_lang, official_ids, sha256_file, lint_vocab, RESERVED)
+from fvlib import (load_case, load_vocab, load_json, load_axis, pr_basis, safe_vid, to_epoch,  # noqa: E402
+                   is_domestic_lang, official_ids, sha256_file, lint_vocab, RESERVED, order_is_display)
 
 FIELD_JA = {"relevance": "関連性", "angle": "切り口", "appeal": "訴求"}
 VOCAB_KEY = {"relevance": "relevance", "angle": "angles", "appeal": "appeals"}
@@ -60,6 +62,8 @@ WINDOW_DEFAULT = {"category": 30, "brand": 20, "own": 20}
 UNSURE_MAX = 0.25        # 判定不可がこれを超える軸は、カバーだけでは判断できていない
 RUBBER_STAMP = 0.9       # 確定ラベルがこの割合以上「機械の推定のまま」なら、見ていない疑い
 CODE_ALPHA = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"   # 0/O/1/I/L は読み違えるので使わない
+CODE_LEN = 4                                     # 31^4 ≒ 92万通り
+PROOF_ITER = 60_000                              # PBKDF2 の反復回数（1回数十ミリ秒。総当たりは1タイル数時間）
 
 
 # ─────────────────────────────── 軸
@@ -110,19 +114,23 @@ def text_of(v: dict) -> str:
     return (v.get("desc") or "") + " " + " ".join("#" + t for t in (v.get("hashtags") or []))
 
 
-def poster_of(v: dict, cfg: dict) -> tuple[str, str | None]:
-    """投稿者は選ばせない。公式ID・PR根拠・メディア一覧・フォロワー数で機械的に決める"""
-    au = v.get("author") or {}
-    uid = str(au.get("uniqueId") or "").lstrip("@").lower()
+def poster_from(author, is_pr: bool, followers, cfg: dict) -> tuple[str, str | None]:
+    """投稿者は選ばせない。公式ID・PR根拠・メディア一覧・フォロワー数で機械的に決める。
+    build_first_visit.py もこれで数え直す（--init 後に case.json の公式IDを直しても食い違わないように）"""
+    uid = str(author or "").lstrip("@").lower()
     for b in cfg.get("brands") or []:
         if uid and uid in official_ids(b):
             return "official", b["name"]
-    if pr_basis(v):
+    if is_pr:
         return "creator_pr", None
     if uid and uid in {str(x).lstrip("@").lower() for x in cfg.get("media_accounts") or []}:
         return "media", None
-    fol = au.get("followerCount")
-    return ("creator" if fol and fol >= 10_000 else "consumer"), None
+    return ("creator" if followers and followers >= 10_000 else "consumer"), None
+
+
+def poster_of(v: dict, cfg: dict) -> tuple[str, str | None]:
+    au = v.get("author") or {}
+    return poster_from(au.get("uniqueId"), bool(pr_basis(v)), au.get("followerCount"), cfg)
 
 
 def guess(v: dict, ax: dict, catpat: str, vocab: dict, official_brand: str | None) -> dict:
@@ -159,17 +167,21 @@ def record(v: dict, case_dir: str, cfg: dict) -> dict:
     cover = f"assets/covers/{vid}.jpg"
     basis = pr_basis(v)
     poster, off_brand = poster_of(v, cfg)
+    miss = set(v.get("missingFields") or []) | ({"stats.playCount", "stats.collectCount"} if not s else set())
     return {
         "video_id": vid, "url": v.get("url"),
         "author": au.get("uniqueId"), "author_name": au.get("nickname"),
         "verified": bool(au.get("verified")),
         # search.mjs は欠損を 0 で返すことがある。0 を「フォロワー0人」と読まない
         "followers": au.get("followerCount") or None,
-        "views": s.get("playCount"), "saves": s.get("collectCount"), "save_rate": srate(v),
+        # search.mjs は取れなかった stats を 0 で出して missingFields に列挙する。0再生と読まない
+        "views": None if "stats.playCount" in miss else s.get("playCount"),
+        "saves": None if "stats.collectCount" in miss else s.get("collectCount"),
+        "save_rate": None if miss & {"stats.playCount", "stats.collectCount"} else srate(v),
         "is_pr": bool(basis), "pr_basis": basis, "is_ad": v.get("isAd") is True,
         "poster": poster, "official_brand": off_brand,
         "media": v.get("mediaType") or None, "image_count": v.get("imageCount") or None,
-        "lang": v.get("textLanguage"), "create_time": v.get("createTime"),
+        "lang": v.get("textLanguage"), "create_time": to_epoch(v.get("createTime")),
         "caption": re.sub(r"\s+", " ", (v.get("desc") or "")).strip(),
         "hashtags": v.get("hashtags") or [],
         "cover": cover if os.path.exists(os.path.join(case_dir, cover)) else None,
@@ -235,6 +247,8 @@ def validate(case_dir: str, cfg: dict, vocab: dict, doc: dict) -> tuple[list[str
             st = per_axis.setdefault(axis_key(a), {"win": 0, "done": 0, "unsure": 0, "rel": 0, "undecided": []})
             if a.get("relevance") is not None and resolve_value("relevance", a["relevance"], vocab) != a["relevance"]:
                 errors.append(f"{p['video_id']}: 関連性={a['relevance']} は語彙外")
+            if a.get("relevance") == "other_brand" and a["kind"] == "category":
+                errors.append(f"{p['video_id']}: カテゴリ軸で「他社の商品」は使えない（カテゴリ軸では他社の商品も「関連」）")
             if a.get("in_window"):
                 st["win"] += 1
                 if a.get("confirmed"):
@@ -247,9 +261,15 @@ def validate(case_dir: str, cfg: dict, vocab: dict, doc: dict) -> tuple[list[str
                 miss = [FIELD_JA[f] for f in required_fields(p, a) if not value_of(p, a, f)]
                 if miss:
                     errors.append(f"{p['video_id']}（{axis_key(a)}）: 確定済みなのに未選択（{'・'.join(miss)}）")
-                if a.get("cover_sha") and p.get("cover"):
+                if a.get("relevance") == "relevant" and p.get("cover"):
+                    # 紙面に載りうるのは relevant だけ。判定時に見せた画像と今の画像が同じであること
                     now = sha256_file(os.path.join(case_dir, p["cover"]))
-                    if now and now != a["cover_sha"]:
+                    if not now:
+                        errors.append(f"{p['video_id']}: 判定したカバー画像が消えた。fetch_covers.py で取り直し、--contact で見直す")
+                    elif not a.get("cover_sha"):
+                        errors.append(f"{p['video_id']}（{axis_key(a)}）: カバーが無い状態で「関連」と確定し、後からカバーが付いた。"
+                                      "--contact で画像を見て --apply し直す")
+                    elif now != a["cover_sha"]:
                         errors.append(f"{p['video_id']}: 判定した後にカバー画像が変わった。見直して --apply し直す")
     for k, st in per_axis.items():
         lines.append(f"  {k}: 窓内 判定 {st['done']}/{st['win']}・関連 {st['rel']}・判定不可 {st['unsure']}")
@@ -279,15 +299,21 @@ def cmd_init(case_dir, cfg, vocab, args):
     old = {} if args.reset or not os.path.exists(lp) else {p["video_id"]: p for p in load_json(lp).get("posts", [])}
     posts, by_id = [], {}
     for ax in axes_of(cfg):
-        vs, _meta = load_axis(case_dir, ax["file"], allow_empty=ax["kind"] != "category")
+        vs, meta = load_axis(case_dir, ax["file"], allow_empty=ax["kind"] != "category")
+        ok_order, why = order_is_display(meta)
+        if not ok_order:
+            # 並べ替えた結果や CAPTCHA 下の取得を「上位」として扱わない（主カテゴリ以外の軸も同じ）
+            raise SystemExit(f"[致命的] {ax['kind']}:{ax['name']}（{ax['file']}）: {why}")
         top = win["category"] if ax["kind"] == "category" else win["own"] if ax["kind"] == "own" else win["brand"]
         picked = [(r, v, True) for r, v in enumerate(vs, start=1) if r <= top]
         if ax["kind"] == "competitor":
             # 競合がお金をかけて広げている訴求（P4）は下位にあることが多い。PR は順位に関係なく候補に入れる
             picked += [(r, v, False) for r, v in enumerate(vs, start=1) if r > top and pr_basis(v)]
         for rank, v, in_window in picked:
-            vid = str(v.get("id") or "")
+            vid = safe_vid(v.get("id"))
             if not vid:
+                # 投稿IDはパスと HTML に使う。数字以外（手で直した raw 等）は候補に入れない
+                print(f"  ! {ax['kind']}:{ax['name']} {rank}位: 投稿ID {str(v.get('id'))[:40]!r} が数字でないため外しました")
                 continue
             if vid not in by_id:
                 r = record(v, case_dir, cfg)
@@ -329,8 +355,10 @@ def cmd_init(case_dir, cfg, vocab, args):
     return 0
 
 
-def code_hash(salt, vid, akey, code):
-    return hashlib.sha256(f"{salt}|{vid}|{akey}|{code}".encode()).hexdigest()
+def code_hash(salt, vid, akey, code, iters=PROOF_ITER):
+    """見た証拠のハッシュ。3文字×sha256 だと labels.json の salt から約2秒で全タイルを復元できた
+    （2026-09 レビュー）。4文字×PBKDF2 にして、画像を開くほうがずっと早いようにする"""
+    return hashlib.pbkdf2_hmac("sha256", str(code).encode(), f"{salt}|{vid}|{akey}".encode(), iters).hex()
 
 
 def cmd_contact(case_dir, cfg, vocab, args):
@@ -372,13 +400,16 @@ def cmd_contact(case_dir, cfg, vocab, args):
             for i, (p, a) in enumerate(chunk):
                 x, y = (i % cols) * tw, (i // cols) * (th + 44)
                 n = si + i + 1
-                code = "".join(secrets.choice(CODE_ALPHA) for _ in range(3))
+                code = "".join(secrets.choice(CODE_ALPHA) for _ in range(CODE_LEN))
                 while code in used:
-                    code = "".join(secrets.choice(CODE_ALPHA) for _ in range(3))
+                    code = "".join(secrets.choice(CODE_ALPHA) for _ in range(CODE_LEN))
                 used.add(code)
                 a["code_hash"] = code_hash(doc["salt"], p["video_id"], axis_key(a), code)
+                a["proof_iter"] = PROOF_ITER
                 a["tile"] = f"{ax['code']}-{n}"
                 a["sheet"] = f"review/{name}.jpg"
+                # シートに実際に見せた画像。確定時に今のカバーと照合する（見た後の差し替えを検知する）
+                a["shown_sha"] = sha256_file(os.path.join(case_dir, p["cover"])) if p.get("cover") else None
                 if p.get("cover"):
                     try:
                         im = Image.open(os.path.join(case_dir, p["cover"])).convert("RGB")
@@ -389,12 +420,12 @@ def cmd_contact(case_dir, cfg, vocab, args):
                 else:
                     dr.text((x + 12, y + 260), "no cover", fill=(160, 0, 0), font=font)
                 # ASCII だけを焼く（既定フォントに日本語の字形が無い）
-                dr.rectangle([x + 4, y + 4, x + 96, y + 40], fill=(23, 24, 28))
+                dr.rectangle([x + 4, y + 4, x + 112, y + 40], fill=(23, 24, 28))
                 dr.text((x + 12, y + 8), code, fill=(255, 255, 255), font=font)
-                tag = f"#{n} {ax['code']} r{a['rank']}" + (" PR" if p.get("is_pr") else "") + \
+                tag = f"{a['tile']} r{a['rank']}" + (" PR" if p.get("is_pr") else "") + \
                       (" OFF" if p.get("poster") == "official" else "") + ("" if a["in_window"] else " +")
-                dr.text((x + 104, y + 12), tag, fill=(23, 24, 28), font=small)
-                listing.append(f"#{n}\t{ax['code']}\t{a['rank']}位{'' if a['in_window'] else '（窓外PR）'}\t"
+                dr.text((x + 120, y + 12), tag, fill=(23, 24, 28), font=small)
+                listing.append(f"{a['tile']}\t{a['rank']}位{'' if a['in_window'] else '（窓外PR）'}\t"
                                f"{p['video_id']}\t{'PR ' if p.get('is_pr') else ''}{'公式 ' if p.get('poster') == 'official' else ''}"
                                f"{p.get('views') or 0:,}再生\t{p['caption'][:60]}")
             img.save(os.path.join(out_dir, name + ".jpg"), quality=85)
@@ -408,8 +439,8 @@ def cmd_contact(case_dir, cfg, vocab, args):
         return 0
     for name, n in made:
         print(f"→ review/{name}.jpg（{n}枚）と review/{name}.txt")
-    print("各タイルの左上の3文字コードを patch の code 列に書く（コードは画像にしか無い）。"
-          "patch は review/patch_<軸コード>.csv に1軸ずつ書くとよい")
+    print("各タイルの左上の4文字コードとタイル番号（K1-3 等）を patch の code・tile 列に書く（コードは画像にしか無い）。"
+          "patch は review/patch_<軸コード>.csv に1軸ずつ書くとよい。--contact をやり直すとコードと番号は変わる")
     return 0
 
 
@@ -426,27 +457,29 @@ def cmd_apply(case_dir, cfg, vocab, args):
     if not os.path.exists(lp):
         raise SystemExit("[致命的] labels.json がありません。先に --init を実行してください")
     doc = load_json(lp)
-    index = {}
+    by_tile = {}
     for p in doc["posts"]:
         for a in p["axes"]:
-            if a.get("code_hash"):
-                index[a["code_hash"]] = (p, a)
-    bad, staged, seen_codes = [], [], set()
+            if a.get("code_hash") and a.get("tile"):
+                by_tile[a["tile"]] = (p, a)
+    bad, staged, seen_tiles = [], [], set()
+    batch_vals: dict[tuple, str] = {}
     rows = [(path, r) for path in args.apply for r in read_patch(path)]
     for path, row in rows:
+        tile = str(row.get("tile") or "").strip().upper()
         code = str(row.get("code") or "").strip().upper()
-        where = f"{os.path.basename(path)} code={code or '空'}"
-        if not code:
-            bad.append(f"{where}: code が空。一覧シートの画像を開いて、タイル左上の3文字を書く")
+        where = f"{os.path.basename(path)} {tile or 'tile=空'}"
+        if not tile or not code:
+            bad.append(f"{where}: tile と code の両方が要る（一覧シートの画像のタイル左上に出ている）")
             continue
-        if code in seen_codes:
-            bad.append(f"{where}: 同じコードが2回ある")
+        if tile in seen_tiles:
+            bad.append(f"{where}: 同じタイルが2回ある")
             continue
-        seen_codes.add(code)
-        hit = next((pa for h, pa in index.items()
-                    if h == code_hash(doc["salt"], pa[0]["video_id"], axis_key(pa[1]), code)), None)
-        if not hit:
-            bad.append(f"{where}: コードが一致しません。最新の一覧シート（--contact で作り直すとコードは変わる）を開いて読み直す")
+        seen_tiles.add(tile)
+        hit = by_tile.get(tile)
+        if not hit or hit[1].get("code_hash") != code_hash(doc["salt"], hit[0]["video_id"], axis_key(hit[1]), code,
+                                                             hit[1].get("proof_iter") or PROOF_ITER):
+            bad.append(f"{where}: タイル番号とコードが一致しません。最新の一覧シート（--contact で作り直すとコードも番号も変わる）を開いて読み直す")
             continue
         p, a = hit
         new = {}
@@ -468,6 +501,13 @@ def cmd_apply(case_dir, cfg, vocab, args):
         if not rel:
             bad.append(f"{where}: 関連性が空")
             continue
+        if rel == "other_brand" and a["kind"] == "category":
+            # カテゴリ軸では他社の商品でも「関連」。他社として外すと分母が変わる
+            bad.append(f"{where}: 「他社の商品」はブランド軸だけで使う。カテゴリ軸では「関連」")
+            continue
+        if a.get("shown_sha") and p.get("cover") and sha256_file(os.path.join(case_dir, p["cover"])) != a["shown_sha"]:
+            bad.append(f"{where}: 一覧シートで見せた後にカバー画像が変わった。--contact でシートを作り直して見直す")
+            continue
         trial_a = {**a, "relevance": rel}
         trial_p = dict(p)
         for f in ("angle", "appeal"):
@@ -475,6 +515,12 @@ def cmd_apply(case_dir, cfg, vocab, args):
                 if p.get(f) and p[f] != new[f] and any(x.get("confirmed") for x in p["axes"] if x is not a):
                     bad.append(f"{where}: 同じ投稿に別の{FIELD_JA[f]}（{p[f]}）が既に確定している。どちらかに揃える")
                     ok = False
+                # 同じ投稿を別の軸のタイルで同時に判定したとき、後の行が黙って上書きしないようにする
+                prev = batch_vals.get((p["video_id"], f))
+                if prev and prev != new[f]:
+                    bad.append(f"{where}: 同じ投稿の別のタイルで{FIELD_JA[f]}を「{prev}」にしている。どちらかに揃える")
+                    ok = False
+                batch_vals[(p["video_id"], f)] = new[f]
                 trial_p[f] = new[f]
         if not ok:
             continue
@@ -497,7 +543,7 @@ def cmd_apply(case_dir, cfg, vocab, args):
                 p[f] = new[f]
         a["confirmed"] = True
         a["labeled_at"] = now
-        a["cover_sha"] = sha256_file(os.path.join(case_dir, p["cover"])) if p.get("cover") else None
+        a["cover_sha"] = a.get("shown_sha")   # 判定に使った（シートで見せた）画像
         a["code_hash"] = None      # 1つのコードで2回確定させない
         p["confirmed"] = all(x.get("confirmed") for x in p["axes"])
     save(case_dir, doc)
@@ -540,7 +586,8 @@ def cmd_options(vocab):
         for e in vocab[VOCAB_KEY[f]]:
             print(f"  {e['id']:<13} {e['label']}（{e['short']}）　{e.get('phrase', '')}")
     print("\n■ 必須欄: 関連以外→関連性だけ／カテゴリ軸で関連→＋切り口／ブランド軸で関連・PR投稿→＋切り口＋訴求"
-          "\n  推定値は引き継がない。空欄の行は拒否される。")
+          "\n  推定値は引き継がない。空欄の行は拒否される。「他社の商品」はブランド軸だけ。"
+          "\n■ patch: tile,code,relevance,angle,appeal（tile と code は一覧シートの画像のタイル左上）")
     return 0
 
 

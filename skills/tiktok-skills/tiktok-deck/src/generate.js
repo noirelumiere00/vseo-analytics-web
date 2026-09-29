@@ -482,6 +482,16 @@ function buildFirstVisitDeck() {
     throw new Error(`first_visit.json を作ったあとに次のファイルが変わっています: ${stale.join(', ')}\n`
       + '  python3 tools/build_first_visit.py --case . を再実行してください');
   }
+  // first_visit.json は build_first_visit.py の出力をそのまま使う。手で書き換えた版（止まったページを
+  // 手で埋めた・見出しの数字を変えた等）は、ラベルの検査を通っていないので資料にしない
+  const assetsPath = path.join(ROOT, 'FV_ASSETS.md');
+  const recorded = fs.existsSync(assetsPath)
+    ? ((fs.readFileSync(assetsPath, 'utf8').match(/first_visit_sha256:\s*([0-9a-f]{64})/) || [])[1] || null) : null;
+  if (!recorded || recorded !== sha256(fvPath)) {
+    throw new Error('first_visit.json が build_first_visit.py の出力と一致しません'
+      + `（${recorded ? '作成後に書き換えられています' : 'FV_ASSETS.md に照合用の値がありません'}）。\n`
+      + '  文言を変えるときは fv_copy.json に書き、python3 tools/build_first_visit.py --case . をやり直してください');
+  }
   const { buildFirstVisit, fvStats } = require('./slides/firstVisit');
   const pptx = new PptxGenJS();
   pptx.defineLayout({ name: 'FMT', width: T.slide.w, height: T.slide.h });

@@ -259,6 +259,48 @@ def index_posts(data):
     return out
 
 
+def check_fv_doc(case_dir, text):
+    """first_visit.json が build_first_visit.py の出力のままで、紙面のカードと FV_ASSETS.md の一覧が一致するか。
+
+    first_visit.json を手で書き換えると（止まったページを手で埋める等）、FV_ASSETS.md だけを
+    照合していては、ラベルの無い投稿の画像が載っても全部緑になった。
+    """
+    fp = os.path.join(case_dir, "first_visit.json")
+    if not os.path.exists(fp):
+        return [f"[致命的] {FV_ASSETS} はあるのに first_visit.json が無い"]
+    m = re.search(r"first_visit_sha256:\s*([0-9a-f]{64})", text)
+    with open(fp, "rb") as f:
+        raw = f.read()
+    if not m:
+        return [f"[致命的] {FV_ASSETS} に first_visit.json の照合値が無い（build_first_visit.py をやり直す）"]
+    if hashlib.sha256(raw).hexdigest() != m.group(1):
+        return ["[致命的] first_visit.json が build_first_visit.py の出力から書き換えられている"
+                "（文言は fv_copy.json で変え、build_first_visit.py をやり直す）"]
+    try:
+        doc = json.loads(raw.decode("utf-8"))
+    except ValueError as e:
+        return [f"[致命的] first_visit.json を読めない（{e}）"]
+    shown = set()
+
+    def walk(o):
+        if isinstance(o, dict):
+            if o.get("video_id") and o.get("cover"):
+                shown.add(str(o["video_id"]))
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    walk({"pages": doc.get("pages"), "cover_cards": doc.get("cover_cards")})
+    listed = {e["head"] for e in fv_entries(text) if e["head"]}
+    out = []
+    if shown - listed:
+        out.append(f"[致命的] 紙面に載る投稿が {FV_ASSETS} に無い: {sorted(shown - listed)}")
+    if listed - shown:
+        out.append(f"[重大] {FV_ASSETS} にあるのに紙面に無い投稿: {sorted(listed - shown)}")
+    return out
+
+
 def check_fv_labels(case_dir, text):
     """初訪に載る投稿は、labels.json で『その軸で』関連確定済みであること。
 
@@ -461,6 +503,7 @@ def main() -> int:
     fv_name = next((n for n in names if os.path.basename(n) == FV_ASSETS), None)
     if fv_name:
         findings += check_fv_labels(case_dir, texts[fv_name])
+        findings += check_fv_doc(case_dir, texts[fv_name])
     findings += check_storyboard(case_dir, recs)
     findings += check_pptx(case_dir)
 

@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime as dt
+import hashlib
 import html
 import io
 import json
@@ -44,8 +45,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from fvlib import (LIMITS, RESERVED, assert_clean, load_axis, load_case, load_json,  # noqa: E402
                    load_vocab, official_ids, order_is_display, sha256_file, short_of,
-                   views_label, width_units, is_domestic_lang)
-from label_posts import axes_of, axis_key, validate  # noqa: E402
+                   views_label, width_units, is_domestic_lang, safe_vid, to_epoch)
+from label_posts import axes_of, axis_key, poster_from, validate  # noqa: E402
 
 # 主張の基準。付録にもこの表をそのまま出す（言ってよいことを担当者の判断にしない）
 CLAIM = {
@@ -60,7 +61,21 @@ CLAIM = {
     "foreign_max": 0.30,                             # 主カテゴリの上位20本で外国語がこれを超えたら止める
 }
 MAX_USE = 2           # 同じ投稿を資料全体で使ってよい回数（preflight の「使い回し」と同じ考え）
+# 論理ページ番号（例示の割り当てと「3ページ連続禁止」に使う）。紙面・レビュー・FV_ASSETS の番号は
+# 実際の並び（P4 が落ちれば詰める）で振り直す → phys_pages()
 PAGE_NO = {"now": 2, "competitors": 3, "paid": 4, "gap": 5, "winning": 6, "plans": 7, "next": 8}
+PAGE_ORDER = ("now", "competitors", "paid", "gap", "winning", "plans", "next")
+DROPPABLE = {"competitors", "gap", "winning", "plans", "next"}   # now は資料の入口なので落とせない
+# 「検索するとこう見える」に置いてよいカバーの取得経路（検索画面のカバーそのもの）。
+# frame（動画のコマ）や existing（経路不明）は検索画面の見え方ではないので置かない
+SEARCH_VIEW_VIA = {"coverUrl", "oembed", "photo"}
+# 自由記述で機械の値と照合できない数量表現（漢数字・割合語）
+QUANTITY_WORDS = re.compile(r"[一二三四五六七八九十百千万]+\s*[割本%％倍人社件]|半数|大半|過半|ほとんど|すべて|全部|大多数")
+
+
+def phys_pages(order) -> dict:
+    """ページ id → 紙面の番号（表紙=1、本編は order の順に2から）"""
+    return {k: i + 2 for i, k in enumerate(order)}
 
 
 def jl(s) -> float:
@@ -123,7 +138,12 @@ class Builder:
         errs, warns, _ = validate(case_dir, self.cfg, self.vocab, self.labels)
         self.blocking += errs
         self.warnings += warns
-        self.posts = self.labels["posts"]
+        # 投稿IDはパスと HTML に使う。数字以外（手で直した labels.json 等）は扱わない
+        bad = [str(p.get("video_id"))[:40] for p in self.labels["posts"] if not safe_vid(p.get("video_id"))]
+        if bad:
+            self.blocking.append(f"labels.json に数字でない投稿IDがあります: {bad[:5]}")
+        self.posts = [p for p in self.labels["posts"] if safe_vid(p.get("video_id"))]
+        self._sha_cache: dict[str, str | None] = {}
         self.A = {e["id"]: e for e in self.vocab["angles"]}
         self.P = {e["id"]: e for e in self.vocab["appeals"]}
         mp = os.path.join(case_dir, "assets", "covers", "manifest.json")
@@ -143,16 +163,28 @@ class Builder:
         if not self.kw:
             raise Stop("[致命的] 初訪にはカテゴリの検索（case.json の keywords）が要ります")
         self.query = self.kw.get("query") or self.kw["name"]
+        # 見出しに入れる検索語。複数語の長い検索語は keywords[].label に短い表示名を書ける
+        self.qlabel = self.kw.get("label") or self.query
         self.category = self.cfg.get("category") or self.kw["name"]
         self.products = [p for p in (self.cfg.get("focus_products") or []) if p][:3]
-        self.acquired_on = self.cfg.get("acquired_on")
+        self._check_axes()
+        # 取得日: case.json の acquired_on → 取得JSONの fetched_on（search.mjs が書く）。
+        # どちらも無ければ本編には日付を出さず「直近1年」の絞り込みもしない。ファイルの更新日時は
+        # コピー・展開・checkout で変わるので、付録に「参考」として出すだけにする
+        self.acquired_on = self.cfg.get("acquired_on") or self._fetched_on()
+        self.acquired_ref = None
         if not self.acquired_on:
             f = os.path.join(case_dir, self.kw["file"])
-            self.acquired_note = "（取得JSONのファイル日付。参考）"
-            self.acquired_on = dt.date.fromtimestamp(os.path.getmtime(f)).isoformat() if os.path.exists(f) else None
-        else:
-            self.acquired_note = ""
-        self._check_primary_axis()
+            if os.path.exists(f):
+                self.acquired_ref = dt.date.fromtimestamp(os.path.getmtime(f)).isoformat()
+            self.warnings.append("取得日が分かりません（case.json の acquired_on も取得JSONの fetched_on も無い）。"
+                                 "本編の日付と「直近1年」の絞り込みを外しました。acquired_on に取得日を書いてください")
+        # 投稿者の種類は今の case.json（公式ID・メディア一覧）で数え直す。--init の後に公式IDを直すと、
+        # 公式露出の数（取得JSONから数える）と P2 の内訳・カードの「公式」が食い違ったため
+        for p in self.posts:
+            p["poster"], p["official_brand"] = poster_from(p.get("author"), bool(p.get("is_pr")),
+                                                           p.get("followers"), self.cfg)
+            p["create_time"] = to_epoch(p.get("create_time"))
 
     # ─────────────── 入力
     def _load_copy(self) -> dict:
@@ -169,16 +201,27 @@ class Builder:
             raise Stop("[致命的] fv_copy.json の自由記述は資料全体で2件まで（それ以上は担当者の“翻訳”に戻る）")
         return c
 
-    def _check_primary_axis(self):
-        vs, meta = load_axis(self.case_dir, self.kw["file"])
-        ok, why = order_is_display(meta)
-        if not ok:
-            self.blocking.append(f"カテゴリ検索「{self.query}」: {why}")
-        top = vs[:20]
+    def _check_axes(self):
+        """全軸: 表示順の取得か（並べ替え・CAPTCHA 下の取得を「上位」と呼ばない）。主カテゴリ: 外国語の混入"""
+        self.fetched = {}
+        for ax in self.axes:
+            vs, meta = load_axis(self.case_dir, ax["file"], allow_empty=ax["kind"] != "category")
+            ok, why = order_is_display(meta)
+            if not ok:
+                self.blocking.append(f"{ax['kind']}:{ax['name']}（{ax['file']}）: {why}")
+            self.fetched[axis_key(ax)] = len(vs)
+            if ax["kind"] == "category" and ax["name"] == self.kw["name"]:
+                self.kw_raw, self.kw_meta = vs, meta
+        if not hasattr(self, "kw_raw"):
+            self.kw_raw, self.kw_meta = load_axis(self.case_dir, self.kw["file"])
+        top = self.kw_raw[:20]
         foreign = [v for v in top if not is_domestic_lang(v.get("textLanguage"))]
         if top and len(foreign) / len(top) > CLAIM["foreign_max"]:
             self.blocking.append(f"カテゴリ検索の上位20本のうち外国語が{len(foreign)}本。取得地域が日本でない疑い。取り直してください")
-        self.kw_raw = vs
+
+    def _fetched_on(self):
+        d = str((self.kw_meta or {}).get("fetched_on") or "")
+        return d if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) else None
 
     # ─────────────── 取り出し
     def rel(self, kind: str, name: str, window_only: bool = True) -> list[dict]:
@@ -195,22 +238,45 @@ class Builder:
         return [(p, a) for p in self.posts for a in p["axes"]
                 if a["kind"] == kind and a["name"] == name and a.get("in_window") and a.get("confirmed")]
 
+    def _cover_sha(self, vid: str, path: str) -> str | None:
+        if vid not in self._sha_cache:
+            self._sha_cache[vid] = sha256_file(path)
+        return self._sha_cache[vid]
+
     def usable(self, p, allow_frame=True) -> bool:
-        if not p.get("cover") or not os.path.exists(os.path.join(self.case_dir, p["cover"])):
+        vid = p["video_id"]
+        want = f"assets/covers/{vid}.jpg"
+        # 画像は投稿IDの名前のものだけ（labels.json を手で直して別の画像を指させない）
+        if p.get("cover") != want:
             return False
-        m = self.manifest.get(p["video_id"]) or {}
-        if not allow_frame and m.get("via") == "frame":
+        path = os.path.join(self.case_dir, want)
+        try:
+            with open(path, "rb") as f:
+                if f.read(3) != b"\xff\xd8\xff":       # 名前だけ .jpg の WebP・HEIC は枠に引き伸ばされる
+                    return False
+        except OSError:
             return False
-        sha = m.get("sha256")
+        m = self.manifest.get(vid) or {}
+        if m.get("ok") is False:
+            return False
+        if not allow_frame and m.get("via") not in SEARCH_VIEW_VIA:
+            return False              # 経路の分からない画像や動画のコマを「検索画面の見え方」として出さない
+        sha = self._cover_sha(vid, path)
         if sha:
-            first = self.usage.sha_seen.setdefault(sha, p["video_id"])
-            if first != p["video_id"]:
+            first = self.usage.sha_seen.setdefault(sha, vid)
+            if first != vid:
                 return False          # 同じ画像の転載・再投稿は上位の1本だけを例にする
         return True
 
+    @staticmethod
+    def clean_url(u):
+        """紙面のリンクは投稿URLそのものだけ（?以降は落とす）。形が違えばリンクを張らない"""
+        u = re.sub(r"[?#].*$", "", str(u or "").strip())
+        return u if re.fullmatch(r"https://(www\.)?tiktok\.com/@[\w.\-]+/(video|photo)/\d{6,25}", u) else None
+
     def card(self, p, page: int, **extra) -> dict:
         self.usage.use(p, page)
-        c = {"video_id": p["video_id"], "cover": p["cover"], "url": p.get("url"),
+        c = {"video_id": p["video_id"], "cover": p["cover"], "url": self.clean_url(p.get("url")),
              "views": p.get("views"), "views_label": views_label(p.get("views")),
              "rank": p.get("_rank"), "axis": p.get("_axis"), "tile": p.get("_tile"),
              "is_pr": bool(p.get("is_pr")), "poster": p.get("poster"), "author": p.get("author"),
@@ -219,18 +285,33 @@ class Builder:
         c.update(extra)
         return c
 
-    def pick_cards(self, ps, page: int, n: int, key=None, allow_frame=True) -> list[dict]:
-        out = []
+    def pick_cards(self, ps, page: int, n: int, key=None, allow_frame=True, want=None) -> list[dict]:
+        """例示に使える投稿を n 本まで選ぶ（まだ割り当てはしない）。同じ投稿・同じ作者は1ページに1回。
+        want(p) を渡すと、その条件を満たす投稿だけを選ぶ"""
+        out, vids, authors = [], set(), set()
         for p in sorted(ps, key=key) if key else ps:
             if len(out) >= n:
                 break
+            au = (p.get("author") or "").lower()
+            if p["video_id"] in vids or (au and au in authors):
+                continue
+            if want and not want(p):
+                continue
             if self.usable(p, allow_frame) and self.usage.ok(p, page):
                 out.append(p)
+                vids.add(p["video_id"])
+                if au:
+                    authors.add(au)
         return out
+
+    @staticmethod
+    def classified(ps, field) -> int:
+        """その項目を判定できた本数（unknown＝判定不可は分母に入れない。仕様C）"""
+        return sum(1 for p in ps if p.get(field) not in (None, "unknown"))
 
     def dist(self, ps, field) -> list[dict]:
         table = self.A if field == "angle" else self.P
-        n = len(ps)
+        n = self.classified(ps, field)
         cnt: dict[str, list] = {}
         for p in ps:
             k = p.get(field)
@@ -266,6 +347,10 @@ class Builder:
                 raise Stop(f"[致命的] fv_copy.json {key} が長すぎます（{jl(t):.0f} > {LIMITS[limit]}）")
             if not ov.get("by") or not ov.get("reason"):
                 raise Stop(f"[致命的] fv_copy.json {key} の自由記述には by（氏名）と reason が要ります")
+            if QUANTITY_WORDS.search(t):
+                # 「九割」「大半」は数字の照合をすり抜ける。量は機械の数字で書く
+                raise Stop(f"[致命的] fv_copy.json {key} に漢数字・割合の言葉があります（{QUANTITY_WORDS.search(t).group(0)}）。"
+                           "量は算用数字で書いてください（機械の値と照合します）")
             nums = set(re.findall(r"\d+(?:\.\d+)?", t))
             # 使ってよい数字＝機械が出した値（テンプレ候補に出てくる数字）。それ以外の数字は書かせない
             allowed = set(numbers or set()) | {n for c in cands for n in re.findall(r"\d+(?:\.\d+)?", c)}
@@ -275,7 +360,8 @@ class Builder:
             return t
         if not fits:
             raise Stop(f"[致命的] {key}: どの見出し案も上限{LIMITS[limit]}字を超えます。"
-                       f"社名・カテゴリ名の短縮名（case.json の short / category）を設定してください。候補: {cands}")
+                       "社名・カテゴリ名・検索語の短い表示名（case.json の brands[].short / category / keywords[].label）を"
+                       f"設定するか、fv_copy.json に text で書いてください。候補: {cands}")
         return fits[0]
 
     def word(self, share: float) -> str:
@@ -290,16 +376,12 @@ class Builder:
         rel = self.rel("category", k["name"])
         n_win = sum(1 for p in self.posts for a in p["axes"]
                     if a["kind"] == "category" and a["name"] == k["name"] and a.get("in_window"))
-        grid = []
-        for p in rel:
-            if len(grid) >= 8:
-                break
-            if self.usable(p, allow_frame=False) and self.usage.ok(p, 2):
-                grid.append(p)
+        grid = self.pick_cards(rel, 2, 8, allow_frame=False)
         size = 8 if len(grid) >= 8 else 6 if len(grid) >= 6 else 4 if len(grid) >= 4 else 0
         if not size:
-            self.blocking.append(f"現状ページ: 例示できる投稿が{len(grid)}本（関連・カバーあり・検索画面のカバー）。"
-                                 "4本未満ではカテゴリ語が広すぎるか、カバーの取得に失敗している")
+            why = (f"例示できる投稿が{len(grid)}本（関連・検索画面のカバーがあるもの。4本以上が要る）。"
+                   "カテゴリ語が広すぎるか、カバーの取得に失敗している")
+            self.status["now"] = ("dropped", why)
             return None
         grid = grid[:size]
         groups = {"official": "公式", "creator_pr": "クリエイター", "creator": "クリエイター",
@@ -310,51 +392,77 @@ class Builder:
             gcount[g] = gcount.get(g, 0) + 1
         gtop = max(gcount, key=gcount.get) if gcount else None
         gshare = gcount.get(gtop, 0) / len(rel) if rel else 0
+        g_ok = bool(gtop) and gcount.get(gtop, 0) >= CLAIM["now_angle_k"] and gshare >= CLAIM["now_angle_share"]
         ad = self.dist(rel, "angle")
+        n_cls = self.classified(rel, "angle")
         a1 = self.top(ad)
         a2 = next((r for r in ad if r is not a1 and r["id"] not in RESERVED), None)
-        strong_a = a1 and a1["share"] >= CLAIM["now_angle_share"] and a1["count"] >= CLAIM["now_angle_k"]
-        joint = sum(1 for p in rel if groups.get(p.get("poster"), "個人") == gtop and a1 and p.get("angle") == a1["id"]) / len(rel) if rel else 0
-        q = self.query
-        cands = []
-        if strong_a and gtop:
-            cands.append(f"「{q}」の上位は、{gtop}の「{a1['short']}」投稿{self.word(joint)}")
+        strong_a = bool(a1) and a1["share"] >= CLAIM["now_angle_share"] and a1["count"] >= CLAIM["now_angle_k"]
+        # 「{投稿者}の「{切り口}」投稿」と言うのは、その組み合わせ自体が基準を満たすときだけ。
+        # 投稿者は a1 の投稿の中で最多のもの（全体の最多ではない）
+        jg, jk = None, 0
         if strong_a:
-            cands.append(f"「{q}」の上位は、「{a1['short']}」投稿{self.word(a1['share'])}")
+            jc: dict[str, int] = {}
+            for p in a1["posts"]:
+                g = groups.get(p.get("poster"), "個人")
+                jc[g] = jc.get(g, 0) + 1
+            jg = max(jc, key=jc.get)
+            jk = jc[jg]
+        joint_ok = strong_a and jk >= CLAIM["now_angle_k"] and n_cls and jk / n_cls >= CLAIM["now_angle_share"]
+        q = self.qlabel
+        cands = []          # (見出し, 補足の種類)
+        if joint_ok:
+            cands.append((f"「{q}」の上位は、{jg}の「{a1['short']}」投稿{self.word(jk / n_cls)}", "joint"))
+        if strong_a:
+            cands.append((f"「{q}」の上位は、「{a1['short']}」投稿{self.word(a1['share'])}", "angle"))
         if a1 and a2 and not strong_a:
-            cands.append(f"「{q}」の上位は、「{a1['short']}」と「{a2['short']}」が混在")
-        if gtop:
-            cands.append(f"「{q}」の上位は、{gtop}の投稿{self.word(gshare)}")
-        cands.append(f"「{q}」の上位は、投稿がばらばら")
-        head = self.choose("now.headline", cands, "headline", {str(len(rel))})
-        m, known = self.official_count(self.own) if self.own or self.cfg.get("client") else (None, False)
-        subs = []
-        if gtop:
-            if known:
-                subs.append(f"関連{len(rel)}本中{gcount[gtop]}本が{gtop}。{self.client}公式は{m}本")
-            subs.append(f"関連{len(rel)}本中{gcount[gtop]}本が{gtop}の投稿")
-        sub = self.choose("now.sub", subs or [f"表示順の上位{n_win}本"], "sub",
-                          {str(n_win), str(len(rel)), str(gcount.get(gtop, 0)), str(m)})
-        mix = [{"id": g, "label": g, "short": g, "count": c} for g, c in sorted(gcount.items(), key=lambda x: -x[1])]
+            cands.append((f"「{q}」の上位は、「{a1['short']}」と「{a2['short']}」が混在", "mix"))
+        if g_ok:
+            cands.append((f"「{q}」の上位は、{gtop}の投稿{self.word(gshare)}", "group"))
+        if not strong_a and gshare < CLAIM["center"]:
+            # 「ばらばら」は主張が無いときだけ（長い検索語で主張のある候補が字数で落ちたときに出さない）
+            cands.append((f"「{q}」の上位は、投稿がばらばら", "none"))
+        head = self.choose("now.headline", [c for c, _ in cands], "headline", {str(len(rel))})
+        kind = next((kd for c, kd in cands if c == head), "angle" if strong_a else "group" if g_ok else "none")
+        m, known, on = self.official_count(self.own) if self.own else (None, False, None)
+        own_line = f"{self.client}公式は上位{on}本中{m}本" if known else None
+        # 補足は見出しを数字で裏づける（投稿者の内訳の帯は本編に出さない。フォロワーで分けた数なので付録へ）
+        if kind in ("joint",):
+            base = f"関連{len(rel)}本中{jk}本が{jg}の「{a1['short']}」"
+        elif kind in ("angle", "mix") and a1:
+            base = f"関連{len(rel)}本中{a1['count']}本が「{a1['short']}」"
+        elif kind == "group":
+            base = f"関連{len(rel)}本中{gcount[gtop]}本が{gtop}の投稿"
+        else:
+            base = f"表示順の上位{n_win}本のうち関連は{len(rel)}本"
+        subs = [f"{base}。{own_line}" if own_line else None, base]
+        nums = {str(n_win), str(len(rel)), str(jk), str(gcount.get(gtop, 0)), str(m), str(on)}
+        if a1:
+            nums.add(str(a1["count"]))
+        sub = self.choose("now.sub", subs, "sub", nums)
         cards = [self.card(p, 2) for p in grid]
         self.status["now"] = ("ready" if size == 8 else "degraded", f"格子 {size}枚")
-        return {"headline": head, "sub": sub, "query": q, "caption": "",
-                "cards": cards, "poster_mix": mix, "n_window": n_win, "n_relevant": len(rel),
+        return {"headline": head, "sub": sub, "query": q, "caption": "", "kicker": "いま、検索するとこう見える",
+                "cards": cards, "n_window": n_win, "n_relevant": len(rel),
                 "numbers": {"n_window": n_win, "n_relevant": len(rel), "group": gtop,
-                            "group_count": gcount.get(gtop, 0), "own_official": m if known else None}}
+                            "group_count": gcount.get(gtop, 0), "own_official": m if known else None,
+                            "official_n": on if known else None}}
 
-    def official_count(self, brand) -> tuple[int | None, bool]:
-        """主カテゴリの表示順上位 min(30,取得数) 本に、その社の公式アカウントが何本出ているか。
-        labels ではなく取得JSONから機械で数える。official_status が confirmed / none の社だけ「0本」と言える"""
+    def official_count(self, brand) -> tuple[int | None, bool, int | None]:
+        """(本数, 言えるか, 分母)。主カテゴリの表示順上位 min(30,取得数) 本に、その社の公式アカウントが何本出ているか。
+        labels ではなく取得JSONから機械で数える。official_status が confirmed / none の社だけ「0本」と言える。
+        official_status が無いときは unknown（intake が推測で入れた公式IDだけでは「0本」と断定しない。仕様B）"""
         if not brand:
-            return None, False
-        status = brand.get("official_status") or ("confirmed" if brand.get("official") else "unknown")
-        if status == "unknown":
-            return None, False
+            return None, False, None
+        status = brand.get("official_status") or "unknown"
+        if status not in ("confirmed", "none"):
+            return None, False, None
         ids = official_ids(brand)
         win = self.kw_raw[:30]
+        if not win:
+            return None, False, None
         k = sum(1 for v in win if str((v.get("author") or {}).get("uniqueId") or "").lower() in ids)
-        return k, True
+        return k, True, len(win)
 
     # ─────────────── P3 競合はこう発信している
     def page_competitors(self):
@@ -375,90 +483,136 @@ class Builder:
                 return r if (r and share_ok and r["share"] >= CLAIM["col_top_share"] and r["count"] >= CLAIM["col_top_k"]) else None
             ca, cp = claim(ta), claim(tp)
             thumbs = self.pick_cards(rel, 3, 2, key=lambda p: -(p.get("views") or 0))
+            if not thumbs:
+                self.warnings.append(f"競合 {b['name']}: 例示できるカバーが無いため列を出しません")
+                continue
             cols.append({
                 "brand": b["name"], "short": self.brand_short(b), "color_index": i + 1, "n": len(rel),
                 "angle": {"label": ca["label"], "short": ca["short"], "count": ca["count"]} if ca else None,
                 "appeal": {"label": cp["label"], "short": cp["short"], "count": cp["count"]} if cp else None,
                 "note": None if share_ok else f"関連{len(rel)}本（少数）",
                 "scattered": share_ok and not ca,
-                "cards": [self.card(p, 3, brand=b["name"], color_index=i + 1) for p in thumbs],
+                "cards": [self.card(p, 3, brand=b["name"], short=self.brand_short(b), color_index=i + 1) for p in thumbs],
                 "confirmed_by_client": b.get("confirmed_by_client", True) is not False,
+                "paid_line": self.paid_lines.get(b["name"]),
             })
         if not cols:
-            self.status["competitors"] = ("dropped", "関連が3本以上ある競合が無い")
+            self.status["competitors"] = ("dropped", "関連が3本以上・カバーのある競合が無い")
             return None
-        claimed = [c for c in cols if c["appeal"]]
+        ap = [c for c in cols if c["appeal"]]
+        an = [c for c in cols if c["angle"]]
         cands = []
-        if len(claimed) >= 2 and claimed[0]["appeal"]["short"] != claimed[1]["appeal"]["short"]:
-            a, b = claimed[0], claimed[1]
+        # 訴求の主張 → 切り口の主張 → 主張なし、の順。「そろって」は紙面の全社が同じ訴求のときだけ
+        if len(ap) == len(cols) >= 2 and len({c["appeal"]["short"] for c in ap}) == 1:
+            cands.append(f"競合はそろって「{ap[0]['appeal']['short']}」を押している")
+        if len(ap) >= 2 and ap[0]["appeal"]["short"] != ap[1]["appeal"]["short"]:
+            a, b = ap[0], ap[1]
             cands.append(f"{a['short']}は「{a['appeal']['short']}」、{b['short']}は「{b['appeal']['short']}」を押している")
             cands.append(f"{a['short']}は「{a['appeal']['short']}」、{b['short']}は「{b['appeal']['short']}」")
-        if len(claimed) >= 2 and len({c["appeal"]["short"] for c in claimed}) == 1:
-            cands.append(f"競合はそろって「{claimed[0]['appeal']['short']}」を押している")
-        if claimed:
-            cands.append(f"{claimed[0]['short']}は「{claimed[0]['appeal']['short']}」を押している")
-        cands.append("競合の発信は、切り口がばらけている")
+        if ap:
+            cands.append(f"{ap[0]['short']}は「{ap[0]['appeal']['short']}」を押している")
+        if len(an) >= 2 and an[0]["angle"]["short"] != an[1]["angle"]["short"]:
+            a, b = an[0], an[1]
+            cands.append(f"{a['short']}は「{a['angle']['short']}」、{b['short']}は「{b['angle']['short']}」で語られている")
+        if len(an) == len(cols) >= 2 and len({c["angle"]["short"] for c in an}) == 1:
+            cands.append(f"競合はそろって「{an[0]['angle']['short']}」で語られている")
+        if an:
+            cands.append(f"{an[0]['short']}は「{an[0]['angle']['short']}」で語られている")
+        if all(c["scattered"] for c in cols):
+            cands.append("競合の発信は、切り口がばらけている")
+        cands.append(f"競合{len(cols)}社の、検索上位の発信" if len(cols) >= 2 else f"{cols[0]['short']}の、検索上位の発信")
         head = self.choose("competitors.headline", cands, "headline")
-        if any(not c["confirmed_by_client"] for c in cols):
-            subs = ["※競合は弊社の想定です。ご確認ください"]
-        else:
-            subs = ["各社の検索上位の関連投稿を、切り口と訴求で分類", "各社の検索上位を、切り口と訴求で分類"]
-        sub = self.choose("competitors.sub", subs, "sub")
+        # 補足に手法（「切り口と訴求で分類」）は書かない。手法は付録1（上長FB「前提・取り方は要らない」）
+        subs = ["※競合は弊社の想定です。ご確認ください"] if any(not c["confirmed_by_client"] for c in cols) else []
+        sub = self.choose("competitors.sub", subs, "sub") if (subs or "competitors.sub" in self.copy) else ""
         self.status["competitors"] = ("ready" if len(cols) >= 2 else "degraded", f"{len(cols)}社")
-        return {"headline": head, "sub": sub, "columns": cols}
+        return {"headline": head, "sub": sub, "columns": cols, "kicker": "競合はこう発信している"}
 
     # ─────────────── P4 競合がお金をかけて広げている訴求
-    def page_paid(self, comp_page):
+    def paid_pool(self):
         pool = []
         for i, b in enumerate(self.comps):
             for p in self.rel("competitor", b["name"], window_only=False):
                 # 関連（その社のカテゴリ商品が主役）× PR表記または公式アカウント
                 if p.get("is_pr") or p.get("poster") == "official":
                     pool.append((i, b, p))
-        pd = self.dist([p for _, _, p in pool], "appeal")
-        tp = self.top(pd)
-        if len(pool) < CLAIM["paid_min"] or not tp or tp["count"] / len(pool) <= CLAIM["paid_major"]:
-            # 独立ページにせず、P3 の各列に1行で吸収する
-            if comp_page:
-                for c in comp_page["columns"]:
-                    mine = [p for _, b, p in pool if b["name"] == c["brand"]]
-                    t = self.top(self.dist(mine, "appeal"))
-                    if mine and t:
-                        c["paid_line"] = f"お金をかけて押しているのは「{t['short']}」"
-            self.status["paid"] = ("dropped", f"PR・公式の関連投稿{len(pool)}本（{CLAIM['paid_min']}本以上かつ最多訴求が過半で独立）")
+        return pool
+
+    def majority(self, ps, field):
+        """(最多の行, 判定できた本数)。最多が単独で過半のときだけ行を返す（同数1位は言わない）"""
+        rows = [r for r in self.dist(ps, field) if r["id"] not in RESERVED]
+        n = self.classified(ps, field)
+        if not rows or not n:
+            return None, n
+        t = rows[0]
+        if len(rows) > 1 and rows[1]["count"] == t["count"]:
+            return None, n
+        return (t if t["count"] / n > CLAIM["paid_major"] else None), n
+
+    def page_paid(self):
+        """P3 より先に呼ぶ（例示の割り当ては P2→P4→P3 の順。仕様D）。
+        独立ページにしないときは、P3 の各列に1行で吸収する（self.paid_lines）"""
+        self.paid_lines = {}
+        pool = self.paid_pool()
+
+        def absorb(reason):
+            for b in self.comps:
+                mine = [p for _, bb, p in pool if bb["name"] == b["name"]]
+                if len(mine) < CLAIM["paid_min"]:
+                    continue
+                t, n = self.majority(mine, "appeal")
+                if t:
+                    line = f"お金をかけて押しているのは「{t['short']}」（PR・公式{n}本中{t['count']}本）"
+                    if jl(line) > LIMITS["sub"]:
+                        line = f"お金をかけて押しているのは「{t['short']}」"
+                    self.paid_lines[b["name"]] = line
+            self.status["paid"] = ("dropped", reason)
             return None
+
+        tp, n_cls = self.majority([p for _, _, p in pool], "appeal")
+        if len(pool) < CLAIM["paid_min"] or not tp:
+            return absorb(f"PR・公式の関連投稿{len(pool)}本（{CLAIM['paid_min']}本以上かつ最多訴求が単独で過半のとき独立）")
         by = {}
         for i, b, p in pool:
             if p.get("appeal") == tp["id"]:
                 by.setdefault(b["name"], []).append(p)
         lead = max(by, key=lambda k: len(by[k]))
         lead_b = next(b for b in self.comps if b["name"] == lead)
-        cards = []
-        # 見出しの主張（{lead}が「{top}」を広げている）を画で裏づける順に並べる:
-        # 先導社×最多訴求 → 他社×最多訴求 → それ以外。見出しと違う訴求のカードばかりにしない
-        order = sorted(pool, key=lambda x: (x[2].get("appeal") != tp["id"], x[1]["name"] != lead,
-                                            -(x[2].get("views") or 0)))
+        # カードは見出しの訴求（tp）の投稿だけ。先導社 → 他社の順、再生の多い順。
+        # 「その他」「判定不可」の投稿をカードにしない（仕様C）
+        order = sorted([x for x in pool if x[2].get("appeal") == tp["id"]],
+                       key=lambda x: (x[1]["name"] != lead, -(x[2].get("views") or 0)))
+        picked, vids, authors = [], set(), set()
         for want_new_brand in (True, False):
             for i, b, p in order:
-                if len(cards) >= 4:
+                if len(picked) >= 4:
                     break
-                if want_new_brand and any(c["brand"] == b["name"] for c in cards):
+                if want_new_brand and any(bb["name"] == b["name"] for _, bb, _ in picked):
                     continue
-                if any(c["video_id"] == p["video_id"] for c in cards):
+                au = (p.get("author") or "").lower()
+                if p["video_id"] in vids or (au and au in authors):
                     continue
                 if self.usable(p) and self.usage.ok(p, 4):
-                    cards.append(self.card(p, 4, brand=b["name"], color_index=i + 1,
-                                           badge="公式" if p.get("poster") == "official" else "PR",
-                                           appeal_label=self.P[p["appeal"]]["label"] if p.get("appeal") else "—"))
+                    picked.append((i, b, p))
+                    vids.add(p["video_id"])
+                    if au:
+                        authors.add(au)
+        if len(picked) < 2:
+            # 見出しを画で裏づけられない文字だけのページは作らない
+            return absorb(f"訴求「{tp['short']}」のPR・公式投稿でカバーのあるものが{len(picked)}本（2本以上で独立）")
+        cards = [self.card(p, 4, brand=b["name"], short=self.brand_short(b), color_index=i + 1,
+                           badge="公式" if p.get("poster") == "official" else "PR",
+                           appeal_label=self.P[p["appeal"]]["label"]) for i, b, p in picked]
         head = self.choose("paid.headline", [
             f"{self.brand_short(lead_b)}は、お金をかけて「{tp['short']}」を広げている",
             f"競合がお金をかけているのは「{tp['short']}」",
         ], "headline")
         sub = self.choose("paid.sub", [
-            f"PR・公式の投稿{len(pool)}本中{tp['count']}本が「{tp['short']}」",
-        ], "sub", {str(len(pool)), str(tp["count"])})
+            f"PR・公式の投稿{n_cls}本中{tp['count']}本が「{tp['short']}」",
+        ], "sub", {str(n_cls), str(tp["count"])})
         self.status["paid"] = ("ready", f"PR・公式 {len(pool)}本")
-        return {"headline": head, "sub": sub, "cards": cards, "n": len(pool), "top": tp["id"]}
+        return {"headline": head, "sub": sub, "cards": cards, "n": n_cls, "top": tp["id"],
+                "kicker": "競合がお金をかけて広げている訴求"}
 
     # ─────────────── P6 いま伸びている型（先に計算して P5・P7 で使う）
     def compute_winning(self):
@@ -468,13 +622,19 @@ class Builder:
         if self.acquired_on:
             try:
                 acq = dt.date.fromisoformat(str(self.acquired_on)[:10])
-                rec = [p for p in pool if p.get("create_time")
-                       and (acq - dt.date.fromtimestamp(p["create_time"])).days <= CLAIM["recent_days"]]
-                if len(rec) >= CLAIM["recent_min"]:
-                    pool = rec
-                    recent_note = "直近1年"
-            except (ValueError, OSError, OverflowError):
-                pass
+            except ValueError:
+                acq = None
+            rec = []
+            for p in pool if acq else []:
+                try:
+                    d = dt.date.fromtimestamp(p["create_time"]) if p.get("create_time") else None
+                except (TypeError, ValueError, OSError, OverflowError):
+                    d = None              # 読めない投稿日時の投稿だけを外す（全体の絞り込みは続ける）
+                if d and (acq - d).days <= CLAIM["recent_days"]:
+                    rec.append(p)
+            if len(rec) >= CLAIM["recent_min"]:
+                pool = rec
+                recent_note = "直近1年"
         views = [p["views"] for p in pool if p.get("views") is not None]
         base = st.median(views) if views else None
         rows = [r for r in self.dist(pool, "angle") if r["id"] not in RESERVED
@@ -518,8 +678,11 @@ class Builder:
                 f"「{self.category}」は、まだ勝ち型が決まっていない", "まだ勝ち型が決まっていない"], "headline")
             sub = self.choose("winning.sub", ["本数の多い型。再生で抜けた型はまだ無い"], "sub")
         self.status["winning"] = ("ready" if W["winners"] else "degraded", f"{len(cards)}型")
+        # 勝ち型が無い版で「いま伸びている型」「お土産」と見出しの上に書かない（見出しと逆のことになる）
         return {"headline": head, "sub": sub, "cards": cards, "winners": bool(W["winners"]),
-                "base": W["base"], "n": len(W["pool"])}
+                "base": W["base"], "n": len(W["pool"]),
+                "kicker": "いま伸びている型" if W["winners"] else "いま多い型",
+                "tag": "お土産" if W["winners"] else ""}
 
     def phrase(self, ph: str) -> str:
         if "{product}" in ph:
@@ -571,38 +734,50 @@ class Builder:
                     break
             if not left:
                 continue
-            src_label = self.brand_short(k0[2][1]) if k0[2] else f"「{self.query}」"
+            src_label = self.brand_short(k0[2][1]) if k0[2] else f"「{self.qlabel}」"
             # 右の枠（まだ無し）が貴社の0本を画で言っているので、根拠行は出所の本数だけにする
             evid = f"{src_label}は{k0[4]}本中{k0[3]}本"
+            # 「競合が押す」と言えるのは、実例の出所が競合で、P3 の「主な切り口」と同じ基準を満たすときだけ
+            pushed = k0[0] == "competitor" and k0[3] >= CLAIM["col_top_k"] and k0[3] / k0[4] >= CLAIM["col_top_share"]
             rows.append({"angle": aid, "label": self.A[aid]["label"], "short": self.A[aid]["short"],
-                         "left": left, "right": None,
+                         "left": left, "right": None, "pushed": pushed,
                          "right_text": "まだ無し" if own_ok else "まだ空席", "evidence": evid})
             if len(rows) >= 3:
                 break
-        m, known = self.official_count(self.own) if self.own else (None, False)
+        m, known, on = self.official_count(self.own) if self.own else (None, False, None)
         if not rows:
             if known and m == 0:
-                head = self.choose("gap.headline", [f"「{self.query}」の上位に、{self.client}公式は0本"], "headline")
+                head = self.choose("gap.headline", [f"「{self.qlabel}」の上位に、{self.client}公式は0本"], "headline")
                 self.status["gap"] = ("degraded", "型の空白なし・公式0本で成立")
-                return {"headline": head, "sub": self.choose("gap.sub", ["上位30本を公式アカウントで数えた"], "sub"),
-                        "rows": [], "mode": "official"}
+                # 補足に数え方は書かない（図の下の1行が「上位N本のうち…」と言っている。手法は付録）
+                return {"headline": head, "sub": "", "rows": [], "mode": "official", "official_n": on,
+                        "kicker": f"{self.client}に足りていない発信"}
             self.status["gap"] = ("dropped", "言える空白が無い（自社の関連5本以上で0本の型、または公式0本が要る）")
             return None
         r1 = rows[0]
+        winners = {w["id"] for w in W["winners"]}
+        cands = []
         if own_ok:
-            cands = [f"競合が押す「{r1['short']}」、{self.client}はまだ0本",
-                     f"「{r1['short']}」、{self.client}はまだ0本"]
+            if r1["pushed"]:
+                cands.append(f"競合が押す「{r1['short']}」、{self.client}はまだ0本")
+            if r1["angle"] in winners:
+                cands.append(f"伸びている「{r1['short']}」、{self.client}はまだ0本")
+            cands.append(f"「{r1['short']}」、{self.client}はまだ0本")
         else:
-            cands = [f"「{r1['short']}」は伸びているのに、まだ空席", f"「{r1['short']}」は、まだ空席"]
+            # 自社の検索が無い版は {client} を主語にしない（言えるのは「競合もまだ使っていない」まで）
+            if r1["angle"] in winners:
+                cands.append(f"「{r1['short']}」は伸びているのに、まだ空席")
+            cands.append(f"「{r1['short']}」は、まだ空席")
         head = self.choose("gap.headline", cands, "headline")
         subs = []
         if known:
-            subs.append(f"「{self.query}」上位30本に{self.client}公式は{m}本")
+            subs.append(f"「{self.qlabel}」上位{on}本に{self.client}公式は{m}本")
         subs.append(f"左が実例、右が{self.client}" if own_ok else "左が市場の実例、右が競合各社")
-        sub = self.choose("gap.sub", subs, "sub", {str(m)})
+        sub = self.choose("gap.sub", subs, "sub", {str(m), str(on)})
         self.status["gap"] = ("ready" if len(rows) >= 2 else "degraded", f"{len(rows)}型")
         return {"headline": head, "sub": sub, "rows": rows, "mode": "own" if own_ok else "none",
-                "right_label": self.client if own_ok else "競合"}
+                "right_label": self.client if own_ok else "競合", "official_n": on,
+                "kicker": f"{self.client}に足りていない発信" if own_ok else "まだ空いている発信"}
 
     # ─────────────── P7 まずこの3本
     def page_plans(self, W, gap):
@@ -612,6 +787,7 @@ class Builder:
             if bad:
                 raise Stop(f"[致命的] fv_copy.json plans.angles に語彙外の id: {bad}")
             src = [{"id": i, "label": self.A[i]["label"], "short": self.A[i]["short"], "lift": None} for i in ids[:3]]
+            basis = "chosen"
         else:
             # 伸びている型（lift順・貴社が0本の型を先）→ 本数の多い型 → 差のページの型、の順に3つまで。
             # P6 には「伸びている」と言える型しか出さないが、企画の種は3つ用意する
@@ -624,6 +800,8 @@ class Builder:
                 if len(src) < 3 and all(x["id"] != aid for x in src):
                     src.append({"id": aid, "label": self.A[aid]["label"], "short": self.A[aid]["short"], "lift": None})
             src = src[:3]
+            win_ids = {w["id"] for w in W["winners"]}
+            basis = "winners" if src and all(r["id"] in win_ids for r in src) else "many"
         if not src:
             self.status["plans"] = ("dropped", "型の候補が無い")
             return None
@@ -651,11 +829,17 @@ class Builder:
                           "reason": "・".join(reason), "reference": self.card(ref[0], 7) if ref else None})
         head = self.choose("plans.headline", [f"{self.client}なら、まずこの{len(items)}本から",
                                               f"まずこの{len(items)}本から"], "headline")
-        sub = self.choose("plans.sub", ["伸びている型を、貴社の商品に当てはめた企画の種",
-                                        "伸びている型を当てはめた企画の種"], "sub")
+        # 補足は企画の出どころどおりに言う（伸びていない型に「伸びている型」と書かない。
+        # 注力商品が無ければ「商品に当てはめた」と書かない）
+        what = {"winners": "伸びている型", "many": "上位に多い型", "chosen": "選んだ型"}[basis]
+        on_prod = any(it["product"] for it in items)
+        subs = ([f"{what}を、貴社の商品に当てはめた企画の種", f"{what}を商品に当てはめた企画の種"] if on_prod
+                else [f"{what}から作る企画の種"])
+        sub = self.choose("plans.sub", subs, "sub")
         photo = sum(1 for p in cat_rel if p.get("media") == "photo") > len(cat_rel) / 2 if cat_rel else False
         self.status["plans"] = ("ready" if len(items) == 3 else "degraded", f"{len(items)}本")
-        return {"headline": head, "sub": sub, "items": items, "photo_major": photo}
+        return {"headline": head, "sub": sub, "items": items, "photo_major": photo, "basis": basis,
+                "kicker": f"まずこの{len(items)}本"}
 
     # ─────────────── P8 次回
     def page_next(self, plans):
@@ -667,8 +851,8 @@ class Builder:
         ask = []
         if any(b.get("confirmed_by_client") is False for b in self.comps) or not self.comps:
             ask.append("比較する競合（2〜3社）のご確認")
-        st_own = (self.own or {}).get("official_status") or ("confirmed" if (self.own or {}).get("official") else "unknown")
-        if st_own == "unknown":
+        st_own = (self.own or {}).get("official_status") or "unknown"
+        if st_own not in ("confirmed", "none"):
             ask.append("公式TikTokアカウントの有無")
         if not self.products:
             ask.append("注力している商品（1〜3つ）")
@@ -687,7 +871,7 @@ class Builder:
         # 補足行は置かない（右の列の見出し「教えていただきたいこと」が同じことを言っている）
         sub = ""
         self.status["next"] = ("ready", "")
-        return {"headline": head, "sub": sub, "bring": bring, "ask": ask[:3],
+        return {"headline": head, "sub": sub, "bring": bring, "ask": ask[:3], "kicker": "次回",
                 "service": "台本→撮影→投稿→検索順位の計測まで、まとめてお任せいただけます"}
 
     # ─────────────── 付録
@@ -746,18 +930,39 @@ class Builder:
         for p in self.posts:
             for b_ in p.get("pr_basis") or []:
                 pr_basis_count[b_] = pr_basis_count.get(b_, 0) + 1
+        if self.acquired_on:
+            day = fmt_date(self.acquired_on)
+        elif self.acquired_ref:
+            day = f"不明（取得JSONのファイル日付は{fmt_date(self.acquired_ref)}。参考）"
+        else:
+            day = "不明"
+        # 集計の対象は実際にある軸と、実際に判定した本数（窓の設定値ではなく min(窓, 取得数)）
+        win = self.labels.get("window") or {}
+        parts = []
+        for kind, label in (("category", "カテゴリ"), ("competitor", "競合"), ("own", self.client)):
+            axs = [ax for ax in self.axes if ax["kind"] == kind]
+            if not axs:
+                continue
+            w = win.get("category" if kind == "category" else "own" if kind == "own" else "brand") or 0
+            ns = sorted({min(w, self.fetched.get(axis_key(ax), 0)) for ax in axs})
+            cnt = f"{ns[0]}本" if len(ns) == 1 else f"{ns[0]}〜{ns[-1]}本"
+            parts.append(f"{label}{'各' if len(axs) > 1 else ''}{cnt}")
+        vname = self.vocab.get("title") or self.vocab.get("name") or "案件の語彙"
+        vver = f" v{self.vocab['version']}" if self.vocab.get("version") else ""
         premise = [
-            ["取得日", f"{fmt_date(self.acquired_on)}{self.acquired_note}。TikTokの検索画面が実際に表示した順（ログインなし・並び替えなし）。表示順は時刻・地域で変わるスナップショット。"],
-            ["集計の対象", f"各検索の表示順上位（カテゴリ{self.labels['window']['category']}本・競合{self.labels['window']['brand']}本・"
-             f"{self.client}{self.labels['window']['own']}本）を1本ずつ画像と本文で判定し、「関連」の投稿だけを数えた。競合のPR投稿は順位の外も確認した。"],
-            ["分類の方法", f"切り口・訴求は固定の選択肢（{self.vocab.get('title')} v{self.vocab.get('version')}）から1つずつ選んだ。"
+            ["取得日", f"{day}。TikTokの検索画面が実際に表示した順（ログインなし・並び替えなし）。表示順は時刻・地域で変わるスナップショット。"],
+            ["集計の対象", f"各検索の表示順上位（{'・'.join(parts)}）を1本ずつ画像と本文で判定し、「関連」の投稿だけを数えた。"
+             + ("競合のPR投稿は順位の外も確認した。" if any(ax["kind"] == "competitor" for ax in self.axes) else "")],
+            ["分類の方法", f"切り口・訴求は固定の選択肢（{vname}{vver}）から1つずつ選んだ。"
              "判定はカバー画像を開いた証拠（一覧シートのコード）付き。投稿者の種類は公式ID・PR表記・フォロワー数で機械的に決めた。"],
             ["PRの判定", f"TikTokの広告フラグ、#PR・#提供・#タイアップ等のタグ、本文の【PR】表記のいずれか（根拠の内訳 広告フラグ{pr_basis_count['isAd']}／タグ{pr_basis_count['tag']}／本文{pr_basis_count['body']}）。広告該当性は判定しない。"],
             ["伸びの定義", f"型の再生中央値 ÷ カテゴリ検索の関連投稿{('（' + W['recent'] + '）') if W['recent'] else ''}の再生中央値。"
              f"{CLAIM['win_k']}本以上・作者{CLAIM['win_authors']}人以上・{CLAIM['win_lift']}倍以上を「伸びている」とした（再生{CLAIM['min_views']:,}未満は除外）。"],
             ["主張の基準", f"現状の型＝関連の{CLAIM['now_angle_share']:.0%}以上かつ{CLAIM['now_angle_k']}本以上／競合の主な切り口・訴求＝関連{CLAIM['col_share_n']}本以上で{CLAIM['col_top_share']:.0%}以上／"
-             f"「{self.client}はまだ0本」＝{self.client}の関連{CLAIM['gap_own_n']}本以上で0本／公式0本＝公式IDを確認した社だけ。"],
-            ["因果について", "上位に多い型は「上位に多い傾向」で、上位表示の原因とは断定しない。「まずこの3本」は仮説で、効果は次回以降の検証で確かめる。"],
+             f"「{self.client}はまだ0本」＝{self.client}の関連{CLAIM['gap_own_n']}本以上で0本／公式0本＝公式IDを確認した社だけ。"
+             "割合の分母は判定できた投稿（判定不可を除く）。"],
+            ["因果について", "上位に多い型は「上位に多い傾向」で、上位表示の原因とは断定しない。"
+             + (f"「まずこの{len(pages['plans']['items'])}本」は仮説で、効果は次回以降の検証で確かめる。" if pages.get("plans") else "")],
         ]
         if self.manual:
             premise.append(["手修正", f"{len(self.manual)}件（" + "／".join(f"{m['key']}: {m['by']}・{m['reason']}" for m in self.manual) + "）"])
@@ -770,24 +975,26 @@ class Builder:
         self.alt: dict[str, list] = {}
         if self.blocking:
             return self._result(None)
+        # 例示の割り当て優先（同じ投稿を取り合ったとき先に取るページ）は P2→P4→P3→P5→P7→P6（仕様D）。
+        # 紙面の並びは order で別に決めるので、呼ぶ順はこのとおりでよい
         now = self.page_now()
+        self.paid_lines = {}
+        paid = self.page_paid() if self.comps else None
         comp = self.page_competitors()
-        paid = self.page_paid(comp) if self.comps else None
         W = self.compute_winning()
-        # P5/P7 は P6 の結果を使うが、例示の割り当て優先は P5→P7→P6（ページ番号順ではない）
         gap = self.page_gap(W)
-        plans_pre = None
-        win = self.page_winning(W)
         plans = self.page_plans(W, gap)
+        win = self.page_winning(W)
         nxt = self.page_next(plans)
-        del plans_pre
         pages = {"now": now, "competitors": comp, "paid": paid, "gap": gap, "winning": win, "plans": plans, "next": nxt}
         allow = set(((self.cfg.get("first_visit") or {}).get("allow_drop")) or [])
         for k, v in pages.items():
             if v is None and k != "paid":
-                why = self.status.get(k, ("dropped", ""))[1]
+                why = self.status.get(k, ("dropped", "理由不明"))[1]
                 msg = f"ページ「{k}」を出せません: {why}"
-                if k in allow:
+                if k not in DROPPABLE:
+                    self.blocking.append(msg + "（このページは資料の入口なので省けません）")
+                elif k in allow:
                     self.warnings.append(msg + "（allow_drop で許可済み）")
                 else:
                     self.blocking.append(msg + "（出さずに進めるなら case.json first_visit.allow_drop に書く）")
@@ -799,7 +1006,7 @@ class Builder:
         if pages is None:
             return {"ok": False, "blocking": self.blocking, "warnings": self.warnings,
                     "pages": [{"id": k, "status": s, "reason": r} for k, (s, r) in self.status.items()]}
-        order = [k for k in ("now", "competitors", "paid", "gap", "winning", "plans", "next") if pages[k]]
+        order = [k for k in PAGE_ORDER if pages[k]]
         # 表紙: 関連・カバーあり・P2/P3 に使っていない投稿を再生順に3枚
         # 表紙はカテゴリの投稿を優先する（貴社自身の投稿は相手が一番よく知っている）
         rel_all = []
@@ -815,10 +1022,11 @@ class Builder:
             used = self.usage.pages.get(p["video_id"], [])
             if any(pg in (2, 3) for pg in used) or len(used) >= MAX_USE:
                 continue
-            if self.usable(p):
+            if self.usable(p) and self.usage.ok(p, 1):       # 同じ作者の投稿を表紙に2枚並べない
                 cover_cards.append(self.card(p, 1))
             if len(cover_cards) >= 3:
                 break
+        # 表紙の日付: 訪問日 → 取得日。取得日が分からないときは日付を出さない（ファイル日付は付録の参考だけ）
         dlabel = fmt_date(self.cfg.get("visit_date") or (self.cfg.get("project") or {}).get("date") or self.acquired_on)
         pj = self.cfg.get("project") or {}
         project = {
@@ -832,7 +1040,8 @@ class Builder:
             "footer": f"{self.client}様｜{fmt_date(self.acquired_on)}取得" if self.acquired_on else f"{self.client}様",
         }
         doc = {"version": 3, "ok": True, "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
-               "project": project, "order": order, "pages": pages, "cover_cards": cover_cards,
+               "project": project, "order": order, "page_no": phys_pages(order),
+               "pages": pages, "cover_cards": cover_cards,
                "appendix": self.appendix(pages, W), "claim": CLAIM, "manual": self.manual,
                "alternatives": self.alt,
                "pages_status": [{"id": k, "status": s, "reason": r} for k, (s, r) in self.status.items()],
@@ -842,16 +1051,18 @@ class Builder:
             if isinstance(o, dict):
                 for k, v in o.items():
                     if k in ("headline", "sub", "label", "short", "phrase", "evidence", "title", "reason",
-                             "caption", "note", "paid_line", "right_text", "service", "cover_title"):
+                             "caption", "note", "paid_line", "right_text", "service", "cover_title", "kicker",
+                             "tag", "footer", "date_label", "recipient", "appeal_label", "right_label"):
                         if isinstance(v, str):
                             assert_clean(f"{path}.{k}", v)
                     walk(v, f"{path}.{k}")
             elif isinstance(o, list):
                 for i, v in enumerate(o):
-                    if isinstance(v, str) and path.endswith(("bring", "ask")):
-                        assert_clean(path, v)
+                    # 付録の表・前提（文字列の2次元配列）や次回の項目も紙面に出る
+                    if isinstance(v, str):
+                        assert_clean(f"{path}[{i}]", v)
                     walk(v, f"{path}[{i}]")
-        walk({"pages": pages, "project": project}, "fv")
+        walk({"pages": pages, "project": project, "appendix": doc["appendix"]}, "fv")
         return doc
 
     def inputs_sha(self) -> dict:
@@ -865,20 +1076,23 @@ class Builder:
 # ─────────────────────────────── 書き出し
 
 def used_images(doc) -> dict:
-    """video_id → {url, cover, axis, pages, tile, author}"""
+    """video_id → {url, cover, axes, pages, tile, author}。pages は紙面の番号（表紙=1）"""
     out = {}
 
     def add(c, page):
         if not c or not c.get("cover"):
             return
-        e = out.setdefault(c["video_id"], {"url": c.get("url"), "cover": c["cover"], "axis": c.get("axis"),
+        e = out.setdefault(c["video_id"], {"url": c.get("url"), "cover": c["cover"], "axes": [],
                                            "pages": [], "tile": c.get("tile"), "author": c.get("author")})
         if page not in e["pages"]:
             e["pages"].append(page)
+        # 同じ投稿を別の軸で載せたら（P2=カテゴリ、P3=競合）両方の軸を照合対象にする
+        if c.get("axis") and c["axis"] not in e["axes"]:
+            e["axes"].append(c["axis"])
     for c in doc.get("cover_cards") or []:
         add(c, 1)
     pg = doc["pages"]
-    for k, no in PAGE_NO.items():
+    for k, no in (doc.get("page_no") or phys_pages(doc["order"])).items():
         p = pg.get(k)
         if not p:
             continue
@@ -896,11 +1110,14 @@ def used_images(doc) -> dict:
     return out
 
 
-def write_assets_md(case_dir, imgs):
-    L = ["# FV ASSETS", "", "<!-- build_first_visit.py が書く。verify_assets.py が照合に使う（手で直さない） -->", ""]
+def write_assets_md(case_dir, imgs, fv_sha):
+    # first_visit_sha256 は generate.js と verify_assets.py が照合する（first_visit.json の手修正を止める）
+    L = ["# FV ASSETS", "", "<!-- build_first_visit.py が書く。verify_assets.py が照合に使う（手で直さない） -->",
+         f"<!-- first_visit_sha256: {fv_sha} -->", ""]
     for vid, e in imgs.items():
-        L += [f"#### VIDEO {vid}", f"- url: {e['url']}", f"- image_path: {e['cover']}",
-              f"- axis: {e['axis'] or ''}", f"- pages: {','.join(str(x) for x in sorted(e['pages']))}", ""]
+        L += [f"#### VIDEO {vid}", f"- url: {e['url'] or ''}", f"- image_path: {e['cover']}"]
+        L += [f"- axis: {a}" for a in e["axes"]] or ["- axis: "]
+        L += [f"- pages: {','.join(str(x) for x in sorted(e['pages']))}", ""]
     with open(os.path.join(case_dir, "FV_ASSETS.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(L))
 
@@ -917,6 +1134,8 @@ def thumb_data_uri(path, max_w=360):
     except ImportError:
         with open(path, "rb") as f:
             return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    except OSError:
+        return ""                      # 読めない画像はレビューで空枠にする（資料側は usable() で弾いている）
 
 
 REASONS = ["案件と関係ない", "その社の商品ではない", "型の分類が違う", "載せたくない画像（顔・炎上・古い）"]
@@ -927,49 +1146,69 @@ def write_review(case_dir, doc, imgs):
     os.makedirs(out, exist_ok=True)
     pj = doc["project"]
     pages = doc["pages"]
-    names = {1: "表紙", 2: "いま検索するとこう見える", 3: "競合はこう発信している", 4: "競合がお金をかけている訴求",
-             5: f"{pj['client_short']}に足りていない発信", 6: "いま伸びている型", 7: "まずこの3本", 8: "次回"}
+    pno = doc.get("page_no") or phys_pages(doc["order"])
+    alts_all = doc.get("alternatives") or {}
+    # ページ名は紙面のキッカーと同じ文言・同じ番号（P4 が落ちたら詰めた番号）にする
+    names = {1: "表紙"}
+    for k, no in pno.items():
+        names[no] = (pages.get(k) or {}).get("kicker") or k
+    n_plans = len((pages.get("plans") or {}).get("items") or [])
+
+    def variant_lines(key):
+        alts = alts_all.get(key) or []
+        cur = (pages.get(key.split(".")[0]) or {}).get(key.split(".")[1], "")
+        return [(i + 1, a, a == cur) for i, a in enumerate(alts)]
+
     # 前日チェック（選択式）
-    md = [f"# 初訪 前日チェック（{pj['client']}・{pj['date_label']}）", "",
+    md = [f"# 初訪 前日チェック（{pj['client']}・{pj['date_label'] or '日付未設定'}）", "",
           "資料を開き、各項目で1つ選ぶ。「差し替え」は理由も選ぶ。結果は review/初訪_レビュー.html の「結果をコピー」でも作れる。", "",
           "- [ ] 掲載サムネに案件と関係ない投稿が無い　［なし／あり→ 番号: ＿＿ ］",
-          "- [ ] 競合はクライアントの認識と合う　［確認済み／未確認→P8で聞く］",
-          "- [ ] 「いま伸びている型」の3つで良い　［はい／差し替え→候補は付録2の表から選ぶ］",
-          "- [ ] 「まずこの3本」の商品は合っている　［はい／違う→ focus_products を直す］",
-          "- [ ] 見出しはこのままで良い　［はい／別案に変える→ 下の候補番号を fv_copy.json に］", ""]
-    for key, alts in (doc.get("alternatives") or {}).items():
-        if key.endswith("headline") and len(alts) > 1:
-            md.append(f"  - {key}: " + " ／ ".join(f"{i + 1}) {a}" for i, a in enumerate(alts)))
+          "- [ ] 競合はクライアントの認識と合う　［確認済み／未確認→次回ページで聞く］",
+          "- [ ] 「いま伸びている型」の型で良い　［はい／差し替え→候補は付録2の表から選ぶ］",
+          f"- [ ] 「まずこの{n_plans}本」の商品は合っている　［はい／違う→ focus_products を直す］",
+          "- [ ] 見出しはこのままで良い　［はい／別案に変える→ 下の案の番号を fv_copy.json に {\"<キー>\": {\"variant\": 番号}}］", ""]
+    for key in alts_all:
+        if key.endswith("headline") and len(alts_all[key]) > 1:
+            md.append(f"  - {key}: " + " ／ ".join(f"{i}) {a}{'（いま）' if cur else ''}" for i, a, cur in variant_lines(key)))
     md += ["", "## 掲載している投稿", ""]
     for vid, e in imgs.items():
-        md.append(f"- p{','.join(str(x) for x in sorted(e['pages']))}　…{vid[-6:]}　@{e['author'] or ''}　{e['axis'] or ''}　{e['url']}")
+        md.append(f"- p{','.join(str(x) for x in sorted(e['pages']))}　…{vid[-6:]}　@{e['author'] or ''}　"
+                  f"{' / '.join(e['axes'])}　{e['url'] or ''}")
     if doc.get("warnings"):
         md += ["", "## 警告", ""] + [f"- {w}" for w in doc["warnings"]]
     with open(os.path.join(out, "初訪_前日チェック.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(md) + "\n")
-    # レビュー用 HTML（1ファイルで完結。サムネは data URI）
-    blocks = []
+    # レビュー用 HTML（1ファイルで完結。サムネは data URI）。全ページに節を作る（画像の無い次回ページも見出しを選べる）
+    esc = html.escape
     by_page: dict[int, list] = {}
     for vid, e in imgs.items():
         for pgno in e["pages"]:
             by_page.setdefault(pgno, []).append((vid, e))
-    for no in sorted(by_page):
-        key = next((k for k, v in PAGE_NO.items() if v == no), None)
+    key_of = {no: k for k, no in pno.items()}
+    blocks = []
+    for no in [1] + sorted(key_of):
+        key = key_of.get(no)
         head = (pages.get(key) or {}).get("headline", "") if key else pj["cover_title"].replace("\n", " ")
-        alts = (doc.get("alternatives") or {}).get(f"{key}.headline", []) if key else []
-        opts = "".join(f'<label><input type="radio" name="h{no}" value="{i}"{" checked" if i == 0 else ""}> '
-                       f'{"このまま" if i == 0 else "別案" + str(i)}: {html.escape(a)}</label>' for i, a in enumerate(alts[:3])) \
-            if len(alts) > 1 else ""
+        opts = ""
+        if key and len(alts_all.get(f"{key}.headline") or []) > 1:
+            hk = f"{key}.headline"
+            opts = "".join(
+                f'<label><input type="radio" name="h{no}" value="{i}" data-key="{esc(hk)}" data-cur="{1 if cur else 0}"'
+                f'{" checked" if cur else ""}> 案{i}{"（いま）" if cur else ""}: {esc(a)}</label>'
+                for i, a, cur in variant_lines(hk))
         cards = []
-        for vid, e in by_page[no]:
+        for vid, e in by_page.get(no, []):
+            v = esc(vid, quote=True)
             uri = thumb_data_uri(os.path.join(case_dir, e["cover"]))
-            reasons = "".join(f'<option>{r}</option>' for r in REASONS)
-            cards.append(f'<div class="c"><img src="{uri}" alt=""><div class="m">…{vid[-6:]}　@{html.escape(e["author"] or "")}</div>'
-                         f'<label><input type="radio" name="v{no}_{vid}" value="ok" checked> OK</label>'
-                         f'<label><input type="radio" name="v{no}_{vid}" value="ng" data-vid="{vid}" data-page="{no}"> 差し替え</label>'
-                         f'<select data-vid="{vid}" data-page="{no}">{reasons}</select></div>')
-        blocks.append(f'<section><h2>P{no}　{html.escape(names.get(no, ""))}</h2><p class="h">{html.escape(head)}</p>'
+            reasons = "".join(f"<option>{esc(r)}</option>" for r in REASONS)
+            cards.append(f'<div class="c"><img src="{uri}" alt=""><div class="m">…{esc(vid[-6:])}　@{esc(e["author"] or "")}</div>'
+                         f'<label><input type="radio" name="v{no}_{v}" value="ok" checked> OK</label>'
+                         f'<label><input type="radio" name="v{no}_{v}" value="ng" data-vid="{v}" data-page="{no}"> 差し替え</label>'
+                         f'<select data-vid="{v}" data-page="{no}">{reasons}</select></div>')
+        blocks.append(f'<section><h2>P{no}　{esc(names.get(no, ""))}</h2><p class="h">{esc(head)}</p>'
                       f'<div class="alts" data-page="{no}">{opts}</div><div class="g">{"".join(cards)}</div></section>')
+    # <script> の中は HTML の実体参照が効かない。JS の文字列は json.dumps で作る（「P&G」「L'Oréal」「\\u」でも壊れない）
+    title_js = json.dumps(f"初訪レビュー結果（{pj['client']}）", ensure_ascii=False).replace("<", "\\u003c")
     page_html = f"""<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>初訪レビュー</title><style>
 :root{{--bg:#F6F4EF;--ink:#17181C;--sub:#6E6B66;--rule:#D9D5CC;--acc:#A24765}}
@@ -981,15 +1220,15 @@ section{{padding:8px 16px 18px;border-bottom:1px solid var(--rule)}} h2{{font-si
 .alts label{{display:block;font-size:13px;margin:2px 0}}
 .g{{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}}
 .c{{background:#FAF8F4;border:1px solid var(--rule);border-radius:6px;padding:8px;font-size:12px}}
-.c img{{width:100%;border-radius:4px}} .m{{color:var(--sub);margin:4px 0}} .c label{{margin-right:8px}} select{{width:100%;margin-top:4px}}
+.c img{{width:100%;border-radius:4px;min-height:40px;background:#e8e5de}} .m{{color:var(--sub);margin:4px 0}} .c label{{margin-right:8px}} select{{width:100%;margin-top:4px}}
 textarea{{width:calc(100% - 32px);margin:12px 16px;height:120px}}
-</style><header><b>初訪レビュー（{html.escape(pj['client'])}）</b><button id="cp">結果をコピー</button>
+</style><header><b>初訪レビュー（{esc(pj['client'])}）</b><button id="cp">結果をコピー</button>
 <span style="font-size:12px;color:#bbb">コピーした結果を、資料を作った担当（Claude）にそのまま貼ってください</span></header>
 {''.join(blocks)}<textarea id="out" readonly></textarea>
 <script>
 document.getElementById('cp').onclick=()=>{{
- const L=['初訪レビュー結果（{html.escape(pj['client'])}）'];
- document.querySelectorAll('.alts').forEach(a=>{{const r=a.querySelector('input:checked');if(r&&r.value!=='0')L.push(`P${{a.dataset.page}} 見出し: 別案${{r.value}}`);}});
+ const L=[{title_js}];
+ document.querySelectorAll('.alts').forEach(a=>{{const r=a.querySelector('input:checked');if(r&&r.dataset.cur!=='1')L.push(`P${{a.dataset.page}} 見出し: 案${{r.value}}（fv_copy.json: {{"${{r.dataset.key}}": {{"variant": ${{r.value}}}}}}）`);}});
  document.querySelectorAll('input[value=ng]:checked').forEach(i=>{{const s=document.querySelector(`select[data-vid="${{i.dataset.vid}}"][data-page="${{i.dataset.page}}"]`);L.push(`差し替え P${{i.dataset.page}} …${{i.dataset.vid.slice(-6)}}（${{i.dataset.vid}}）理由: ${{s.value}}`);}});
  if(L.length===1)L.push('すべてOK');
  const t=L.join('\\n');const o=document.getElementById('out');o.value=t;o.select();
@@ -1074,14 +1313,15 @@ def main() -> int:
         print("dry-run: 何も書いていません")
         return 0
     imgs = used_images(doc)
-    with open(os.path.join(case_dir, "first_visit.json"), "w", encoding="utf-8") as f:
-        json.dump(doc, f, ensure_ascii=False, indent=1)
-    write_assets_md(case_dir, imgs)
+    raw = json.dumps(doc, ensure_ascii=False, indent=1).encode("utf-8")
+    with open(os.path.join(case_dir, "first_visit.json"), "wb") as f:
+        f.write(raw)
+    write_assets_md(case_dir, imgs, hashlib.sha256(raw).hexdigest())
     write_review(case_dir, doc, imgs)
     print(f"→ {os.path.join(case_dir, 'first_visit.json')}")
     print(f"本編: 表紙 → {' → '.join(doc['order'])} → 付録2枚（計 {1 + len(doc['order']) + 2}枚）")
     for k in doc["order"]:
-        print(f"  P{PAGE_NO[k]} {doc['pages'][k]['headline']}")
+        print(f"  P{doc['page_no'][k]} {doc['pages'][k]['headline']}")
     print(f"前日レビュー: review/初訪_レビュー.html ・ review/初訪_前日チェック.md（掲載画像 {len(imgs)}枚）")
     if doc["warnings"]:
         print(f"警告 {len(doc['warnings'])}件:")

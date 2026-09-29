@@ -28,10 +28,25 @@ function fvStats() { return FV; }
 
 function brandColor(i) { return T.brandColors[(i || 0) % T.brandColors.length]; }
 
-/** 案件ディレクトリ基準で画像を解決。無ければ記録して null（ダミーで埋めない） */
-function cover(p, where) {
+/** キッカー「NN　…」。番号は紙面の並び（表紙の次を01）。P4 が落ちても 01,02,04… と飛ばさない。
+ *  文言は build_first_visit.py が状況に合わせて決める（勝ち型が無いのに「伸びている型」と書かない等） */
+function kicker(ctx, pg, fallback) {
+  return `${String(ctx.page - 1).padStart(2, '0')}　${pg.kicker || fallback}`;
+}
+
+/**
+ * 案件ディレクトリ基準で画像を解決。無ければ記録して null（ダミーで埋めない）。
+ * 置いてよいのは assets/covers/<その投稿のID>.jpg だけ（first_visit.json を手で書き換えて
+ * ラベルの無い投稿の画像や案件外のファイルを差し込めないようにする）
+ */
+function cover(p, where, vid) {
   if (!p) return null;
-  const abs = path.isAbsolute(p) ? p : path.join(ROOT, p);
+  const abs = path.resolve(ROOT, p);
+  const want = /^\d{6,25}$/.test(String(vid || '')) ? path.join(ROOT, 'assets', 'covers', `${vid}.jpg`) : null;
+  if (!want || abs !== want) {
+    FV.missing.push(`${p} ← ${where}（assets/covers/<投稿ID>.jpg 以外は置かない）`);
+    return null;
+  }
   if (!fs.existsSync(abs)) {
     FV.missing.push(`${p} ← ${where}`);
     return null;
@@ -59,7 +74,7 @@ function finishPage(s, pageNo, expect) {
 
 /** カバー＋（左上）順位バッジ＋（右上）PR/公式バッジ＋（下）再生数 */
 function thumbCard(s, c, box, opt = {}) {
-  const abs = cover(c && c.cover, opt.where || '?');
+  const abs = cover(c && c.cover, opt.where || '?', c && c.video_id);
   const b = abs ? addThumb(s, abs, box, c.url) : null;
   if (!b) {
     addEmptySlot(s, box, '画像なし');
@@ -142,7 +157,7 @@ function slideCover(pptx, fv) {
     // 右端から並べる（左から置くと3枚目がスライド外へ出た）
     const x = right - (shots.length - i) * bw - (shots.length - 1 - i) * 0.22;
     const y = 2.40 + (i % 2) * 0.55;
-    const abs = cover(c.cover, '表紙');
+    const abs = cover(c.cover, '表紙', c.video_id);
     if (abs) { addThumb(s, abs, { x, y, w: bw, h: bh }, c.url); note(c); }
   });
   return s;
@@ -150,9 +165,16 @@ function slideCover(pptx, fv) {
 
 // ───────────────────────────────── P2 いま検索するとこう見える
 function slideNow(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '01　いま、検索するとこう見える', headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, 'いま、検索するとこう見える'), headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const cards = (pg.cards || []).slice(0, 8);
+  const n = Math.max(cards.length, 1);
+  const gap = 0.22;
+  const tw = Math.min(2.02, (W - (n - 1) * gap) / n);
+  const th = tw * 16 / 9;
+  // 検索窓＋格子を本文領域の縦中央より少し上に置く（格子は横幅で大きさが決まり、下に余白が残るため）
+  const block = 0.95 + th + 0.34;
+  const y0 = S.top + Math.max(0.05, (S.bottom - S.top - block) * 0.4);
   // 検索窓（絵文字は明朝・ゴシックに字形が無く豆腐になるため、虫眼鏡は図形で描く）
-  const y0 = S.top + 0.05;
   s.addShape('roundRect', {
     x: X0, y: y0, w: 7.6, h: 0.62, rectRadius: 0.31,
     fill: { color: 'FFFFFF' }, line: { color: T.color.cardLine, width: 1 },
@@ -167,45 +189,19 @@ function slideNow(pptx, pg, ctx) {
     x: X0 + 7.9, y: y0, w: W - 7.9, h: 0.62,
     fontFace: T.font.gothic, fontSize: 12, color: T.color.subLight, valign: 'middle',
   });
-  const cards = (pg.cards || []).slice(0, 8);
-  const n = Math.max(cards.length, 1);
-  const gap = 0.22;
-  const tw = Math.min(2.02, (W - (n - 1) * gap) / n);
-  const th = tw * 16 / 9;
   const ty = y0 + 0.95;
   cards.forEach((c, i) => {
     thumbCard(s, c, { x: X0 + i * (tw + gap), y: ty, w: tw, h: th }, { rank: true, where: 'P2' });
   });
-  // 投稿者の内訳を1本の帯で（文章にしない）
-  const mix = (pg.poster_mix || []).filter((m) => m.count > 0);
-  const total = mix.reduce((a, m) => a + m.count, 0);
-  if (total) {
-    const by = ty + th + 0.62;
-    s.addText('表示されている投稿の内訳', {
-      x: X0, y: by, w: 4.0, h: 0.36, fontFace: T.font.gothic, fontSize: 12, color: T.color.sub, valign: 'middle',
-    });
-    let bx = X0 + 4.0;
-    const bwAll = W - 4.0;
-    const cols = { 公式: '2F5397', クリエイター: 'A24765', 個人: '55524C', メディア: '9B978F' };
-    mix.forEach((m) => {
-      const w = bwAll * (m.count / total);
-      s.addShape('rect', { x: bx, y: by + 0.02, w, h: 0.34, fill: { color: cols[m.id] || '9B978F' }, line: { color: T.color.bg, width: 1 } });
-      if (w > 1.2) {
-        s.addText(`${m.short || m.label} ${m.count}`, {
-          x: bx, y: by + 0.02, w, h: 0.34, fontFace: T.font.gothic, fontSize: 11, bold: true, color: 'FFFFFF',
-          align: 'center', valign: 'middle', margin: 0,
-        });
-      }
-      bx += w;
-    });
-  }
+  // 投稿者の内訳（クリエイター／個人＝フォロワー1万人で分けた数）は本編に出さない。
+  // 上長FB「フォロワーの話はいらない、あっても最後」→ 付録2の表にだけ置く
   finishPage(s, ctx.page, { have: cards.length, want: 8, why: '関連・検索画面のカバーがある投稿が足りない' });
   return s;
 }
 
 // ───────────────────────────────── P3 競合はこう発信している
 function slideCompetitors(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '02　競合はこう発信している', headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, '競合はこう発信している'), headline: pg.headline, sub: pg.sub, footer: ctx.footer });
   const cols = pg.columns || [];
   const n = Math.max(cols.length, 1);
   const gap = 0.45;
@@ -226,18 +222,21 @@ function slideCompetitors(pptx, pg, ctx) {
     const ty = S.top + 0.72;
     thumbs.forEach((t, j) => thumbCard(s, t, { x: x + j * (tw + tgap), y: ty, w: tw, h: th }, { where: `P3 ${c.brand}` }));
     let cy = ty + th + 0.48;
+    // 本数の文字（「20本中10本」）を列の内側に残す。4社だと列幅が約4.1inで、チップが列いっぱいになり
+    // 本数が隣の列に重なった
+    const chipW = Math.min(4.6, cw - 1.25);
     if (c.angle) {
-      chip(s, { x, y: cy, w: Math.min(cw, 4.6), label: '切り口', text: c.angle.short || c.angle.label, color });
+      chip(s, { x, y: cy, w: chipW, label: '切り口', text: c.angle.short || c.angle.label, color });
       s.addText(`${c.n}本中${c.angle.count}本`, {
-        x: x + Math.min(cw, 4.6) + 0.12, y: cy, w: Math.max(0.8, cw - Math.min(cw, 4.6) - 0.12), h: 0.40,
+        x: x + chipW + 0.10, y: cy, w: cw - chipW - 0.10, h: 0.40,
         fontFace: T.font.gothic, fontSize: 12, color: T.color.sub, valign: 'middle',
       });
       cy += 0.52;
     }
     if (c.appeal) {
-      chip(s, { x, y: cy, w: Math.min(cw, 4.6), label: '訴求', text: c.appeal.short || c.appeal.label, color: T.color.chipDark });
+      chip(s, { x, y: cy, w: chipW, label: '訴求', text: c.appeal.short || c.appeal.label, color: T.color.chipDark });
       s.addText(`${c.n}本中${c.appeal.count}本`, {
-        x: x + Math.min(cw, 4.6) + 0.12, y: cy, w: Math.max(0.8, cw - Math.min(cw, 4.6) - 0.12), h: 0.40,
+        x: x + chipW + 0.10, y: cy, w: cw - chipW - 0.10, h: 0.40,
         fontFace: T.font.gothic, fontSize: 12, color: T.color.sub, valign: 'middle',
       });
       cy += 0.52;
@@ -251,9 +250,11 @@ function slideCompetitors(pptx, pg, ctx) {
       cy += 0.46;
     }
     if (c.paid_line) {
+      // 列が狭い（3〜4社）ときは2行まで。2社の列は広く1行で収まるが、下端（フッターの上）を越えない
+      const ph = Math.max(0.36, Math.min(0.62, S.bottom + 0.06 - (cy + 0.04)));
       s.addText(c.paid_line, {
-        x, y: cy + 0.04, w: cw, h: 0.40,
-        fontFace: T.font.gothic, fontSize: fit(c.paid_line, cw, 0.40, { base: 13, min: 10, lineHeight: 1.1, quiet: true }),
+        x, y: cy + 0.04, w: cw, h: ph,
+        fontFace: T.font.gothic, fontSize: fit(c.paid_line, cw, ph, { base: 13, min: 10, lineHeight: 1.15, quiet: true }),
         bold: true, color: 'A24765', valign: 'middle',
       });
     }
@@ -264,7 +265,7 @@ function slideCompetitors(pptx, pg, ctx) {
 
 // ───────────────────────────────── P4 競合がお金をかけて広げている訴求
 function slidePaid(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '03　競合がお金をかけて広げている訴求', headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, '競合がお金をかけて広げている訴求'), headline: pg.headline, sub: pg.sub, footer: ctx.footer });
   const cards = (pg.cards || []).slice(0, 4);
   const n = Math.max(cards.length, 1);
   const gap = 0.5;
@@ -278,9 +279,11 @@ function slidePaid(pptx, pg, ctx) {
     const b = thumbCard(s, c, { x: x + (cw - tw) / 2, y: S.top + 0.10, w: tw, h: th }, { where: `P4 ${c.brand}`, views: false });
     let y = b.y + b.h + 0.18;
     s.addShape('rect', { x, y: y + 0.08, w: 0.16, h: 0.26, fill: { color }, line: { width: 0 } });
-    s.addText(`${c.brand}　${c.badge || ''}`, {
+    const who = `${c.short || c.brand}　${c.badge || ''}`;
+    s.addText(who, {
       x: x + 0.26, y, w: cw - 0.26, h: 0.42,
-      fontFace: T.font.gothic, fontSize: 13, bold: true, color: T.color.text, valign: 'middle',
+      fontFace: T.font.gothic, fontSize: fit(who, cw - 0.26, 0.42, { base: 13, min: 10, lineHeight: 1.0, quiet: true }),
+      bold: true, color: T.color.text, valign: 'middle',
     });
     y += 0.46;
     s.addText(c.appeal_label || '', {
@@ -298,7 +301,7 @@ function slidePaid(pptx, pg, ctx) {
 
 // ───────────────────────────────── P5 貴社に足りていない発信
 function slideGap(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: `04　${ctx.client}に足りていない発信`, headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, `${ctx.client}に足りていない発信`), headline: pg.headline, sub: pg.sub, footer: ctx.footer });
   const rows = (pg.rows || []).slice(0, 3);
   const n = Math.max(rows.length, 1);
   const gap = 0.55;
@@ -345,7 +348,9 @@ function slideGap(pptx, pg, ctx) {
       x: X0, y: S.top + 1.2, w: W, h: 2.6, fontFace: T.font.en, fontSize: 150, bold: true,
       color: T.brandColors[0], align: 'center', valign: 'middle',
     });
-    s.addText(`「${pg.query || ''}」上位30本のうち、${ctx.client}公式アカウントの投稿`, {
+    // 分母は実際に数えた本数（取得が30本未満なら30と書かない）
+    const within = pg.official_n ? `上位${pg.official_n}本` : '上位';
+    s.addText(`「${pg.query || ''}」${within}のうち、${ctx.client}公式アカウントの投稿`, {
       x: X0, y: S.top + 4.0, w: W, h: 0.6, fontFace: T.font.gothic, fontSize: 18, color: T.color.sub, align: 'center', valign: 'middle',
     });
   }
@@ -355,7 +360,7 @@ function slideGap(pptx, pg, ctx) {
 
 // ───────────────────────────────── P6 いま伸びている型（お土産）
 function slideWinning(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '05　いま伸びている型', headline: pg.headline, sub: pg.sub, footer: ctx.footer, tag: 'お土産' });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, pg.winners ? 'いま伸びている型' : 'いま多い型'), headline: pg.headline, sub: pg.sub, footer: ctx.footer, tag: pg.tag || '' });
   const cards = (pg.cards || []).slice(0, 3);
   const n = Math.max(cards.length, 1);
   const gap = 0.5;
@@ -399,7 +404,7 @@ function slideWinning(pptx, pg, ctx) {
 
 // ───────────────────────────────── P7 まずこの3本
 function slidePlans(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '06　まずこの3本', headline: pg.headline, sub: pg.sub, footer: ctx.footer, tag: '提案（仮説）' });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, `まずこの${(pg.items || []).length}本`), headline: pg.headline, sub: pg.sub, footer: ctx.footer, tag: '提案（仮説）' });
   const items = (pg.items || []).slice(0, 3);
   const n = Math.max(items.length, 1);
   const gap = 0.5;
@@ -440,7 +445,7 @@ function slidePlans(pptx, pg, ctx) {
 
 // ───────────────────────────────── P8 次回
 function slideNext(pptx, pg, ctx) {
-  const s = addStorySlide(pptx, { kicker: '07　次回', headline: pg.headline, sub: pg.sub, footer: ctx.footer });
+  const s = addStorySlide(pptx, { kicker: kicker(ctx, pg, '次回'), headline: pg.headline, sub: pg.sub, footer: ctx.footer });
   const colW = (W - 1.0) / 2;
   const blocks = [['次回お持ちするもの', pg.bring || [], T.brandColors[0]], ['教えていただきたいこと', pg.ask || [], T.color.text]];
   blocks.forEach(([title, list, color], bi) => {

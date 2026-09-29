@@ -82,8 +82,9 @@ function addStorySlide(pptx, opts) {
   });
   addStoryFooter(s, opts.footer);
   // 本文の文字数を数える（FB「文字が多い」の再発防止）。短いラベル（順位・再生・PR 等の6字以下）は
-  // 文章ではないので数えない。preflight.py と同じ数え方にする
-  s._fvChars = [opts.headline, opts.sub].filter(Boolean).reduce((a, t) => a + (String(t).length > 6 ? String(t).length : 0), 0);
+  // 文章ではないので数えない。preflight.py と同じ数え方にする（キッカー・タグも紙面の文字なので数える）
+  s._fvChars = [opts.kicker, opts.tag, opts.headline, opts.sub].filter(Boolean)
+    .reduce((a, t) => a + (String(t).length > 6 ? String(t).length : 0), 0);
   const orig = s.addText.bind(s);
   s.addText = (t, o) => {
     const str = typeof t === 'string' ? t : (Array.isArray(t) ? t.map((x) => (x && x.text) || '').join('') : '');

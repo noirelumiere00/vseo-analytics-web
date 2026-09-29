@@ -51,8 +51,19 @@ function fitBox(p, x, y, w, h, align = 'center') {
  * URL が無ければ何も足さない（壊れたリンクを作らない）。
  */
 function linkTo(url) {
-  const u = String(url || '').trim();
-  if (!/^https?:\/\//.test(u)) return {};
+  // pptxgenjs は画像リンクの Target を XML エスケープせずに rels へ書く。
+  // ブラウザからコピーした TikTok URL（?is_from_webapp=1&sender_device=pc）の & だけで PPTX が壊れるので、
+  // TikTok の URL は ? 以降を落とし、それでも XML に危ない字が残る URL にはリンクを張らない
+  let x;
+  try {
+    x = new URL(String(url || '').trim());
+  } catch (e) {
+    return {};
+  }
+  if (!/^https?:$/.test(x.protocol)) return {};
+  if (/(^|\.)tiktok\.com$/i.test(x.hostname)) { x.search = ''; x.hash = ''; }
+  const u = x.href;
+  if (/["'<>&\s]/.test(u)) return {};
   return { hyperlink: { url: u, tooltip: '投稿を開く' } };
 }
 

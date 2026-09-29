@@ -13,8 +13,17 @@ import hashlib
 import json
 import os
 import re
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# 日本語 Windows のパイプ越し（cp932）では é・ä・〜 などを print した時点で落ちる。
+# 初訪ツールは全部これを import するので、ここで置換モードにしておく（build_input_md.py と同じ対処）
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(errors="replace")
+    except (AttributeError, ValueError, OSError):
+        pass
 
 # ─────────────────────────────── 文字数（src/helpers/text.js の widthUnits と同じ数え方）
 
@@ -52,7 +61,10 @@ def assert_clean(label: str, s: str) -> None:
 
 PR_TAGS = {"pr", "ｐｒ", "pr案件", "タイアップ", "広告", "プロモーション", "提供", "ad", "sponsored"}
 # 本文の先頭・末尾の【PR】[PR]（PR）PR: 表記。タグを付けずに本文で表記する投稿が多い
-PR_BODY = re.compile(r"(^|\s)[【\[（(]\s*(PR|ＰＲ|プロモーション|広告)\s*[】\]）)]|(^|\s)(PR|ＰＲ)\s*[:：]", re.I)
+# 括弧つきは前の字を問わない（「食べてみた【PR】」「餃子(PR)」のように空白なしで続けて書く人が多い）。
+# 括弧なしの「PR:」だけは語の途中（「APR:」等）を拾わないよう区切りを要求する
+PR_BODY = re.compile(r"[【\[（(]\s*(PR|ＰＲ|プロモーション|広告)\s*[】\]）)]"
+                     r"|(^|[\s。、！!？?・])(PR|ＰＲ)\s*[:：]", re.I)
 
 
 def norm_tag(t: str) -> str:
@@ -73,6 +85,28 @@ def pr_basis(v: dict) -> list[str]:
     if PR_BODY.search(desc):
         out.append("body")
     return out
+
+
+# ─────────────────────────────── 投稿ID・投稿日時
+
+VID_RE = re.compile(r"\d{6,25}")
+
+
+def safe_vid(v) -> str | None:
+    """投稿IDは数字だけ。パス（assets/covers/<id>.jpg）と HTML に使うので、それ以外は受けない"""
+    s = str(v if v is not None else "").strip()
+    return s if VID_RE.fullmatch(s) else None
+
+
+def to_epoch(ct) -> int | None:
+    """createTime を秒に。SSR 経路では文字列、別経路ではミリ秒で来ることがある。読めなければ None"""
+    try:
+        ts = int(float(ct))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if ts > 100_000_000_000:          # ミリ秒
+        ts //= 1000
+    return ts if ts > 0 else None
 
 
 # ─────────────────────────────── 言語

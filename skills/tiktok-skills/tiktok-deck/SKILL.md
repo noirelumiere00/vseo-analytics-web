@@ -53,11 +53,13 @@ description: TikTok検索面の取得データから、営業ステータス別�
 
 ```bash
 # 0. case.json（intake の依頼票から下書きできる）: category / vocab(food|beauty|general) / brands[].short・official・official_status / focus_products
+#    acquired_on（取得日。無ければ取得JSONの fetched_on。どちらも無いと本編に日付を出さない）
+#    keywords[].label（任意。複数語の長い検索語を見出しに入れるときの短い表示名）
 #    取得は tiktok-acquire で「{カテゴリ語}」「{競合} {カテゴリ}」（＋任意で「{貴社} {カテゴリ}」）を raw/ に
 python3 tools/fetch_covers.py --case .            # カバーを assets/covers/<動画ID>.jpg に（動画IDで保存＝取り違え防止）
 python3 tools/label_posts.py --case . --init      # 候補（カテゴリ上位30・競合上位20＋PR全件・貴社上位20）
 python3 tools/label_posts.py --case . --options   # 選べる値と「迷ったときの決まり」を必ず読む
-python3 tools/label_posts.py --case . --contact   # review/contact_<軸>_NN.jpg（各タイルに3文字コード）
+python3 tools/label_posts.py --case . --contact   # review/contact_<軸>_NN.jpg（各タイルにタイル番号と4文字コード）
 #   ★ 一覧シートを実際に開き、タイルごとに patch を書く（下の「選択式ラベル」）
 python3 tools/label_posts.py --case . --apply review/patch_K1.csv review/patch_C1.csv ...
 python3 tools/label_posts.py --case . --check     # 窓内が全件判定済みになるまで繰り返す
@@ -72,8 +74,11 @@ python3 tools/render_pptx_any.py output/TikTok_Competitive_Research_初訪.pptx 
 
 ### 選択式ラベル（ここが品質を揃える）
 
-- 判定は**タイル（投稿×検索軸）ごと**。patch は `code,relevance,angle,appeal` の CSV。
-  code は一覧シートの画像にだけ焼かれた3文字（見ていない投稿は確定できない）。
+- 判定は**タイル（投稿×検索軸）ごと**。patch は `tile,code,relevance,angle,appeal` の CSV
+  （例 `K1-3,7HQX,関連,アレンジ調理,`）。tile はタイル番号、code は一覧シートの画像にだけ焼かれた4文字。
+  labels.json には低速なハッシュしか残さないので、画像を開かずにコードを当てることはできない
+  （見ていない投稿は確定できない）。`--contact` を作り直すとコードも変わるので、最新のシートを読む。
+  シートで見せた後にカバーが差し替わった投稿は確定できない（シートを作り直す）。
 - relevance：関連／他社の商品（ブランド軸のみ）／カテゴリ外／無関係／判定不可。
   **例に載るのは「関連」だけ**（冷凍食品の資料に特撮番組の投稿が載った事故の再発防止）。
 - angle（切り口）＝カバーと冒頭で分かる“作り”。複数当てはまれば一覧の上のもの。
@@ -88,7 +93,9 @@ python3 tools/render_pptx_any.py output/TikTok_Competitive_Research_初訪.pptx 
 
 `review/初訪_レビュー.html` を営業（または上長）に渡す。掲載する投稿ごとに［OK／差し替え＋理由］、
 見出しごとに［このまま／別案］を選び、「結果をコピー」の文面を貼ってもらう。
-差し替えは labels.json を直して（例：無関係にする）`build_first_visit.py` から作り直す。
+差し替えは labels.json のその軸の relevance を `irrelevant` にして `build_first_visit.py` から作り直す。
+first_visit.json は手で直さない（FV_ASSETS.md の照合値と合わなくなり、generate.js と verify_assets.py が止める）。
+文言は `fv_copy.json` で変える。HTML の見出しの案の番号は `fv_copy.json` の variant と同じ。
 `review/初訪_前日チェック.md` は同じ内容のチェックリスト。
 
 ### 初訪でやってはいけないこと
@@ -99,7 +106,8 @@ python3 tools/render_pptx_any.py output/TikTok_Competitive_Research_初訪.pptx 
 | INPUT.md / authored.md で初訪を作る | 旧初訪の器（Q番号・lead注記・手法ページ）が戻る。初訪は first_visit.json だけで作る |
 | ラベルを見ずに確定する・推定値をそのまま写す | 例示の事故と担当者による品質差が戻る。`--check` が推定と同じ割合を警告する |
 | 見出しを長文に書き換える | 文字が多い資料に戻る。別案の番号で選ぶ |
-| 「PRをしていない」「0本」を根拠なく書く | 取れた範囲の事実だけ。公式0本は公式IDを確認した社だけ（official_status） |
+| 「PRをしていない」「0本」を根拠なく書く | 取れた範囲の事実だけ。公式0本は公式IDを確認した社だけ（official_status が confirmed / none。未設定は unknown 扱いで「0本」と書かない） |
+| P2 を省く（allow_drop） | P2「いま検索するとこう見える」は資料の入口。成立しなければ止まる（カバー取得かカテゴリ語を見直す） |
 
 ---
 

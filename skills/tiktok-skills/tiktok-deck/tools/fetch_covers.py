@@ -21,6 +21,9 @@
   どれも取れなければ **作らない**（生成画像・プレースホルダで埋めない）。
   取れなかった投稿は manifest.json に理由付きで残し、資料の例示には使われない。
   既にある画像は上書きしない（--refresh のときだけ）。同じ投稿の画像がページ間・版間で変わらないように。
+  --refresh でも、取り直した画像が検証を通ったときだけ置き換える（劣化した応答で判定済みのカバーを消さない）。
+  manifest.json は1本ごとに保存する（途中で落ちても、それまでの取得経路と sha256 が残る）。
+  ネット取得が3回続けて失敗したら、以降はネットを使わない（無応答の回線で1本30秒ずつ黙って待たない）。
 
 使い方:
   python3 tools/fetch_covers.py --case <案件ディレクトリ>                 # labels.json の投稿（無ければ各軸の上位）
@@ -34,6 +37,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -46,7 +50,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fvlib import pr_basis  # noqa: E402
+from fvlib import pr_basis, safe_vid  # noqa: E402
 
 UA = "Mozilla/5.0 (compatible; tiktok-deck/cover-fetch)"
 MAX_H = 960        # 資料に貼るには十分。原寸のまま入れると PPTX が数十MBになる
@@ -103,6 +107,14 @@ def raw_index(case_dir: str, cfg: dict) -> dict:
     return idx
 
 
+def sha256_of(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for b in iter(lambda: f.read(1 << 16), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
 def is_image(b: bytes) -> str | None:
     if b[:3] == b"\xff\xd8\xff":
         return "jpg"
@@ -115,13 +127,23 @@ def is_image(b: bytes) -> str | None:
     return None
 
 
-def http_get(url: str, timeout: float = 15.0) -> bytes:
+NET_TIMEOUT = 8.0      # 1回の取得の待ち時間。無応答の回線で長く黙らない
+NET_DOWN_AFTER = 3     # ネット取得がこの回数続けて失敗したら、以降はネットを使わない
+
+
+def http_get(url: str, timeout: float = NET_TIMEOUT) -> bytes:
     # 取得JSON由来の URL だけを叩く。file:// 等を通すと手元のファイルを資料に取り込めてしまう
     if not re.match(r"^https?://", str(url or ""), re.I):
         raise urllib.error.URLError(f"http(s) 以外の URL は取得しない: {str(url)[:40]}")
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310  公開URLのみ
-        return r.read()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:   # noqa: S310  公開URLのみ
+            return r.read()
+    except urllib.error.HTTPError:
+        raise
+    except (http.client.HTTPException, ValueError) as e:
+        # 応答が途中で切れた（IncompleteRead）・壊れた応答・不正なURL。1本の失敗として扱い、全体を落とさない
+        raise urllib.error.URLError(f"{type(e).__name__}: {e}") from e
 
 
 def to_jpeg(src: str, dst: str, ffmpeg: str | None, seek: float | None = None) -> bool:
@@ -222,17 +244,33 @@ def fetch_one(v: dict, dst: str, media_dirs: list[str], ffmpeg: str | None,
         os.remove(dst)
         return None
 
-    if network and not state.get("rate_limited"):
+    def net_failed(msg):
+        errs.append(msg)
+        state["net_fail"] = state.get("net_fail", 0) + 1
+        if state["net_fail"] >= NET_DOWN_AFTER and not state.get("network_down"):
+            state["network_down"] = True
+            print(f"  ! ネット取得が{NET_DOWN_AFTER}回続けて失敗。以降はネットを使わず、取得済みの媒体だけで続けます"
+                  "（回線・プロキシを直して再実行すると、取れなかった投稿だけを取り直します）", flush=True)
+
+    def net_ok():
+        state["net_fail"] = 0
+
+    if network and not state.get("rate_limited") and not state.get("network_down"):
         cu = v.get("coverUrl") or v.get("cover_image_url") or ""
         if cu and not expired(cu):
             try:
-                ok, why = from_bytes(http_get(cu), dst, ffmpeg)
+                b = http_get(cu)
+                net_ok()
+                ok, why = from_bytes(b, dst, ffmpeg)
                 if ok and accept("coverUrl"):
                     return "coverUrl", errs
                 if not ok:
                     errs.append(f"coverUrl: {why}")
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            except urllib.error.HTTPError as e:
+                net_ok()                               # 応答は返っている（403/404 は回線の問題ではない）
                 errs.append(f"coverUrl: {e}")
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                net_failed(f"coverUrl: {e}")
         elif cu:
             errs.append("coverUrl: 署名の期限切れ（x-expires）")
         urls = [v.get("url") or ""]
@@ -240,14 +278,24 @@ def fetch_one(v: dict, dst: str, media_dirs: list[str], ffmpeg: str | None,
             # 写真投稿は /video/ の URL だと oEmbed が失敗することがある
             urls.append(re.sub(r"/video/(\d+)", r"/photo/\1", urls[0]))
         for u in [x for x in dict.fromkeys(urls) if x.startswith("http")]:
+            if state.get("network_down"):
+                break
             try:
                 th, pid = oembed_thumb(u)
+                net_ok()
             except RateLimited:
                 state["rate_limited"] = True
                 errs.append("oEmbed: 429（回数制限）。以降のネット取得を止めました。時間を置いて再実行してください")
                 break
-            except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            except urllib.error.HTTPError as e:
+                net_ok()
                 errs.append(f"oEmbed: {e}")
+                continue
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                net_failed(f"oEmbed: {e}")
+                continue
+            except ValueError as e:
+                errs.append(f"oEmbed: 応答を読めない（{e}）")
                 continue
             if not th:
                 errs.append("oEmbed: thumbnail_url が無い（削除・非公開の可能性）")
@@ -258,8 +306,13 @@ def fetch_one(v: dict, dst: str, media_dirs: list[str], ffmpeg: str | None,
                 continue
             try:
                 ok, why = from_bytes(http_get(th), dst, ffmpeg)
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                net_ok()
+            except urllib.error.HTTPError as e:
+                net_ok()
                 errs.append(f"oEmbed画像: {e}")
+                continue
+            except (urllib.error.URLError, TimeoutError, OSError) as e:
+                net_failed(f"oEmbed画像: {e}")
                 continue
             if ok and accept("oembed"):
                 return "oembed", errs
@@ -267,6 +320,8 @@ def fetch_one(v: dict, dst: str, media_dirs: list[str], ffmpeg: str | None,
                 errs.append(f"oEmbed: {why}")
     elif not network:
         errs.append("ネット取得を無効化（--no-network）")
+    elif state.get("network_down"):
+        errs.append("ネット取得は停止中（続けて失敗したため）")
     for md in media_dirs:
         ph = os.path.join(md, f"{vid}_photos")
         if os.path.isdir(ph):
@@ -340,8 +395,12 @@ def main() -> int:
         basis = f"各軸の表示順上位{args.top}本"
     seen, uniq = set(), []
     for v in targets:
-        vid = str(v.get("id") or "")
-        if vid and vid not in seen:
+        vid = safe_vid(v.get("id"))
+        if not vid:
+            # 投稿IDはファイル名（assets/covers/<id>.jpg）になる。数字以外は案件の外へ書きうるので扱わない
+            print(f"  ! 投稿ID {str(v.get('id'))[:40]!r} が数字でないため飛ばします")
+            continue
+        if vid not in seen:
             seen.add(vid)
             uniq.append(v)
 
@@ -349,30 +408,68 @@ def main() -> int:
     os.makedirs(out_dir, exist_ok=True)
     man_path = os.path.join(out_dir, "manifest.json")
     manifest = load_json(man_path) if os.path.exists(man_path) else {}
+
+    def save_manifest():
+        tmp = man_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, man_path)
+
     got = kept = 0
     missing = []
     state: dict = {}
-    for v in uniq:
-        vid = str(v["id"])
-        dst = os.path.join(out_dir, f"{vid}.jpg")
-        if os.path.exists(dst) and not args.refresh:
-            kept += 1
-            if vid not in manifest or not manifest[vid].get("ok"):
-                manifest[vid] = {"ok": True, "via": "existing", "url": v.get("url")}
-            continue
-        via, errs = fetch_one(v, dst, media_dirs, ffmpeg, not args.no_network, state)
-        if via:
-            got += 1
-            with open(dst, "rb") as f:
-                digest = hashlib.sha256(f.read()).hexdigest()
-            _ok, _why, w, h = quality_ok(dst)
-            manifest[vid] = {"ok": True, "via": via, "url": v.get("url"), "sha256": digest,
-                             "w": w, "h": h, "fetched_at": dt.datetime.now().isoformat(timespec="seconds")}
-        else:
-            missing.append(vid)
-            manifest[vid] = {"ok": False, "errors": errs, "url": v.get("url")}
-    with open(man_path, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=1)
+    try:
+        for i, v in enumerate(uniq, start=1):
+            vid = str(v["id"])
+            dst = os.path.join(out_dir, f"{vid}.jpg")
+            if os.path.exists(dst) and not args.refresh:
+                digest = sha256_of(dst)
+                prev = manifest.get(vid) or {}
+                if prev.get("ok") and prev.get("sha256") == digest:
+                    kept += 1
+                    continue
+                # 取得経路の分からない既存画像（manifest が消えた・手で置いた）。中身を確かめ、
+                # 経路は existing のまま残す（「検索するとこう見える」のページには使わない）
+                with open(dst, "rb") as f:
+                    kind = is_image(f.read(16))
+                ok, why, w, h = quality_ok(dst) if kind == "jpg" else (False, f"JPEG ではない（{kind or '不明'}）", None, None)
+                if ok:
+                    kept += 1
+                    manifest[vid] = {"ok": True, "via": "existing", "url": v.get("url"), "sha256": digest, "w": w, "h": h}
+                else:
+                    missing.append(vid)
+                    manifest[vid] = {"ok": False, "errors": [f"既存の画像が使えない: {why}（消すか --refresh で取り直す）"],
+                                     "url": v.get("url"), "sha256": digest}
+                save_manifest()
+                continue
+            # 一時ファイルに取り、検証を通ったときだけ置き換える（--refresh で判定済みの画像を失わない）
+            tmp = dst + ".new.jpg"
+            via, errs = fetch_one(v, tmp, media_dirs, ffmpeg, not args.no_network, state)
+            if via:
+                got += 1
+                os.replace(tmp, dst)
+                _ok, _why, w, h = quality_ok(dst)
+                manifest[vid] = {"ok": True, "via": via, "url": v.get("url"), "sha256": sha256_of(dst),
+                                 "w": w, "h": h, "fetched_at": dt.datetime.now().isoformat(timespec="seconds")}
+                mark = via
+            else:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+                if os.path.exists(dst):
+                    # --refresh で取り直せなかった。今ある画像と記録はそのまま使う
+                    kept += 1
+                    manifest.setdefault(vid, {"ok": True, "via": "existing", "url": v.get("url"),
+                                              "sha256": sha256_of(dst)})
+                    manifest[vid]["refresh_errors"] = errs
+                    mark = "取り直せず（既存を維持）"
+                else:
+                    missing.append(vid)
+                    manifest[vid] = {"ok": False, "errors": errs, "url": v.get("url")}
+                    mark = "取れず"
+            save_manifest()
+            print(f"  [{i}/{len(uniq)}] {vid}: {mark}", flush=True)
+    finally:
+        save_manifest()
     log = manifest
 
     print(f"対象: {basis} {len(uniq)}本 → 新規 {got} / 既存 {kept} / 取れなかった {len(missing)}")
