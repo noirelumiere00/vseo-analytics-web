@@ -1,0 +1,916 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TikTok分析 依頼票</title>
+<!-- 外部アセットは読まない（社内PCでオフラインでも開けるように）。フォントは端末にあるものを使う -->
+<style>
+:root{
+  --bg:#EDF0F1; --panel:#FFFFFF; --panel-2:#E4E8EA; --sunken:#F5F7F8;
+  --rule:#D3DADD; --rule-soft:#E2E7E9;
+  --ink:#12171A; --ink-2:#465055; --ink-3:#727E84;
+  --accent:#1D5566; --accent-soft:#DCEAEE;
+  --ai:#5E4380; --ai-soft:#E9E1F2;
+  --ok:#1B6448; --ok-soft:#DCEDE4;
+  --warn:#8A5410; --warn-soft:#F6EBD8;
+  --shadow:0 1px 2px rgba(18,23,26,.05),0 12px 28px -18px rgba(18,23,26,.3);
+  --r:9px;
+  --serif:"Zen Old Mincho","Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP",serif;
+  --sans:"Noto Sans JP","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1315; --panel:#181E21; --panel-2:#212A2E; --sunken:#141A1D;
+    --rule:#2C3639; --rule-soft:#232C30;
+    --ink:#EAEFF1; --ink-2:#AFBBC0; --ink-3:#7E8B91;
+    --accent:#7FBCCE; --accent-soft:#17282E;
+    --ai:#B79BD8; --ai-soft:#241C31;
+    --ok:#63BE97; --ok-soft:#12261D;
+    --warn:#D6A458; --warn-soft:#2A2010;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 32px -20px rgba(0,0,0,.85);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1315; --panel:#181E21; --panel-2:#212A2E; --sunken:#141A1D;
+  --rule:#2C3639; --rule-soft:#232C30;
+  --ink:#EAEFF1; --ink-2:#AFBBC0; --ink-3:#7E8B91;
+  --accent:#7FBCCE; --accent-soft:#17282E;
+  --ai:#B79BD8; --ai-soft:#241C31;
+  --ok:#63BE97; --ok-soft:#12261D;
+  --warn:#D6A458; --warn-soft:#2A2010;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 32px -20px rgba(0,0,0,.85);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.8;-webkit-font-smoothing:antialiased}
+.wrap{max-width:800px;margin:0 auto;padding:44px 16px 200px;display:flex;flex-direction:column;gap:30px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+p{margin:0}
+
+header{display:flex;flex-direction:column;gap:10px}
+.kicker{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--serif);font-size:clamp(27px,4.4vw,37px);font-weight:700;line-height:1.26;margin:0;text-wrap:balance}
+.lede{color:var(--ink-2);max-width:60ch;font-size:14.5px}
+
+/* グループ = 誰がその情報を持っているか */
+.group{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.ghead{padding:15px 20px;border-bottom:1px solid var(--rule-soft);background:var(--panel-2);display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+.ghead .who{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:20px;flex:none}
+.who.you{background:var(--accent-soft);color:var(--accent)}
+.who.ai{background:var(--ai-soft);color:var(--ai)}
+.who.cond{background:var(--warn-soft);color:var(--warn)}
+.who.pick{background:var(--ok-soft);color:var(--ok)}
+.ghead h2{font-family:var(--serif);font-size:17px;font-weight:700;margin:0}
+.ghead .note{font-size:12.5px;color:var(--ink-3);width:100%}
+.gbody{padding:6px 20px 18px;display:flex;flex-direction:column}
+
+.field{padding:15px 0;border-bottom:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:8px;min-width:0}
+.field:last-child{border-bottom:0}
+.frow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+label.fl,span.fl{font-weight:700;font-size:14px;flex:none}
+.opt{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);border:1px solid var(--rule);border-radius:20px;padding:0 7px;margin-left:6px;font-weight:400;vertical-align:1px}
+.hint{font-size:12.5px;color:var(--ink-3);flex:1;min-width:200px}
+input.in,input[type=text],input[type=date]{width:100%;min-width:0;padding:10px 13px;border:1px solid var(--rule);border-radius:7px;
+  background:var(--sunken);color:var(--ink);font:inherit;font-size:14.5px;transition:border-color .12s,background .12s}
+input::placeholder{color:var(--ink-3)}
+input[type=text]:focus,input[type=date]:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent);background:var(--panel)}
+input[type=text]:disabled{background:var(--ai-soft);color:var(--ai);border-color:transparent;cursor:not-allowed}
+input.over{border-color:var(--warn);background:var(--warn-soft)}
+
+/* AIに任せるトグル */
+.dele{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ai);
+  cursor:pointer;user-select:none;padding:4px 9px;border:1px dashed var(--ai);border-radius:20px;flex:none;align-self:flex-start;
+  background:transparent;transition:background .12s}
+.dele:hover{background:var(--ai-soft)}
+.dele input{accent-color:var(--ai);margin:0;width:14px;height:14px}
+.dele.on{background:var(--ai-soft);border-style:solid}
+
+/* 型の選択カード */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:9px}
+.cards.three{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
+.card{position:relative;display:flex;flex-direction:column;gap:3px;padding:13px 15px;border:1px solid var(--rule);
+  border-radius:8px;background:var(--sunken);cursor:pointer;transition:border-color .12s,background .12s}
+.card:hover{border-color:var(--accent)}
+.card input{position:absolute;opacity:0;pointer-events:none}
+.card .ct{font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px}
+.card .cn{font-family:var(--mono);font-size:11px;color:var(--accent)}
+.card .cd{font-size:12.5px;color:var(--ink-2);line-height:1.7}
+.card:has(input:checked){border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.card:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.card.guess{border-style:dashed}
+.card.guess .cn{color:var(--ai)}
+.card.guess:has(input:checked){border-color:var(--ai);background:var(--ai-soft);box-shadow:inset 0 0 0 1px var(--ai)}
+
+/* 小さな選択（セグメント） */
+.seg{display:inline-flex;align-self:flex-start;max-width:100%;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--sunken);flex:none}
+.seg label{position:relative;display:inline-flex;align-items:center;padding:8px 12px;font-size:13px;cursor:pointer;
+  color:var(--ink-2);border-left:1px solid var(--rule);white-space:nowrap;transition:background .12s,color .12s}
+.seg label:first-child{border-left:0}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent-soft);color:var(--accent);font-weight:700}
+.seg label.ok:has(input:checked){background:var(--ok-soft);color:var(--ok)}
+.seg label.un:has(input:checked){background:var(--warn-soft);color:var(--warn)}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+
+/* 候補チップ */
+.chips{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.chips .clab{font-size:12px;color:var(--ink-3);margin-right:2px}
+.chip{font:inherit;font-size:12.5px;font-weight:500;padding:4px 11px;border-radius:20px;border:1px dashed var(--accent);
+  background:transparent;color:var(--accent);cursor:pointer;transition:background .12s}
+.chip:hover{background:var(--accent-soft);opacity:1}
+.chip:disabled{border-style:solid;border-color:var(--rule);color:var(--ink-3);cursor:default;background:transparent;opacity:1}
+.chip .sh{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-left:5px}
+.empty{font-size:12.5px;color:var(--ink-3)}
+
+/* 競合の行 */
+.crows{display:flex;flex-direction:column;gap:8px}
+.crow{display:grid;grid-template-columns:22px minmax(0,1fr) 128px 128px auto;gap:8px;align-items:center}
+.crow .idx{font-family:var(--mono);font-size:12px;color:var(--ink-3);text-align:center}
+.crow .sw{position:relative}
+.crow .sw .cnt{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:10.5px;color:var(--ink-3);pointer-events:none}
+.crow .sw input{padding-left:10px;padding-right:36px}
+.crow .coff{padding-left:10px;padding-right:8px}
+.crow .sw.over .cnt{color:var(--warn);font-weight:700}
+.crow.req .idx{color:var(--accent);font-weight:700}
+.duo{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px}
+body:not(.fv) #company-duo{grid-template-columns:1fr}
+.duo.wide{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.duo .sw{position:relative}
+.duo .sw .cnt{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:10.5px;color:var(--ink-3);pointer-events:none}
+.duo .sw input{padding-right:40px}
+.duo .sw.over .cnt{color:var(--warn);font-weight:700}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.sub{font-size:12.5px;color:var(--ink-2)}
+.sub b{color:var(--accent)}
+
+.alert{margin-top:12px;padding:14px 16px;border-radius:8px;background:var(--warn-soft);
+  border-left:4px solid var(--warn);font-size:13.5px;color:var(--ink-2);display:none;flex-direction:column;gap:6px}
+.alert.show{display:flex}
+.alert b{color:var(--warn)}
+.alert ul{margin:0;padding-left:18px}
+#g3,#gfv{display:none}
+#g3.show,#gfv.show{display:block}
+/* 初訪では自由記述の欄を隠す（選択式に置き換える） */
+body.fv .not-fv{display:none}
+.only-fv{display:none}
+body.fv .only-fv{display:flex}
+
+/* 送信バー */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--rule);
+  box-shadow:0 -10px 30px -20px rgba(0,0,0,.5);padding:13px 16px;z-index:20}
+.barin{max-width:800px;margin:0 auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.tally{display:flex;gap:14px;flex:1;min-width:190px;font-size:12.5px;flex-wrap:wrap}
+.tally span{display:inline-flex;align-items:center;gap:5px;color:var(--ink-2)}
+.tally .t-ask{display:none}
+body.fv .tally .t-ask{display:inline-flex}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.you{background:var(--accent)}.dot.ai{background:var(--ai)}.dot.non{background:var(--rule)}.dot.ask{background:var(--warn)}
+button{font:inherit;font-weight:700;font-size:14px;padding:11px 20px;border-radius:8px;border:1px solid var(--accent);
+  background:var(--accent);color:var(--panel);cursor:pointer;transition:opacity .12s}
+button:hover{opacity:.87}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+button.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+.out{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.out .ghead h2{font-family:var(--serif)}
+textarea{width:100%;min-height:186px;border:0;border-top:1px solid var(--rule-soft);padding:16px 20px;
+  background:var(--sunken);color:var(--ink);font-family:var(--mono);
+  font-size:12.5px;line-height:1.85;resize:vertical;display:block}
+textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.tally .copied{color:var(--ok);font-weight:700;font-size:13px;display:none}
+.tally .copied.show{display:inline-flex}
+footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font-size:12.5px;display:flex;flex-direction:column;gap:5px}
+
+@media (max-width:560px){
+  .wrap{padding-top:28px}
+  .ghead,.gbody{padding-left:16px;padding-right:16px}
+  .crow{grid-template-columns:22px minmax(0,1fr) minmax(0,1fr);row-gap:6px}
+  .crow .cname{grid-column:2 / 4}
+  .crow .sw{grid-column:2 / 3}
+  .crow .coff{grid-column:3 / 4}
+  .crow .seg{grid-column:2 / 4;justify-self:start}
+  .duo.wide{grid-template-columns:1fr}
+  .seg label{padding:8px 10px;font-size:12.5px}
+  .duo{grid-template-columns:minmax(0,1fr) 120px}
+  .trio{grid-template-columns:1fr}
+  .barin{gap:10px}
+  button{padding:10px 14px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Request form</div>
+    <h1>TikTok分析 依頼票</h1>
+    <p class="lede">分かる欄だけ埋めてください。<strong>空欄はAIが自分で調べます。</strong>
+      埋め終わったら下の「依頼文をコピー」を押して、Claude に貼り付けるだけで着手します。</p>
+  </header>
+
+  <!-- ① 営業しか知らない = 代替不能 -->
+  <section class="group">
+    <div class="ghead">
+      <span class="who you">あなたしか知らない</span>
+      <h2>案件のこと</h2>
+      <p class="note">ここはAIが調べても分かりません。対象ブランドと作る資料の2つは埋めてください。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><label class="fl" for="company">対象ブランド</label>
+          <span class="hint">正式名称でなくても構いません（例: サンプル社、サンプルストア）</span></div>
+        <div class="duo" id="company-duo">
+          <input type="text" id="company" data-k="対象ブランド" placeholder="TOTO" autocomplete="off">
+          <div class="sw only-fv" id="cshort-w"><input type="text" id="cshort" placeholder="略称" aria-label="対象ブランドの略称（6字まで）" autocomplete="off"><span class="cnt" id="cshort-n">0/6</span></div>
+        </div>
+        <span class="hint only-fv">初訪では右に<strong>略称（6字まで）</strong>を。資料の見出し「◯◯に足りていない発信」などに入ります</span>
+      </div>
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="product">対象商品</label>
+          <span class="hint">空欄なら公式サイトから拾います（例: トイレ、洗面台）</span></div>
+        <input type="text" id="product" data-k="対象商品" placeholder="トイレ・洗面台">
+      </div>
+      <div class="field only-fv">
+        <div class="frow"><label class="fl" for="recip">宛名<span class="opt">任意</span></label>
+          <span class="hint">表紙に入ります（例: 株式会社ミナトマート 御中）</span></div>
+        <input type="text" id="recip" placeholder="株式会社ミナトマート 御中" autocomplete="off">
+      </div>
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="purpose">目的・状況</label>
+          <span class="hint">話し言葉でOK。ここから作る資料を判断します</span></div>
+        <input type="text" id="purpose" data-k="目的" placeholder="来週初回訪問。まだ何も提案していない">
+      </div>
+      <!-- 競合は「空欄ならAIが調べる」に置かない。競合の選定は営業の仕事で、AIが黙って決めると
+           担当者ごとに資料の比較相手がぶれる（2026-09 監査）。空欄は「未定」で書き出す -->
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="comp">競合<span class="opt">任意</span></label>
+          <span class="hint">2〜3社。空欄なら「未定」のまま進めます（AIが勝手に決めません。競合差再提案では必須）</span></div>
+        <input type="text" id="comp" data-k="競合" placeholder="LIXIL、Panasonic">
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">作る資料</span>
+          <span class="hint">迷ったら一番下の「わからない」でOK</span></div>
+        <div class="cards" id="cards">
+          <label class="card"><input type="radio" name="status" value="初訪">
+            <span class="ct"><span class="cn">01</span>初訪</span>
+            <span class="cd">いまの検索面と競合の発信を見せ、伸びている型をお土産に二次提案へつなぐ（約8枚・選択式）</span></label>
+          <label class="card"><input type="radio" name="status" value="具体提案">
+            <span class="ct"><span class="cn">02</span>具体提案</span>
+            <span class="cd">上位投稿の勝ちパターンを見せて方向性を合意する。必要情報が最少</span></label>
+          <label class="card"><input type="radio" name="status" value="構成提案">
+            <span class="ct"><span class="cn">03</span>構成提案</span>
+            <span class="cd">企画・台本・ABテスト設計まで落とす。制作に渡す前提</span></label>
+          <label class="card"><input type="radio" name="status" value="レポート">
+            <span class="ct"><span class="cn">04</span>レポート</span>
+            <span class="cd">施策の効果検証。施策前のデータが必要</span></label>
+          <label class="card"><input type="radio" name="status" value="競合差再提案">
+            <span class="ct"><span class="cn">05</span>競合差再提案</span>
+            <span class="cd">競合との差から新しい提案を作る。単独の資料になる</span></label>
+          <label class="card guess"><input type="radio" name="status" value="わからない" checked>
+            <span class="ct"><span class="cn">AI</span>わからない</span>
+            <span class="cd">目的の文からAIが推定し、確認だけ取ります</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ①' 初訪のときだけ = 選択式 -->
+  <section class="group" id="gfv">
+    <div class="ghead">
+      <span class="who pick">初訪は選ぶだけ</span>
+      <h2>初訪の設計（選択式）</h2>
+      <p class="note">誰が入力しても同じ資料になるよう、初訪は<strong>選んで埋める</strong>形にしています。
+        資料に入るのは<strong>選んだ値と事実（社名・ID・日付）だけ</strong>です。自由記述は資料に流しません。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><span class="fl">業種<span class="opt">必須</span></span>
+          <span class="hint">切り口・訴求の分類語彙が決まります。<strong>ここだけは選んでください</strong></span></div>
+        <div class="cards three" id="presets">
+          <label class="card"><input type="radio" name="preset" value="food">
+            <span class="ct"><span class="cn">F</span>食品・飲料</span>
+            <span class="cd">食品・飲料・コンビニ・外食</span></label>
+          <label class="card"><input type="radio" name="preset" value="beauty">
+            <span class="ct"><span class="cn">B</span>美容・コスメ</span>
+            <span class="cd">スキンケア・メイク・ヘア</span></label>
+          <label class="card"><input type="radio" name="preset" value="general">
+            <span class="ct"><span class="cn">G</span>汎用</span>
+            <span class="cd">上のどちらでもないとき</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="cat">カテゴリ名</label>
+          <span class="hint"><strong>1つだけ</strong>。お客さんがTikTokで検索する一般名詞（例: 冷凍食品）。この語で検索します</span></div>
+        <input type="text" id="cat" list="cat-list" placeholder="冷凍食品" autocomplete="off">
+        <datalist id="cat-list"></datalist>
+        <div class="chips" id="catchips"></div>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">競合<span class="opt">1社以上・2〜4社推奨</span></span>
+          <span class="hint">正式名・略称（6字まで）・公式@ID（無ければ「無し」、空欄ならAIが調べる）。
+            クライアント未確認なら<strong>「想定」</strong>のまま進めます（資料に「※競合は弊社の想定です」と入ります）</span></div>
+        <div class="crows" id="crows"></div>
+        <datalist id="off-list"><option value="無し"></option></datalist>
+        <div class="chips" id="compchips"></div>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">競合の検索のしかた</span>
+          <span class="hint" id="bq-ex"></span></div>
+        <div class="seg" role="radiogroup" aria-label="競合の検索のしかた">
+          <label><input type="radio" name="bq" value="{社名} {カテゴリ}" checked>社名＋カテゴリ（既定）</label>
+          <label><input type="radio" name="bq" value="{社名}">社名だけ</label>
+        </div>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">自社の検索</span>
+          <span class="hint">対象ブランドも同じ形で検索し、「足りていない発信」で自社の枠を出します</span></div>
+        <div class="seg" role="radiogroup" aria-label="自社の検索">
+          <label><input type="radio" name="own" value="する" checked>する</label>
+          <label><input type="radio" name="own" value="しない">しない</label>
+        </div>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">公式TikTok</span>
+          <span class="hint">対象ブランドの公式アカウント</span></div>
+        <div class="seg" role="radiogroup" aria-label="公式TikTok">
+          <label class="ok"><input type="radio" name="fvtt" value="url">URL・IDあり</label>
+          <label><input type="radio" name="fvtt" value="none">無し</label>
+          <label class="un"><input type="radio" name="fvtt" value="unknown" checked>不明</label>
+        </div>
+        <input type="text" id="fvttv" placeholder="https://www.tiktok.com/@xxxx または @xxxx" autocomplete="off" hidden>
+        <p class="sub" id="fvtt-note"></p>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">注力商品<span class="opt">任意・1〜3</span></span>
+          <span class="hint">「まずこの3本」の企画名に使います</span></div>
+        <div class="trio">
+          <input type="text" id="fp1" placeholder="注力商品1" aria-label="注力商品1" autocomplete="off">
+          <input type="text" id="fp2" placeholder="注力商品2" aria-label="注力商品2" autocomplete="off">
+          <input type="text" id="fp3" placeholder="注力商品3" aria-label="注力商品3" autocomplete="off">
+        </div>
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">訪問日と前日レビュー<span class="opt">任意</span></span>
+          <span class="hint">資料は<strong>前日</strong>に生成し、担当者が一通り見てから持参します</span></div>
+        <div class="duo wide">
+          <input type="date" id="vdate" aria-label="訪問日">
+          <input type="text" id="rev" placeholder="前日レビュー担当（氏名）" aria-label="前日レビュー担当" autocomplete="off">
+        </div>
+        <p class="sub" id="vdate-note"></p>
+      </div>
+      <div class="alert" id="fvcheck"></div>
+    </div>
+  </section>
+
+  <!-- ② AIが代替できる = 空欄でよい -->
+  <section class="group">
+    <div class="ghead">
+      <span class="who ai">空欄ならAIが調べる</span>
+      <h2>調べれば分かること</h2>
+      <p class="note">分かっていれば早いですが、<strong>思い出せないなら空欄のままにしてください。</strong>
+        公式サイトとWeb検索から候補を出して確認をお願いする形になります。</p>
+    </div>
+    <div class="gbody">
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="kw">一般検索キーワード</label>
+          <span class="hint">お客さんが検索する言葉。ブランド名より<strong>一般名詞</strong>が効きます</span></div>
+        <input type="text" id="kw" data-k="一般検索キーワード" placeholder="トイレリフォーム、洗面台 交換">
+      </div>
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="tt">公式TikTokアカウントURL</label>
+          <span class="hint">0本なら「公式が出ていない」という強い訴求材料になります</span></div>
+        <input type="text" id="tt" data-k="公式TikTokアカウントURL" placeholder="@toto_official">
+        <label class="dele" id="ttnone-l"><input type="checkbox" id="ttnone">公式アカウントは無い（探さなくてよい）</label>
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="site">公式サイトURL</label>
+          <span class="hint">商材の把握に使います。分からなければ空欄で</span></div>
+        <input type="text" id="site" data-k="公式サイトURL" placeholder="jp.toto.com">
+      </div>
+      <div class="field">
+        <div class="frow"><span class="fl">希望形式</span>
+          <span class="hint">通常はPPTXのみで足ります</span></div>
+        <div class="cards">
+          <label class="card"><input type="radio" name="fmt" value="PPTX" checked>
+            <span class="ct"><span class="cn">A</span>PPTX</span>
+            <span class="cd">そのまま編集して商談で使う。通常はこちら</span></label>
+          <label class="card"><input type="radio" name="fmt" value="PPTX＋PDF">
+            <span class="ct"><span class="cn">B</span>PPTX＋PDF</span>
+            <span class="cd">PDFはPowerPointからの書き出しになる場合があります</span></label>
+        </div>
+      </div>
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="inst">指示・要望</label>
+          <span class="hint">章の追加・削除や、触れてほしくない点があれば</span></div>
+        <input type="text" id="inst" data-k="指示" placeholder="保存率を主指標にしてほしい">
+      </div>
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="due">納期・訪問日</label>
+          <span class="hint">急ぎなら章を削って先に出します</span></div>
+        <input type="text" id="due" data-k="納期" placeholder="9/10 の商談まで">
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ ④レポートのみ = 条件付き -->
+  <section class="group" id="g3">
+    <div class="ghead">
+      <span class="who cond">レポートのときだけ</span>
+      <h2>効果検証に必要なこと</h2>
+      <p class="note">この3つは<strong>AIが後から取り戻せません</strong>。分かる範囲で埋めてください。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><label class="fl" for="start">施策開始日</label>
+          <span class="hint">いつから投稿や配信を始めたか</span></div>
+        <input type="text" id="start" data-k="施策開始日" placeholder="8/1">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="period">対象期間</label>
+          <span class="hint">どこからどこまでを報告するか</span></div>
+        <input type="text" id="period" data-k="対象期間" placeholder="8/1〜8/31">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="snap">施策前のデータ</label>
+          <span class="hint">施策を始める前に検索面を記録してありますか</span></div>
+        <input type="text" id="snap" data-k="施策前スナップショット" placeholder="ある / ない / わからない">
+        <div class="alert show"><span><b>⚠️ 施策前のデータは後から遡れません。</b>
+          無い場合、前後比較のかわりに「現状値のみ」の資料に切り替えます。
+          まだ施策を始めていないなら、<b>今日のうちに記録だけ取っておくべきです</b>。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="out">
+    <div class="ghead">
+      <span class="who you">最後にこれ</span>
+      <h2>Claude に貼る依頼文</h2>
+      <p class="note">下のボタンでコピーし、Claude Code に貼り付けてください。手打ちは不要です。</p>
+    </div>
+    <textarea id="out" readonly aria-label="Claudeに貼る依頼文"></textarea>
+  </section>
+
+  <footer>
+    <div>空欄は「AIに任せる」と同じ意味です（競合だけは「未定」。AIが勝手に決めません）。埋めなくても着手できます。</div>
+    <div>入力内容はこの端末のブラウザにだけ残ります（次回開くと復元されます）。送信はコピー＆ペーストのみで、自動送信はしません。</div>
+    <div>このページは外部のファイルを読みません（オフラインでも開けます）。</div>
+  </footer>
+</div>
+
+<div class="bar">
+  <div class="barin">
+    <div class="tally">
+      <span><i class="dot you"></i>あなたが記入 <b id="n-you" class="mono">0</b></span>
+      <span><i class="dot ai"></i>AIが調べる <b id="n-ai" class="mono">0</b></span>
+      <span class="t-ask"><i class="dot ask"></i>要確認 <b id="n-ask" class="mono">0</b></span>
+      <span class="copied" id="copied">✓ コピーしました。Claude に貼ってください</span>
+    </div>
+    <button class="ghost" id="clear" type="button">クリア</button>
+    <button id="copy" type="button">依頼文をコピー</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var KEY = "tiktok-intake-form-v2";
+  var OLD_KEY = "tiktok-intake-form-v1";
+  var ids = ["company","product","purpose","kw","comp","tt","site","inst","due","start","period","snap"];
+  var FV_TEXT = ["cshort","recip","cat","fvttv","fp1","fp2","fp3","vdate","rev"];
+  var el = {}; ids.concat(FV_TEXT).forEach(function(i){ el[i] = document.getElementById(i); });
+  var out = document.getElementById("out");
+  var g3  = document.getElementById("g3");
+  var gfv = document.getElementById("gfv");
+  var NCOMP = 4, SHORT_MAX = 6;
+  // 依頼票の区切り。intake_form.py は「：」「:」どちらも読む
+  var SEP = "：";
+
+  // ── 業種別の候補（選ぶだけで埋まるように。確定はクライアント確認で）──
+  // 候補は「よく名前が挙がる社」であり正解ではない。選ぶと「想定」で入る。
+  // 略称は資料の見出しに入る（6字まで）。公式IDは推測で書かない（空欄＝AIが調べる）。
+  var PRESETS = {
+    food: {
+      label: "食品・飲料",
+      cats: ["冷凍食品","コンビニ冷凍食品","コンビニスイーツ","カップ麺","チョコレート","スナック菓子",
+             "アイス","お茶","ビール","調味料","プロテイン","パン","コーヒー"],
+      comp: {
+        "冷凍食品": [["ニチレイフーズ","ニチレイ"],["味の素冷凍食品","味の素"],["マルハニチロ","マルハニチロ"],["日清食品冷凍","日清"]],
+        "コンビニ冷凍食品": [["セブン-イレブン","セブン"],["ファミリーマート","ファミマ"],["ローソン","ローソン"]],
+        "コンビニスイーツ": [["セブン-イレブン","セブン"],["ファミリーマート","ファミマ"],["ローソン","ローソン"]],
+        "カップ麺": [["日清食品","日清"],["東洋水産","東洋水産"],["サンヨー食品","サンヨー"],["エースコック","エースコック"],["明星食品","明星"]],
+        "チョコレート": [["明治","明治"],["ロッテ","ロッテ"],["森永製菓","森永"],["ネスレ日本","ネスレ"]],
+        "スナック菓子": [["カルビー","カルビー"],["湖池屋","湖池屋"],["亀田製菓","亀田"]],
+        "アイス": [["明治","明治"],["森永乳業","森永乳業"],["ロッテ","ロッテ"],["赤城乳業","赤城"],["井村屋","井村屋"]],
+        "お茶": [["伊藤園","伊藤園"],["サントリー","サントリー"],["キリンビバレッジ","キリン"],["アサヒ飲料","アサヒ"],["コカ・コーラ","コカ・コーラ"]],
+        "ビール": [["アサヒビール","アサヒ"],["キリンビール","キリン"],["サッポロビール","サッポロ"],["サントリー","サントリー"]],
+        "調味料": [["キッコーマン","キッコーマン"],["ミツカン","ミツカン"],["味の素","味の素"],["エバラ食品","エバラ"]],
+        "プロテイン": [["ザバス","ザバス"],["マイプロテイン","マイプロ"]]
+      }
+    },
+    beauty: {
+      label: "美容・コスメ",
+      cats: ["日焼け止め","化粧水","美容液","ファンデーション","リップ","アイシャドウ","シャンプー",
+             "ヘアオイル","香水","メンズスキンケア","韓国コスメ","プチプラコスメ"],
+      comp: {
+        "日焼け止め": [["アネッサ","アネッサ"],["ビオレUV","ビオレUV"],["スキンアクア","スキンアクア"],["アリィー","アリィー"],["ラ ロッシュ ポゼ","ラロッシュ"]],
+        "化粧水": [["肌ラボ","肌ラボ"],["ナチュリエ","ナチュリエ"],["キュレル","キュレル"],["無印良品","無印良品"]],
+        "ファンデーション": [["マキアージュ","マキアージュ"],["KATE","KATE"],["キャンメイク","キャンメイク"],["セザンヌ","セザンヌ"]],
+        "リップ": [["ロムアンド","ロムアンド"],["オペラ","オペラ"],["キャンメイク","キャンメイク"],["ディオール","ディオール"]],
+        "シャンプー": [["BOTANIST","BOTANIST"],["TSUBAKI","TSUBAKI"],["パンテーン","パンテーン"],["&honey","&honey"]],
+        "ヘアオイル": [["エルジューダ","エルジューダ"],["モロッカンオイル","モロッカン"],["&honey","&honey"],["エリップス","エリップス"]],
+        "メンズスキンケア": [["バルクオム","バルクオム"],["ニベアメン","ニベアメン"],["オルビス ミスター","オルビス"],["ウーノ","ウーノ"]]
+      }
+    },
+    general: {
+      label: "汎用",
+      cats: ["トイレリフォーム","引っ越し","転職","旅行","家具","格安SIM","家電","保険","不動産","英会話","ホテル"],
+      comp: {
+        "トイレリフォーム": [["TOTO","TOTO"],["LIXIL","LIXIL"],["パナソニック","パナソニック"]],
+        "引っ越し": [["サカイ引越センター","サカイ"],["アート引越センター","アート"],["アリさんマークの引越社","引越社"],["日本通運","日通"]],
+        "転職": [["リクルートエージェント","リクルート"],["doda","doda"],["マイナビ転職","マイナビ"],["ビズリーチ","ビズリーチ"]],
+        "旅行": [["じゃらん","じゃらん"],["楽天トラベル","楽天トラベル"],["一休.com","一休"],["JTB","JTB"]],
+        "家具": [["ニトリ","ニトリ"],["IKEA","IKEA"],["無印良品","無印良品"],["LOWYA","LOWYA"]],
+        "格安SIM": [["楽天モバイル","楽天モバイル"],["ahamo","ahamo"],["povo","povo"],["LINEMO","LINEMO"],["UQ mobile","UQ mobile"],["Y!mobile","Y!mobile"]],
+        "英会話": [["DMM英会話","DMM英会話"],["レアジョブ英会話","レアジョブ"]]
+      }
+    }
+  };
+
+  // 資料側と同じ数え方（全角=1 / 半角=0.55）
+  function wu(s){
+    var n = 0;
+    Array.from(String(s || "")).forEach(function(ch){ n += ch.charCodeAt(0) < 128 ? 0.55 : 1; });
+    return n;
+  }
+  function fmtWu(n){ return (Math.round(n * 10) / 10).toString(); }
+  function norm(s){ return String(s || "").replace(/[\s　・\-－ー]/g, "").toLowerCase(); }
+  function val(id){ return (el[id] && el[id].value || "").trim(); }
+
+  function radio(name, fallback){
+    var r = document.querySelector('input[name="' + name + '"]:checked');
+    return r ? r.value : fallback;
+  }
+  function setRadio(name, v){
+    if (v == null) {
+      Array.prototype.forEach.call(document.querySelectorAll('input[name="' + name + '"]'),
+        function(r){ r.checked = false; });
+      return;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="' + name + '"]'),
+      function(r){ r.checked = (r.value === String(v)); });
+  }
+  function fmt(){ return radio("fmt", "PPTX"); }
+  function status(){ return radio("status", "わからない"); }
+  function isFv(){ return status() === "初訪"; }
+  function presetOf(){ return radio("preset", ""); }
+
+  // 公式アカウントの書き方: URL か @ID か「無し」。読めなければ ""（＝不明扱い）
+  function officialId(v){
+    v = String(v || "").trim();
+    var m = /tiktok\.com\/@([A-Za-z0-9._]+)/i.exec(v) || /^@?([A-Za-z0-9._]{2,24})$/.exec(v);
+    return m ? m[1] : "";
+  }
+  function isNone(v){ return /^(無し|なし|無い|ない|none)$/i.test(String(v || "").trim()); }
+
+  // ── 競合の行を組む（正式名／略称／公式@ID／確認済み・想定）──
+  var crows = document.getElementById("crows");
+  (function(){
+    for (var i = 0; i < NCOMP; i++) {
+      var n = i + 1;
+      var row = document.createElement("div");
+      row.className = "crow" + (i < 1 ? " req" : "");
+      row.innerHTML =
+        '<span class="idx">' + n + '</span>' +
+        '<input type="text" class="cname" id="cn' + i + '" autocomplete="off" aria-label="競合' + n + ' 正式名" placeholder="' +
+          (i < 1 ? "競合1 正式名（必須）" : "競合" + n + " 正式名" + (i < 2 ? "（推奨）" : "（任意）")) + '">' +
+        '<div class="sw"><input type="text" class="cshort" id="cs' + i + '" autocomplete="off" aria-label="競合' + n + ' 略称（6字まで）" placeholder="略称">' +
+          '<span class="cnt" id="csn' + i + '">0/6</span></div>' +
+        '<input type="text" class="coff" id="co' + i + '" list="off-list" autocomplete="off" aria-label="競合' + n + ' 公式TikTok（@ID／無し／空欄）" placeholder="@ID・無し">' +
+        '<div class="seg" role="radiogroup" aria-label="競合' + n + ' クライアント確認">' +
+          '<label class="ok"><input type="radio" name="cc' + i + '" value="確認済み">確認済み</label>' +
+          '<label class="un"><input type="radio" name="cc' + i + '" value="想定" checked>想定</label>' +
+        '</div>';
+      crows.appendChild(row);
+    }
+  })();
+  function comp(i){
+    return {
+      name: (document.getElementById("cn" + i).value || "").trim(),
+      short: (document.getElementById("cs" + i).value || "").trim(),
+      off: (document.getElementById("co" + i).value || "").trim(),
+      conf: radio("cc" + i, "想定")
+    };
+  }
+  function comps(){
+    var a = [];
+    for (var i = 0; i < NCOMP; i++) { var c = comp(i); if (c.name) a.push(c); }
+    return a;
+  }
+
+  // ── 候補（カテゴリ・競合）──
+  function candidatesFor(preset, cat){
+    var P = PRESETS[preset]; if (!P || !cat) return null;
+    if (P.comp[cat]) return P.comp[cat];
+    var n = norm(cat), hit = null;
+    Object.keys(P.comp).forEach(function(k){
+      if (!hit && (n.indexOf(norm(k)) >= 0 || norm(k).indexOf(n) >= 0)) hit = P.comp[k];
+    });
+    return hit;
+  }
+  function chip(label, sub, disabled, onClick){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip";
+    b.appendChild(document.createTextNode(label));
+    if (sub) { var s = document.createElement("span"); s.className = "sh"; s.textContent = sub; b.appendChild(s); }
+    b.disabled = !!disabled;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function renderCats(){
+    var P = PRESETS[presetOf()];
+    var dl = document.getElementById("cat-list");
+    var box = document.getElementById("catchips");
+    dl.innerHTML = ""; box.innerHTML = "";
+    if (!P) { box.innerHTML = '<span class="empty">業種を選ぶと、カテゴリの候補が出ます</span>'; return; }
+    var cur = val("cat");
+    var lab = document.createElement("span"); lab.className = "clab"; lab.textContent = "候補:"; box.appendChild(lab);
+    P.cats.forEach(function(c){
+      var o = document.createElement("option"); o.value = c; dl.appendChild(o);
+      box.appendChild(chip(c, "", c === cur, function(){ el.cat.value = c; refresh(); }));
+    });
+  }
+  function renderCompChips(){
+    var box = document.getElementById("compchips");
+    box.innerHTML = "";
+    var preset = presetOf(), cat = val("cat");
+    if (!preset || !cat) {
+      box.innerHTML = '<span class="empty">業種とカテゴリを選ぶと、競合の候補が出ます（候補は「想定」で入ります）</span>';
+      return;
+    }
+    var list = candidatesFor(preset, cat);
+    if (!list) {
+      box.innerHTML = '<span class="empty">このカテゴリの候補はありません。クライアントに確認した社名を入れてください</span>';
+      return;
+    }
+    var used = comps().map(function(c){ return norm(c.name); });
+    var own = norm(val("company"));
+    var lab = document.createElement("span"); lab.className = "clab"; lab.textContent = "候補:"; box.appendChild(lab);
+    list.forEach(function(pair){
+      if (own && norm(pair[0]) === own) return;   // 対象ブランド自身は競合に出さない
+      box.appendChild(chip(pair[0], pair[1] !== pair[0] ? pair[1] : "", used.indexOf(norm(pair[0])) >= 0,
+        function(){ addComp(pair[0], pair[1]); }));
+    });
+  }
+  function addComp(name, short){
+    for (var i = 0; i < NCOMP; i++) {
+      var n = document.getElementById("cn" + i);
+      if (!n.value.trim()) {
+        n.value = name;
+        document.getElementById("cs" + i).value = short || "";
+        document.getElementById("co" + i).value = "";
+        setRadio("cc" + i, "想定");
+        refresh();
+        return;
+      }
+    }
+  }
+
+  // ── 表示の切り替え ──
+  function syncSections(){
+    var fv = isFv();
+    g3.classList.toggle("show", status() === "レポート");
+    gfv.classList.toggle("show", fv);
+    document.body.classList.toggle("fv", fv);
+    var tt = radio("fvtt", "unknown");
+    el.fvttv.hidden = tt !== "url";
+    document.getElementById("fvtt-note").textContent = tt === "none"
+      ? "無いことを事実として扱います（探し直しません）。資料では対象ブランドの枠を「まだ無し」で示します"
+      : tt === "unknown"
+        ? "AIが探します。見つからないときは「0本」と書かず、判定しない扱いにします"
+        : "IDで検索面の公式投稿を数えます（@以下を読み取ります）";
+    var cs = comps(), cat = val("cat") || "カテゴリ";
+    var who = cs.length ? cs[0].name : "社名";
+    var q = radio("bq", "{社名} {カテゴリ}").replace("{社名}", who).replace("{カテゴリ}", cat);
+    document.getElementById("bq-ex").textContent = "例:「" + q + "」で検索します";
+  }
+  function counter(inputId, cntId, wrapEl){
+    var n = wu(document.getElementById(inputId).value.trim());
+    var c = document.getElementById(cntId);
+    c.textContent = fmtWu(n) + "/" + SHORT_MAX;
+    var over = n > SHORT_MAX;
+    (wrapEl || c.parentNode).classList.toggle("over", over);
+    document.getElementById(inputId).classList.toggle("over", over);
+    return over;
+  }
+  function dayBefore(iso){
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return "";
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    d.setUTCDate(d.getUTCDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function checkFv(){
+    var msgs = [];
+    if (!presetOf()) msgs.push("<b>業種</b>を選んでください（初訪で1つだけ聞く項目です）");
+    var cs = comps();
+    if (cs.length < 1) msgs.push("<b>競合を1社以上</b>入れてください（候補から選ぶと「想定」で入ります）");
+    else if (cs.length < 2) msgs.push("競合は2〜4社あると、競合の章が比べやすくなります");
+    if (counter("cshort", "cshort-n", document.getElementById("cshort-w")))
+      msgs.push("対象ブランドの略称が6字を超えています（半角は0.55字で数えます）");
+    var own = norm(val("company"));
+    for (var i = 0; i < NCOMP; i++) {
+      var c = comp(i);
+      if (counter("cs" + i, "csn" + i)) msgs.push("競合" + (i + 1) + "の略称が6字を超えています");
+      if (c.off && !isNone(c.off) && !officialId(c.off))
+        msgs.push("競合" + (i + 1) + "の公式IDを読み取れません（@ID か「無し」、分からなければ空欄）");
+      if (c.name && own && norm(c.name) === own) msgs.push("「" + c.name + "」は対象ブランドと同じです。競合から外してください");
+    }
+    if (/[、,，／/]/.test(val("cat"))) msgs.push("カテゴリ名は<b>1つだけ</b>にしてください");
+    if (radio("fvtt", "unknown") === "url") {
+      var v = val("fvttv");
+      if (!v) msgs.push("公式TikTokのURLかIDを入れてください（分からなければ「不明」）");
+      else if (!officialId(v)) msgs.push("公式TikTokのIDを読み取れません。@から始まるIDで書いてください");
+    }
+    var box = document.getElementById("fvcheck");
+    box.innerHTML = msgs.length ? "<span><b>確認してください</b></span><ul><li>" + msgs.join("</li><li>") + "</li></ul>" : "";
+    box.classList.toggle("show", msgs.length > 0);
+    var vd = el.vdate.value;
+    document.getElementById("vdate-note").innerHTML = vd ? "生成の目安: <b>" + dayBefore(vd) + "</b>（前日）" : "";
+  }
+
+  // 空欄 = AIに任せる。AIが調べられない欄（①）は空欄でも数に入れない。
+  // 競合は任せない（空欄は「未定」。intake_form.py は未定を未入力として扱い、AIの候補には回さない）
+  var DELEGABLE = ["kw","tt","site"];
+  var UNDECIDED = ["comp"];
+
+  // 初訪の依頼票。1行1項目。資料に流れるのは選択肢と事実（社名・ID・日付）だけ
+  function buildFv(lines, tally){
+    var put = function(k, v){ lines.push(k + SEP + v); };
+    if (val("cshort")) { put("対象ブランド略称", val("cshort")); tally.you++; }
+    if (val("recip")) { put("宛名", val("recip")); tally.you++; }
+    var p = presetOf();
+    if (p) { put("業種", PRESETS[p].label + "（" + p + "）"); tally.you++; }
+    else { put("業種", "未選択"); tally.ask++; }
+    if (val("cat")) { put("カテゴリ名", val("cat")); tally.you++; }
+    else { put("カテゴリ名", "AIに任せる"); tally.ai++; }
+    var cs = comps();
+    if (!cs.length) { put("競合", "未定"); tally.ask++; }
+    cs.forEach(function(c, i){
+      // 競合1：ファミリーマート（ファミマ）｜確認済み｜@famima_official
+      var parts = [c.short ? c.name + "（" + c.short + "）" : c.name, c.conf === "確認済み" ? "確認済み" : "想定"];
+      if (isNone(c.off)) parts.push("無し");
+      else if (officialId(c.off)) parts.push("@" + officialId(c.off));
+      put("競合" + (i + 1), parts.join("｜"));
+      tally.you++;
+    });
+    put("競合の検索のしかた", radio("bq", "{社名} {カテゴリ}")); tally.you++;
+    put("自社の検索", radio("own", "する")); tally.you++;
+    var tt = radio("fvtt", "unknown");
+    if (tt === "url" && val("fvttv")) { put("公式TikTokアカウントURL", val("fvttv")); tally.you++; }
+    else if (tt === "none") { put("公式TikTokアカウントURL", "無し"); tally.you++; }
+    else { put("公式TikTokアカウントURL", "不明"); tally.ai++; }
+    var k = 0;
+    ["fp1","fp2","fp3"].forEach(function(id){
+      if (val(id)) { k++; put("注力商品" + k, val(id)); tally.you++; }
+    });
+    if (el.vdate.value) { put("訪問日", el.vdate.value); tally.you++; }
+    if (val("rev")) { put("前日レビュー担当", val("rev")); tally.you++; }
+  }
+
+  function build(){
+    var lines = [];
+    var fv = isFv();
+    lines.push("TikTok分析をお願いします。依頼票の内容です。");
+    lines.push("");
+    var tally = {you: 0, ai: 0, ask: 0};
+    var s = status();
+    if (val("company")) { lines.push("対象ブランド" + SEP + val("company")); tally.you++; }
+    lines.push("作りたい資料／章" + SEP + s);
+    if (s === "わからない") tally.ai++; else tally.you++;
+    if (fv) {
+      buildFv(lines, tally);
+      if (val("site")) { lines.push("公式サイトURL" + SEP + val("site")); tally.you++; }
+      else { lines.push("公式サイトURL" + SEP + "AIに任せる"); tally.ai++; }
+    } else {
+      ids.forEach(function(id){
+        if (id === "company") return;
+        var n = el[id]; if (!n) return;
+        if (!g3.classList.contains("show") && ["start","period","snap"].indexOf(id) >= 0) return;
+        var v = (n.value || "").trim();
+        var k = n.getAttribute("data-k");
+        if (id === "tt" && document.getElementById("ttnone").checked) {
+          lines.push(k + SEP + "無し"); tally.you++; return;
+        }
+        if (v) { lines.push(k + SEP + v); tally.you++; }
+        else if (DELEGABLE.indexOf(id) >= 0) { lines.push(k + SEP + "AIに任せる"); tally.ai++; }
+        else if (UNDECIDED.indexOf(id) >= 0) { lines.push(k + SEP + "未定"); }
+      });
+    }
+    lines.push("希望形式" + SEP + fmt());
+    lines.push("");
+    if (fv) {
+      lines.push("初訪は選択式の依頼票です。「AIに任せる」の欄は候補を出して確認をください。");
+      lines.push("「想定」の競合はそのまま進め、資料に「※競合は弊社の想定です。ご確認ください」と入れてください。");
+    } else {
+      lines.push("「AIに任せる」の欄は、公式サイトとWeb検索から候補を出して確認をください。");
+      lines.push("空欄が残っていても、いま出せる章から先に進めてください。");
+    }
+    out.value = lines.join("\n");
+    document.getElementById("n-you").textContent = tally.you;
+    document.getElementById("n-ai").textContent = tally.ai;
+    document.getElementById("n-ask").textContent = tally.ask;
+  }
+
+  function save(){
+    var d = {status: status(), fmt: fmt(), ttnone: document.getElementById("ttnone").checked,
+             preset: presetOf(), fvtt: radio("fvtt", "unknown"), bq: radio("bq", ""), own: radio("own", ""),
+             comps: []};
+    ids.concat(FV_TEXT).forEach(function(i){ if (el[i]) d[i] = el[i].value; });
+    for (var i = 0; i < NCOMP; i++) d.comps.push(comp(i));
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  function load(){
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(OLD_KEY) || "null"); } catch (e) { d = null; }
+    if (!d) return;
+    ids.concat(FV_TEXT).forEach(function(i){ if (el[i] && typeof d[i] === "string") el[i].value = d[i]; });
+    if (d.fmt) setRadio("fmt", d.fmt);
+    if (typeof d.ttnone === "boolean") {
+      var tb = document.getElementById("ttnone");
+      tb.checked = d.ttnone;
+      el.tt.disabled = d.ttnone;
+      document.getElementById("ttnone-l").classList.toggle("on", d.ttnone);
+    }
+    ["status","preset","fvtt","bq","own"].forEach(function(k){ if (d[k]) setRadio(k, d[k]); });
+    (d.comps || []).slice(0, NCOMP).forEach(function(c, i){
+      if (!c) return;
+      document.getElementById("cn" + i).value = c.name || "";
+      document.getElementById("cs" + i).value = c.short || "";
+      document.getElementById("co" + i).value = c.off || "";
+      setRadio("cc" + i, c.conf === "確認済み" ? "確認済み" : "想定");
+    });
+  }
+
+  function refresh(){ syncSections(); renderCats(); renderCompChips(); checkFv(); build(); save(); }
+
+  document.addEventListener("input", function(e){
+    if (e.target && e.target.matches && e.target.matches('input[type="text"],input[type="date"]')) refresh();
+  });
+  document.addEventListener("change", function(e){
+    if (e.target && e.target.matches && e.target.matches('input[type="radio"],input[type="date"]')) refresh();
+  });
+  document.getElementById("ttnone").addEventListener("change", function(){
+    var box = document.getElementById("ttnone");
+    el.tt.disabled = box.checked;
+    document.getElementById("ttnone-l").classList.toggle("on", box.checked);
+    refresh();
+  });
+
+  document.getElementById("copy").addEventListener("click", function(){
+    out.focus(); out.select();
+    var done = function(){
+      var c = document.getElementById("copied");
+      c.classList.add("show");
+      setTimeout(function(){ c.classList.remove("show"); }, 4000);
+    };
+    // クリップボードAPIは環境により拒否される。失敗しても選択済みなので ⌘C で拾える
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out.value).then(done, function(){
+        try { document.execCommand("copy"); done(); } catch (e) {}
+      });
+    } else {
+      try { document.execCommand("copy"); done(); } catch (e) {}
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", function(){
+    ids.concat(FV_TEXT).forEach(function(i){ if (el[i]) el[i].value = ""; });
+    for (var i = 0; i < NCOMP; i++) {
+      ["cn","cs","co"].forEach(function(p){ document.getElementById(p + i).value = ""; });
+      setRadio("cc" + i, "想定");
+    }
+    setRadio("status", "わからない");
+    setRadio("fmt", "PPTX");
+    setRadio("preset", null);
+    setRadio("fvtt", "unknown");
+    setRadio("bq", "{社名} {カテゴリ}");
+    setRadio("own", "する");
+    var tb2 = document.getElementById("ttnone");
+    tb2.checked = false; el.tt.disabled = false;
+    document.getElementById("ttnone-l").classList.remove("on");
+    try { localStorage.removeItem(KEY); localStorage.removeItem(OLD_KEY); } catch (e) {}
+    refresh();
+  });
+
+  load();
+  refresh();
+})();
+</script>
+</body>
+</html>

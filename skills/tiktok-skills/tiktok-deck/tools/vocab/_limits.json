@@ -1,0 +1,13 @@
+{
+ "_comment": "初訪資料の文字数上限（全角=1・ASCII=0.55 で数える）。label_posts / build_first_visit / firstVisit.js が読む。上限を超えたテンプレは次の短い候補に落ち、全部超えたら止める（黙って切らない）。",
+ "headline": 30,
+ "sub": 40,
+ "label": 12,
+ "short": 6,
+ "phrase": 20,
+ "evidence": 26,
+ "item": 30,
+ "brand_short": 6,
+ "plan": 24,
+ "body_chars": 160
+}

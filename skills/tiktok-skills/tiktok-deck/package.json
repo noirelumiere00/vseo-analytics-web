@@ -1,0 +1,12 @@
+{
+  "name": "tiktok-research-pptx",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Reusable TikTok competitive research presentation generator scaffold",
+  "scripts": {
+    "build": "node src/generate.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

@@ -1,0 +1,8 @@
+# tiktok-deck の依存。既定では Python の外部パッケージは要らない。
+#   build_input_md.py / merge_authored.py / preflight.py /
+#   verify_assets.py / extract_frames.py … すべて標準ライブラリ＋ffmpeg のみ
+#
+# 取得は tiktok-acquire（search.mjs）。Excel を読む道具はこのスキルには無い。
+# 初訪の道具（fetch_covers.py・label_posts.py --contact・build_first_visit.py）は Pillow を使う
+# （tiktok-analyze の venv の Python で実行するか、下を入れる）。
+# Pillow>=10

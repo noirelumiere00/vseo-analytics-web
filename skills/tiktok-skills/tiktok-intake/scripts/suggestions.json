@@ -1,0 +1,200 @@
+{
+  "_comment": "不足入力ごとの『次の一手』。by_missing_input は modules.json の input_labels の**入力ID**（axes / official_tiktok_account / telop …）をキーにする（初訪以外）。gaps.py が build_deck.py の不足ラベルを modules.json で入力IDに戻して引く。ラベル文字列をキーにしていたときは表記が食い違い、肝心の『検索軸・競合の不足』に一度も文言が出ていなかった（2026-09 監査）。ask は営業しか知らない事実だけ（『実行してよいですか』は聞かない）、run はこちらで実行する次の一手。『この入力を使う章』は modules.json の needs から gaps.py が数えるので、ここには持たない。first_visit は初訪（2026-09 再設計）のチェックリストとページ名。文言はここを編集すれば変わる（コードを触らない）。gaps.py --selftest で input_labels に文言の無い入力が無いかを確かめられる。",
+  "version": "1.3",
+  "by_missing_input": {
+    "axes": {
+      "why": "露出シェアや比較は相手がないと出せない（1軸だけだとシェア100%という無意味な数字になる）。1-1 露出シェアは、市場KWの軸に加えて、ブランドの検索軸（自社・競合）が2社分以上要る",
+      "ask": "競合を2〜3社挙げていただけますか？ 挙げていただければ私が検索から取得します。",
+      "example": "例：ECモールなら同じ業態の大手3社。コンビニなら同じ業態の大手2社",
+      "auto": "営業が「分からない」「任せる」と言ったときだけ、公式サイトの商圏から候補を出し、「想定」として確認に載せる（黙って決めない）"
+    },
+    "self_vs_competitor": {
+      "why": "自社と競合の見せ方・冒頭を比べる章は、自社の検索軸と競合の検索軸の両方が要る（市場KWの軸2本では成り立たない）",
+      "ask": "競合を1社以上挙げていただけますか？",
+      "run": "自社名と競合名で search.mjs を回し、build_dataset.py に --source self:<自社>:… と --source competitor:<競合>:… で渡す"
+    },
+    "official_tiktok_account": {
+      "why": "公式が検索面に出ているかを見る。0本なら『出ていない危機感』と『伸びしろ』を同時に示せる強い材料になる",
+      "ask": "公式TikTokアカウントのURLはありますか？",
+      "auto": "不明でも進められる。公式サイトとWeb検索から公式アカウントを特定して確認をもらう。検索面に出ていれば認証バッジ付きアカウントとの突合でも候補が出せる（search.mjs にアカウント検索モードは無いので、検索面に出ていない公式は自動特定できない）",
+      "warn": "『公式が検索面に出ていない』と『handleを間違えた』は区別できない。0本だったときは必ず本人確認を取る"
+    },
+    "telop": {
+      "why": "テロップ未取り込みのまま集計すると『見せ方が無い』＝0%として資料に流れる",
+      "run": "抽出済みのフレーム画像を読んでテロップを取り込む（import_agent_telop.py。本数により数分）",
+      "auto": "冒頭3秒は extract_hook_frames.py で高密度に抜いてあるので、フックの解剖から先に出せます"
+    },
+    "asr": {
+      "why": "音声で何回言っているか（4経路の『音声』）は文字起こしが要る。未実施を0回として扱わない",
+      "run": "extract_signals.py（Whisper）で音声を文字起こしする。動画の取得（search.mjs --mode fetch）が先"
+    },
+    "measurement": {
+      "why": "登場率と4経路はこの出力を参照する",
+      "run": "measure_keywords.py を実行する（テロップ取り込み後）"
+    },
+    "rank_patterns": {
+      "why": "上位の勝ちパターンと上位下位差分、構成案・ABテストはこの出力を参照する",
+      "run": "rank_patterns.py で上位10本を分類する（テロップ取り込みが前提。未取り込みだと停止する）"
+    },
+    "market_categories": {
+      "why": "検索面がどの話題で占められているかの分類",
+      "run": "classify_market_categories.py で話題を分類する"
+    },
+    "media": {
+      "why": "実画面を証拠として資料に載せるために媒体そのものが必要",
+      "run": "search.mjs --mode fetch で上位の動画・写真を取得する（既定は上位10本。1本あたり数秒〜20秒）"
+    },
+    "frames": {
+      "why": "テロップを読む対象になる。TikTokは冒頭3秒でスワイプが決まるため、冒頭は高密度で抜く",
+      "run": "extract_signals.py で全体、extract_hook_frames.py で冒頭3秒を8fpsで抜く"
+    },
+    "baseline": {
+      "why": "④レポートは施策前のデータが無いと前後比較できない。あとから遡れない",
+      "ask": "施策はもう始まっていますか？ まだなら**今日のうちに**同じ検索語でスナップショットを取りましょう。",
+      "warn": "施策開始後で基準値が無い場合、前後差は算出できません。現状値のみの資料に変更するか確認が必要です",
+      "auto": "自動導出は不可。実体があるなら build_dataset.py --baseline <施策前のrun-dir> で記録する。ただし 5-4（定点観測）は対象外の章なので章は増えない。レポート資料（generate.js --mode レポート）は、施策前後を比べられる状態でないと止まる（偽の効果測定を作らない）"
+    },
+    "campaign_period": {
+      "why": "社内の実施情報でTikTok側に存在しない。ここだけは営業に聞くしか手段が無い",
+      "ask": "施策はいつから始めましたか？ 報告する期間はどこからどこまでですか？",
+      "example": "例：施策開始 8/1／対象期間 8/1〜8/31",
+      "auto": "自動導出は不可。--campaign-start と --period で build_dataset.py に渡す"
+    },
+    "_not_computed": {
+      "why": "入力の形は揃っているが、取得したデータからこの章を計算できなかった（例: 1-1 露出シェアは市場KWの軸と、ブランドの検索軸（自社・競合）2社分以上が要る。市場KWと自社だけでは出ない）",
+      "run": "build_deck.py --run-dir <run-dir> --modules <章ID> で中身を確かめ、足りない検索軸を取得する"
+    }
+  },
+  "first_visit": {
+    "_comment": "初訪は build_first_visit.py --dry-run --json の pages[].status でページごとに判定する。旧 modules.json の 1-1〜1-6 には対応させない。checklist のキーは gaps.py の項目 id",
+    "pages": {
+      "cover": "P1 表紙",
+      "now": "P2 いま、検索するとこう見える",
+      "competitors": "P3 競合はこう発信している",
+      "paid": "P4 競合がお金をかけて広げている訴求",
+      "gap": "P5 足りていない発信",
+      "winning": "P6 いま伸びている型（お土産）",
+      "plans": "P7 まずこの3本",
+      "next": "P8 次回",
+      "appx1": "付録1 調査の前提",
+      "appx2": "付録2 数字の一覧"
+    },
+    "page_mark": {
+      "ready": "✅",
+      "degraded": "△",
+      "dropped": "✗"
+    },
+    "state_mark": {
+      "ok": "✅",
+      "ask": "⛔",
+      "ai": "🤖",
+      "todo": "⏳",
+      "opt": "○"
+    },
+    "checklist": {
+      "vocab": {
+        "label": "業種（語彙プリセット）",
+        "why": "切り口・訴求の分類語彙が決まる。AIが推測すると担当者ごとに資料がぶれるので選んでもらう",
+        "ask": "業種は 食品・飲料／美容・コスメ／汎用 のどれですか？（選ぶだけ）"
+      },
+      "category": {
+        "label": "カテゴリ名（1つ）",
+        "why": "P2「いま、検索するとこう見える」と P6「いま伸びている型」の軸。この語で検索する",
+        "auto": "公式サイトから一般消費者が使うカテゴリ名を拾い、候補で取得して件数を見せる。同じ条件で取り直しても0件（2回とも TIKTOK_TRULY_EMPTY）の語はカテゴリ名にしない（case.json に入れると取得・組み立てが止まる）。「検索されていない語」として営業に伝え、別の候補に替える"
+      },
+      "category_search": {
+        "label": "カテゴリの検索結果",
+        "why": "P2・P6 の元データ。表示順の上位30本を見る（表示順以外の並べ替えや CAPTCHA 下の取得は使えない）"
+      },
+      "competitors": {
+        "label": "競合（1社以上・2〜4社推奨）",
+        "why": "P3・P4・P5 の軸B（競合はこう発信している）。対象ブランドの説明をしない分、ここが資料の半分になる",
+        "ask": "競合を1〜4社教えてください。クライアント未確認なら「想定」のまま進め、資料に「※競合は弊社の想定です。ご確認ください」と入れます",
+        "warn": "検索面の投稿者から競合を推測しない（個人クリエイターが並ぶ）"
+      },
+      "official": {
+        "label": "公式TikTok（対象ブランド）",
+        "why": "P5 で対象ブランドの枠（投稿があればサムネ、無ければ「まだ無し」）を出す。公式露出を「0本」と言えるのは confirmed か none の社だけ",
+        "auto": "公式サイトとWeb検索で探し、@ID で確認をもらう。見つからなければ unknown のまま（0本とは書かない）"
+      },
+      "own_search": {
+        "label": "対象ブランドの検索（任意）",
+        "why": "P5 で対象ブランドの投稿を枠に置ける。しない場合 P5 は対象ブランドについて主張しない版になる"
+      },
+      "focus_products": {
+        "label": "注力商品（任意・1〜3）",
+        "why": "P7「まずこの3本」の企画名に使う"
+      },
+      "visit_date": {
+        "label": "訪問日（任意）",
+        "why": "前日に生成して一通り見る運用（review/初訪_前日チェック.md）"
+      },
+      "acquired_on": {
+        "label": "取得日（acquired_on）",
+        "why": "フッター「◯◯様｜取得日」に入る。無いと raw ファイルの日付を「参考」として付録にだけ出す"
+      },
+      "covers": {
+        "label": "カバー画像（fetch_covers）",
+        "why": "1枚＝実画像＋ワンフレーズ。画像が無い投稿は例に載せない"
+      },
+      "labels": {
+        "label": "ラベルの下地（label_posts --init）",
+        "why": "候補投稿を窓（カテゴリ30・競合20・自社20）で選び、判定欄を用意する"
+      },
+      "labels_confirmed": {
+        "label": "ラベルの確定（画像を見て選ぶ）",
+        "why": "見ていない投稿は集計にも例にも使わない。窓内は全タイルの判定が必須で、足りないと build が止まる"
+      },
+      "case_json": {
+        "label": "案件ディレクトリの case.json",
+        "why": "初訪の入力（業種・カテゴリ・競合・公式）はすべて case.json から読む"
+      }
+    }
+  },
+  "findings_rules": [
+    {
+      "id": "photo_dominant",
+      "when": "photo_ratio >= 0.5",
+      "text": "写真投稿が {photo_pct}%（{photo}/{total}件）。この検索面は写真カルーセルが主流です。動画前提の提案だと的を外します"
+    },
+    {
+      "id": "pr_underperform",
+      "when": "pr_save_rate < no_pr_save_rate and pr_views > no_pr_views",
+      "text": "広告（#PR表記かTikTokの広告フラグ）は再生が {views_ratio} 倍だが保存率は {save_ratio} 倍。露出は買えているが刺さっていない可能性があります（build_deck の 4-4 と同じ数え方）",
+      "skip_status": [
+        "初訪"
+      ]
+    },
+    {
+      "id": "ad_without_pr",
+      "when": "ad_only >= 1",
+      "text": "#PR表記なしで広告フラグが立つ投稿が {ad_only} 件。どちらも広告として数えています"
+    },
+    {
+      "id": "entry_room",
+      "when": "follower_known >= 10 and small_follower_ratio >= 0.4",
+      "text": "フォロワー数が分かる {follower_known} 件のうち、1万未満が {small_pct}%（{small}件）。予算より設計で勝てる面です",
+      "skip_status": [
+        "初訪"
+      ]
+    },
+    {
+      "id": "freshness",
+      "when": "recent7_ratio is not None and recent7_ratio >= 0.6",
+      "text": "データ化した時点（{ref_date}）で直近7日の投稿が {recent_pct}%。この検索面は鮮度で回っています＝タイミング勝負です"
+    },
+    {
+      "id": "single_axis",
+      "when": "axes_count <= 1",
+      "text": "検索軸が1つだけです。競合を足すと露出シェア・競合比較・自社競合差の章が数えられるようになります",
+      "skip_status": [
+        "初訪"
+      ]
+    },
+    {
+      "id": "creator_driven_face",
+      "when": "verified_ratio <= 0.05 and total >= 20",
+      "text": "認証バッジ付きが {verified_pct}% しかありません。この検索面はブランド公式ではなく個人クリエイターで占められています＝起用先の選定が勝負になります"
+    }
+  ]
+}
