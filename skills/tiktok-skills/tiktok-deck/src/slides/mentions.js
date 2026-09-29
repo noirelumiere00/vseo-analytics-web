@@ -20,9 +20,10 @@ const { brandColor } = C;
 const PART = 'PART 2 — 検索ワードの露出実態';
 const CHANNELS = ['caption', 'hashtag', 'ocr', 'asr'];
 
-/** 「58.3%（対象外 18本を分母から除外）」から本数だけを取り出す */
-function excludedOf(rate) {
-  const m = /対象外\s*(\d+)\s*本/.exec(String(rate || ''));
+/** 「58.3%（対象外 18本・未計測 5本を分母から除外）」から、対象外／未計測の本数を取り出す。
+ *  対象外（その経路が構造的に無い）と未計測（まだ測っていない）を混ぜると「音声が無い」と読まれる */
+function excludedOf(rate, kind = '対象外') {
+  const m = new RegExp(`${kind}\\s*(\\d+)\\s*本`).exec(String(rate || ''));
   return m ? parseInt(m[1], 10) : 0;
 }
 
@@ -39,36 +40,43 @@ function slideMentions(pptx, d, footer, partTag) {
   (m.axes || []).forEach((ax, i) => {
     const ch = ax.channels || {};
     const rows = CHANNELS.map((k) => {
-      const ex = excludedOf(ch[`${k}_rate`]);
+      const ex = excludedOf(ch[`${k}_rate`], '対象外');
+      const um = excludedOf(ch[`${k}_rate`], '未計測');
       return [
         { text: val(ch[`${k}_label`]), bold: true },
         val(ch[`${k}_gist`]),
         { text: val(ch[`${k}_valid`]), align: 'right' },
         // 分母から外した本数は「0本」ではなく「—」。0と書くと外していないように読める
-        { text: ex ? `${ex}本` : '—', align: 'right' },
+        { text: [ex ? `対象外${ex}本` : null, um ? `未計測${um}本` : null].filter(Boolean).join('／') || '—',
+          align: 'right' },
         { text: rateOnly(ch[`${k}_rate`]), align: 'right', bold: true },
         { text: val(ch[`${k}_avg`]), align: 'right' },
       ];
     });
+    // 未計測の経路がある統合値は下限値（tiktok-analyze の is_lower_bound）。確定値として読ませない
+    const lower = String(ax.is_lower_bound || '').trim().toLowerCase() === 'true';
     const s = addSlide(pptx, {
       qLabel: `言及${i + 1}`,
       title: `「${val(m.keyword)}」は動画の中でどう言われているか`,
       partTag: partTag || PART,
       lead: `${val(ax.label)}｜解析できた ${val(ax.videos_processed)} 本／`
         + `対象 ${val(ax.videos_in_file)} 本。`
-        + `いずれかの経路で言及があったのは ${val(ax.videos_with_keyword)} 本（${val(ax.appearance_rate)}）。`,
+        + `いずれかの経路で言及があったのは ${val(ax.videos_with_keyword)} 本`
+        + `（${val(ax.appearance_rate)}${lower ? '・下限値' : ''}）。`,
       accent: brandColor(0), footerLeft: footer,
     });
     // coverage_note は tiktok-analyze が三値で書いた開示文。要約せず載せる
     const body = [
       val(m.coverage_note),
+      lower ? val(ax.lower_bound_note) : null,
       '経路ごとに分母が異なる。除外した本数は0件ではなく、対象外または未計測。',
     ].filter((t) => t && !D.isPlaceholderText(t)).join('\n');
     const opt = { label: '調査範囲', h: 1.35, maxH: 2.60 };
     addDataTable(s, {
       x: T.margin.l, y: T.content.top, w: T.content.w,
       head: ['経路', '何を見たか', '分母', '分母から除外', '出現率', '1本あたり'],
-      colW: [1.90, 5.40, 1.30, 1.90, 1.60, 1.80],
+      // 除外列は「対象外◯本／未計測◯本」が入る幅にする
+      colW: [1.90, 4.60, 1.30, 3.40, 1.60, 1.80],
       rows,
       maxH: T.content.bottom - insightHeight(body, opt) - 0.34 - T.content.top,
     });

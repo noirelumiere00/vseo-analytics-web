@@ -169,6 +169,8 @@ Copy-Item C:\path\to\*.json raw\
 - 取得JSONの `order_basis` が `search_display_order` 以外（tiktok-acquire の `--sessions 2` 以上）の軸は止まる。
   並びが検索の表示順ではなく、順位として使えないため。その軸は `--sessions 1` で取り直す
 - 軸の中の同じ動画IDは1本にまとめる（件数を表示する）。別の軸に同じ動画が出るのは正常で、それぞれで数える
+- 指標（`stats`）の無い投稿は本数には数えるが、平均・中央値・率・率の順位には入れない（0再生として数えない。INPUT に `stats_missing` と本数が出る）
+- PR の判定は初訪と同じ（`tools/fvlib.py` の `pr_basis`）：isAd、PR表記のタグ（#PR・#PR案件・#タイアップ・#広告・#プロモーション・#提供・#ad・#sponsored）、本文の【PR】等のいずれか
 
 ---
 

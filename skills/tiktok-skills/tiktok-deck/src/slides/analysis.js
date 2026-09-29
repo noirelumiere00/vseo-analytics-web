@@ -202,12 +202,12 @@ function prBreakdown(q) {
   let ad = qq.pr_isad_count;
   let tg = qq.pr_tag_count;
   if (D.isMissing(ad) || D.isMissing(tg)) {
-    const m = /isAd\s*(\d+)本[／/]#PRタグ\s*(\d+)本/.exec(String(qq.pr_definition_note || ''));
+    const m = /isAd\s*(\d+)本[／/](?:#PRタグ|PR表記)\s*(\d+)本/.exec(String(qq.pr_definition_note || ''));
     if (!m) return null;
     [, ad, tg] = m;
   }
   const unk = parseInt(String(qq.pr_isad_unknown || '0'), 10) || 0;
-  return `内訳：isAd ${ad}本／#PRタグ ${tg}本${unk ? `（isAd 未取得 ${unk}本）` : ''}`;
+  return `内訳：isAd ${ad}本／PR表記（タグ・本文） ${tg}本${unk ? `（isAd 未取得 ${unk}本）` : ''}`;
 }
 
 function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
@@ -217,7 +217,7 @@ function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
     title: `伸びているのは、PR投稿かオーガニックか？${pageSuffix(chunks, ci)}`,
     partTag: PART1,
     // 「内訳は各ページに併記」は、実際に内訳を描けるときだけ書く（以前は描いていないのに書いていた）
-    lead: `PRはisAdまたは#PRタグのいずれか${chunk.some((b) => prBreakdown(b.q2)) ? '（内訳は各ブランドに併記）' : ''}。`
+    lead: `PRはisAdまたはPR表記（タグ・本文）のいずれか${chunk.some((b) => prBreakdown(b.q2)) ? '（内訳は各ブランドに併記）' : ''}。`
       + '「#PR表記なし」はオーガニックを意味しない。',
     accent: brandColor(colorOf(chunk[0] || brands[0] || {})), footerLeft: footer,
   });
@@ -242,7 +242,7 @@ function slideQ2(pptx, d, chunk, ci, chunks, footer, offset) {
     addBrandHeading(s, {
       x: x + 0.40, y: cardY + 0.55, w: cw - 0.80, color: c,
       name: clip(val(b.brand_name), 20),
-      sub: `PR（isAdまたは#PRタグ）　${val(q.pr_count)} / ${val(q.total_count)}本（${val(q.pr_share)}）`,
+      sub: `PR（isAdまたはPR表記）　${val(q.pr_count)} / ${val(q.total_count)}本（${val(q.pr_share)}）`,
     });
     // 2定義の内訳。定義で比率が大きく変わる軸があるので、付録の約束どおり各ブランドに併記する
     const bd = prBreakdown(q);

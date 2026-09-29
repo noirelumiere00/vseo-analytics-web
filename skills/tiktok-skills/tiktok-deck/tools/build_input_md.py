@@ -174,9 +174,11 @@ def media_mix(cfg, vs):
     tp = sum(1 for v in top if is_photo(v))
     out = (f"写真カルーセル {len(ph)}本（{len(ph) / len(vs) * 100:.1f}%）／"
            f"動画 {len(vd)}本。保存率上位{len(top)}本（再生{lim:,}以上）のうち写真は {tp}本")
-    if ph and vd:
-        out += (f"。保存率中央値は写真 {st.median([srate(v) for v in ph]):.2f}%・"
-                f"動画 {st.median([srate(v) for v in vd]):.2f}%")
+    sp = [x for x in (srate(v) for v in ph) if x is not None]
+    sv = [x for x in (srate(v) for v in vd) if x is not None]
+    if sp and sv:
+        out += (f"。保存率中央値は写真 {st.median(sp):.2f}%・"
+                f"動画 {st.median(sv):.2f}%")
     return out
 
 
@@ -314,6 +316,15 @@ def eg(v):
 def srate(v):
     p, c = plays(v), stat(v, "collectCount")
     return c / p * 100 if p and c is not None else None
+
+
+def stats_note(a, axis_name, vs):
+    """指標（stats）が取れていない投稿の本数を INPUT と画面に残す。
+    本数には数えるが、平均・中央値・率の母数には入れない（0 再生として数えない）"""
+    n = sum(1 for v in vs if plays(v) is None)
+    if n:
+        a(f"- stats_missing: {n}本（再生数などの指標が取得できていない。平均・中央値・率の母数から除外）")
+        print(f"[注意] {axis_name}: 指標（stats）の無い投稿 {n} 本は平均・率の母数から外した（0 として数えていない）")
 
 
 def mean_plays(vs):
@@ -514,12 +525,26 @@ def emit_measured_mentions(a, case_dir: str, explicit: str | None):
         a(f"- videos_with_keyword: {_metric(ov, 'videos_with_keyword')}")
         a(f"- appearance_rate: {_metric(ov, 'appearance_rate_pct', '%')}")
         a(f"- avg_mentions: {_metric(ov, 'avg_mentions_per_video')}")
+        # テロップ・音声が未計測の投稿は、その経路の言及を数えていない。統合の登場率・平均回数は
+        # その分だけ小さく出る下限値（tiktok-analyze の overall.is_lower_bound）。確定値に見せない。
+        # 古い計測結果（キーが無い）では何も足さない
+        if ov.get("is_lower_bound") is True:
+            um = ov.get("unmeasured_route_videos") or {}
+            detail = "・".join(f"{CHANNEL_LABEL[k][0]} {n}本" for k, n in um.items()
+                              if k in CHANNEL_LABEL and n)
+            a("- is_lower_bound: true")
+            a(f"- lower_bound_note: 未計測の経路（{detail or 'テロップ・音声'}）の言及を数えていないため、"
+              "登場率・1本あたり回数は下限値")
         a("")
         a("### Channels\n")
         for ch, (label, gist) in CHANNEL_LABEL.items():
             c = (ov.get("channels") or {}).get(ch) or {}
+            # 「対象外」（その経路が構造的に無い）と「未計測」（まだ測っていない）は別物。
+            # 混ぜると「音声が無い」と誤読されるので、両方を別々に書く（無いキーは 0 扱い＝古い計測結果）
             ex = c.get("excluded_not_applicable") or 0
-            note = f"（対象外 {ex}本を分母から除外）" if ex else ""
+            um = c.get("excluded_unmeasured") or 0
+            parts = ([f"対象外 {ex}本"] if ex else []) + ([f"未計測 {um}本"] if um else [])
+            note = f"（{'・'.join(parts)}を分母から除外）" if parts else ""
             a(f"- {ch}_label: {label}")
             a(f"- {ch}_gist: {gist}")
             a(f"- {ch}_valid: {_metric(c, 'valid_videos')}")
@@ -660,6 +685,7 @@ def main() -> int:
         # 括弧付きにすると「98（生115本）」→98115 と読まれ母数計算が壊れる。数値だけ入れる
         a(f"- total_video_count: {len(vs)}")
         a(f"- raw_video_count: {len(raw)}")
+        stats_note(a, b["name"], vs)
         a(f"- acquisition_note: {acq_note(cfg, b['name'], meta)}")
         a("")
         a("##### Q1 Influencer Tier\n")
@@ -721,8 +747,9 @@ def main() -> int:
         a(f"- pr_isad_count: {len(pr_ad)}")
         a(f"- pr_tag_count: {len(pr_tg)}")
         a(f"- pr_isad_unknown: {len(_ad_unk)}")
-        a(f"- pr_definition_note: PR＝TikTokの広告フラグ(isAd)または#PRタグのいずれか。"
-          f"内訳は isAd {len(pr_ad)}本／#PRタグ {len(pr_tg)}本。"
+        a(f"- pr_definition_note: PR＝TikTokの広告フラグ(isAd)またはPR表記（#PR・#PR案件・#タイアップ・#広告・"
+          f"#プロモーション・#提供・#ad・#sponsored のタグ、本文の【PR】等）のいずれか。"
+          f"内訳は isAd {len(pr_ad)}本／PR表記 {len(pr_tg)}本。"
           # 広告フラグが取れていない投稿を黙って「非PR」に数えると PR比率が過少になる
           + (f"うち {len(_ad_unk)}本は広告フラグが未取得のため、isAd 側の比率は下限値である。"
              if _ad_unk else "")
@@ -911,6 +938,7 @@ def main() -> int:
         a(f"## KEYWORD {ki:02d}\n")
         a(f"- keyword: {k['name']}")
         a(f"- total_count: {len(vs)}")
+        stats_note(a, k["name"], vs)
         a(f"- acquisition_note: {acq_note(cfg, k['name'], kmeta)}")
         a("")
         a("### Head 10\n")

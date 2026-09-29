@@ -188,7 +188,7 @@ function slideMethod(pptx, d, footer, M) {
   const agg = val((d.project || {}).aggregation_note);
   const note = '検索順位はTikTokアプリが実際に表示した順（デフォルト表示順）。取得時点のスナップショットであり、'
     + 'ログイン状態・地域・閲覧履歴により変動する。'
-    + 'PRの判定はTikTokの広告フラグ(isAd)または #PR タグのいずれかで、広告該当性・景表法適合性は判定しない。'
+    + 'PRの判定はTikTokの広告フラグ(isAd)またはPR表記（タグ・本文。定義は付録）のいずれかで、広告該当性・景表法適合性は判定しない。'
     + (D.isPlaceholderText(agg) ? `ブランド${nb}軸＋市場${nk}ワードを同一手法で取得している。` : agg);
   const colW = (T.content.w - 1.4) / 2;
   // 行間を 0.62in 固定にしていたため、他面の行を1本足しただけで

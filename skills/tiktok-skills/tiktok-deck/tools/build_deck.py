@@ -80,6 +80,10 @@ def detect_inputs(run_dir: Path):
                 sg = json.loads(fp.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 continue
+            # 動画IDの無い JSON（集計ファイル・壊れた出力など）は1本の解析結果ではない。
+            # 数えると「解析済み本数」が実際より多く出る
+            if not isinstance(sg, dict) or not sg.get("video_id"):
+                continue
             # status!=ok は「解析対象外」。未計測と混ぜると分母が食い違う
             # （tiktok-analyze は ok だけを数え、こちらが全件を数えていた）。
             if sg.get("status") == "ok":
@@ -122,7 +126,10 @@ def detect_inputs(run_dir: Path):
         "axes": len(_by_axis(recs)) >= 2,
         # 3-5 / 4-3 が要求するのは「自社と競合の対」。市場KW×2では成立しない。
         "self_vs_competitor": ("self" in roles and "competitor" in roles),
-        "official_tiktok_account": bool(cfg.get("official_tiktok_account")),
+        # 「公式TikTok：無し」を確認済み（tiktok-analyze build_dataset の official_tiktok_absent）も
+        # 公式の有無が確定している状態として扱う（1-2 は「公式0本（確定）」を出せる）
+        "official_tiktok_account": bool(cfg.get("official_tiktok_account"))
+                                   or cfg.get("official_tiktok_absent") is True,
         "measurement": (run_dir / "measurement" / "measure_output.json").exists(),
         "telop": telop_measured > 0,
         "asr": asr_present > 0,
@@ -319,6 +326,8 @@ def compute_from_external(mid, ext, cfg=None, recs=None):
                     # 分母を出さないと読み手が全件だと思い込む。
                     "分母": c.get("valid_videos"),
                     "対象外": c.get("excluded_not_applicable") or 0,
+                    # 対象外（構造的に無い）と未計測（まだ測っていない）は別物。混ぜない
+                    "未計測": c.get("excluded_unmeasured") or 0,
                 })
         # 有効動画が1本も無いと全項目が null になる。null 並びの表を「出せた」ことにすると
         # 資料に空欄の章が流れるので、不足として返す（媒体解析が済んでいない状態）。
@@ -694,7 +703,8 @@ def is_ad(r):
     （2026-09-03 決定。それ以前は #PR 表記のみを基準にしていた）。
     片方だけを基準にすると、資料の中に 2.8% と 19.8% の二重帳簿ができる。
     """
-    if r.get("pr_status_prelim") == "pr":
+    # 最終判定（テロップの #PR まで見た tiktok-analyze の pr_status_final）があればそれを正にする
+    if r.get("pr_status_final") == "pr" or r.get("pr_status_prelim") == "pr":
         return True
     v = r.get("is_ad_platform_flag")
     return v is True or str(v).strip().lower() == "true"
@@ -1040,6 +1050,14 @@ def compute_module(mid, recs, cfg):
 
     if mid == "1-2":
         acct = (cfg.get("official_tiktok_account") or "").rstrip("/").split("/")[-1].lstrip("@").lower()
+        if not acct and cfg.get("official_tiktok_absent") is True:
+            # 公式TikTokが無いことを確認済み。推定の「見つからなかった」とは違い、0本は確定した事実
+            return {"公式アカウント": "無し（確認済み）",
+                    "検索面に出ている本数": 0,
+                    "取得した全本数": total,
+                    "露出シェア%": 0.0,
+                    "note": "公式0本（確定）。公式TikTokアカウントが無いことを確認済み"
+                            "（confirmed_config.json の official_tiktok_absent）"}
         if not acct:
             return None
         hit = [r for r in recs if (r.get("creator_id") or "").lower() == acct]
