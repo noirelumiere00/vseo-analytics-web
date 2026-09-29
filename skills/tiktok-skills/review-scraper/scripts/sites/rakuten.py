@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+import urllib.error
 from urllib.parse import quote
 
 from common import SiteChanged, clean, embedded_json, make_review, to_date
@@ -107,30 +108,49 @@ def resolve(fetcher, ref):
     return m.group(1)
 
 
-def collect(fetcher, ref, max_reviews=200, max_pages=100, log=print, **_):
+def collect(fetcher, ref, max_reviews=200, max_pages=None, log=print, **_):
     code = resolve(fetcher, ref)
-    meta, rows, seen = None, [], set()
-    for p in range(1, max_pages + 1):
-        try:
-            text = fetcher.get(f"{REVIEW}/{code}/{p}.1/")
-        except Exception:  # 最終ページ超過
-            break
-        m, page_rows = parse_page(text)
-        meta = meta or m
+    # 1ページ目は try の外で取る。ここでの 403・robots 禁止・404・通信エラー・構造変化を
+    # 「0件」に化けさせず、呼び出し側に「アクセス拒否」「取得失敗」「構造変化」として記録させるため。
+    meta, page_rows = parse_page(fetcher.get(f"{REVIEW}/{code}/1.1/"))
+    total = meta.get("site_total")
+    rows, seen, p = [], set(), 1
+    while True:
         new = [r for r in page_rows if r["review_id"] not in seen]
         if not new:
             break
         for r in new:
             seen.add(r["review_id"])
+            # 何ページ目の口コミかを残す（引用の出典を1ページ目ではなく実際の掲載ページにするため）
+            r["review_url"] = f"{REVIEW}/{code}/{p}.1/"
             rows.append(r)
-        if len(rows) >= max_reviews:
+        # サイト表示の件数まで取れたら次のページは取りに行かない
+        # （最終ページの先で何が返るかに頼らない。アクセスも1回減る）
+        if len(rows) >= max_reviews or (isinstance(total, int) and len(rows) >= total):
             break
-    meta = meta or {"name": None, "site_total": None, "url": None}
-    if not rows and (meta.get("site_total") or 0) > 0:
-        raise SiteChanged(f"楽天の口コミを読めませんでした（表示上は{meta['site_total']}件）")
+        if max_pages and p >= max_pages:
+            log(f"  [NOTE] 楽天は {max_pages} ページで打ち切り（{len(rows)}件）")
+            break
+        p += 1
+        try:
+            _, page_rows = parse_page(fetcher.get(f"{REVIEW}/{code}/{p}.1/"))
+        except urllib.error.HTTPError as e:
+            if e.code == 404:   # 最終ページ超過
+                break
+            meta["incomplete"] = f"{p}ページ目で失敗（{len(rows)}件で中断）: HTTP {e.code}"
+            break
+        except Exception as e:  # noqa: BLE001
+            # 拒否・通信エラー・メンテ画面など。終端と区別できないので黙って打ち切らず、
+            # 取れた分は残したまま「途中で失敗」として呼び出し側に知らせる
+            meta["incomplete"] = f"{p}ページ目で失敗（{len(rows)}件で中断）: {type(e).__name__}: {e}"
+            break
+    # 件数表示が読めない（None）ときも 0件を本物とみなさない。
+    # 構造変化では件数と口コミ本体が同時に読めなくなるのが普通なので、表示が 0 のときだけ受け入れる。
+    if not rows and total != 0:
+        raise SiteChanged(f"楽天の口コミを読めませんでした（表示上は{total if total is not None else '不明'}件）")
     meta.update({"site": NAME, "product_id": code, "url": meta.get("url") or f"{REVIEW}/{code}/1.1/"})
     reviews = [make_review(site=NAME, product_id=code, product_name=meta["name"],
                            product_url=meta["url"], rating_scale=RATING_SCALE,
-                           review_url=f"{REVIEW}/{code}/1.1/", body_truncated=False, **r)
+                           body_truncated=False, **r)
                for r in rows[:max_reviews]]
     return meta, reviews

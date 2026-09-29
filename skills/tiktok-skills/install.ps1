@@ -10,6 +10,13 @@ $Dest = Join-Path $env:USERPROFILE ".claude\skills"
 $Skills = @("tiktok-intake","tiktok-acquire","tiktok-analyze","tiktok-deck","review-scraper")
 $Results = New-Object System.Collections.Generic.List[string]
 $Failed = $false
+function Remove-Safely($path) {
+  # シンボリックリンク・ジャンクションは中身ではなくリンクだけを消す。
+  # Windows PowerShell 5.1 の Remove-Item -Recurse はジャンクションの先まで辿って消すことがある
+  if (-not (Test-Path $path)) { return }
+  $item = Get-Item $path -Force
+  if ($item.LinkType) { [System.IO.Directory]::Delete($path) } else { Remove-Item -Recurse -Force $path }
+}
 function Ok($m) { $script:Results.Add("  OK  $m") }
 function Ng($m) { $script:Results.Add("  NG  $m"); $script:Failed = $true }
 
@@ -26,9 +33,9 @@ if ((Resolve-Path $Here).Path -eq (Resolve-Path $Dest).Path) {
     $tmp = Join-Path $Dest ".$s.tmp"
     $t = Join-Path $Dest $s
     try {
-      if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+      Remove-Safely $tmp
       Copy-Item -Recurse $src $tmp
-      if (Test-Path $t) { Remove-Item -Recurse -Force $t }
+      Remove-Safely $t
       Move-Item $tmp $t
       Ok "配置: $s"
     } catch {

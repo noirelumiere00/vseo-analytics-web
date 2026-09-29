@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import http.client
 import json
 import re
 import sys
@@ -51,12 +52,14 @@ def clean(s):
 
 
 def to_date(s):
-    """'2026/9/11 16:12:37' / '2026/03/08' / ミリ秒 → 'YYYY-MM-DD'。読めなければ None。"""
-    if s is None or s == "":
+    """'2026/9/11 16:12:37' / '2026/03/08' / '2026年9月11日' / エポック秒・ミリ秒 → 'YYYY-MM-DD'。
+    読めなければ None。"""
+    if s is None or s == "" or isinstance(s, bool):
         return None
     if isinstance(s, (int, float)):
-        return datetime.fromtimestamp(s / 1000, JST).strftime("%Y-%m-%d")
-    m = re.search(r"(20\d\d)[/.-](\d{1,2})[/.-](\d{1,2})", str(s))
+        # 1e11 未満は秒とみなす（ミリ秒なら1973年、秒なら5138年の境目。秒をミリ秒扱いすると1970年に化ける）
+        return datetime.fromtimestamp(s if s < 1e11 else s / 1000, JST).strftime("%Y-%m-%d")
+    m = re.search(r"(20\d\d)\s*[/.\-年]\s*(\d{1,2})\s*[/.\-月]\s*(\d{1,2})", str(s))
     if not m:
         return None
     return f"{int(m.group(1)):04d}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
@@ -73,15 +76,24 @@ def age_band(age):
     m = re.match(r"(\d+)", s)
     if m:
         n = int(m.group(1))
-        return "10代以下" if n < 20 else f"{n // 10 * 10}代"
+        # 楽天・Yahoo!の「10代」と同じ区分にする（「10代以下」にすると同じ層が別区分に割れる）
+        if n < 10:
+            return "10代未満"
+        return f"{n // 10 * 10}代"
     return None
 
 
 def make_review(**kw):
     r = {k: None for k in FIELDS}
     r.update(kw)
-    if r["rating"] is not None and r["rating_scale"]:
-        r["rating_5"] = round(float(r["rating"]) * 5 / float(r["rating_scale"]), 2)
+    scale = float(r["rating_scale"] or 0)
+    if r["rating"] is not None and scale > 1:
+        v = float(r["rating"])
+        # 1〜scale を 1〜5 に線形で写す。rating×5÷scale（0起点）だと @cosme の最低1が0.71、
+        # 中央4が2.86 になり、楽天・Yahoo!（最低1.0・中央3.0）より系統的に低く出る。
+        # 範囲外（@cosme の 0 等）は換算しない（最低点として平均に混ぜないため。rating には元の値が残る）
+        if 1 <= v <= scale:
+            r["rating_5"] = round(1 + (v - 1) * 4 / (scale - 1), 2)
     r["age_band"] = age_band(r["age"])
     r["fetched_at"] = r["fetched_at"] or now_iso()
     return r
@@ -165,21 +177,33 @@ class Fetcher:
             return self._robots[host]
         rules = []
         try:
+            # robots.txt も同じホストへのアクセスなので間隔を空ける（直後の1ページ目と同時刻にしない）
+            self._wait(host)
             status, ctype, raw = self._raw(f"https://{host}/robots.txt")
             text = _decode(raw, ctype)
             # robots.txt の代わりに通常のHTMLページが返るサイトがある（楽天レビュー）。
             # それは「robots.txt が無い」扱いにする。
             if status == 200 and not text.lstrip().lower().startswith(("<!doctype", "<html")):
-                applies = False
+                # RFC 9309: 連続する User-agent 行は1つのグループ。規則行の後の User-agent から次のグループ。
+                # 「User-agent: *」の直後に別の User-agent が続く書き方でも * 向けの Disallow を取りこぼさない。
+                # Allow は読まない（禁止側に倒れるだけで、行ってはいけない所へは行かない）
+                applies, in_rules = False, False
                 for line in text.splitlines():
                     line = line.split("#", 1)[0].strip()
                     if not line or ":" not in line:
                         continue
                     k, v = (x.strip() for x in line.split(":", 1))
-                    if k.lower() == "user-agent":
-                        applies = (v == "*")
-                    elif k.lower() == "disallow" and applies and v:
-                        rules.append(v)
+                    k = k.lower()
+                    if k == "user-agent":
+                        if in_rules:
+                            applies, in_rules = False, False
+                        applies = applies or v == "*"
+                    elif k == "sitemap":
+                        continue   # グループに属さない行
+                    else:
+                        in_rules = True
+                        if k == "disallow" and applies and v:
+                            rules.append(v)
         except urllib.error.HTTPError:
             pass      # 404 等は robots.txt 無し＝制限なし
         except Exception as e:  # noqa: BLE001
@@ -204,6 +228,7 @@ class Fetcher:
         host = urllib.parse.urlsplit(url).netloc
         err = None
         for attempt in range(self.retries):
+            last = attempt == self.retries - 1
             self._wait(host)
             try:
                 self.requests += 1
@@ -216,10 +241,14 @@ class Fetcher:
                     raise Blocked(f"サイトが自動アクセスを拒否しました（HTTP 403）: {url}") from e
                 err = e
                 if e.code in (429, 500, 502, 503, 504):
-                    time.sleep(self.delay * (attempt + 2) * 2)
+                    if not last:   # 最後の試行の後は待っても次が無い
+                        time.sleep(self.delay * (attempt + 2) * 2)
                     continue
                 raise
-            except (urllib.error.URLError, TimeoutError) as e:
+            except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
+                # 読み込み中の接続リセット（ConnectionResetError）・IncompleteRead・
+                # Python 3.9 の socket.timeout（3.10 未満は TimeoutError ではない）も一時的な失敗としてやり直す
                 err = e
-                time.sleep(self.delay * (attempt + 2))
+                if not last:
+                    time.sleep(self.delay * (attempt + 2))
         raise err

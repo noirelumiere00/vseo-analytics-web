@@ -3,13 +3,15 @@
 一覧 /products/<id>/review/?page=N は1ページ10件で、本文は途中で切れている
 （「続きを読む」）。切れているものだけ個別ページ /reviews/<id>/ を取りに行く。
 一覧と個別は同じ `review-sec` ブロックなので、読み方は1つでよい。
-評価は7段階（0〜7）。
+評価は7段階（1〜7）。0 など範囲外の値は rating にそのまま残し、
+rating_5 には換算しない（common.make_review。最低点として平均に混ぜないため）。
 """
 from __future__ import annotations
 
 import re
+import urllib.error
 
-from common import SiteChanged, clean, make_review, to_date
+from common import Blocked, SiteChanged, clean, make_review, to_date
 
 NAME = "cosme"
 LABEL = "@cosme"
@@ -144,12 +146,16 @@ def collect(fetcher, pid, max_reviews=200, full_text=True, log=print):
     meta = parse_product(first)
     meta.update({"site": NAME, "product_id": pid, "url": product_url(pid)})
     rows, seen, page, text = [], set(), 1, first
+    blocked = False
     while len(rows) < max_reviews:
         secs = parse_sections(text)
         if not secs:
             # 口コミがある商品なのに1件も読めない＝構造変化。0件扱いにしない。
-            if page == 1 and (meta["site_total"] or 0) > 0:
-                raise SiteChanged(f"@cosme の口コミ一覧を読めませんでした（表示上は{meta['site_total']}件）")
+            # 件数表示が読めない（None）ときも同じ。構造変化では件数と口コミが同時に読めなくなるので、
+            # 表示が 0 のときだけ本当に0件とみなす。
+            if page == 1 and meta["site_total"] != 0:
+                total = meta["site_total"] if meta["site_total"] is not None else "不明"
+                raise SiteChanged(f"@cosme の口コミ一覧を読めませんでした（表示上は{total}件）")
             break
         new = [s for s in secs if s["review_id"] not in seen]
         if not new:
@@ -160,15 +166,30 @@ def collect(fetcher, pid, max_reviews=200, full_text=True, log=print):
         page += 1
         try:
             text = fetcher.get(f"{BASE}/products/{pid}/review/?page={page}")
-        except Exception:  # 最終ページ超過は404
+        except urllib.error.HTTPError as e:
+            if e.code == 404:   # 最終ページ超過は404
+                break
+            meta["incomplete"] = f"{page}ページ目で失敗（{len(rows)}件で中断）: HTTP {e.code}"
+            break
+        except Exception as e:  # noqa: BLE001
+            # 拒否・通信エラー等を終端と同じに扱うと、一部だけの取得が「OK」に見える。
+            # 取れた分は残し、「途中で失敗」として呼び出し側に知らせる
+            meta["incomplete"] = f"{page}ページ目で失敗（{len(rows)}件で中断）: {type(e).__name__}: {e}"
+            blocked = isinstance(e, Blocked)
             break
     rows = rows[:max_reviews]
-    if full_text:
+    if full_text and blocked:
+        # 拒否されたサイトへ個別ページを取りに行き続けない（本文は途中までのまま body_truncated=True で残る）
+        log("  [WARN] @cosme に拒否されたので全文の取得を省きます")
+    if full_text and not blocked:
         for i, s in enumerate(rows):
             if not s["body_truncated"]:
                 continue
             try:
                 full = parse_sections(fetcher.get(f"{BASE}/reviews/{s['review_id']}/"))
+            except Blocked as e:
+                log(f"  [WARN] @cosme に拒否されたので残りの全文取得をやめます（{e}）")
+                break
             except Exception as e:  # noqa: BLE001
                 log(f"  [WARN] @cosme 個別ページ {s['review_id']} を取れませんでした（{e}）")
                 continue

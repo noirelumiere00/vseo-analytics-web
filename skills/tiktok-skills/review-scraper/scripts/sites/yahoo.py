@@ -62,14 +62,20 @@ def parse_list(text):
     own = ((pp.get("pickUpItemReviewEntity") or {}).get("itemReview") or {})
     raw, seen = [], set()
     for r in (cat.get("reviews") or []) + (own.get("reviews") or []):
-        if r.get("id") in seen:
+        # id が無いと重複除去の鍵が全件 None になり、20件が1件に潰れる。
+        # 件数が0にならないので構造変化にも気づけない。id の欠落は構造変化として止める
+        if r.get("id") in (None, ""):
+            raise SiteChanged("Yahoo!の口コミに id がありません（構造変化の可能性）")
+        if r["id"] in seen:
             continue
-        seen.add(r.get("id"))
+        seen.add(r["id"])
         raw.append(r)
     cat_total = (cat.get("reviewSummary") or {}).get("count")
     own_total = (own.get("reviewSummary") or {}).get("count")
+    # `cat_total or own_total` だと表示「0件」が None（不明）に化けるので、読めた値の大きい方を使う
+    totals = [x for x in (cat_total, own_total) if isinstance(x, int)]
     meta = {"name": item.get("name") or None,
-            "site_total": cat_total or own_total,
+            "site_total": max(totals) if totals else None,
             "jan": item.get("jan") or None}
     out = []
     for r in raw:
@@ -123,8 +129,10 @@ def search(fetcher, keyword, limit=5):
 def collect(fetcher, ref, max_reviews=200, log=print, **_):
     url = list_url(ref)
     meta, rows = parse_list(fetcher.get(url))
-    if not rows and (meta.get("site_total") or 0) > 0:
-        raise SiteChanged(f"Yahoo!の口コミを読めませんでした（表示上は{meta['site_total']}件）")
+    # 件数表示が読めない（None）ときも 0件を本物とみなさない（表示が 0 のときだけ受け入れる）
+    if not rows and meta.get("site_total") != 0:
+        total = meta["site_total"] if meta.get("site_total") is not None else "不明"
+        raise SiteChanged(f"Yahoo!の口コミを読めませんでした（表示上は{total}件）")
     if (meta.get("site_total") or 0) > len(rows):
         log(f"  [NOTE] Yahoo!はページに載る先頭分のみ取得（{len(rows)}/{meta['site_total']}件）")
     meta.update({"site": NAME, "product_id": ref, "url": url})
