@@ -267,8 +267,10 @@ class Builder:
             if not ov.get("by") or not ov.get("reason"):
                 raise Stop(f"[致命的] fv_copy.json {key} の自由記述には by（氏名）と reason が要ります")
             nums = set(re.findall(r"\d+(?:\.\d+)?", t))
-            if nums - (numbers or set()):
-                raise Stop(f"[致命的] fv_copy.json {key} の数字 {sorted(nums - (numbers or set()))} が機械の値と合いません")
+            # 使ってよい数字＝機械が出した値（テンプレ候補に出てくる数字）。それ以外の数字は書かせない
+            allowed = set(numbers or set()) | {n for c in cands for n in re.findall(r"\d+(?:\.\d+)?", c)}
+            if nums - allowed:
+                raise Stop(f"[致命的] fv_copy.json {key} の数字 {sorted(nums - allowed)} が機械の値と合いません")
             self.manual.append({"key": key, "text": t, "by": ov["by"], "reason": ov["reason"]})
             return t
         if not fits:

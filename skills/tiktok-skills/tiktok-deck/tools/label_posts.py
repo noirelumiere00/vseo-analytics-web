@@ -216,6 +216,11 @@ def validate(case_dir: str, cfg: dict, vocab: dict, doc: dict) -> tuple[list[str
     elif doc.get("vocab_sha") and doc.get("vocab_sha") != vocab.get("_sha"):
         errors.append("語彙ファイルがラベル付けの後に変わった。--check で差分を確認し、必要なら --init からやり直す")
     cur = raw_shas(case_dir, cfg)
+    had = set((doc.get("raw_sha") or {}).keys())
+    if had and had != set(cur):
+        # 競合を足した・外した等。軸が変わると窓と分母が変わるので、ラベルを作り直す
+        errors.append("case.json の検索軸がラベル付けの後に変わった"
+                      f"（増: {sorted(set(cur) - had) or 'なし'} / 減: {sorted(had - set(cur)) or 'なし'}）。--init をやり直す（判定済みは引き継ぐ）")
     for k, sha in (doc.get("raw_sha") or {}).items():
         if k in cur and cur[k] != sha:
             errors.append(f"取得JSONがラベル付けの後に変わった（{k}）。順位と窓が変わるので --init からやり直す")

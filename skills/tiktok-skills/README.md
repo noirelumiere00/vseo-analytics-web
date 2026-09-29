@@ -7,52 +7,53 @@
 ## 導入手順（各メンバーが自分の端末で1回だけ）
 ### 前提ソフト（先に入れる）
 - Claude Code（CLI / デスクトップ / IDE拡張のいずれか）
-- Node.js 20 以上／Google Chrome／Python 3.10〜3.12
+- Node.js 20 以上／Google Chrome／Python 3.10〜3.12（3.13 以上・3.9 以下は不可）
+- PDF が要る場合だけ LibreOffice（任意）
 
 ### かんたん導入（同梱スクリプト）
 1. ZIPを展開する
 2. 展開した `tiktok-skills` フォルダの中で、OSに合わせて実行:
    - macOS / Linux：`bash install.sh`
-   - Windows（PowerShell）：`./install.ps1`
-   （5スキルを ~/.claude/skills/ に配置し、npm/pip も自動実行します）
+   - Windows：`powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1`
+     （ZIP由来のスクリプトは既定の実行ポリシーで拒否されるため、この形で起動する）
+   - 5スキルを `~/.claude/skills/` に配置し、npm と Python の venv（`~/.claude/skills/.venv`）を作る
+   - 最後に手順ごとの結果（✅／❌）が出る。❌ があれば終了コード1で止まるので、表示に従って直す
 3. **Claude Code を再起動**する
 4. 「TikTokの初訪資料を作って」等と依頼すれば発動します
 
 ### 手動で入れる場合
 1. 5つのフォルダ（tiktok-intake / tiktok-acquire / tiktok-analyze / tiktok-deck / review-scraper）を
    `~/.claude/skills/`（Windowsは `%USERPROFILE%\.claude\skills\`）へコピー
-2. 依存を入れる:
+2. 依存を入れる（Python はシステムに直接入れず、venv を1つ作って全スキルで共有する）:
    ```bash
    cd ~/.claude/skills/tiktok-acquire/scripts && npm install
    cd ~/.claude/skills/tiktok-deck && npm install
-   cd ~/.claude/skills/tiktok-analyze/scripts && python3 -m pip install -r requirements.txt
+   python3.12 -m venv ~/.claude/skills/.venv          # 3.10〜3.12 のどれか
+   ~/.claude/skills/.venv/bin/python -m pip install -r ~/.claude/skills/tiktok-analyze/scripts/requirements.txt
    # review-scraper は追加インストール不要
    ```
 3. Claude Code を再起動
 
+Python のツールは `~/.claude/skills/.venv/bin/python`（Windows は `.venv\Scripts\python.exe`）で実行する。
+初訪の一覧シート（`label_posts.py --contact`）は Pillow を使う。
+
 ---
 
 ## 含まれるもの
-- `tiktok-intake` … 受付（依頼→必要情報の確定）
+- `tiktok-intake` … 受付（依頼→必要情報の確定。初訪は選択式の依頼フォーム）
 - `tiktok-acquire` … 取得（検索面データ・動画）
 - `tiktok-analyze` … 計測（登場率・勝ちパターン）
-- `tiktok-deck` … 資料化（PPTX生成）※章順を「現状+競合差→市場空白→クチコミ→方向性+実行案→締め」に整理済み
+- `tiktok-deck` … 資料化（PPTX生成）
 - `review-scraper` … クチコミ収集（楽天市場／Yahoo!ショッピング／@cosme）。標準ライブラリのみで動作（pip不要）
 
-## セットアップ（受け取った人がやること）
-1. このフォルダ内の4スキルを、各自の `~/.claude/skills/` 配下へ配置する
-   （例：`~/.claude/skills/tiktok-deck/` となるように置く）
-2. 依存をインストール（node_modules は容量削減のため同梱していません）
-   ```bash
-   # 取得スキル（Node.js 20+ と Google Chrome が必要）
-   cd ~/.claude/skills/tiktok-acquire/scripts && npm install
-   # 資料化スキル
-   cd ~/.claude/skills/tiktok-deck && npm install
-   # 計測スキル（Python 3.10〜3.12 の venv を1つ作って共有）
-   cd ~/.claude/skills/tiktok-analyze/scripts && python3 -m pip install -r requirements.txt
-   ```
-3. `review-scraper` は Python標準ライブラリのみで動作するため追加インストール不要
-4. PDF書き出しが必要な場合のみ LibreOffice を導入（任意）
+## 2026-09-29 改修：初訪資料を作り直した
+上長レビューで「文字が多い」「前提・フォロワー帯は要らない」「無関係な投稿が例に載っている」
+「ストーリーが無い」「作る人で質がぶれる」と差し戻された初訪を、専用の作り方に分けた。
+- 本編 最大8枚＋付録2枚。1枚＝実画像＋ワンフレーズ（現状 → 競合の発信 → 足りない発信 → 伸びている型 → まずこの3本 → 次回）
+- 軸はカテゴリで伸びている型（お土産）と競合のコミュニケーションの2本。自社ブランドの説明はしない
+- 投稿の判定は固定語彙からの選択式。画像を見て「関連」と確定した投稿だけを例に使う
+- 前日に作り、`review/初訪_レビュー.html` で［OK／差し替え］を選んでもらってから持っていく
+詳しくは `SKILL_GUIDE.md` の③と `tiktok-deck/SKILL.md` の「初訪」。
 
 ## 使い方の入口
 - Claude Code で「TikTokの初訪資料を作って」等と依頼すると `tiktok-intake` が起動します
