@@ -219,7 +219,7 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
     <div class="ghead">
       <span class="who you">あなたしか知らない</span>
       <h2>案件のこと</h2>
-      <p class="note">ここはAIが調べても分かりません。2つだけ埋めてください。</p>
+      <p class="note">ここはAIが調べても分かりません。対象ブランドと作る資料の2つは埋めてください。</p>
     </div>
     <div class="gbody">
       <div class="field">
@@ -245,6 +245,13 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
         <div class="frow"><label class="fl" for="purpose">目的・状況</label>
           <span class="hint">話し言葉でOK。ここから作る資料を判断します</span></div>
         <input type="text" id="purpose" data-k="目的" placeholder="来週初回訪問。まだ何も提案していない">
+      </div>
+      <!-- 競合は「空欄ならAIが調べる」に置かない。競合の選定は営業の仕事で、AIが黙って決めると
+           担当者ごとに資料の比較相手がぶれる（2026-09 監査）。空欄は「未定」で書き出す -->
+      <div class="field not-fv">
+        <div class="frow"><label class="fl" for="comp">競合<span class="opt">任意</span></label>
+          <span class="hint">2〜3社。空欄なら「未定」のまま進めます（AIが勝手に決めません。競合差再提案では必須）</span></div>
+        <input type="text" id="comp" data-k="競合" placeholder="LIXIL、Panasonic">
       </div>
       <div class="field">
         <div class="frow"><span class="fl">作る資料</span>
@@ -376,11 +383,6 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
         <input type="text" id="kw" data-k="一般検索キーワード" placeholder="トイレリフォーム、洗面台 交換">
       </div>
       <div class="field not-fv">
-        <div class="frow"><label class="fl" for="comp">競合</label>
-          <span class="hint">2〜3社。露出シェアと競合比較の章に使います</span></div>
-        <input type="text" id="comp" data-k="競合" placeholder="LIXIL、Panasonic">
-      </div>
-      <div class="field not-fv">
         <div class="frow"><label class="fl" for="tt">公式TikTokアカウントURL</label>
           <span class="hint">0本なら「公式が出ていない」という強い訴求材料になります</span></div>
         <input type="text" id="tt" data-k="公式TikTokアカウントURL" placeholder="@toto_official">
@@ -455,7 +457,7 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
   </section>
 
   <footer>
-    <div>空欄は「AIに任せる」と同じ意味です。埋めなくても着手できます。</div>
+    <div>空欄は「AIに任せる」と同じ意味です（競合だけは「未定」。AIが勝手に決めません）。埋めなくても着手できます。</div>
     <div>入力内容はこの端末のブラウザにだけ残ります（次回開くと復元されます）。送信はコピー＆ペーストのみで、自動送信はしません。</div>
     <div>このページは外部のファイルを読みません（オフラインでも開けます）。</div>
   </footer>
@@ -742,8 +744,10 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
     document.getElementById("vdate-note").innerHTML = vd ? "生成の目安: <b>" + dayBefore(vd) + "</b>（前日）" : "";
   }
 
-  // 空欄 = AIに任せる。AIが調べられない欄（①）は空欄でも数に入れない
-  var DELEGABLE = ["kw","comp","tt","site"];
+  // 空欄 = AIに任せる。AIが調べられない欄（①）は空欄でも数に入れない。
+  // 競合は任せない（空欄は「未定」。intake_form.py は未定を未入力として扱い、AIの候補には回さない）
+  var DELEGABLE = ["kw","tt","site"];
+  var UNDECIDED = ["comp"];
 
   // 初訪の依頼票。1行1項目。資料に流れるのは選択肢と事実（社名・ID・日付）だけ
   function buildFv(lines, tally){
@@ -805,6 +809,7 @@ footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font
         }
         if (v) { lines.push(k + SEP + v); tally.you++; }
         else if (DELEGABLE.indexOf(id) >= 0) { lines.push(k + SEP + "AIに任せる"); tally.ai++; }
+        else if (UNDECIDED.indexOf(id) >= 0) { lines.push(k + SEP + "未定"); }
       });
     }
     lines.push("希望形式" + SEP + fmt());

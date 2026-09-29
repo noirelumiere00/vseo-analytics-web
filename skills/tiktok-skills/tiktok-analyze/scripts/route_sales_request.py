@@ -411,7 +411,9 @@ def extract_output_formats(text: str) -> list[str]:
         name for name, patterns in OUTPUT_FORMAT_PATTERNS.items()
         if any(re.search(pattern, text) for pattern in patterns)
     ]
-    return formats or ["pptx", "pdf"]
+    # 指定が無ければ PPTX だけ。generate.js は PDF を出さない（変換できる環境でだけ後から作る）。
+    # 既定を PPTX＋PDF にしていたため、返信テンプレが PDF の納品を約束していた（2026-09 監査）
+    return formats or ["pptx"]
 
 
 def extract_constraints(text: str) -> dict[str, list[str] | str | None]:
@@ -476,7 +478,9 @@ STATUS_NAME_PATTERNS = (
     (2, r"具体提案"),
     (3, r"構成提案"),
     (4, r"実施後レポート|投稿後レポート|効果検証レポート|レポート(?:を|の|に|が)"),
-    (5, r"競合差再提案|再提案|再アプローチ"),
+    # 「競合差の再提案」は型の名前。ここで1語として拾わないと、「競合差」「再提案」が章の明示
+    # （competitive_gap / reproposal_plan）と読まれ、競合・再提案の背景が必須入力から落ちていた
+    (5, r"競合差再提案|競合差(?:の|による)?再提案|再提案|再アプローチ"),
 )
 
 
@@ -622,7 +626,13 @@ def chapter_order(status_ids: Sequence[int], text: str) -> list[int]:
     return [status_id for status_id in narrative_order if status_id in status_ids]
 
 
-def find_explicit_modules(text: str) -> list[str]:
+def find_explicit_modules(text: str, ignore_spans: Sequence[tuple[int, int]] = ()) -> list[str]:
+    """Find explicitly requested modules.
+
+    ``ignore_spans`` are the spans of status names (for example 「競合差の再提案」).  A module
+    pattern that matches only inside a status name is that status being named, not a module
+    request, so it must not narrow the deck to that module.
+    """
     if not any(re.search(marker, text) for marker in DIRECT_MARKERS):
         return []
     found = []
@@ -630,6 +640,8 @@ def find_explicit_modules(text: str) -> list[str]:
         starts = []
         for pattern in patterns:
             for match in re.finditer(pattern, text):
+                if any(a <= match.start() and match.end() <= b for a, b in ignore_spans):
+                    continue
                 if not match_is_negated(text, match):
                     starts.append(match.start())
         if starts:
@@ -809,13 +821,13 @@ def make_reply(
         lines.append("重要：施策を始める前に、比較用の基準データを必ず取得してください。")
         lines.extend([
             "今すぐ取得・保存するもの：",
-            "・一般キーワードとブランド名の検索結果（01-acquire が自動で取得します）",
+            "・一般キーワードとブランド名の検索結果（tiktok-acquire が自動で取得します）",
             "・公式アカウントの投稿一覧と主要指標",
             # ログイン状態は記録しない。この一式は非ログインで取得するため、
             # 「ログインアカウント」を聞くとログインを促す誤解になる
             "・取得日時、地域、デフォルト表示順、取得件数（いずれも取得JSONに記録されます）",
             "・施策後も同じ検索語・同じ条件で取得すること",
-            "・収集方法：`01-acquire` の search.mjs を同じ引数で再実行してください",
+            "・収集方法：`tiktok-acquire` の search.mjs を同じ引数で再実行してください",
             "",
             "取得後は「施策前の基準データとして保存」と入力してください。"
             "施策後データが揃うまで、効果比較資料は作成しません。",
@@ -860,7 +872,8 @@ def route_request(request: str, available_inputs: Iterable[str] = ()) -> dict:
 
     explicit_status_ids, explicit_status_reason = find_explicit_statuses(text)
     explicit_status_id = explicit_status_ids[0] if explicit_status_ids else None
-    detected_modules = find_explicit_modules(text)
+    status_name_spans = [(start, end) for start, end, _ in _named_status_candidates(text)]
+    detected_modules = find_explicit_modules(text, status_name_spans)
     constraints = extract_constraints(text)
     concrete_scope_marker = bool(re.search(
         r"だけ|のみ|に絞|ページ|スライド|各\s*[0-9]+|"
@@ -1066,6 +1079,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     args = parser.parse_args(argv)
+    # 標準入出力を UTF-8 に固定する。日本語 Windows のパイプでは cp932 になり、依頼文の絵文字を
+    # 書き出す時点で UnicodeEncodeError になっていた（intake_form.py から呼ぶと黙って簡易判定に落ちた）
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
     request = args.request if args.request is not None else sys.stdin.read()
     available = [item.strip() for item in args.available_inputs.split(",") if item.strip()]
     try:

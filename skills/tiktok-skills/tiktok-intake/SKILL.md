@@ -1,6 +1,6 @@
 ---
 name: tiktok-intake
-description: TikTok分析の入口。営業からの相談を受け、必要情報の確定→取得→分析→資料(PPTX/PDF)出力までを繋ぐ受付モジュール。次のいずれかで発動する。(1)「初訪資料を作って」「初回訪問の資料作れる？」「具体提案の資料」「構成提案」「効果検証のレポート」「競合差の再提案」など作りたい資料を名指しした依頼。(2)「対象ブランド：」「一般検索キーワード：」「作りたい資料／章：」「業種：」「カテゴリ名：」「競合1：」「希望形式：」を含む依頼票が貼られたとき。(3)「◯◯社に提案したい」「◯◯に初回訪問で行くけど資料作れる？」のようにキーワードも競合も決まっていない段階の相談。検索キーワードが分からなくても着手できる（AIが公式サイトから候補を出す）。初訪は選択式（業種3択・カテゴリ名・競合1〜4社・公式TikTok）で、競合はクライアント未確認なら「想定」のまま進める。取得は tiktok-acquire、計測は tiktok-analyze、資料化は tiktok-deck が担当。
+description: TikTok分析の入口。営業からの相談を受け、必要情報の確定→取得→分析→資料(PPTX。PDFは変換できる環境のみ)出力までを繋ぐ受付モジュール。次のいずれかで発動する。(1)「初訪資料を作って」「初回訪問の資料作れる？」「具体提案の資料」「構成提案」「効果検証のレポート」「競合差の再提案」など作りたい資料を名指しした依頼。(2)「対象ブランド：」「一般検索キーワード：」「作りたい資料／章：」「業種：」「カテゴリ名：」「競合1：」「希望形式：」を含む依頼票が貼られたとき。(3)「◯◯社に提案したい」「◯◯に初回訪問で行くけど資料作れる？」のようにキーワードも競合も決まっていない段階の相談。検索キーワードが分からなくても着手できる（AIが公式サイトから候補を出す）。初訪は選択式（業種3択・カテゴリ名・競合1〜4社・公式TikTok）で、競合はクライアント未確認なら「想定」のまま進める。取得は tiktok-acquire、計測は tiktok-analyze、資料化は tiktok-deck が担当。
 ---
 
 
@@ -61,7 +61,7 @@ description: TikTok分析の入口。営業からの相談を受け、必要情�
 ## ターン0：依頼票（営業の手間を0に近づける経路）
 
 営業が最初からこれを貼れるなら、会話はほぼ不要になる。
-**空欄があってよい。空欄はAIが調べる。**
+**空欄があってよい。空欄はAIが調べる**（競合だけは調べて決めない。未定のまま1回だけ聞く）。
 
 ```
 対象ブランド：
@@ -70,9 +70,14 @@ description: TikTok分析の入口。営業からの相談を受け、必要情�
 公式TikTokアカウントURL：（無ければ「無し」）
 一般検索キーワード：
 作りたい資料／章：
-希望形式：PPTX＋PDF
+希望形式：PPTX
 指示：この内容で資料を作成してください
 ```
+
+`希望形式` の既定は PPTX だけ（PDF は変換できる環境でだけ後から作る）。
+`作りたい資料／章` は**型の名前（初訪／具体提案／構成提案／レポート／競合差再提案。①〜⑤ の番号も可。
+複数なら「、」で）だけ**を読む。`4-4` のような章の番号は型ではないので、
+型は依頼文から推定して確認する（章の番号を書かれたら、その旨を警告に出す）。
 
 初訪は選択式の依頼票になる（`python3 scripts/intake_form.py --template 初訪`）。
 
@@ -104,12 +109,22 @@ description: TikTok分析の入口。営業からの相談を受け、必要情�
 注力商品・訪問日の選択欄に切り替わる。
 
 受け取ったらそのまま渡す。**自分で解釈し直さない。**
+貼られた依頼票は、まず **Write ツールで `<run-dir>/request.txt` にそのまま保存**してから `--file` で渡す。
+`--text "<貼った文>"` でシェルに埋め込まない（依頼票の `"`・`$`・バッククォートでクォートが壊れ、
+`予算は$5000以内` が `予算は000以内` に化ける。コマンドが実行される恐れもある）。
 
 ```bash
-python3 scripts/intake_form.py --text "<貼られた依頼票そのまま>" --run-dir <run-dir>
+python3 scripts/intake_form.py --file <run-dir>/request.txt --run-dir <run-dir>
 # 初訪は case.json の下書きも同時に作る（既存の case.json は上書きせず case.draft.json に書く）
-python3 scripts/intake_form.py --text "<貼られた依頼票そのまま>" --case-json <案件ディレクトリ>
+python3 scripts/intake_form.py --file <run-dir>/request.txt --case-json <案件ディレクトリ>
+# Write ツールが使えないときは、クォート付きのヒアドキュメントで標準入力から渡す（中身は展開されない）
+python3 scripts/intake_form.py --file - --run-dir <run-dir> <<'EOF_REQUEST'
+<貼られた依頼票そのまま>
+EOF_REQUEST
 ```
+
+`作りたい資料／章` に型が複数書かれていれば（`初訪、競合差再提案`）、`statuses` に全部入り、
+`generate_modes` に generate.js の `--mode` に渡す値が資料1本につき1つ出る（初訪は必ず単独）。
 
 `--case-json` が書くのは選択肢と事実だけ: `client.short`・`category`・`vocab`・
 `brands[]`（`short`・`query`＝既定「{社名} {カテゴリ}」・`file`・`official`・`official_status`・
@@ -132,6 +147,17 @@ python3 scripts/intake_form.py --text "<貼られた依頼票そのまま>" --ca
 初訪で ⛔ になるのは **業種（3択）** と **競合（0社のとき）** の2つだけ。
 カテゴリ名と公式TikTokは 🤖（公式サイト・Web検索で候補を出す）。
 
+初訪以外で ⛔ になるもの（空欄なら）:
+
+| 型 | ⛔ 聞くしかない |
+|---|---|
+| 構成提案 | 目的とCTA／尺・本数・必須／禁止表現（status-output-spec の必須入力。推測で埋めると別の資料になる） |
+| レポート | 施策開始日／対象期間／施策前スナップショット（「ない」は答え。聞き返さない） |
+| 競合差再提案 | 競合（1社以上）／再提案の背景 |
+
+**競合はどの型でも 🤖 にしない**（AIが黙って決めない）。依頼票に「競合：任せる」と
+書かれたときだけ、候補を出して「想定」として確認に載せる（`competitors_delegated: true`）。
+
 ### `公式TikTokアカウントURL：無し` は「不明」ではない
 
 **「無し」は確定した事実**として扱う。探し直さない。
@@ -148,7 +174,10 @@ python3 scripts/intake_form.py --text "<貼られた依頼票そのまま>" --ca
 `tiktok-analyze/scripts/route_sales_request.py` に推定エンジンがある。**必ずこれを使う。**
 
 ```bash
-python3 ../tiktok-analyze/scripts/route_sales_request.py --request "<営業の一文>"
+# 一文も依頼票と同じく、シェルに埋め込まず標準入力で渡す（--request を省くと標準入力を読む）
+python3 ../tiktok-analyze/scripts/route_sales_request.py <<'EOF_REQUEST'
+<営業の一文>
+EOF_REQUEST
 ```
 
 | `needs_clarification` | 対応 |
@@ -173,7 +202,10 @@ python3 ../tiktok-analyze/scripts/route_sales_request.py --request "<営業の�
 2. 候補3〜5個を作る（例: TOTO → トイレリフォーム／洗面台 交換／お風呂 リフォーム）
 3. ブランド名（A）と一般名詞（B）を1つずつ持つ。**Bが提案材料になる**
 4. 迷ったら**候補で取得して件数を見せる**。0件なら検索されていない語だと確定する
-   （`search.mjs` は `TIKTOK_TRULY_EMPTY` と `TIKTOK_BOT_WALL` を切り分けるので0件の意味が確定できる）
+   （`search.mjs` は `TIKTOK_TRULY_EMPTY` と `TIKTOK_BOT_WALL` を切り分けるので0件の意味が確定できる）。
+   **0件の語は `build_dataset.py --source` にも `case.json` の keywords／brands にも入れない**
+   （0件のファイルが1つでもあると、データ化・INPUT.md 作成・初訪の組み立てが止まる）。
+   ターン3の発見として「◯◯は検索されていない語でした」と伝え、別の候補に替える
 
 **初訪ではカテゴリ名を1つだけ決める。** それが主キーワード（`keywords[].primary`）になり、
 競合も「{社名} {カテゴリ}」で検索する。カテゴリ名を2つ以上にしない（軸がぼける）。
@@ -252,11 +284,22 @@ AIが推測すると担当者ごとに資料がぶれるので、**3択で選ん
     まだ施策を始めていないなら、今日のうちに記録だけ取っておくべきです
 ```
 
-取得できたら必ず `build_dataset.py` に渡す。**渡さないと 5-4 は永久に出ない。**
+取得できたら `build_dataset.py` に渡して記録する（`confirmed_config.json` に残る）。
 
 ```bash
 --campaign-start 2026-08-01 --period "2026-08-01..2026-08-31" --baseline <施策前のrun-dir>
 ```
+
+**レポート資料は、いまのツールでは最後まで自動では通らない前提で扱う。** 正直に伝えること。
+
+- 章 5-4（定点観測）は対象外（`modules.json` の excluded）。施策前データを渡しても章は増えない
+- `node src/generate.js --mode レポート` は、施策前後を比べられる状態でないと止まる
+  （施策前の基準が INPUT.md に無い、または前後比較のページが未実装。偽の効果測定を作らないため）。
+  レポートを約束する前に、実際に `--mode レポート` で止まらないかを確かめる
+- 止まったら、営業に「施策前後の比較資料はまだ自動で作れない」と伝え、
+  現状値だけの資料（例: `--mode 具体提案`）にするかを確認する。**施策前後の比較・効果測定とは書かない**
+- 施策前データが「ない」と答えられたら、それは確定した事実（聞き返さない）。前後比較は作れない
+- それでも3点は必ず聞き、施策前スナップショットは今日取る（あとから遡れない。比較は後で手作業でもできる）
 
 ---
 
@@ -279,11 +322,21 @@ python3 scripts/gaps.py --run-dir <run-dir> --status 具体提案        # 初�
 初訪以外の出力は**そのまま営業に渡せる3部構成**。
 
 1. **データを見て気づいた点** — 提案の切り口。**これを先に出す**
-2. **いま出せる章** — 実数つき。足りなくても資料は成立すると伝える
-3. **足りないもの／次の一手** — なぜ必要か・何を聞けば埋まるか・こちらで補えるか
+2. **いま数えられる章** — 実数つき。足りなくても分析は進められると伝える
+3. **足りないもの／次の一手** — なぜ必要か・**営業に聞く**（営業しか知らない事実だけ）・
+   **こちらで実行**（計測やコマ抽出など。営業に「実行してよいですか」とは聞かない）・この入力を使う章
+
+**章ID（1-1〜6-3）は `build_deck.py`／`modules.json` の分析の番号で、generate.js が作るPPTXのページ
+（Q1〜Q8 等）とは対応していない。** 「1-1 が出せます」を「資料に1-1のページが載る」と言い換えない。
+資料のページ構成は `generate.js --mode <型>` が決める。
+
+`--status` は generate.js と同じ別名も受ける（quick=初訪、deep/full/提案=具体提案、構成=構成提案、
+競合差/再提案=競合差再提案、report/効果測定=レポート）。知らない名前や `build_deck.py` が止まったときは
+**[STOP] で止まる**（前回の結果を出し直さない）。`--run-dir` に `intake.json` があれば、
+「公式TikTok：無し」「施策前データ：ない」を確定事実として扱い、聞き返さない。
 
 **発見を先に出す。** 不足だけ言われると営業は止まるが、
-「写真投稿が62.8%」「PR投稿は再生2.4倍なのに保存率0.84倍」のような事実が来ると会話が前に進む。
+「写真投稿が62.8%」「広告（#PR表記か広告フラグ）は再生2.4倍なのに保存率0.84倍」のような事実が来ると会話が前に進む。
 
 ### 初訪の資料化（訪問の前日に生成する）
 
@@ -320,16 +373,29 @@ python3 scripts/gaps.py --run-dir <run-dir> --status 具体提案        # 初�
 
 ### 初訪以外の資料化と PDF
 
+コマンドは `../tiktok-deck` で実行する。**3つとも同じ `--case` を渡す**（`generate.js` は `--case` が無いと
+スキルのフォルダ自身を案件とみなし「INPUT.md がありません」で止まる）。
+
 ```bash
 cd ../tiktok-deck && npm install            # 初回だけ
-python3 tools/build_input_md.py --case <案件ディレクトリ>
+# 計測（tiktok-analyze の measure_keywords.py）をした案件は --analyze-run <run-dir> を必ず渡す。
+# 渡さないと、run-dir が案件フォルダの外にある場合は「計測していない」扱いになり、計測結果が資料から消える。
+# 計測していない案件では付けない（measurement/measure_output.json が無いと [致命的] で止まる）
+python3 tools/build_input_md.py --case <案件ディレクトリ> --analyze-run <run-dir>
 python3 tools/merge_authored.py --case <案件ディレクトリ>
 node src/generate.js --case <案件ディレクトリ> --mode <ステータス名>
 ```
 
-`希望形式` に PDF が含まれていたら `--pdf` を付ける。
-LibreOffice が無い環境では変換できないので、**その旨と PowerPoint からの書き出し手順を伝える**
-（`pdf_ok: false` と `pdf_error` が返る。成功したフリをしない）。
+**generate.js は PPTX だけを出す（`--pdf` オプションは無い。付けても PDF はできない）。**
+`希望形式` に PDF が含まれていたら、PPTX のあとで変換を試し、**PDF ができたかを必ず確かめる**。
+
+```bash
+soffice --headless --convert-to pdf --outdir <案件>/output <案件>/output/<資料>.pptx
+ls <案件>/output/<資料>.pdf     # 無ければ失敗
+```
+
+LibreOffice（`soffice`）が無い・変換に失敗した環境では、**その旨と PowerPoint の
+「ファイル→エクスポート→PDF」の手順を伝える**。成功したフリをしない。
 
 ---
 
@@ -339,9 +405,9 @@ LibreOffice が無い環境では変換できないので、**その旨と Power
 |---|---|
 | 検索キーワード・競合 | `tiktok-acquire` → `search.mjs --query`（初訪は `case.json` の `keywords[].query`／`brands[].query` を `--out <案件>/<file>` で） |
 | 初訪の入力（業種・カテゴリ・競合・公式・注力商品・訪問日） | `intake_form.py --case-json` → 案件の `case.json` → `tiktok-deck` の初訪パイプライン |
-| 型（初訪等） | `tiktok-deck` → `node src/generate.js --case <案件> --mode <ステータス名>`（`status_name` をそのまま渡せる。**初訪は単独**。複数は初訪以外で `--mode "具体提案,構成提案"`） |
-| ブランド・商品・公式URL | `tiktok-analyze` → `build_dataset.py --brand --product --official-*` |
-| 施策開始日・期間・施策前データ | `tiktok-analyze` → `build_dataset.py --campaign-start --period --baseline` |
+| 型（初訪等） | `tiktok-deck` → `node src/generate.js --case <案件> --mode <ステータス名>`（intake の `generate_modes` を1つずつそのまま渡せる。**初訪は単独**。複数は初訪以外で `--mode "具体提案,構成提案"`） |
+| ブランド・商品・公式URL | `tiktok-analyze` → `build_dataset.py --brand --product --official-*`（「公式：無し」を渡す引数は無い。`intake.json` を run-dir に置けば gaps.py が聞き返さない） |
+| 施策開始日・期間・施策前データ | `tiktok-analyze` → `build_dataset.py --campaign-start --period --baseline`（記録されるだけ。レポート資料の生成条件は上の「④レポート」を参照） |
 
 **注意**: `route_sales_request.py` の `requested_modules` は `modules.json` の `1-1`〜`6-3` と
 対応表が無い。**使えるのは `status_name` だけ。** `--modules` にそのまま渡さないこと。
@@ -371,13 +437,15 @@ LibreOffice が無い環境では変換できないので、**その旨と Power
 | ④レポートで施策前データの確認を飛ばす | 遡れない。最も取り返しがつかない |
 | 検索面の投稿者を競合として扱う | 実測で個人クリエイターだった。競合ブランドではない |
 | PDF変換の失敗を黙って飲む | 営業は PDF が出たと思って商談に行く |
+| 貼られた依頼票を `--text "…"` でシェルに埋め込む | `$`・`"` で中身が化ける／コマンドが実行される。ファイルに保存して `--file` |
+| 0件の語を case.json や `--source` に入れる | 取得・組み立てが止まる。「検索されていない語」という発見として伝える |
 | 不足だけ報告して終わる | 「いま出せること」と「発見」を必ず添える |
 
 ## 参照
 
 `scripts/intake_form.py`（依頼票の解釈・型推定・3分類・case.json 下書き・`--selftest`）／
-`scripts/gaps.py`（不足→次の一手。初訪は build_first_visit.py の dry-run で判定）／
-`scripts/suggestions.json`（文言。編集可。初訪のページ名とチェックリストは `first_visit`）／
+`scripts/gaps.py`（不足→次の一手。初訪は build_first_visit.py の dry-run で判定。`--selftest` で文言の抜けを検査）／
+`scripts/suggestions.json`（文言。編集可。キーは modules.json の入力ID。初訪のページ名とチェックリストは `first_visit`）／
 `form/intake-form.html`（1画面入力フォーム。初訪は選択式）／
 `../tiktok-analyze/scripts/route_sales_request.py`（型推定エンジン）／
 `../tiktok-deck/tools/`（`fetch_covers.py`・`label_posts.py`・`build_first_visit.py`・`preflight.py`・

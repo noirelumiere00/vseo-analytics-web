@@ -19,6 +19,7 @@
     python3 gaps.py --status 初訪 --run-dir <run-dir>          # intake.json から入力の揃い具合だけ見る
     python3 gaps.py --run-dir <run-dir> --status 具体提案
     python3 gaps.py --run-dir <run-dir> --status 具体提案 --json
+    python3 gaps.py --selftest        # suggestions.json に文言の無い不足入力が無いかを確かめる
 """
 import argparse
 import json
@@ -50,6 +51,44 @@ PY_CANDIDATES = [
     Path(sys.executable),
 ]
 PRESETS = ("food", "beauty", "general")
+# generate.js の MODES.alias と同じ別名を正式名に寄せる。build_deck.py は別名を知らないので、
+# 「--status report」のまま渡すと止まるのに、前回の spec が残っていると別の型の章一覧を出していた（2026-09 監査）
+STATUS_NAMES = ("初訪", "具体提案", "構成提案", "レポート", "競合差再提案")
+STATUS_ALIAS = {
+    "quick": "初訪", "初回": "初訪", "初回訪問": "初訪",
+    "deep": "具体提案", "full": "具体提案", "提案": "具体提案",
+    "構成": "構成提案",
+    "競合差": "競合差再提案", "再提案": "競合差再提案",
+    "report": "レポート", "効果測定": "レポート",
+}
+STATUS_ALIAS.update({str(i): n for i, n in enumerate(STATUS_NAMES, 1)})
+# 子プロセス（build_deck.py / build_first_visit.py）の標準入出力を UTF-8 に固定する。
+# 日本語 Windows では既定が cp932 で、⛔✅ を含む出力が化けるか UnicodeEncodeError で落ちる
+CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
+def utf8_stdio():
+    """標準出力・標準エラーを UTF-8 にする（日本語 Windows のパイプで ✅⛔⚠️ が書けずに落ちていた）"""
+    for st in (sys.stdout, sys.stderr):
+        if hasattr(st, "reconfigure"):
+            try:
+                st.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
+def canon_statuses(arg):
+    """--status の値 → 正式名のリスト。知らない名前は推測せずに止める"""
+    out = []
+    for raw in [x.strip() for x in re.split(r"[,、，＋+]", arg or "") if x.strip()]:
+        name = raw if raw in STATUS_NAMES else STATUS_ALIAS.get(raw.lower(), STATUS_ALIAS.get(raw))
+        if not name:
+            fail(f"未知の営業ステータス: {raw}（使えるのは {' / '.join(STATUS_NAMES)}。"
+                 "別名: quick=初訪, deep/full/提案=具体提案, 構成=構成提案, 競合差/再提案=競合差再提案, "
+                 "report/効果測定=レポート）")
+        if name not in out:
+            out.append(name)
+    return out
 
 
 def fail(msg):
@@ -95,14 +134,22 @@ def build_spec(run_dir: Path, status, modules):
         fail("build_deck.py が見つかりません。TIKTOK_DECK_SCRIPTS で場所を指定してください")
     py = first_existing(PY_CANDIDATES) or Path(sys.executable)
     out = run_dir / "_intake_spec.json"
+    # 前回の spec を先に消す。「ファイルがあるか」だけで成功扱いにしていたため、
+    # build_deck.py が止まっても前回の（別の型の）章一覧をそのまま出して exit 0 で終わっていた（2026-09 監査）
+    try:
+        out.unlink()
+    except FileNotFoundError:
+        pass
     cmd = [str(py), str(deck), "--run-dir", str(run_dir), "--out", str(out)]
     if status:
         cmd += ["--status", status]
     if modules:
         cmd += ["--modules", modules]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if not out.exists():
-        fail(f"build_deck.py が spec を出せませんでした\n{proc.stderr[-500:]}")
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          env=CHILD_ENV)
+    if proc.returncode != 0 or not out.exists():
+        tail = (proc.stderr or proc.stdout or "").strip()[-500:]
+        fail(f"build_deck.py が止まりました（終了コード {proc.returncode}）。章の判定は出せません\n{tail}")
     return json.loads(out.read_text(encoding="utf-8"))
 
 
@@ -130,32 +177,82 @@ def _median(xs):
     return xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
 
 
-def compute_findings(recs, axes_count, rules, status=None):
+def is_ad(r):
+    """広告として数えるか。build_deck.py の is_ad と同じ定義（#PR 表記 または TikTok の広告フラグ）。
+
+    以前は #PR 表記だけで割っていたため、同じデータで 4-4 は「広告は再生11.0倍」、
+    ここは「PR投稿は再生2.0倍」と食い違い、同じ出力の「どちらも広告として数えています」とも矛盾していた（2026-09 監査）。
+    """
+    if r.get("pr_status_prelim") == "pr":
+        return True
+    v = r.get("is_ad_platform_flag")
+    return v is True or str(v).strip().lower() == "true"
+
+
+def axis_count(recs):
+    """検索軸の数（build_deck の _by_axis と同じくラベル単位）。role の種類数ではない。
+
+    role で数えると、市場KWを2本取った run が「1軸」、自社＋市場KWが「2軸」になり、
+    1-1 が出ないのに single_axis の注意も出なかった（2026-09 監査）。
+    """
+    keys = set()
+    for r in recs:
+        for a in (r.get("source_appearances") or [{"label": r.get("label"), "source_file": r.get("source_file")}]):
+            keys.add(a.get("label") or a.get("source_file") or "(不明)")
+    return len(keys)
+
+
+def reference_time(run_dir):
+    """「直近7日」の基準時刻。gaps.py を実行した日ではなく、データを作った日（build_dataset の built_at）。
+
+    実行日を基準にすると、同じ検索面でも日が経つほど「直近7日」が減って判定が変わっていた（2026-09 監査）。
+    分からなければ None（鮮度の発見は出さない。推測で基準日を作らない）。
+    """
+    from datetime import datetime
+    cfg = load_json(run_dir / "confirmed_config.json") if run_dir else None
+    ts = ((cfg or {}).get("dataset_provenance") or {}).get("built_at")
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return None
+
+
+def compute_findings(recs, axes_count, rules, status=None, ref=None):
     """データから「提案の切り口になる発見」を拾う。ルールは suggestions.json 側。"""
     total = len(recs)
     if not total:
         return []
     from datetime import datetime, timezone, timedelta
     JST = timezone(timedelta(hours=9))
-    now = datetime.now(JST)
 
     photo = sum(1 for r in recs if r.get("media_type") == "photo")
-    small = sum(1 for r in recs if 0 < (r.get("follower_count") or 0) < 10000)
-    recent = 0
-    for r in recs:
-        pa = r.get("posted_at")
-        if not pa:
-            continue
-        try:
-            if (now - datetime.fromisoformat(pa)).days <= 7:
+    # フォロワー数は取れなかった投稿が 0 で入っている（build_dataset）。分母から外して件数も示す
+    known = [r for r in recs if (r.get("follower_count") or 0) > 0]
+    small = sum(1 for r in known if r["follower_count"] < 10000)
+    recent, dated = 0, 0
+    if ref is not None:
+        if ref.tzinfo is None:
+            ref = ref.replace(tzinfo=JST)
+        for r in recs:
+            pa = r.get("posted_at")
+            if not pa:
+                continue
+            try:
+                t = datetime.fromisoformat(pa)
+            except (ValueError, TypeError):
+                continue
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=JST)
+            dated += 1
+            if (ref - t).days <= 7:
                 recent += 1
-        except (ValueError, TypeError):
-            pass
 
-    pr = [r for r in recs if r.get("pr_status_prelim") == "pr"]
-    no = [r for r in recs if r.get("pr_status_prelim") != "pr"]
-    ad = [r for r in recs if r.get("is_ad_platform_flag")]
-    both = sum(1 for r in recs if r.get("pr_status_prelim") == "pr" and r.get("is_ad_platform_flag"))
+    # 広告は #PR 表記か広告フラグのどちらか（build_deck の 4-4 と同じ）。名前は既存ルール互換で pr_*
+    pr = [r for r in recs if is_ad(r)]
+    no = [r for r in recs if not is_ad(r)]
+    ad_only = sum(1 for r in recs if r.get("pr_status_prelim") != "pr" and is_ad(r))
 
     def sr(g):
         return _median([r["saves"] / r["views"] * 100 for r in g
@@ -167,13 +264,17 @@ def compute_findings(recs, axes_count, rules, status=None):
         "verified_pct": round(verified / total * 100, 1),
         "total": total, "photo": photo, "photo_ratio": photo / total,
         "photo_pct": round(photo / total * 100, 1),
-        "small": small, "small_follower_ratio": small / total,
-        "small_pct": round(small / total * 100, 1),
-        "recent7_ratio": recent / total, "recent_pct": round(recent / total * 100, 1),
+        "small": small, "follower_known": len(known),
+        "small_follower_ratio": (small / len(known)) if known else 0,
+        "small_pct": round(small / len(known) * 100, 1) if known else 0,
+        "recent7_ratio": (recent / dated) if dated else None,
+        "recent_pct": round(recent / dated * 100, 1) if dated else None,
+        "ref_date": ref.date().isoformat() if ref is not None else None,
         "pr_save_rate": sr(pr), "no_pr_save_rate": sr(no),
         "pr_views": _median([r.get("views") for r in pr]),
         "no_pr_views": _median([r.get("views") for r in no]),
-        "ad_only": len(ad) - both,
+        "ad_count": len(pr),
+        "ad_only": ad_only,
         "axes_count": axes_count,
     }
     ctx["views_ratio"] = round(ctx["pr_views"] / max(ctx["no_pr_views"], 1), 2)
@@ -201,7 +302,8 @@ def _dry_run(case_dir: Path, deck: Path):
     py = first_existing(PY_CANDIDATES) or Path(sys.executable)
     cmd = [str(py), str(tool), "--case", str(case_dir), "--dry-run", "--json"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=180,
+                              encoding="utf-8", errors="replace", env=CHILD_ENV)
     except (subprocess.SubprocessError, OSError) as e:
         return None, f"build_first_visit.py を実行できませんでした: {e}"
     out = (proc.stdout or "").strip()
@@ -230,10 +332,20 @@ def _files_state(case_dir, rel):
     if not p or not p.exists():
         return False, "未取得"
     d = load_json(p)
+    if d is None:
+        return False, "JSON を読めない（取り直す）"
     if isinstance(d, dict) and d.get("ok") is False:
+        if d.get("errorCode") == "TIKTOK_TRULY_EMPTY":
+            # 0件の語は case.json に入れたままだと取得・組み立てが止まる。「検索されていない語」という発見として返し、語を替える
+            return False, "0件（TIKTOK_TRULY_EMPTY＝検索されていない語）。この語は使わず別の語に替える"
         return False, f"取得失敗（{d.get('errorCode') or d.get('error')}）"
     vs = d.get("videos") if isinstance(d, dict) else d
     return True, len(vs or [])
+
+
+def _is_empty(state):
+    """_files_state の理由が「0件（検索されていない語）」か。取り直しても同じなので語を替える"""
+    return isinstance(state, str) and state.startswith("0件")
 
 
 def fv_checklist(case_dir, cfg, intake, fvs):
@@ -282,7 +394,8 @@ def fv_checklist(case_dir, cfg, intake, fvs):
         ok, n = _files_state(case_dir, primary.get("file"))
         add("category_search", "ok" if ok else "todo",
             f"「{primary.get('query') or primary.get('name')}」" + (f" {n}本" if ok else f" … {n}"),
-            query=primary.get("query") or primary.get("name"), file=primary.get("file"))
+            query=primary.get("query") or primary.get("name"), file=primary.get("file"),
+            empty=_is_empty(n))
     else:
         add("category_search", "todo", "keywords が空です")
     if comps:
@@ -292,7 +405,8 @@ def fv_checklist(case_dir, cfg, intake, fvs):
             conf = "確認済み" if b.get("confirmed_by_client") else "想定"
             parts.append(f"{b.get('short') or b['name']}（{conf}・{f'{n}本' if ok else n}）")
             if not ok:
-                missing.append({"query": b.get("query"), "file": b.get("file"), "name": b["name"]})
+                missing.append({"query": b.get("query"), "file": b.get("file"), "name": b["name"],
+                                "empty": _is_empty(n)})
         add("competitors", "ok" if not missing else "todo", "、".join(parts),
             to_acquire=missing, few=len(comps) < 2)
     else:
@@ -304,7 +418,7 @@ def fv_checklist(case_dir, cfg, intake, fvs):
     if own and own.get("file"):
         ok, n = _files_state(case_dir, own.get("file"))
         add("own_search", "ok" if ok else "todo", f"「{own.get('query') or own['name']}」" + (f" {n}本" if ok else f" … {n}"),
-            query=own.get("query"), file=own.get("file"))
+            query=own.get("query"), file=own.get("file"), empty=_is_empty(n))
     else:
         add("own_search", "opt", "しない（P5 は対象ブランドについて主張しない版）")
     fp = cfg.get("focus_products") or []
@@ -337,20 +451,23 @@ def fv_next_steps(case_dir, items, deck, dry):
     if asks:
         steps.append("ターン2の1回の確認で聞く: " + " ／ ".join(i.get("label", i["id"]) for i in asks)
                      + "（返事を待たずにカテゴリの取得から始める）")
-    acq = []
+    acq, empty = [], []
     for key in ("category_search", "own_search"):
         i = st.get(key)
         if i and i["state"] == "todo" and i.get("file"):
-            acq.append((i.get("query"), i.get("file")))
+            (empty if i.get("empty") else acq).append((i.get("query"), i.get("file")))
     for m in (st.get("competitors") or {}).get("to_acquire") or []:
         if m.get("file"):
-            acq.append((m.get("query"), m.get("file")))
+            (empty if m.get("empty") else acq).append((m.get("query"), m.get("file")))
+    for q, f in empty:
+        # 同じ語で取り直しても0件。0件のファイルを置いたままにすると組み立てが止まる
+        steps.append(f"「{q}」は0件（検索されていない語）。営業にそう伝え、case.json の語を替えて {f} を取り直す")
     for q, f in acq:
         steps.append(f'cd <tiktok-acquire>/scripts && node search.mjs --query "{q}" --max 50 --out {C}/{f}')
     if acq or (st.get("acquired_on") or {}).get("state") == "todo":
         steps.append("取得した日を case.json の acquired_on（YYYY-MM-DD）に入れる")
-    if "case_json" in st:
-        return steps
+    if "case_json" in st or empty:
+        return steps          # 語を替えるまで、ラベル以降の工程は進められない
     if (st.get("covers") or {}).get("state") == "todo":
         steps.append(f"python3 {D}/tools/fetch_covers.py --case {C}")
     if (st.get("labels") or {}).get("state") == "todo":
@@ -399,7 +516,8 @@ def first_visit_report(case_dir, run_dir, sug):
     axes = 0
     if cfg:
         axes = len(cfg.get("keywords") or []) + len(cfg.get("brands") or [])
-    findings = compute_findings(load_recs(run_dir), axes, sug.get("findings_rules", []), status="初訪")
+    findings = compute_findings(load_recs(run_dir), axes, sug.get("findings_rules", []), status="初訪",
+                                ref=reference_time(run_dir))
     return {
         "status": "初訪",
         "case_dir": str(case_dir) if case_dir else None,
@@ -470,14 +588,126 @@ def print_first_visit(r, fvs):
     print()
 
 
+def load_module_defs():
+    """tiktok-deck/tools/modules.json（入力ID⇔不足ラベル、章の needs）。読めなければ None"""
+    d = deck_dir()
+    return load_json(d / "tools" / "modules.json") if d else None
+
+
+NOT_COMPUTED_PREFIX = "今回取得したデータの範囲では"
+
+
+def gap_entries(spec, defs, by_input, intake):
+    """build_deck の blocked_detail → 入力ごとの「次の一手」。文言は入力IDで引く"""
+    labels = (defs or {}).get("input_labels") or {}
+    label_to_id = {v: k for k, v in labels.items()}
+    uses = {}
+    for m in (defs or {}).get("modules") or []:
+        if m.get("excluded"):
+            continue            # 対象外の章（5-4 等）を「埋まると増える」と約束しない
+        for k in m.get("needs") or []:
+            uses.setdefault(k, []).append(m["id"])
+    official_absent = bool((intake or {}).get("official_tiktok_absent"))
+    gaps = {}
+    for b in spec.get("blocked_detail", []):
+        for m in b["missing"]:
+            iid = label_to_id.get(m) or ("_not_computed" if m.startswith(NOT_COMPUTED_PREFIX) else None)
+            g = gaps.get(m)
+            if g is None:
+                g = {"id": iid, "blocks": [], **(by_input.get(iid) or by_input.get(m) or {})}
+                if iid and uses.get(iid):
+                    g["uses"] = uses[iid]
+                if iid == "official_tiktok_account" and official_absent:
+                    # 営業が「公式TikTok：無し」と書いた事実を聞き返さない（intake.json が唯一の記録）。
+                    # build_deck.py 側に「無し」を渡す口が無いので章は ⛔ のまま出る
+                    g = {"id": iid, "blocks": [], "confirmed_absent": True,
+                         "why": "公式TikTokは「無し」で確定（依頼票・intake.json）。探し直さない・聞き返さない",
+                         "auto": "資料では『公式0本（確定）』として扱ってよい。build_dataset.py / build_deck.py には"
+                                 "「無し」を渡す口が無いため、この章は入力不足の表示のまま残る"}
+                if not g.get("why") and not g.get("run") and not g.get("ask"):
+                    g["unmapped"] = True
+                gaps[m] = g
+            g["blocks"].append(f"{b['id']} {b['name']}")
+    return gaps
+
+
+def report_gaps(run_dir, intake, by_input):
+    """④レポートだけの確認。build_deck のレポートの章は施策前データを要求しないので、ここで見る。
+
+    手順どおり build_dataset.py に --baseline を渡しても gaps に何も出ず、施策開始日の抜けにも
+    気づけなかった（2026-09 監査）。確定していない社内情報は、聞くか、受け取った値を渡す一手にする。
+    """
+    cfg = load_json(run_dir / "confirmed_config.json") or {}
+    fields = (intake or {}).get("fields") or {}
+    out = {}
+    where = "レポート資料（generate.js --mode レポート）"
+    if not cfg.get("campaign_start") or not cfg.get("measurement_period"):
+        g = {"id": "campaign_period", "blocks": [where], **(by_input.get("campaign_period") or {})}
+        if fields.get("campaign_start") and fields.get("period"):
+            # 受け取った値を聞き返さない。渡し忘れを埋める一手だけにする
+            for k in ("ask", "example", "auto"):
+                g.pop(k, None)
+            g["run"] = (f"依頼票で受け取り済み（施策開始 {fields['campaign_start']}／対象期間 {fields['period']}）。"
+                        "YYYY-MM-DD にして build_dataset.py --campaign-start … --period … で渡す（年は推測しない）")
+        out["施策開始日・対象期間"] = g
+    if not cfg.get("baseline"):
+        if (intake or {}).get("baseline_absent"):
+            out["施策前スナップショット"] = {
+                "id": "baseline", "blocks": [where], "confirmed_absent": True,
+                "why": "施策前のデータは「無い」で確定（依頼票）。前後比較は作れない",
+                "warn": "現状値だけの資料にするかを確認する。施策前後の比較とは書かない"}
+        else:
+            g = {"id": "baseline", "blocks": [where], **(by_input.get("baseline") or {})}
+            if fields.get("baseline"):
+                g.pop("ask", None)
+                g["ask"] = (f"依頼票では「{fields['baseline']}」。施策前に取った検索結果（run-dir）の場所を教えてください")
+            out["施策前スナップショット"] = g
+    return out
+
+
+def selftest():
+    """suggestions.json と modules.json の食い違いを確かめる（入力IDに文言が無い／使われないキー）"""
+    sug = load_suggestions()
+    defs = load_module_defs()
+    if defs is None:
+        print("[STOP] tiktok-deck/tools/modules.json が見つかりません（TIKTOK_DECK_DIR で指定できます）",
+              file=sys.stderr)
+        return 2
+    by_input = sug.get("by_missing_input") or {}
+    excluded_only = {k for k in defs.get("input_labels", {})
+                     if all(m.get("excluded") for m in defs["modules"] if k in (m.get("needs") or []))}
+    ok = True
+    for k, label in defs.get("input_labels", {}).items():
+        e = by_input.get(k)
+        mark = "OK " if e and (e.get("why") and (e.get("ask") or e.get("run") or e.get("auto"))) else "NG "
+        if mark == "NG ":
+            ok = False
+        print(f"  {mark}{k}（{label}）" + ("  ※対象外の章だけが使う入力" if k in excluded_only else ""))
+    own = set(defs.get("input_labels", {})) | {"campaign_period", "_not_computed"}
+    for k in by_input:
+        if k not in own:
+            ok = False
+            print(f"  NG suggestions.json の {k} は build_deck が出さない入力です（表示されない）")
+    for k, e in by_input.items():
+        if "unlocks" in e:
+            ok = False
+            print(f"  NG {k}.unlocks は持たない（modules.json の needs から数える）")
+    print("\n" + ("✅ 自己検査 OK" if ok else "❌ 自己検査 NG"))
+    return 0 if ok else 1
+
+
 def main():
     ap = argparse.ArgumentParser(description="足りない入力を次の一手に翻訳する")
     ap.add_argument("--run-dir", help="計測の作業フォルダ（初訪以外は必須）")
     ap.add_argument("--case", help="案件ディレクトリ（case.json のある場所。初訪で使う）")
-    ap.add_argument("--status", help="営業ステータス（例: 初訪）")
+    ap.add_argument("--status", help="営業ステータス（例: 初訪。別名 quick/deep/report 等も可）")
     ap.add_argument("--modules", help="モジュールID（例: 1-1,3-2）")
     ap.add_argument("--json", action="store_true", help="JSON で出す")
+    ap.add_argument("--selftest", action="store_true", help="suggestions.json と modules.json の食い違いを確かめる")
     args = ap.parse_args()
+    utf8_stdio()
+    if args.selftest:
+        raise SystemExit(selftest())
     if not args.status and not args.modules:
         fail("--status か --modules を指定してください")
 
@@ -489,7 +719,7 @@ def main():
         fail(f"案件ディレクトリがありません: {case_dir}")
     sug = load_suggestions()
 
-    statuses = [s.strip() for s in re.split(r"[,、，]", args.status or "") if s.strip()]
+    statuses = canon_statuses(args.status) if args.status else []
     if "初訪" in statuses and not args.modules:
         # 初訪は単独の資料。旧 modules.json の 1-1〜1-6 には対応させない
         rest = [s for s in statuses if s != "初訪"]
@@ -507,16 +737,16 @@ def main():
 
     if not run_dir:
         fail("--run-dir を指定してください（初訪以外は計測の作業フォルダから判定します）")
-    spec = build_spec(run_dir, args.status, args.modules)
+    status_arg = ",".join(statuses) if statuses else None
+    spec = build_spec(run_dir, status_arg, args.modules)
     recs = load_recs(run_dir)
+    intake = load_json(run_dir / "intake.json") if (run_dir / "intake.json").exists() else None
     by_input = sug["by_missing_input"]
 
     # ① 足りないもの → アクション（同じ入力名でまとめる）
-    gaps = {}
-    for b in spec.get("blocked_detail", []):
-        for m in b["missing"]:
-            g = gaps.setdefault(m, {"blocks": [], **(by_input.get(m) or {})})
-            g["blocks"].append(f"{b['id']} {b['name']}")
+    gaps = gap_entries(spec, load_module_defs(), by_input, intake)
+    if "レポート" in statuses:
+        gaps.update(report_gaps(run_dir, intake, by_input))
 
     # ② いま出せる章（実数の要約つき）
     ready = []
@@ -536,17 +766,20 @@ def main():
                 break
         ready.append({"id": c["id"], "name": c["name"], "highlight": head})
 
-    axes = len(spec.get("dataset", {}).get("roles") or [])
-    findings = compute_findings(recs, axes, sug.get("findings_rules", []), status=args.status)
+    findings = compute_findings(recs, axis_count(recs), sug.get("findings_rules", []),
+                                status=statuses[0] if statuses else None, ref=reference_time(run_dir))
 
+    selection = status_arg or args.modules
     result = {
         "run_dir": str(run_dir),
         "keyword": spec.get("keyword"),
-        "selection": args.status or args.modules,
+        "selection": selection,
         "summary": spec.get("summary"),
         "gaps": gaps,
         "ready_chapters": ready,
         "findings": findings,
+        # 章ID は build_deck.py / modules.json の番号。generate.js の資料ページ（Q1〜Q8 等）とは対応していない
+        "chapter_note": CHAPTER_NOTE,
     }
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -554,8 +787,8 @@ def main():
 
     # ── 人が読む形（営業へそのまま出せる文面）──
     sm = spec.get("summary", {})
-    print(f"■ 「{args.status or args.modules}」の資料：全{sm.get('total')}章のうち "
-          f"{sm.get('ready')}章はいま作れます（{sm.get('blocked')}章が入力不足）\n")
+    print(f"■ 「{selection}」の分析（build_deck.py の章）：全{sm.get('total')}章のうち "
+          f"{sm.get('ready')}章はいま数えられます（{sm.get('blocked')}章が入力不足）\n")
 
     if findings:
         print("【データを見て気づいた点】")
@@ -564,7 +797,7 @@ def main():
         print()
 
     if ready:
-        print("【いま出せる章】")
+        print("【いま数えられる章】")
         for c in ready:
             hl = f"（{c['highlight']}）" if c["highlight"] else ""
             print(f"  ✅ {c['id']} {c['name']}{hl}")
@@ -573,7 +806,7 @@ def main():
     if gaps:
         print("【足りないもの／次の一手】")
         for name, g in gaps.items():
-            print(f"  ⛔ {name}")
+            print(f"  {'✅' if g.get('confirmed_absent') else '⛔'} {name}")
             print(f"     止まっている章: {', '.join(g['blocks'])}")
             if g.get("why"):
                 print(f"     なぜ必要か  : {g['why']}")
@@ -581,15 +814,27 @@ def main():
                 print(f"     営業に聞く   : {g['ask']}")
             if g.get("example"):
                 print(f"     {g['example']}")
+            if g.get("run"):
+                print(f"     こちらで実行 : {g['run']}")
             if g.get("auto"):
                 print(f"     こちらで補える: {g['auto']}")
             if g.get("warn"):
                 print(f"     ⚠️ {g['warn']}")
-            if g.get("unlocks"):
-                print(f"     埋まると増える章: {', '.join(g['unlocks'])}")
+            if g.get("uses"):
+                print(f"     この入力を使う章: {', '.join(g['uses'])}")
+            if g.get("unmapped"):
+                # 文言が無い不足を黙って空にしない（営業が止まる）
+                print("     （この不足の次の一手は suggestions.json に未登録。gaps.py --selftest で確認）")
             print()
     else:
         print("【足りないもの】なし。このまま資料化できます。\n")
+    print(f"※ {CHAPTER_NOTE}")
+
+
+# 章ID と資料ページの関係。gaps.py が章を「資料に載る」と約束しないための注記（2026-09 監査:
+# 初訪で 1-1 露出シェア・2-3 ハッシュタグが「出せる」と出ていたが、generate.js はその章を描かない）
+CHAPTER_NOTE = ("章ID（1-1〜6-3）は build_deck.py / modules.json の分析の番号です。generate.js が作るPPTXの"
+                "ページ（Q1〜Q8 等）とは対応していません。資料のページ構成は generate.js --mode <型> が決めます")
 
 
 if __name__ == "__main__":
