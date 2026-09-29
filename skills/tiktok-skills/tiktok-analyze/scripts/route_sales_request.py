@@ -18,16 +18,19 @@ from typing import Iterable, Sequence
 
 
 STATUS = {
+    # 初訪（2026-09 再設計）: 約8枚・画像＋ワンフレーズ。軸は (A) カテゴリで伸びている投稿
+    # (B) 競合のコミュニケーション の2本だけ。自社公式の露出やフォロワー帯を主役にした旧初訪は廃止。
+    # 初訪は単独の資料で、二次提案（具体提案など）とは別ファイルにする。
     1: {
         "name": "初訪",
-        "purpose": "現状を可視化して信頼を得る",
+        "purpose": "現状と競合の発信を見せ、伸びている型をお土産に二次提案へつなぐ",
         "modules": [
-            "search_exposure_share",
-            "account_search_visibility",
-            "brand_search_visibility",
-            "poster_type_breakdown",
-            "hashtag_composition",
-            "pr_disclosure_comparison",
+            "current_search_view",
+            "competitor_communication",
+            "competitor_paid_push",
+            "posting_gap",
+            "category_winning_types",
+            "first_three_ideas",
         ],
     },
     2: {
@@ -70,7 +73,22 @@ STATUS = {
     },
 }
 
+# 旧初訪のモジュール。初訪の標準章からは外したが、明示されたときの項目としては残す。
+# 判定の手掛かりとしては従来どおり初訪寄りに数える（明示依頼の分類を変えないため）。
+LEGACY_STATUS_MODULES = {
+    1: (
+        "search_exposure_share", "account_search_visibility", "brand_search_visibility",
+        "poster_type_breakdown", "hashtag_composition", "pr_disclosure_comparison",
+    ),
+}
+
 MODULE_LABEL = {
+    "current_search_view": "いま検索するとこう見える（カテゴリ検索の上位）",
+    "competitor_communication": "競合はこう発信している（切り口・訴求）",
+    "competitor_paid_push": "競合がお金をかけて広げている訴求（PR・公式）",
+    "posting_gap": "クライアントに足りていない発信（競合・市場との差）",
+    "category_winning_types": "カテゴリでいま伸びている型（お土産）",
+    "first_three_ideas": "まずこの3本（最初の投稿案）",
     "search_exposure_share": "一般キーワード検索での露出シェア",
     "account_search_visibility": "一般キーワード検索での顧客公式アカウント露出",
     "brand_search_visibility": "ブランド名検索での顧客公式アカウント露出",
@@ -94,6 +112,14 @@ MODULE_LABEL = {
 }
 
 MODULE_PATTERNS = {
+    "current_search_view": (
+        r"検索(?:する|した)と.{0,8}(?:どう|こう)(?:見え|出)", r"(?:いま|今)の検索(?:面|結果)",
+    ),
+    "competitor_communication": (r"競合.{0,6}発信",),
+    "competitor_paid_push": (r"お金をかけ(?:て|た)", r"競合.{0,8}(?:pr|広告).{0,8}訴求"),
+    "posting_gap": (r"足りていない発信", r"足りない発信"),
+    "category_winning_types": (r"伸びている型", r"伸びてる型", r"お土産"),
+    "first_three_ideas": (r"まず(?:この)?3本", r"最初の3本"),
     "search_exposure_share": (
         r"露出シェア", r"検索シェア", r"share\s*of\s*search", r"シェアオブサーチ",
     ),
@@ -168,6 +194,7 @@ STATUS_SCORE_PATTERNS = {
         (r"信頼(?:を得|獲得)", 4),
         (r"現状把握|現在地|まず.{0,8}把握", 3),
         (r"一般キーワード|検索露出|露出シェア|ブランド名検索|指名検索", 2),
+        (r"お土産|伸びている型|伸びてる型|競合.{0,6}発信", 2),
     ),
     2: (
         (r"具体提案", 6),
@@ -215,6 +242,8 @@ INPUT_ALIASES = {
     ),
     "target_keywords": ("keywords", "first_recall_keywords", "第一想起キーワード"),
     "competitor_brands": ("competitors", "競合", "競合ブランド"),
+    "category_name": ("category", "カテゴリ", "カテゴリ名"),
+    "vocab_preset": ("vocab", "業種", "業種プリセット"),
     "general_keyword_search_excel": (
         "general_search_excel", "market_search_excel", "一般キーワード検索excel",
     ),
@@ -247,6 +276,8 @@ INPUT_LABEL = {
     "general_search_keywords": "一般検索キーワード",
     "target_keywords": "狙うキーワード",
     "competitor_brands": "競合ブランド",
+    "category_name": "カテゴリ名（1つ）",
+    "vocab_preset": "業種（食品・飲料／美容・コスメ／汎用）",
     "general_keyword_search_excel": "一般キーワード検索結果Excel",
     "brand_keyword_search_excel": "ブランド名検索結果Excel",
     "own_brand_search_excel": "自社ブランド検索結果Excel",
@@ -265,9 +296,10 @@ INPUT_LABEL = {
 }
 
 STAGE_REQUIRED = {
+    # 初訪: 業種（語彙）・カテゴリ名・競合（軸B。未確認なら「想定」で可）・公式TikTok
     1: (
-        "target_brand", "official_tiktok_account",
-        "general_search_keywords",
+        "target_brand", "vocab_preset", "category_name",
+        "competitor_brands", "official_tiktok_account",
     ),
     2: (
         "target_brand", "target_product", "target_keywords", "campaign_goal",
@@ -290,6 +322,12 @@ STAGE_REQUIRED = {
 }
 
 MODULE_REQUIRED = {
+    "current_search_view": ("category_name",),
+    "competitor_communication": ("category_name", "competitor_brands"),
+    "competitor_paid_push": ("category_name", "competitor_brands"),
+    "posting_gap": ("target_brand", "category_name", "competitor_brands"),
+    "category_winning_types": ("category_name",),
+    "first_three_ideas": ("target_brand", "category_name"),
     "search_exposure_share": (
         "target_brand", "general_search_keywords",
     ),
@@ -623,7 +661,7 @@ def score_statuses(text: str, modules: Sequence[str]) -> dict[int, int]:
                 scores[status_id] += weight
     for module in modules:
         for status_id, status in STATUS.items():
-            if module in status["modules"]:
+            if module in status["modules"] or module in LEGACY_STATUS_MODULES.get(status_id, ()):
                 scores[status_id] += 4
     return scores
 
@@ -671,6 +709,10 @@ def missing_inputs(required: Sequence[str], available: set[str]) -> list[str]:
         elif key == "target_keywords":
             if not ({"target_keywords", "general_search_keywords"} & available):
                 missing.append(key)
+        elif key == "category_name":
+            # 初訪はカテゴリ名で検索する。一般検索キーワードが来ていればそれで代える
+            if not ({"category_name", "general_search_keywords"} & available):
+                missing.append(key)
         elif key not in available:
             missing.append(key)
     return missing
@@ -703,6 +745,7 @@ def make_reply(
     output_formats: Sequence[str],
     baseline_missing: bool,
     before_launch: bool,
+    first_visit_alone: bool = False,
 ) -> str:
     lines = []
     multiple_statuses = len(status_ids) > 1
@@ -711,6 +754,9 @@ def make_reply(
             f"{status_id}｜{STATUS[status_id]['name']}" for status_id in ordered_status_ids
         )
         output_label = "1資料に統合" if combined_deck else f"{deck_count}資料を個別作成"
+        if first_visit_alone:
+            output_label = (f"初訪は単独＋残りを1資料に統合（計{deck_count}資料）" if combined_deck
+                            else f"初訪は単独（計{deck_count}資料）")
         lines.append(f"判定：{chapter_label}（{output_label}）")
         lines.append("判断理由：営業が複数ステータスを明示したため、指定範囲をまとめて扱います。")
     elif explicit_scope:
@@ -736,7 +782,11 @@ def make_reply(
         lines.extend(["", "作成予定の章："])
         for selected_id in ordered_status_ids:
             lines.append(f"・{selected_id}｜{STATUS[selected_id]['name']}：{STATUS[selected_id]['purpose']}")
-        lines.append(f"・出力：{'1つの統合資料' if combined_deck else f'{deck_count}つの個別資料'}")
+        if first_visit_alone:
+            lines.append(f"・出力：初訪は単独の資料、{'残りは1つの統合資料' if combined_deck else '残りは別の資料'}"
+                         f"（計{deck_count}資料）")
+        else:
+            lines.append(f"・出力：{'1つの統合資料' if combined_deck else f'{deck_count}つの個別資料'}")
     elif explicit_scope:
         lines.extend(["", "ご指定の作成内容："])
         lines.append(f"・{requested_output_text}")
@@ -788,8 +838,13 @@ def make_reply(
         )
 
     lines.extend(["", "以下をコピーしてご返信ください。"])
-    if missing:
-        lines.extend(f"{INPUT_LABEL.get(key, key)}：" for key in missing)
+    for key in missing:
+        if key == "competitor_brands" and 1 in status_ids:
+            # 初訪の競合は1行1社（intake_form.py が読む形）。未確認なら「想定」で進める
+            lines.append("競合1：（正式名（略称）｜確認済み または 想定｜@公式ID または 無し）")
+            lines.append("競合2：")
+        else:
+            lines.append(f"{INPUT_LABEL.get(key, key)}：")
     lines.append(f"希望形式：{'＋'.join(fmt.upper() for fmt in output_formats)}")
     lines.append("指示：この内容で資料を作成してください")
     if explicit_scope:
@@ -844,6 +899,13 @@ def route_request(request: str, available_inputs: Iterable[str] = ()) -> dict:
         ordered_status_ids = list(explicit_status_ids)
     combined_deck = len(explicit_status_ids) > 1 and not separate_decks
     deck_count = len(explicit_status_ids) if separate_decks else 1
+    # 初訪は単独の資料（約8枚のお土産）。他の型と1つの資料に混ぜず、残りを別の資料にする
+    first_visit_alone = 1 in explicit_status_ids and len(explicit_status_ids) > 1 and not separate_decks
+    if first_visit_alone:
+        rest = [status_id for status_id in ordered_status_ids if status_id != 1]
+        ordered_status_ids = [1] + rest
+        combined_deck = len(rest) > 1
+        deck_count = 2
 
     if len(explicit_status_ids) > 1:
         modules = unique_in_order(
@@ -851,11 +913,14 @@ def route_request(request: str, available_inputs: Iterable[str] = ()) -> dict:
             for selected_id in ordered_status_ids
             for module in STATUS[selected_id]["modules"]
         )
-        reasons.append(
-            "複数ステータスの標準章を重複なく統合しました。"
-            if combined_deck else
-            "複数ステータスを指定どおり個別資料として扱います。"
-        )
+        if first_visit_alone:
+            reasons.append("初訪は単独の資料で出します。残りの型は別の資料にします。")
+        else:
+            reasons.append(
+                "複数ステータスの標準章を重複なく統合しました。"
+                if combined_deck else
+                "複数ステータスを指定どおり個別資料として扱います。"
+            )
     elif explicit_scope:
         reasons.append("営業が作成内容を明示しているため、指定された項目だけを保持しました。")
     elif status_id is not None:
@@ -983,7 +1048,7 @@ def route_request(request: str, available_inputs: Iterable[str] = ()) -> dict:
             combined_deck, deck_count, modules, missing, available, received_values,
             needs_clarification, question,
             explicit_scope, reasons, original_request, output_formats,
-            baseline_missing, before_launch,
+            baseline_missing, before_launch, first_visit_alone,
         ),
     }
 

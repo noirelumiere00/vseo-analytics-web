@@ -11,8 +11,11 @@
   [漏れ] 空のテキスト枠／プレースホルダ（[DATA NOT PROVIDED] 等）
   [漏れ] 未解決の変数（undefined / NaN / null / [object Object]）
   [ずれ] 同一画像が N ページ以上連続（実例の使い回し）
-  [ずれ] 画像の縦横比が元ファイルと違う（潰れ・引き伸ばし）
+  [ずれ] 画像の縦横比が元ファイルと違う（潰れ・引き伸ばし。PNG / JPEG）
   [情報] ページ別のフォントサイズ最小値（下限に張り付いているページ）
+  [構成] 初訪（*_初訪.pptx）: 付録>2枚・本編>8枚は致命的、本編1枚の文字>160字は重大
+  [生成] 生成ログの QA 警告。ログ名は PPTX 名から決める
+         TikTok_Competitive_Research{接尾辞}.pptx → generation_log{接尾辞}.md
 
 使い方:
   python3 tools/preflight.py output/deck.pptx
@@ -25,6 +28,7 @@ import argparse
 import json
 import os
 import re
+import struct
 import sys
 import zipfile
 from collections import defaultdict
@@ -42,8 +46,37 @@ EMU = 914400.0
 CONTENT_BOTTOM_IN = 10.20
 SLIDE_H_IN = 11.25
 # フッターは「実在する要素」から見つける。全ページにあると決め打ちすると
-# 表紙（フッターを持たない）を誤検出する
-FOOTER_HINT = re.compile(r"DEEP-DIVE|^\d+\s*/\s*\d+$")
+# 表紙（フッターを持たない）を誤検出する。
+# ページ番号は「NN / NN」。初訪（storySlide.js）は総数が未確定だと「NN / --」を出すので、それも拾う
+FOOTER_HINT = re.compile(r"DEEP-DIVE|^\d+\s*/\s*(\d+|--)$")
+# 初訪（ストーリー型）のフッター左は「{client}様｜{取得日}取得」で、DEEP-DIVE を含まない。
+# 拾わないと、フッター左そのものが「フッター(ページ番号)へ入る要素」として全ページ重大になる
+STORY_FOOTER = re.compile(r"様\s*[｜|]|[｜|][^｜|]*取得\s*$")
+FOOTER_ZONE_IN = 9.5
+# レンダラ（src/generate.js）が付ける出力名の接頭辞。verify_assets.py と同じ値にそろえる
+RENDERER_PREFIX = "TikTok_Competitive_Research"
+# ── 初訪（first_visit.json から組むストーリー型。仕様 v0.2 の F）
+FV_SUFFIX = "_初訪"
+FV_MAX_MAIN = 8          # 本編（表紙・付録を除く）の上限
+FV_MAX_APPENDIX = 2      # 付録の上限（契約はちょうど2枚）
+def _fv_body_limit() -> int:
+    """上限は tools/vocab/_limits.json（build_first_visit.py・firstVisit.js と同じ値）"""
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vocab", "_limits.json"),
+                  encoding="utf-8") as f:
+            return int(json.load(f).get("body_chars", 160))
+    except (OSError, ValueError):
+        return 160
+
+
+FV_BODY_LIMIT = _fv_body_limit()   # 本編1枚の文字数の上限
+# 6字以下の短い文字（順位「12位」・再生「▶ 3.3万」・「PR」・社名チップ等）は文章ではないので数えない。
+# レンダラ（components/storySlide.js）の数え方と同じにする。数え方が違うと片方だけが落ちる
+FV_SHORT_TOKEN = 6
+# 付録は「kicker 位置（上端 0.62in）の文字が『付録』で始まる」ページ。
+# 見出しは 0.98in から始まるので、0.95in 未満に絞って見出しを kicker と取り違えない
+FV_KICKER_MAX_Y = 0.95
+APPENDIX_KICKER = re.compile(r"^付録")
 PLACEHOLDERS = ("[DATA NOT PROVIDED]", "[IMAGE NOT PROVIDED]")
 BAD_TOKENS = ("undefined", "UNDEFINED", "NaN", "[object Object]", "null,", "Infinity")
 
@@ -70,6 +103,11 @@ def shapes_of(root: ET.Element) -> list[dict]:
         sizes = [int(rPr.get("sz")) / 100 for rPr in sp.iter(f"{{{NS['a']}}}rPr")
                  if rPr.get("sz")]
         blip = sp.find(".//a:blip", NS)
+        # PowerPoint でトリミングされた画像は、元の縦横比と枠が違って当然。
+        # トリミング後の比で比べないと、人が整えた版を「歪み」と誤検知する
+        src = sp.find(".//a:srcRect", NS)
+        crop = (tuple(int(src.get(k, 0)) / 100000 for k in ("l", "t", "r", "b"))
+                if src is not None else None)
         out.append({
             "kind": "pic" if tag == "pic" else "sp",
             "x": int(off.get("x")) / EMU, "y": int(off.get("y")) / EMU,
@@ -77,8 +115,78 @@ def shapes_of(root: ET.Element) -> list[dict]:
             "text": "".join(texts),
             "sizes": sizes,
             "embed": blip.get(f"{{{NS['r']}}}embed") if blip is not None else None,
+            "crop": crop,
         })
     return out
+
+
+def frame_texts(root: ET.Element) -> list[str]:
+    """表（graphicFrame）のセルの文字。shapes_of は sp / pic しか見ないので、
+    表に入れた文字は初訪の文字数に入らず、表にするだけで上限をすり抜けてしまう"""
+    out = []
+    for gf in root.iter(f"{{{NS['p']}}}graphicFrame"):
+        for tc in gf.iter(f"{{{NS['a']}}}tc"):
+            t = "".join(x.text or "" for x in tc.iter(f"{{{NS['a']}}}t")).strip()
+            if t:
+                out.append(t)
+    return out
+
+
+def image_dims(data: bytes) -> tuple[int, int] | None:
+    """PNG / JPEG の実寸（幅, 高さ）。読めなければ None。
+
+    src/helpers/imageBox.js の imageSize と同じ読み方（PNG は IHDR、JPEG は SOF マーカー）。
+    レンダラはこの実寸で枠を決めるので、別の読み方で比べると
+    「レンダラは正しいのに歪み」と誤検知する。以前は JPEG を丸ごと省いていたが、
+    投稿カバーはほぼ全部 JPEG なので、初訪（画像が主役）の潰れを1件も見ていなかった
+    """
+    try:
+        if data[:8] == b"\x89PNG\r\n\x1a\n" and len(data) >= 24:
+            w, h = struct.unpack(">II", data[16:24])
+            return (w, h) if w and h else None
+        if data[:2] == b"\xff\xd8":
+            i, n = 2, len(data)
+            while i + 9 < n:
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                m = data[i + 1]
+                if m == 0xFF:                          # 詰め物の FF
+                    i += 1
+                    continue
+                if m == 0x01 or 0xD0 <= m <= 0xD7:     # 長さを持たないマーカー
+                    i += 2
+                    continue
+                if m == 0xDA:                          # SOS 以降は圧縮データ。SOF はこれより前
+                    break
+                # SOF0-SOF15（DHT=C4 / JPG=C8 / DAC=CC は除く）に実寸が入る
+                if 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", data[i + 5:i + 9])
+                    return (w, h) if w and h else None
+                i += 2 + struct.unpack(">H", data[i + 2:i + 4])[0]
+    except (struct.error, IndexError):
+        return None
+    return None
+
+
+def generation_log_for(pptx: Path) -> tuple[Path, bool]:
+    """PPTX に対応する生成ログと、それが名前から確定できたか。
+
+    generate.js はログを generation_log{接尾辞}.md に書く（初訪なら generation_log_初訪.md）。
+    以前は generation_log.md を決め打ちで読んでいたため、具体提案以外の全モードで
+    「生成ログなし（情報）」になり、収まらない・画像欠落の警告がどのゲートにも届いていなかった。
+    人が改名した納品版は接尾辞を推定し、推定できなければ従来どおり generation_log.md を見る
+    """
+    d = pptx.resolve().parent
+    stem = pptx.stem
+    if stem.startswith(RENDERER_PREFIX):
+        return d / f"generation_log{stem[len(RENDERER_PREFIX):]}.md", True
+    cands = sorted(d.glob("generation_log?*.md"), key=lambda p: -len(p.stem))
+    for c in cands:
+        sfx = c.stem[len("generation_log"):]
+        if sfx and stem.endswith(sfx):
+            return c, False
+    return d / "generation_log.md", False
 
 
 def image_map(z: zipfile.ZipFile, slide_name: str) -> dict[str, str]:
@@ -109,12 +217,18 @@ def main() -> int:
     ap.add_argument("--json", dest="json_out")
     ap.add_argument("--repeat-limit", type=int, default=3,
                     help="同一画像が何ページ連続したら指摘するか（既定3）")
+    ap.add_argument("--fv-body-limit", type=int, default=FV_BODY_LIMIT,
+                    help=f"初訪の本編1枚あたりの文字数上限（既定{FV_BODY_LIMIT}）")
     args = ap.parse_args()
 
     path = Path(args.pptx)
     if not path.exists():
         print(f"[ERROR] ありません: {path}", file=sys.stderr)
         return 2
+    # 初訪は「画像＋ワンフレーズ」の別物の資料（2026-09 上長FB）。分析資料の基準では
+    # 枚数も文字量も通ってしまうので、名前の接尾辞で見分けて別の基準を足す
+    is_fv = path.stem.endswith(FV_SUFFIX)
+    fv_pages: dict[int, dict] = {}
 
     findings: list[dict] = []
     def add(sev: str, page: int, kind: str, msg: str) -> None:
@@ -140,8 +254,15 @@ def main() -> int:
             body = [s for s in shapes if s["kind"] == "sp" and s["text"].strip()]
 
             # ── 崩れ: フッター／ページ番号との衝突（フッターが実在する場合だけ）
-            footers = [s for s in body if FOOTER_HINT.search(s["text"].strip())
-                       and s["y"] > 9.5]
+            footers = [s for s in body if s["y"] > FOOTER_ZONE_IN
+                       and (FOOTER_HINT.search(s["text"].strip())
+                            or STORY_FOOTER.search(s["text"].strip()))]
+            if is_fv and footers:
+                # 初訪のフッター左は案件ごとの文言（取得日が無い版など）で形が揺れる。
+                # ページ番号と同じ行・同じ高さの短い帯にある文字はフッターとして扱う
+                fy = min(s["y"] for s in footers)
+                footers += [s for s in body if s not in footers and s["y"] > FOOTER_ZONE_IN
+                            and abs(s["y"] - fy) < 0.03 and s["h"] <= 0.5]
             ftop = min((s["y"] for s in footers), default=None)
             for s in body:
                 if s in footers:
@@ -198,6 +319,20 @@ def main() -> int:
                 add("情報", page, "文字が最小",
                     f"最小フォント {min(sizes)}pt（下限に張り付いている）")
 
+            # ── 初訪: 付録の判定と本編の文字量（集計はループの後）
+            if is_fv:
+                parts = [s["text"].strip() for s in body if s not in footers]
+                parts += frame_texts(root)
+                fv_pages[page] = {
+                    "appendix": any(s["y"] < FV_KICKER_MAX_Y
+                                    and APPENDIX_KICKER.match(s["text"].strip())
+                                    for s in body),
+                    "chars": sum(len(t) for t in parts if len(t) > FV_SHORT_TOKEN),
+                    "parts": parts,
+                    # 分析資料の器（DEEP-DIVE フッター）で組まれた初訪＝廃止した旧経路の出力
+                    "legacy": any("DEEP-DIVE" in s["text"] for s in footers),
+                }
+
         # ── ずれ: 縦横比の破壊（元画像と比較）
         for name in slides:
             page = int(re.search(r"(\d+)", name.split("/")[-1]).group(1))
@@ -211,21 +346,58 @@ def main() -> int:
                 if not m or m not in z.namelist():
                     add("重大", page, "画像欠落", f"参照先が見つからない: {f}")
                     continue
-                try:
-                    import struct
-                    raw = z.read(m)[:64]
-                    if raw[:2] == b"\xff\xd8":         # JPEG は簡易判定を省略
-                        continue
-                    if raw[:8] == b"\x89PNG\r\n\x1a\n":
-                        w, h = struct.unpack(">II", raw[16:24])
-                        if w and h:
-                            src = w / h
-                            box = s["w"] / s["h"] if s["h"] else 0
-                            if box and abs(src - box) / src > 0.06:
-                                add("重大", page, "縦横比",
-                                    f"画像が歪んでいる 元={src:.3f} 配置={box:.3f}（{f}）")
-                except Exception:  # noqa: BLE001
-                    pass
+                # SOF は EXIF の後ろにあり、先頭64バイトでは届かないので全体を読む
+                dims = image_dims(z.read(m))
+                if not dims:
+                    continue
+                w, h = dims
+                if s["crop"]:
+                    cl, ct, cr, cb = s["crop"]
+                    w, h = w * (1 - cl - cr), h * (1 - ct - cb)
+                if w <= 0 or h <= 0:
+                    continue
+                src = w / h
+                box = s["w"] / s["h"] if s["h"] else 0
+                if box and abs(src - box) / src > 0.06:
+                    add("重大", page, "縦横比",
+                        f"画像が歪んでいる 元={src:.3f} 配置={box:.3f}（{f}）")
+
+    # ── 初訪: 枚数と文字量（仕様 v0.2 の F）
+    # 上長FBは「スライド数が多すぎる」「文字が多い」。本編が9枚目に伸びたり、
+    # 手法の注記が本編へ戻ってきたりしても、分析資料の基準では何も落ちない。
+    # 表紙＝1枚目、付録＝kicker が「付録」で始まるページ、残りを本編として数える
+    fv_summary = None
+    if is_fv:
+        appx = [p for p in sorted(fv_pages) if p != 1 and fv_pages[p]["appendix"]]
+        main_pages = [p for p in sorted(fv_pages) if p != 1 and p not in appx]
+        fv_summary = {"main_pages": main_pages, "appendix_pages": appx,
+                      "chars": {p: fv_pages[p]["chars"] for p in main_pages},
+                      "body_limit": args.fv_body_limit}
+        legacy = [p for p in sorted(fv_pages) if fv_pages[p]["legacy"]]
+        if legacy:
+            add("致命的", legacy[0], "旧形式の初訪",
+                f"分析資料の器（DEEP-DIVE フッター）で組まれた初訪が {len(legacy)} ページある。"
+                "旧経路（MODES.初訪）は廃止した。build_first_visit.py → first_visit.json から組み直すこと")
+        if len(appx) > FV_MAX_APPENDIX:
+            add("致命的", appx[0], "付録の枚数",
+                f"付録が {len(appx)} 枚（上限 {FV_MAX_APPENDIX} 枚）: "
+                + "、".join(f"p{p}" for p in appx))
+        elif len(appx) < FV_MAX_APPENDIX:
+            # 手法・定義は付録にしか書かない約束。付録が欠けると、その開示がどこにも無い
+            add("情報", 0, "付録が足りない",
+                f"付録が {len(appx)} 枚（契約は2枚：調査の前提／数字の一覧）。"
+                "手法・定義の開示が抜けていないか確認すること")
+        if len(main_pages) > FV_MAX_MAIN:
+            add("致命的", 0, "本編の枚数",
+                f"本編が {len(main_pages)} 枚（上限 {FV_MAX_MAIN} 枚。表紙・付録を除く）: "
+                + "、".join(f"p{p}" for p in main_pages))
+        for p in main_pages:
+            n = fv_pages[p]["chars"]
+            if n > args.fv_body_limit:
+                top = sorted(fv_pages[p]["parts"], key=len, reverse=True)[:3]
+                add("重大", p, "本編の文字量",
+                    f"文字が {n} 字（上限 {args.fv_body_limit} 字。フッター・ページ番号と6字以下のラベルを除く）。"
+                    "多い順: " + " / ".join(f"「{t[:16]}」{len(t)}字" for t in top))
 
     # ── 資料内の矛盾: 同じ数値が「最も高い/最も低い」と別ページで逆に語られていないか
     # 読点・句点をまたがせない。またぐと「最上位のA3.52%は…、最下位のB0.92%」の
@@ -298,7 +470,9 @@ def main() -> int:
     # 生成時のQA警告を拾う。レンダラは「本文領域に収まらない」を
     # generation_log.md に書くが、どのゲートも読んでいなかった。
     # 収まらない資料が前検も画像照合も緑で通り抜けていた
-    log = os.path.join(os.path.dirname(os.path.abspath(path)), "generation_log.md")
+    log_path, log_named = generation_log_for(path)
+    log = str(log_path)
+    log_name = log_path.name
     if os.path.exists(log):
         lines = open(log, encoding="utf-8").read().split("\n")
         # 見出しより上の行にも重要な数字がある。「解決できなかった画像」は
@@ -308,7 +482,7 @@ def main() -> int:
             if m and int(m.group(1)) > 0:
                 add("重大", 0, "画像が出ていない",
                     f"{m.group(1)} 枚が、宣言はあるのに実体が無くスライドに出ていない。"
-                    "ファイルが動かされた可能性があります。generation_log.md に一覧があります")
+                    f"ファイルが動かされた可能性があります。{log_name} に一覧があります")
             m2 = re.search(r"画像欄そのものが無い箇所:\s*(\d+)", ln)
             if m2 and int(m2.group(1)) > 0:
                 add("情報", 0, "画像欄なし",
@@ -324,13 +498,25 @@ def main() -> int:
                 if ln.startswith("#"):
                     break
                 t = ln.strip().lstrip("- ").strip()
-                if t:
+                if t and t != "なし":      # generate.js は警告0件のとき「- なし」と書く
                     qa.append(t)
         # 「収まらない（確定）」は重大。「収まらない可能性」は行数の推定に
         # よる警告で、実際には溢れていないことがある（レンダラ側にその注記がある）。
         # 推定を重大にすると誤検知で提出が止まるので、目視の宿題として情報に置く
         maybe = 0
         for t in dict.fromkeys(qa):
+            # 初訪のレンダラ警告（generate.js が ## QA fixes に書く）。ページ番号を拾って
+            # 該当ページに付ける。下の「可能性」「収まらない」より先に判定する
+            # （文言にそれらの語が入っても、初訪の区分を優先するため）
+            fm = re.search(r"FV文字量超過\s*p(\d+)", t)
+            if fm:
+                add("重大", int(fm.group(1)), "FV文字量超過", t)
+                continue
+            fm = re.search(r"FVカード不足\s*p(\d+)", t)
+            if fm:
+                # カードが減るのは縮退として正常なこともある。止めないが、必ず目に入れる
+                add("情報", int(fm.group(1)), "FVカード不足", t)
+                continue
             if "可能性" in t:
                 add("情報", 0, "生成時のQA警告(要目視)", t)
                 maybe += 1
@@ -343,9 +529,16 @@ def main() -> int:
                 f"下限の文字サイズでも収まらない可能性のある本文が {maybe} 件ある。"
                 "行数の推定なので実際は収まっていることもある。"
                 "render_pptx_any.py で画像にして該当ページを見てから提出すること")
+    elif log_named:
+        # レンダラの出力名なのにログが無い＝別の場所で生成して PPTX だけ持ってきたか、
+        # 生成が途中で止まった。どちらも QA 警告（収まらない・画像欠落）を誰も見ていない
+        add("重大", 0, "生成ログなし",
+            f"{log_name} が {path.name} の隣に無い。生成時のQA警告（収まらない・画像欠落）を"
+            "確認できていない。generate.js で出力し直すか、同じ output/ にログを置くこと")
     else:
         add("情報", 0, "生成ログなし",
-            "generation_log.md が無いため、生成時のQA警告は確認できていない")
+            f"{log_name} が無いため、生成時のQA警告は確認できていない"
+            "（PPTX が改名されていて、どのログか決められない）")
 
     order = {"致命的": 0, "重大": 1, "情報": 2}
     findings.sort(key=lambda f: (order.get(f["severity"], 9), f["page"]))
@@ -355,10 +548,15 @@ def main() -> int:
 
     print(f"preflight: {path.name}")
     print(f"  ページ数 : {len(texts_by_page)}")
+    if fv_summary:
+        print(f"  初訪     : 本編 {len(fv_summary['main_pages'])} 枚（上限 {FV_MAX_MAIN}）"
+              f" / 付録 {len(fv_summary['appendix_pages'])} 枚（上限 {FV_MAX_APPENDIX}）")
+    # どのログを読んだかを出す。決め打ちの名前で空振りしていたことに誰も気づかなかった
+    print(f"  生成ログ : {log_name}{'' if os.path.exists(log) else '（無い）'}")
     print(f"  致命的 {counts['致命的']} / 重大 {counts['重大']} / 情報 {counts['情報']}\n")
     # 情報のうち、人が手を動かさないと閉じないものは既定でも必ず出す。
     # --json の中に隠すと、目視の宿題が誰にも渡らないまま提出される
-    ALWAYS_SHOW = ("目視の宿題", "生成ログなし")
+    ALWAYS_SHOW = ("目視の宿題", "生成ログなし", "FVカード不足", "付録が足りない")
     for f in findings:
         if f["severity"] == "情報" and f["kind"] not in ALWAYS_SHOW:
             continue
@@ -372,6 +570,8 @@ def main() -> int:
     if args.json_out:
         Path(args.json_out).write_text(
             json.dumps({"pptx": str(path), "pages": len(texts_by_page),
+                        "generation_log": log if os.path.exists(log) else None,
+                        "first_visit": fv_summary,
                         "counts": dict(counts), "findings": findings},
                        ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\n  レポート: {args.json_out}")

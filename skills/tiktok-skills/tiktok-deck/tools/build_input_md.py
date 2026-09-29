@@ -228,7 +228,15 @@ def fmt(n, unit=""):
     return f"{n:.2f}{unit}" if isinstance(n, float) else f"{n:,}{unit}"
 
 
-def asset_or_nd(case_dir, rel):
+def asset_or_nd(case_dir, rel, v=None):
+    """画像欄の値。動画IDで保存したカバー（tools/fetch_covers.py の assets/covers/<id>.jpg）を最優先にする。
+    順位名（top01.jpg 等）は順位の決め方が変わると別人の投稿に付け替わる（verify_assets.py 冒頭の事故）。
+    ID名なら画像が投稿そのものを指すので取り違えが起きない。無ければ従来の順位名を見る"""
+    vid = str((v or {}).get("id") or "")
+    if vid:
+        cov = f"assets/covers/{vid}.jpg"
+        if os.path.exists(os.path.join(case_dir, cov)):
+            return cov
     return rel if os.path.exists(os.path.join(case_dir, rel)) else ND
 
 
@@ -429,8 +437,8 @@ def main() -> int:
               if not pat or re.search(pat, (v.get("desc") or "") + " "
                                       + " ".join(v.get("hashtags") or []), re.I)] or raw
 
-        def ast(rel):
-            return asset_or_nd(case_dir, f"assets/client_01/{bid}/{rel}")
+        def ast(rel, v=None):
+            return asset_or_nd(case_dir, f"assets/client_01/{bid}/{rel}", v)
 
         a(f"#### BRAND {bi:02d}\n")
         a(f"- brand_id: {bid}")
@@ -464,7 +472,7 @@ def main() -> int:
             a(f"- views: {fmt(top['stats']['playCount'])}")
             a(f"- eg: {fmt(eg(top), '%')}")
             a(f"- url: {top.get('url')}")
-            a(f"- image_path: {ast('q1_example.jpg')}")
+            a(f"- image_path: {ast('q1_example.jpg', top)}")
         else:
             for k in ("creator", "followers", "views", "eg", "image_path"):
                 a(f"- {k}: {ND}")
@@ -532,7 +540,7 @@ def main() -> int:
         # どの動画のカバーかを併記する。書かないと画像とキャプションのズレを
         # verify_assets.py が照合できない（top01.jpg は順位で名前が付いているため）
         a(f"- url: {top.get('url') if top else ND}")
-        a(f"- representative_image: {ast('top01.jpg')}")
+        a(f"- representative_image: {ast('top01.jpg', top)}")
         a(f"- insight: {ND}")
         a("\n---\n")
         a("##### Q5 Top Videos\n")
@@ -558,7 +566,7 @@ def main() -> int:
             a(f"- media: {media_label(v)}")
             a(f"- content_summary: {ND}")
             a(f"- url: {v.get('url')}")
-            a(f"- image_path: {ast(f'top{i:02d}.jpg')}")
+            a(f"- image_path: {ast(f'top{i:02d}.jpg', v)}")
             a("")
         a(f"- q5_insight: {ND}")
         a("")
@@ -582,7 +590,7 @@ def main() -> int:
             a(f"- media: {media_label(v)}")
             a(f"- topic: {(v.get('desc') or '')[:24]}")
             a(f"- cluster: {ND}")
-            a(f"- thumb_path: {ast(f'list{li:02d}.jpg')}")
+            a(f"- thumb_path: {ast(f'list{li:02d}.jpg', v)}")
             a(f"- url: {v.get('url')}")
             a("")
         a("\n---\n")
@@ -639,8 +647,8 @@ def main() -> int:
         kid = f"kw_{ki:02d}"
         vs = load_axis(case_dir, k["file"])
 
-        def kast(rel):
-            return asset_or_nd(case_dir, f"assets/client_01/{kid}/{rel}")
+        def kast(rel, v=None):
+            return asset_or_nd(case_dir, f"assets/client_01/{kid}/{rel}", v)
 
         srs = [x for x in (srate(v) for v in vs) if x is not None]
         pr, _org_x, pr_unknown = pr_sets(vs)
@@ -665,7 +673,7 @@ def main() -> int:
             a(f"- is_pr: {pr_label(v)}")
             a(f"- caption: {(v.get('desc') or '')[:70]}")
             a(f"- url: {v.get('url')}")
-            a(f"- image_path: {kast(f'head{idx + 1:02d}.jpg')}")
+            a(f"- image_path: {kast(f'head{idx + 1:02d}.jpg', v)}")
             a("")
         a("### Head Composition\n")
         tc = Counter(tier_of(v) for v in vs)
@@ -701,7 +709,7 @@ def main() -> int:
             a(f"- media: {media_label(v)}")
             a(f"- caption: {(v.get('desc') or '')[:60]}")
             a(f"- url: {v.get('url')}")
-            a(f"- image_path: {kast(f'save{i:02d}.jpg')}")
+            a(f"- image_path: {kast(f'save{i:02d}.jpg', v)}")
             a("")
         a("### Brand Exposure\n")
         share = {}

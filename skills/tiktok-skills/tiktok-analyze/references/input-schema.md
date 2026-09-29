@@ -16,7 +16,7 @@
 - `official_tiktok_account`：公式投稿者を照合するTikTokアカウントURLまたは`@handle`
 - `official_url`：既存スクリプト互換用。`official_site_url` と同じ値を保存する
 
-①初訪では、一般キーワードとブランド名の検索結果を `01-acquire` の `search.mjs` で取得する（Excelは不要）。
+①初訪では、カテゴリ語と「{競合} {カテゴリ}」（任意で「{自社} {カテゴリ}」）の検索結果を `tiktok-acquire` の `search.mjs` で取得する（Excelは不要）。初訪の集計は tiktok-deck の `build_first_visit.py` が行い、このモジュールの計測は使わない（手順は `tiktok-deck/SKILL.md` の「初訪」）。
 
 ④レポートでは、施策前と施策後を**同じ検索語・同じ条件**で取得した JSON を必須とする。
 

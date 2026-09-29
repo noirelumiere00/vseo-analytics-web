@@ -294,11 +294,11 @@ function slideAllBrandSummary(pptx, d, brands, footer) {
 // 持たないので、黙って現状資料を出さずエラーで止める（偽の効果測定を作らない）。
 const MODES = {
   初訪: {
-    label: '初回訪問', suffix: '_初訪', alias: ['quick', '初回', '初回訪問'],
-    q3: false, q4: false, q5: false, allBrandSummary: true,
-    kwSaves: false, kwVideos: false, videoAnatomy: false,
-    mentions: true,
-    reviews: false, patterns: false, platforms: false,
+    // 2026-09 上長FBで作り直した。ストーリー型の専用レンダラ（src/slides/firstVisit.js）で組み、
+    // INPUT.md ではなく first_visit.json（tools/build_first_visit.py の出力）だけを読む。
+    // 分析資料の“器”（Q番号・PARTタグ・lead注記・章扉・手法ページ）を初訪に持ち込まないため、
+    // ここだけは「章の足し引きで作り分ける」方針の例外にする。他モードとは統合しない。
+    label: '初回訪問', suffix: '_初訪', alias: ['quick', '初回', '初回訪問'], fv: true,
   },
   具体提案: {
     label: '具体提案', suffix: '', alias: ['deep', 'full', '提案'],
@@ -344,6 +344,7 @@ function canonicalMode(name) {
 
 /** 複数ステータスを1資料に統合する。章は和集合を取る */
 function mergeModes(names) {
+  if (names.includes('初訪')) throw fvComboError();
   const base = { label: names.join('＋'), suffix: '_' + names.join('') };
   const keys = ['q3', 'q4', 'q5', 'allBrandSummary', 'kwSaves', 'kwVideos', 'mentions',
     'videoAnatomy', 'reviews', 'patterns', 'platforms'];
@@ -369,6 +370,11 @@ function resolveMode(d) {
     }
     return c;
   });
+  if (names.includes('初訪')) {
+    // INPUT.md の deck_mode で初訪が指定された場合。初訪は INPUT.md を使わないので入口を案内する
+    if (names.length > 1) throw fvComboError();
+    throw new Error('初訪は first_visit.json から作ります。node src/generate.js --case <案件> --mode 初訪 で実行してください');
+  }
   const m = names.length === 1
     ? { name: names[0], ...MODES[names[0]] }
     : { name: names.join('＋'), ...mergeModes(names) };
@@ -383,8 +389,90 @@ function resolveMode(d) {
   return m;
 }
 
+// ───────────────────────────────── 初訪（ストーリー型）
+function fvComboError() {
+  const e = new Error('初訪は単独で出します（二次提案とは別の資料）。\n'
+    + '  二次提案は --mode 具体提案 等で別ファイルにしてください。');
+  e.exitCode = 2;
+  return e;
+}
+
+/** INPUT.md を読む前にモードを決める（初訪は INPUT.md を使わない） */
+function earlyModeNames() {
+  const i = process.argv.indexOf('--mode');
+  let raw = i >= 0 ? process.argv[i + 1] : process.env.DECK_MODE;
+  if (!raw) {
+    const cj = path.join(ROOT, 'case.json');
+    try { raw = ((JSON.parse(fs.readFileSync(cj, 'utf8')).settings) || {}).deck_mode; } catch (e) { raw = null; }
+  }
+  if (!raw) return null;
+  return String(raw).split(/[,、＋+]/).map((x) => x.trim()).filter(Boolean).map((p) => canonicalMode(p) || p);
+}
+
+function sha256(p) {
+  if (!fs.existsSync(p)) return null;
+  return require('crypto').createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+}
+
+function buildFirstVisitDeck() {
+  const fvPath = path.join(ROOT, 'first_visit.json');
+  if (!fs.existsSync(fvPath)) {
+    throw new Error(`first_visit.json がありません: ${fvPath}\n`
+      + '  初訪は次の順で作ります（案件ディレクトリで）:\n'
+      + '    python3 tools/fetch_covers.py --case .\n'
+      + '    python3 tools/label_posts.py --case . --init / --contact / --apply / --check\n'
+      + '    python3 tools/build_first_visit.py --case .');
+  }
+  const fv = JSON.parse(fs.readFileSync(fvPath, 'utf8'));
+  if (!fv.ok || fv.version < 3) {
+    throw new Error('first_visit.json が古い形式か、作成に失敗したものです。build_first_visit.py をやり直してください');
+  }
+  // 作ったあとにラベルや取得JSONが変わっていたら止める（古い数字の資料を出さない）
+  const stale = Object.entries(fv.inputs_sha256 || {})
+    .filter(([f]) => !f.startsWith('_'))
+    .filter(([f, h]) => sha256(path.join(ROOT, f)) !== h)
+    .map(([f]) => f);
+  if (stale.length) {
+    throw new Error(`first_visit.json を作ったあとに次のファイルが変わっています: ${stale.join(', ')}\n`
+      + '  python3 tools/build_first_visit.py --case . を再実行してください');
+  }
+  const { buildFirstVisit, fvStats } = require('./slides/firstVisit');
+  const pptx = new PptxGenJS();
+  pptx.defineLayout({ name: 'FMT', width: T.slide.w, height: T.slide.h });
+  pptx.layout = 'FMT';
+  resetPages();
+  const total = buildFirstVisit(pptx, fv);
+  if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+  const out = path.join(OUT_DIR, 'TikTok_Competitive_Research_初訪.pptx');
+  return pptx.writeFile({ fileName: out }).then(() => {
+    const fs2 = fvStats();
+    const log = [
+      '# generation_log',
+      '',
+      `- 生成: ${total} スライド（20 × 11.25 in）／資料モード: 初訪（ストーリー型・first_visit.json）`,
+      `- 本編: ${fv.order.join(' → ')}`,
+      `- 使用画像: ${fs2.images} 枚`,
+      `- 宣言があるのに実体が無い画像: ${fs2.missing.length}`,
+      ...(fs2.missing.length ? ['', '### 宣言があるのに実体が無い画像（要修正）', ...fs2.missing.map((m) => `  - ${m}`)] : []),
+      `- 画像欄そのものが無い箇所: 0（初訪は画像のある投稿だけを選んで組む）`,
+      '',
+      '## QA fixes',
+      ...([...fs2.qa, ...stats.qaFixes].length ? [...fs2.qa, ...stats.qaFixes].map((x) => `  - ${x}`) : ['  - なし']),
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(OUT_DIR, 'generation_log_初訪.md'), log);
+    console.log(`スライド ${total}枚（初訪）/ 使用画像 ${fs2.images} / QA警告 ${fs2.qa.length + stats.qaFixes.length}件`);
+    console.log(`→ ${out}`);
+  });
+}
+
 // ───────────────────────────────── main
 function main() {
+  const early = earlyModeNames();
+  if (early && early.includes('初訪')) {
+    if (early.length > 1) throw fvComboError();
+    return buildFirstVisitDeck();
+  }
   const inputPath = path.join(ROOT, 'INPUT.md');
   if (!fs.existsSync(inputPath)) {
     throw new Error(`INPUT.md がありません: ${inputPath}\n`
@@ -607,4 +695,12 @@ function main() {
   });
 }
 
-main();
+try {
+  const r = main();
+  if (r && typeof r.catch === 'function') {
+    r.catch((e) => { console.error(`[停止] ${e.message}`); process.exit(e.exitCode || 1); });
+  }
+} catch (e) {
+  console.error(`[停止] ${e.message}`);
+  process.exit(e.exitCode || 1);
+}
