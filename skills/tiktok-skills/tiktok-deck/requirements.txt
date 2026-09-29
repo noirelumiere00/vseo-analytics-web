@@ -1,0 +1,6 @@
+# tiktok-deck の依存。既定では Python の外部パッケージは要らない。
+#   build_input_md.py / merge_authored.py / preflight.py /
+#   verify_assets.py / extract_frames.py … すべて標準ライブラリ＋ffmpeg のみ
+#
+# 下は「案件でExcelを読む必要がある場合」だけ入れる（既定の取得は search.mjs）。
+# openpyxl>=3.1,<4     # tools/analyze_excel.py を使うときだけ

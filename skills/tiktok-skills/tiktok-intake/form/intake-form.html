@@ -1,0 +1,425 @@
+<title>TikTok分析 依頼票</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@600;700&family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+:root{
+  --bg:#EDF0F1; --panel:#FFFFFF; --panel-2:#E4E8EA; --sunken:#F5F7F8;
+  --rule:#D3DADD; --rule-soft:#E2E7E9;
+  --ink:#12171A; --ink-2:#465055; --ink-3:#727E84;
+  --accent:#1D5566; --accent-soft:#DCEAEE;
+  --ai:#5E4380; --ai-soft:#E9E1F2;
+  --ok:#1B6448; --ok-soft:#DCEDE4;
+  --warn:#8A5410; --warn-soft:#F6EBD8;
+  --shadow:0 1px 2px rgba(18,23,26,.05),0 12px 28px -18px rgba(18,23,26,.3);
+  --r:9px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1315; --panel:#181E21; --panel-2:#212A2E; --sunken:#141A1D;
+    --rule:#2C3639; --rule-soft:#232C30;
+    --ink:#EAEFF1; --ink-2:#AFBBC0; --ink-3:#7E8B91;
+    --accent:#7FBCCE; --accent-soft:#17282E;
+    --ai:#B79BD8; --ai-soft:#241C31;
+    --ok:#63BE97; --ok-soft:#12261D;
+    --warn:#D6A458; --warn-soft:#2A2010;
+    --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 32px -20px rgba(0,0,0,.85);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1315; --panel:#181E21; --panel-2:#212A2E; --sunken:#141A1D;
+  --rule:#2C3639; --rule-soft:#232C30;
+  --ink:#EAEFF1; --ink-2:#AFBBC0; --ink-3:#7E8B91;
+  --accent:#7FBCCE; --accent-soft:#17282E;
+  --ai:#B79BD8; --ai-soft:#241C31;
+  --ok:#63BE97; --ok-soft:#12261D;
+  --warn:#D6A458; --warn-soft:#2A2010;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 32px -20px rgba(0,0,0,.85);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN",system-ui,sans-serif;
+  font-size:15px;line-height:1.8;-webkit-font-smoothing:antialiased}
+.wrap{max-width:800px;margin:0 auto;padding:44px 20px 200px;display:flex;flex-direction:column;gap:30px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}
+p{margin:0}
+
+header{display:flex;flex-direction:column;gap:10px}
+.kicker{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:"Zen Old Mincho",serif;font-size:clamp(27px,4.4vw,37px);font-weight:700;line-height:1.26;margin:0;text-wrap:balance}
+.lede{color:var(--ink-2);max-width:60ch;font-size:14.5px}
+
+/* グループ = 誰がその情報を持っているか */
+.group{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.ghead{padding:15px 20px;border-bottom:1px solid var(--rule-soft);background:var(--panel-2);display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}
+.ghead .who{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:3px 8px;border-radius:20px;flex:none}
+.who.you{background:var(--accent-soft);color:var(--accent)}
+.who.ai{background:var(--ai-soft);color:var(--ai)}
+.who.cond{background:var(--warn-soft);color:var(--warn)}
+.ghead h2{font-family:"Zen Old Mincho",serif;font-size:17px;font-weight:700;margin:0}
+.ghead .note{font-size:12.5px;color:var(--ink-3);width:100%}
+.gbody{padding:6px 20px 18px;display:flex;flex-direction:column}
+
+.field{padding:15px 0;border-bottom:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:8px}
+.field:last-child{border-bottom:0}
+.frow{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+label.fl{font-weight:700;font-size:14px;flex:none}
+.hint{font-size:12.5px;color:var(--ink-3);flex:1;min-width:200px}
+input[type=text]{width:100%;padding:10px 13px;border:1px solid var(--rule);border-radius:7px;
+  background:var(--sunken);color:var(--ink);font:inherit;font-size:14.5px;transition:border-color .12s,background .12s}
+input[type=text]::placeholder{color:var(--ink-3)}
+input[type=text]:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent);background:var(--panel)}
+input[type=text]:disabled{background:var(--ai-soft);color:var(--ai);border-color:transparent;cursor:not-allowed}
+
+/* AIに任せるトグル */
+.dele{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ai);
+  cursor:pointer;user-select:none;padding:4px 9px;border:1px dashed var(--ai);border-radius:20px;flex:none;
+  background:transparent;transition:background .12s}
+.dele:hover{background:var(--ai-soft)}
+.dele input{accent-color:var(--ai);margin:0;width:14px;height:14px}
+.dele.on{background:var(--ai-soft);border-style:solid}
+
+/* 型の選択カード */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:9px}
+.card{position:relative;display:flex;flex-direction:column;gap:3px;padding:13px 15px;border:1px solid var(--rule);
+  border-radius:8px;background:var(--sunken);cursor:pointer;transition:border-color .12s,background .12s}
+.card:hover{border-color:var(--accent)}
+.card input{position:absolute;opacity:0;pointer-events:none}
+.card .ct{font-weight:700;font-size:14px;display:flex;align-items:center;gap:7px}
+.card .cn{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--accent)}
+.card .cd{font-size:12.5px;color:var(--ink-2);line-height:1.7}
+.card:has(input:checked){border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.card:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.card.guess{border-style:dashed}
+.card.guess .cn{color:var(--ai)}
+.card.guess:has(input:checked){border-color:var(--ai);background:var(--ai-soft);box-shadow:inset 0 0 0 1px var(--ai)}
+
+.alert{margin-top:12px;padding:14px 16px;border-radius:8px;background:var(--warn-soft);
+  border-left:4px solid var(--warn);font-size:13.5px;color:var(--ink-2);display:none;flex-direction:column;gap:6px}
+.alert.show{display:flex}
+.alert b{color:var(--warn)}
+#g3{display:none}
+#g3.show{display:block}
+
+/* 送信バー */
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--rule);
+  box-shadow:0 -10px 30px -20px rgba(0,0,0,.5);padding:13px 20px;z-index:20}
+.barin{max-width:800px;margin:0 auto;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.tally{display:flex;gap:14px;flex:1;min-width:190px;font-size:12.5px;flex-wrap:wrap}
+.tally span{display:inline-flex;align-items:center;gap:5px;color:var(--ink-2)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.you{background:var(--accent)}.dot.ai{background:var(--ai)}.dot.non{background:var(--rule)}
+button{font:inherit;font-weight:700;font-size:14px;padding:11px 20px;border-radius:8px;border:1px solid var(--accent);
+  background:var(--accent);color:var(--panel);cursor:pointer;transition:opacity .12s}
+button:hover{opacity:.87}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+button.ghost{background:transparent;color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+
+.out{background:var(--panel);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden}
+.out .ghead h2{font-family:"Zen Old Mincho",serif}
+textarea{width:100%;min-height:186px;border:0;border-top:1px solid var(--rule-soft);padding:16px 20px;
+  background:var(--sunken);color:var(--ink);font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:12.5px;line-height:1.85;resize:vertical;display:block}
+textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
+.copied{color:var(--ok);font-weight:700;font-size:13px;display:none}
+.copied.show{display:inline}
+footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font-size:12.5px;display:flex;flex-direction:column;gap:5px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Request form</div>
+    <h1>TikTok分析 依頼票</h1>
+    <p class="lede">分かる欄だけ埋めてください。<strong>空欄はAIが自分で調べます。</strong>
+      埋め終わったら下の「依頼文をコピー」を押して、Claude に貼り付けるだけで着手します。</p>
+  </header>
+
+  <!-- ① 営業しか知らない = 代替不能 -->
+  <section class="group">
+    <div class="ghead">
+      <span class="who you">あなたしか知らない</span>
+      <h2>案件のこと</h2>
+      <p class="note">ここはAIが調べても分かりません。2つだけ埋めてください。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><label class="fl" for="company">対象ブランド</label>
+          <span class="hint">正式名称でなくても構いません（例: サンプル社、サンプルストア）</span></div>
+        <input type="text" id="company" data-k="対象ブランド" placeholder="TOTO">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="product">対象商品</label>
+          <span class="hint">空欄なら公式サイトから拾います（例: トイレ、洗面台）</span></div>
+        <input type="text" id="product" data-k="対象商品" placeholder="トイレ・洗面台">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="purpose">目的・状況</label>
+          <span class="hint">話し言葉でOK。ここから作る資料を判断します</span></div>
+        <input type="text" id="purpose" data-k="目的" placeholder="来週初回訪問。まだ何も提案していない">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl">作る資料</label>
+          <span class="hint">迷ったら一番下の「わからない」でOK</span></div>
+        <div class="cards" id="cards">
+          <label class="card"><input type="radio" name="status" value="初訪">
+            <span class="ct"><span class="cn">01</span>初訪</span>
+            <span class="cd">検索面の現状把握で信頼を得る。誰が出ているか・公式は出ているか</span></label>
+          <label class="card"><input type="radio" name="status" value="具体提案">
+            <span class="ct"><span class="cn">02</span>具体提案</span>
+            <span class="cd">上位投稿の勝ちパターンを見せて方向性を合意する。必要情報が最少</span></label>
+          <label class="card"><input type="radio" name="status" value="構成提案">
+            <span class="ct"><span class="cn">03</span>構成提案</span>
+            <span class="cd">企画・台本・ABテスト設計まで落とす。制作に渡す前提</span></label>
+          <label class="card"><input type="radio" name="status" value="レポート">
+            <span class="ct"><span class="cn">04</span>レポート</span>
+            <span class="cd">施策の効果検証。施策前のデータが必要</span></label>
+          <label class="card"><input type="radio" name="status" value="競合差再提案">
+            <span class="ct"><span class="cn">05</span>競合差再提案</span>
+            <span class="cd">競合との差から新しい提案を作る。単独の資料になる</span></label>
+          <label class="card guess"><input type="radio" name="status" value="わからない" checked>
+            <span class="ct"><span class="cn">AI</span>わからない</span>
+            <span class="cd">目的の文からAIが推定し、確認だけ取ります</span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ② AIが代替できる = 空欄でよい -->
+  <section class="group">
+    <div class="ghead">
+      <span class="who ai">空欄ならAIが調べる</span>
+      <h2>調べれば分かること</h2>
+      <p class="note">分かっていれば早いですが、<strong>思い出せないなら空欄のままにしてください。</strong>
+        公式サイトとWeb検索から候補を出して確認をお願いする形になります。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><label class="fl" for="kw">一般検索キーワード</label>
+          <span class="hint">お客さんが検索する言葉。ブランド名より<strong>一般名詞</strong>が効きます</span></div>
+        <input type="text" id="kw" data-k="一般検索キーワード" placeholder="トイレリフォーム、洗面台 交換">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="comp">競合</label>
+          <span class="hint">2〜3社。露出シェアと競合比較の章に使います</span></div>
+        <input type="text" id="comp" data-k="競合" placeholder="LIXIL、Panasonic">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="tt">公式TikTokアカウントURL</label>
+          <span class="hint">0本なら「公式が出ていない」という強い訴求材料になります</span></div>
+        <input type="text" id="tt" data-k="公式TikTokアカウントURL" placeholder="@toto_official">
+        <label class="dele" id="ttnone-l"><input type="checkbox" id="ttnone">公式アカウントは無い（探さなくてよい）</label>
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="site">公式サイトURL</label>
+          <span class="hint">商材の把握に使います。分からなければ空欄で</span></div>
+        <input type="text" id="site" data-k="公式サイトURL" placeholder="jp.toto.com">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl">希望形式</label>
+          <span class="hint">通常はPPTXのみで足ります</span></div>
+        <div class="cards">
+          <label class="card"><input type="radio" name="fmt" value="PPTX" checked>
+            <span class="ct"><span class="cn">A</span>PPTX</span>
+            <span class="cd">そのまま編集して商談で使う。通常はこちら</span></label>
+          <label class="card"><input type="radio" name="fmt" value="PPTX＋PDF">
+            <span class="ct"><span class="cn">B</span>PPTX＋PDF</span>
+            <span class="cd">PDFはPowerPointからの書き出しになる場合があります</span></label>
+        </div>
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="inst">指示・要望</label>
+          <span class="hint">章の追加・削除や、触れてほしくない点があれば</span></div>
+        <input type="text" id="inst" data-k="指示" placeholder="保存率を主指標にしてほしい">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="due">納期・訪問日</label>
+          <span class="hint">急ぎなら章を削って先に出します</span></div>
+        <input type="text" id="due" data-k="納期" placeholder="9/10 の商談まで">
+      </div>
+    </div>
+  </section>
+
+  <!-- ③ ④レポートのみ = 条件付き -->
+  <section class="group" id="g3">
+    <div class="ghead">
+      <span class="who cond">レポートのときだけ</span>
+      <h2>効果検証に必要なこと</h2>
+      <p class="note">この3つは<strong>AIが後から取り戻せません</strong>。分かる範囲で埋めてください。</p>
+    </div>
+    <div class="gbody">
+      <div class="field">
+        <div class="frow"><label class="fl" for="start">施策開始日</label>
+          <span class="hint">いつから投稿や配信を始めたか</span></div>
+        <input type="text" id="start" data-k="施策開始日" placeholder="8/1">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="period">対象期間</label>
+          <span class="hint">どこからどこまでを報告するか</span></div>
+        <input type="text" id="period" data-k="対象期間" placeholder="8/1〜8/31">
+      </div>
+      <div class="field">
+        <div class="frow"><label class="fl" for="snap">施策前のデータ</label>
+          <span class="hint">施策を始める前に検索面を記録してありますか</span></div>
+        <input type="text" id="snap" data-k="施策前スナップショット" placeholder="ある / ない / わからない">
+        <div class="alert show"><span><b>⚠️ 施策前のデータは後から遡れません。</b>
+          無い場合、前後比較のかわりに「現状値のみ」の資料に切り替えます。
+          まだ施策を始めていないなら、<b>今日のうちに記録だけ取っておくべきです</b>。</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="out">
+    <div class="ghead">
+      <span class="who you">最後にこれ</span>
+      <h2>Claude に貼る依頼文</h2>
+      <p class="note">下のボタンでコピーし、Claude Code に貼り付けてください。手打ちは不要です。</p>
+    </div>
+    <textarea id="out" readonly aria-label="Claudeに貼る依頼文"></textarea>
+  </section>
+
+  <footer>
+    <div>空欄は「AIに任せる」と同じ意味です。埋めなくても着手できます。</div>
+    <div>入力内容はこの端末のブラウザにだけ残ります（次回開くと復元されます）。送信はコピー＆ペーストのみで、自動送信はしません。</div>
+  </footer>
+</div>
+
+<div class="bar">
+  <div class="barin">
+    <div class="tally">
+      <span><i class="dot you"></i>あなたが記入 <b id="n-you" class="mono">0</b></span>
+      <span><i class="dot ai"></i>AIが調べる <b id="n-ai" class="mono">0</b></span>
+      <span class="copied" id="copied">✓ コピーしました。Claude に貼ってください</span>
+    </div>
+    <button class="ghost" id="clear" type="button">クリア</button>
+    <button id="copy" type="button">依頼文をコピー</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var KEY = "tiktok-intake-form-v1";
+  var ids = ["company","product","purpose","kw","comp","tt","site","inst","due","start","period","snap"];
+  var el = {}; ids.forEach(function(i){ el[i] = document.getElementById(i); });
+  var out = document.getElementById("out");
+  var g3  = document.getElementById("g3");
+
+  function fmt(){
+    var r = document.querySelector('input[name="fmt"]:checked');
+    return r ? r.value : "PPTX";
+  }
+  function status(){
+    var r = document.querySelector('input[name="status"]:checked');
+    return r ? r.value : "わからない";
+  }
+  // ④レポートを選んだときだけ、遡れない項目を出す
+  function syncG3(){ g3.classList.toggle("show", status() === "レポート"); }
+
+  // 空欄 = AIに任せる。AIが調べられない欄（①）は空欄でも数に入れない
+  var DELEGABLE = ["kw","comp","tt","site"];
+
+  function build(){
+    var lines = [];
+    lines.push("TikTok分析をお願いします。依頼票の内容です。");
+    lines.push("");
+    var you = 0, ai = 0;
+    ids.forEach(function(id){
+      var n = el[id]; if (!n) return;
+      if (g3 && !g3.classList.contains("show") && ["start","period","snap"].indexOf(id) >= 0) return;
+      var v = (n.value || "").trim();
+      var k = n.getAttribute("data-k");
+      if (id === "tt" && document.getElementById("ttnone").checked) {
+        lines.push(k + ": 無し"); you++; return;
+      }
+      if (v) { lines.push(k + ": " + v); you++; }
+      else if (DELEGABLE.indexOf(id) >= 0) { lines.push(k + ": AIに任せる"); ai++; }
+    });
+    var s = status();
+    lines.splice(3, 0, "作りたい資料／章: " + s);
+    lines.push("希望形式: " + fmt());
+    if (s === "わからない") ai++; else you++;
+    lines.push("");
+    lines.push("「AIに任せる」の欄は、公式サイトとWeb検索から候補を出して確認をください。");
+    lines.push("空欄が残っていても、いま出せる章から先に進めてください。");
+    out.value = lines.join("\n");
+    document.getElementById("n-you").textContent = you;
+    document.getElementById("n-ai").textContent = ai;
+  }
+
+  function save(){
+    var d = {status: status(), fmt: fmt(), ttnone: document.getElementById("ttnone").checked};
+    ids.forEach(function(i){ if (el[i]) d[i] = el[i].value; });
+    try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) {}
+  }
+  function load(){
+    var d = null;
+    try { d = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { d = null; }
+    if (!d) return;
+    ids.forEach(function(i){ if (el[i] && typeof d[i] === "string") el[i].value = d[i]; });
+    if (d.fmt) {
+      var rf = document.querySelector('input[name="fmt"][value="' + d.fmt.replace(/"/g, '') + '"]');
+      if (rf) rf.checked = true;
+    }
+    if (typeof d.ttnone === "boolean") {
+      var tb = document.getElementById("ttnone");
+      tb.checked = d.ttnone;
+      document.getElementById("tt").disabled = d.ttnone;
+      document.getElementById("ttnone-l").classList.toggle("on", d.ttnone);
+    }
+    if (d.status) {
+      var r = document.querySelector('input[name="status"][value="' + d.status.replace(/"/g, '') + '"]');
+      if (r) r.checked = true;
+    }
+  }
+
+  function refresh(){ syncG3(); build(); save(); }
+
+  ids.forEach(function(i){ if (el[i]) el[i].addEventListener("input", refresh); });
+  Array.prototype.forEach.call(
+    document.querySelectorAll('input[name="status"], input[name="fmt"]'),
+    function(r){ r.addEventListener("change", refresh); });
+  document.getElementById("ttnone").addEventListener("change", function(){
+    var box = document.getElementById("ttnone");
+    document.getElementById("tt").disabled = box.checked;
+    document.getElementById("ttnone-l").classList.toggle("on", box.checked);
+    refresh();
+  });
+
+  document.getElementById("copy").addEventListener("click", function(){
+    out.focus(); out.select();
+    var done = function(){
+      var c = document.getElementById("copied");
+      c.classList.add("show");
+      setTimeout(function(){ c.classList.remove("show"); }, 4000);
+    };
+    // クリップボードАPIは環境により拒否される。失敗しても選択済みなので ⌘C で拾える
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out.value).then(done, function(){
+        try { document.execCommand("copy"); done(); } catch (e) {}
+      });
+    } else {
+      try { document.execCommand("copy"); done(); } catch (e) {}
+    }
+  });
+
+  document.getElementById("clear").addEventListener("click", function(){
+    ids.forEach(function(i){ if (el[i]) el[i].value = ""; });
+    var g = document.querySelector('input[name="status"][value="わからない"]');
+    if (g) g.checked = true;
+    var f0 = document.querySelector('input[name="fmt"][value="PPTX"]');
+    if (f0) f0.checked = true;
+    var tb2 = document.getElementById("ttnone");
+    tb2.checked = false; document.getElementById("tt").disabled = false;
+    document.getElementById("ttnone-l").classList.remove("on");
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    refresh();
+  });
+
+  load();
+  refresh();
+})();
+</script>
