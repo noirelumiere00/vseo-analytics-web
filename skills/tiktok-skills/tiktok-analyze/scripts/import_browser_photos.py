@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Safely import TikTok photo-mode images captured by a logged-in browser.
+"""Safely import TikTok photo-mode images saved by hand from the public page.
 
 This is an explicit, audited fallback for posts whose public-page downloader
-returns only the post audio.  It never discovers files by glob: the operator
+returns only the post audio.  ログインして取る経路は採らない
+（references/environment-and-data-policy.md。アカウント単位でブロックされる危険がある）。
+非ログインの公開ページから人が保存した画像だけを、この manifest で取り込む。  It never discovers files by glob: the operator
 must provide their exact carousel order in a JSON manifest.  Every referenced
 artifact is required to resolve below ``<run-dir>/media`` and to belong to the
 manifest post's scoped media location before a latest-success acquisition
@@ -228,8 +230,10 @@ def validate_post(post, run_dir, media_dir, normalized_by_id):
         audio_path = _resolve_media_file(
             post["audio_path"], run_dir, media_dir, f"{video_id} audio_path")
         file_id = safe_artifact_id(video_id)
+        # search.mjs は写真投稿の音声を <id>_audio.<ext> で保存する。その名前も受ける。
         if audio_path.parent != media_dir or not (
                 audio_path.name.startswith(f"{file_id}.")
+                or audio_path.name.startswith(f"{file_id}_audio.")
                 or audio_path.name.startswith(f"{file_id}_photo_audio.")):
             raise ImportValidationError(
                 f"{video_id}: audio_path must be a scoped file directly inside {media_dir}")

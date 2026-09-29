@@ -7,12 +7,15 @@ services and everything else.  Projects can replace the rules through
 """
 import argparse
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from common import normalize_text, read_jsonl  # noqa: E402
+
+_HASHTAG_RE = re.compile(r"[#＃]([\w一-龠々〆ヵヶぁ-んァ-ヶー]+)")
 
 # 案件の語彙が無いまま既定語彙を当てると、無関係な分類が資料に出る。
 # 実測: コンビニの「クリームたっぷりダブルシュー」が「化粧品・スキンケア商品」に
@@ -62,7 +65,20 @@ def usable_asr(signal):
 
 
 def combined_text(video, signal):
-    fields = [video.get("caption", ""), " ".join(video.get("hashtags", []) or [])]
+    # TikTok の desc（caption）にはタグ文字列（#スイーツ）がそのまま入っており、
+    # hashtags 列にも同じタグがある。両方を連結すると同じタグを2回数え、タグ由来の分類に
+    # 偏る（実測: 『コンビニ飯 #スイーツ』が同点ではなくスイーツ判定）。
+    # measure_keywords.find_caption_occurrences と同じく、caption に既にあるタグは列側で足さない。
+    caption = video.get("caption", "") or ""
+    caption_tags = {normalize_text(t, kana_fold=True) for t in _HASHTAG_RE.findall(caption)}
+    column_tags = []
+    for tag in video.get("hashtags", []) or []:
+        tag = re.sub(r"^[#＃]+", "", str(tag or "")).strip()
+        key = normalize_text(tag, kana_fold=True)
+        if tag and key not in caption_tags:
+            caption_tags.add(key)
+            column_tags.append(tag)
+    fields = [caption, " ".join(column_tags)]
     fields.extend(span.get("text", "") for span in signal.get("ocr_spans", []) or [])
     fields.extend(span.get("text", "") for span in usable_asr(signal))
     return " ".join(fields)
@@ -118,6 +134,12 @@ def main():
             continue
         source_file = Path(file_cfg["path"]).name
         members = []
+        # 分母は「解析済み（signals あり）かつ関連/要確認」の投稿だけ。上位だけ取得した場合、
+        # その構成比が検索面全体の話題構成のように読まれるため、軸の全件数と
+        # 分類できなかった件数を必ず並べて出す。
+        in_file = [video_id for video_id, video in videos.items()
+                   if any(item.get("source_file") == source_file
+                          for item in video.get("source_appearances", []))]
         for video_id, video in videos.items():
             if video_id not in signals:
                 continue
@@ -149,6 +171,13 @@ def main():
         axes.append({
             "label": file_cfg.get("label"),
             "source_file": source_file,
+            "total_videos_in_file": len(in_file),
+            # 解析未完了・関連性で除外などで分類しなかった件数（0件の話題ではない）。
+            "unclassified_videos": len(in_file) - denominator,
+            "coverage_note": (
+                f"この軸の {len(in_file)} 件中 {denominator} 件（解析済み・関連/要確認）の構成比。"
+                + ("残りは未分類で、検索面全体の構成を表すものではない。"
+                   if denominator < len(in_file) else "")),
             "valid_videos": denominator,
             "composition": composition,
             "video_classifications": members,

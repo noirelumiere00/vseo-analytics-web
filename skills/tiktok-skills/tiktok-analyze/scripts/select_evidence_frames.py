@@ -14,18 +14,26 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from common import read_jsonl, safe_artifact_id, validate_tiktok_page_url  # noqa: E402
+from common import (  # noqa: E402
+    read_jsonl, resolve_media_path, safe_artifact_id, validate_tiktok_page_url,
+)
 
 
 def first_pattern_timestamp(classification):
+    # present が True の分類だけを証拠に使う。rank_patterns は present=False / None でも
+    # evidence（該当しなかった冒頭の文字など）を返すため、見ないと「冒頭フックなし」の
+    # 投稿の時刻を pattern_A_opening_hook として資料の証拠画像にしてしまう。
     for key in ("B_proof", "A_opening_hook", "F_cta"):
         category = classification.get(key, {})
+        if category.get("present") is not True:
+            continue
         if category.get("evidence_timestamp_sec") is not None:
             return float(category["evidence_timestamp_sec"]), key
         for evidence in category.get("evidence", []) or []:
             if isinstance(evidence, dict) and evidence.get("start") is not None:
                 return float(evidence["start"]), key
-    product_ts = classification.get("E_product_connection", {}).get("first_mention_sec")
+    product = classification.get("E_product_connection", {})
+    product_ts = product.get("first_mention_sec") if product.get("present") is True else None
     if product_ts is not None:
         return float(product_ts), "E_product_connection"
     return None, None
@@ -34,6 +42,8 @@ def first_pattern_timestamp(classification):
 def first_pattern_photo_index(classification):
     for key in ("B_proof", "A_opening_hook", "F_cta", "E_product_connection"):
         category = classification.get(key, {})
+        if category.get("present") is not True:
+            continue
         direct_index = category.get("evidence_photo_index", category.get("first_mention_photo"))
         if direct_index is not None:
             return int(direct_index), key
@@ -62,14 +72,9 @@ def extract_frame(media_path, timestamp, output_path):
 
 
 def safe_existing_path(raw_path, allowed_root):
-    if not raw_path:
-        return None
-    try:
-        path = Path(raw_path).resolve(strict=True)
-        path.relative_to(allowed_root.resolve(strict=True))
-    except (OSError, ValueError):
-        return None
-    return path if path.is_file() else None
+    # 台帳のパスはカレント相対・移動前の絶対パスのことがあるため、
+    # extract_signals と同じ規則で「今の media/ 配下の実在ファイル」に解決する。
+    return resolve_media_path(raw_path, allowed_root)
 
 
 def photo_evidence_candidates(photo_paths, audit, signal, classification, max_images):
@@ -219,6 +224,14 @@ def main():
             candidates.append((pattern_ts, f"pattern_{pattern_key}"))
         else:
             candidates.append((max(0.0, duration * 0.7), "late_fallback"))
+
+        # 候補が冒頭付近に重なると重複除去で消え、最大3枚のはずが1枚になっていた。
+        # 意味のある候補の後ろに、まだ使っていない予備（中盤・終盤）を足しておく。
+        used_purposes = {purpose for _ts, purpose in candidates}
+        for fallback_ts, fallback_purpose in ((max(0.0, duration * 0.35), "midpoint_fallback"),
+                                              (max(0.0, duration * 0.7), "late_fallback")):
+            if fallback_purpose not in used_purposes:
+                candidates.append((fallback_ts, fallback_purpose))
 
         # Deduplicate nearby timestamps while preserving semantic priority.
         selected = []

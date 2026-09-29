@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """Encode top-ranked videos (rank = row order within each source file, per
-user-confirmed convention) against the A-F "killer pattern" taxonomy in
-references/analysis-rubric.md, and aggregate common-rates per axis.
+user-confirmed convention) against the A-F "killer pattern" taxonomy
+(A 冒頭フック / B 証明 / C 情報設計 / D 言葉の置き方 / E 商品接続 / F CTA; the
+画面レビューでの判定基準は references/visual-review-schema.md), and aggregate
+common-rates per axis.
 
-This is explicitly a HYPOTHESIS-GENERATION step, not a causal-proof step —
-see analysis-rubric.md's closing section on 事実/AI分類/勝因仮説/提案. All
-output field names and print strings in this script follow that framing
-(e.g. "common_rate", never "winning_formula").
+This is explicitly a HYPOTHESIS-GENERATION step, not a causal-proof step
+（事実／AI分類／勝因仮説／提案を分ける）. All output field names and print
+strings in this script follow that framing (e.g. "common_rate", never
+"winning_formula").
+
+テロップ未計測（import_agent_telop.py 未取り込み）の投稿は、テロップ由来の分類を
+0% ではなく「判定不可（present=None）」にする。音声だけで該当が確認できた場合のみ
+present=True を残す（根拠は音声と note に書く）。
 
 Usage:
     python3 rank_patterns.py --run-dir <dir> --confirmed-config confirmed_config.json \
-        [--top-n 10]
+        [--top-n 10] [--bottom-n N | --bottom-ids a,b] [--allow-unmeasured-telop]
 
 Output:
     <run-dir>/measurement/rank_patterns_output.json
@@ -139,7 +145,7 @@ def classify_structure(items, ocr_spans):
     }
 
 
-def classify_placement(measurement_audit, hook_end):
+def classify_placement(measurement_audit, hook_end, timed=True):
     # measure_keywords.py の監査が無い投稿を present:false にすると、
     # 「計測していない」が「言葉を置いていない」として 0% で集計される。
     # 実測でこれが起き、上位100% vs 下位0%（+100pt）という偽の差分が出た。
@@ -154,7 +160,10 @@ def classify_placement(measurement_audit, hook_end):
     starts = [g.get("event_start", g.get("representative_start")) for g in mention_groups
               if g.get("event_start", g.get("representative_start")) is not None]
     tags = []
-    if starts and min(starts) <= hook_end:
+    # 写真投稿の start は import_agent_telop が付けた「0始まりの枚数序数」で、秒ではない。
+    # これを秒として比べると2枚目・3枚目まで「早期提示」になる。写真では時刻の判定をしない
+    # （visual-review-schema.md「写真番号を時刻へ変換しない」）。
+    if timed and starts and min(starts) <= hook_end:
         tags.append("早期提示")
     if len(mention_groups) >= 3:
         tags.append("反復提示")
@@ -212,8 +221,9 @@ def _photo_evidence(spans, predicate=None):
     return result
 
 
-def classify_photo_hook(ocr_spans):
-    if not ocr_spans:
+def classify_photo_hook(ocr_spans, read_photo_indices=None):
+    read_photo_indices = set(read_photo_indices or [])
+    if not ocr_spans and 1 not in read_photo_indices:
         # テロップ未取り込み。「無い」ではなく「判定不可」。
         # false にすると aggregate_common_rates の分母に入り 0% として集計される。
         return {"present": None, "tags": [], "evidence": [],
@@ -233,6 +243,10 @@ def classify_photo_hook(ocr_spans):
     if _any_word(blob, HOOK_EMPATHY_WORDS):
         tags.append("悩み共感")
     if not first_photo:
+        if 1 in read_photo_indices:
+            # 1枚目は読んだが文字が無かった（計測済み・0件）。未計測とは区別する。
+            return {"present": False, "tags": [], "evidence": [],
+                    "note": "1枚目は読み取り済みで文字なし"}
         return {"present": None, "tags": [], "evidence": [],
                 "note": "1枚目のテロップを読み取れていないため判定不可"}
     return {"present": bool(tags), "tags": tags, "evidence": _photo_evidence(first_photo)[:3]}
@@ -292,7 +306,13 @@ def classify_photo_product_connection(ocr_spans, asr_segments, product_terms):
             "first_mention_photo": None, "evidence": []}
 
 
-def classify_photo_cta(ocr_spans, total_photo_count=None):
+def classify_photo_cta(ocr_spans, total_photo_count=None, read_photo_indices=None):
+    """最終写真の文字で CTA を判定する。
+
+    total_photo_count には**写真の実枚数**を渡すこと。旧実装は常に 0 の photos_ocrd を
+    渡していたため「文字が読めた最後の写真」が最終写真扱いになり、3枚中2枚目の
+    「保存してね」で CTA ありと誤判定していた。
+    """
     indexed = [
         ((span.get("source_provenance") or {}).get("photo_index"), span)
         for span in (ocr_spans or [])
@@ -303,6 +323,10 @@ def classify_photo_cta(ocr_spans, total_photo_count=None):
     last_index = int(total_photo_count) if total_photo_count else max(indices)
     final_spans = [span for index, span in indexed if index == last_index]
     if not final_spans:
+        if last_index in set(read_photo_indices or []):
+            # 最終写真は読んだが文字が無かった（計測済み・0件）。
+            return {"present": False, "tags": [], "evidence": [],
+                    "note": f"最終写真（{last_index}枚目）は読み取り済みで文字なし"}
         return {
             "present": None, "tags": [], "evidence": [],
             "note": f"最終写真（{last_index}枚目）の文字を読み取れないため判定不可",
@@ -325,8 +349,32 @@ def get_duration_from_signal(signal):
     return max(ends) if ends else None
 
 
+def _gate_unmeasured_telop(result):
+    """テロップ未計測の投稿で「見つからなかった」を「無い」にしない。
+
+    文字・音声ルールの分類は、テロップが未計測だとテロップ由来の根拠を1つも見ていない。
+    その状態の present=False を共通率の分母に入れると「見せ方が無い」＝0% として
+    資料に流れ、上位/下位や自社/競合の偽の差分になる（実測: 上位100% vs 下位0%）。
+      * present=False → None（判定不可。0%ではない）
+      * present=True  → 残す（音声・キャプション等の他経路で該当を確認できた）。
+                         ただしテロップは見ていないと note に書く
+    """
+    for key, _label in CATEGORY_KEYS:
+        category = result.get(key) or {}
+        if category.get("present") is False:
+            category["present"] = None
+            category["note"] = "テロップ未計測のため判定不可（0%ではない）"
+            category["telop_unmeasured"] = True
+        elif category.get("present") is True:
+            category["note"] = "テロップ未計測。テロップ以外の経路（音声・キャプション等）で該当を確認"
+            category["telop_unmeasured"] = True
+    return result
+
+
 def classify_video(video_record, signal, measurement_audit, product_terms):
-    ocr = signal.get("ocr_spans") or []
+    telop_measured = signal.get("telop_measured") is True
+    # 未計測の ocr_spans は空のはずだが、旧版の出力が混ざっても読まない。
+    ocr = (signal.get("ocr_spans") or []) if telop_measured else []
     # 写真投稿の音声はBGMのみ。楽曲の歌詞を「証明の見せ方」「商品接続」の
     # 根拠にすると、投稿者が言っていないことを言ったことにしてしまう。
     # measured 以外（not_applicable / unmeasured / pending）は実データではない。
@@ -339,21 +387,27 @@ def classify_video(video_record, signal, measurement_audit, product_terms):
 
     media_type = signal.get("media_type", "video")
     if media_type == "photo":
-        placement = classify_placement(measurement_audit, hook_end)
+        placement = classify_placement(measurement_audit, hook_end, timed=False)
         counts = (measurement_audit or {}).get("channel_counts", {})
         if counts.get("ocr", 0):
             placement.setdefault("tags", []).append("写真内提示")
             placement["present"] = True
+        # 読んだ写真番号（import_agent_telop が記録）。「読んで文字なし」と「未読」を分ける。
+        read_photo_indices = [k for k in (signal.get("telop_read_keys") or [])
+                              if isinstance(k, int)] if telop_measured else []
+        # 最終写真の判定には実枚数が要る（photos_ocrd は機械OCR撤去後つねに 0）。
+        total_photos = (len(signal.get("photo_paths") or []) or signal.get("photos_extracted")
+                        or signal.get("telop_frames_total") or None)
         result = {
             "video_id": video_record["video_id"],
             "media_type": "photo",
             "duration_seconds": duration,
-            "A_opening_hook": classify_photo_hook(ocr),
+            "A_opening_hook": classify_photo_hook(ocr, read_photo_indices),
             "B_proof": classify_photo_proof(ocr, asr),
             "C_structure": classify_structure(items, ocr),
             "D_keyword_placement": placement,
             "E_product_connection": classify_photo_product_connection(ocr, asr, product_terms),
-            "F_cta": classify_photo_cta(ocr, signal.get("photos_ocrd")),
+            "F_cta": classify_photo_cta(ocr, total_photos, read_photo_indices),
         }
     else:
         result = {
@@ -367,8 +421,11 @@ def classify_video(video_record, signal, measurement_audit, product_terms):
             "E_product_connection": classify_product_connection(items, duration, product_terms),
             "F_cta": classify_cta(items, cta_start),
         }
+    if not telop_measured:
+        _gate_unmeasured_telop(result)
     for key in (category_key for category_key, _ in CATEGORY_KEYS):
         result[key]["basis"] = "text_audio_signal_heuristic"
+    result["telop_status"] = "measured" if telop_measured else "unmeasured"
     result["acquisition_sha256"] = signal.get("acquisition_sha256")
     return result
 
@@ -577,7 +634,7 @@ def main():
                 f"{len(unmeasured_here)}/{len(top_ids_with_signal)} 件あります。\n"
                 "  このまま分類すると『見せ方が無い』＝0% として資料に流れます。\n"
                 f"  未計測: {sample}{more}\n"
-                f"  対応1: import_agent_telop.py --run-dir {run_dir} --manifest telop.json で取り込む\n"
+                f"  対応1: import_agent_telop.py --run-dir {run_dir} --manifest {run_dir}/telop.json で取り込む\n"
                 "  対応2: テロップ抜きで分類してよい場合のみ --allow-unmeasured-telop\n"
                 "          （その場合、資料には該当分類を『未計測（0%ではない）』と明記すること）",
                 file=sys.stderr,
@@ -598,7 +655,7 @@ def main():
 
         # 下位群（--bottom-n 指定時のみ）。上位と同じ関数で分類するので
         # 共通率の意味が揃う。信号が無い分は静かに繰り上げず件数で報告する。
-        bottom_classifications, bottom_skipped = [], []
+        bottom_classifications, bottom_skipped, bottom_unmeasured = [], [], []
         bottom_ids_arg = ({x.strip() for x in args.bottom_ids.split(",") if x.strip()}
                           if args.bottom_ids else None)
         if bottom_ids_arg or args.bottom_n:
@@ -612,6 +669,24 @@ def main():
             true_bottom = [(r, v) for r, v in true_bottom if v not in top_vids]
             bottom_ids_with_signal = [(r, v) for r, v in true_bottom if v in signals]
             bottom_skipped = [(r, v) for r, v in true_bottom if v not in signals]
+            # 上位と同じテロップ未計測ガードを下位群にもかける。下位だけ未計測だと
+            # テロップ由来の分類が下位で「無い」になり、上位100% vs 下位0%（+100pt）という
+            # 偽の差分が出る（このファイル冒頭のコメントにある実測事故そのもの）。
+            bottom_unmeasured = [v for _r, v in bottom_ids_with_signal
+                                 if not signals[v].get("telop_measured", False)]
+            if bottom_unmeasured and not args.allow_unmeasured_telop:
+                sample = ", ".join(bottom_unmeasured[:5])
+                more = f" ほか{len(bottom_unmeasured) - 5}件" if len(bottom_unmeasured) > 5 else ""
+                print(
+                    f"ERROR: 軸『{label}』の下位群に telop 未計測の投稿が "
+                    f"{len(bottom_unmeasured)}/{len(bottom_ids_with_signal)} 件あります。\n"
+                    "  このまま比べると、テロップ由来の分類が下位だけ 0% になり偽の差分が出ます。\n"
+                    f"  未計測: {sample}{more}\n"
+                    f"  対応1: import_agent_telop.py --run-dir {run_dir} --manifest {run_dir}/telop.json で取り込む\n"
+                    "  対応2: --allow-unmeasured-telop（未計測の分類は判定不可として差分から外れる）",
+                    file=sys.stderr,
+                )
+                raise SystemExit(2)
             bottom_classifications = classify_group(bottom_ids_with_signal)
 
         axes_out.append({
@@ -632,6 +707,9 @@ def main():
             "bottom_classified_count": len(bottom_classifications),
             "bottom_skipped_rank_no_signal_yet": [
                 {"rank": r, "video_id": v} for r, v in bottom_skipped],
+            "bottom_telop_unmeasured_count": len(bottom_unmeasured),
+            "bottom_telop_status": (None if not bottom_classifications
+                                    else ("measured" if not bottom_unmeasured else "partial")),
             "bottom_common_rates": (aggregate_common_rates(bottom_classifications)
                                     if bottom_classifications else None),
             "bottom_video_classifications": bottom_classifications,

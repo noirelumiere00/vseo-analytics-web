@@ -5,8 +5,10 @@
 日本語データの入れ忘れ）と装飾テロップでの精度不足のため撤去した。
 現行は次の流れになる。
 
-    1. extract_signals.py がフレーム画像を <run-dir>/media/frames/<video_id>/ へ出す
+    1. extract_signals.py がフレーム画像を <run-dir>/frames/<video_id>/f_TTTT.TT.jpg へ出す
+       （TTTT.TT は秒。写真投稿は <run-dir>/media/<video_id>_photos/NN.jpg そのものを読む）
     2. Claude Code がその画像を読み、読み取り結果を manifest(JSON) に書く
+       （manifest は案件側の <run-dir>/telop.json に置く。スキル本体のフォルダに置かない）
     3. 本スクリプトが manifest を検証して signals へ取り込む
 
 取り込むまで telop は「0件」ではなく **未計測**（telop_measured=false）である。
@@ -21,11 +23,11 @@ manifest の形式:
         {
           "video_id": "7678464957435940112",
           "video_url": "https://www.tiktok.com/@user/video/7678464957435940112",
-          "frames_dir": "media/frames/7678464957435940112",
+          "frames_dir": "frames/7678464957435940112",
           "reads": [
-            {"timestamp": 0.0,  "text": "結局どれが一番安いの？", "frame": "frame_000001.jpg"},
-            {"timestamp": 2.5,  "text": "答えはこれ",           "frame": "frame_000011.jpg"},
-            {"timestamp": 5.0,  "text": null}
+            {"timestamp": 0.0,  "text": "結局どれが一番安いの？", "frame": "f_0000.00.jpg"},
+            {"timestamp": 2.0,  "text": "答えはこれ",           "frame": "f_0002.00.jpg"},
+            {"timestamp": 4.0,  "text": null}
           ]
         }
       ]
@@ -41,6 +43,18 @@ manifest の形式:
 `text` が null のフレームは「読んだが文字が無い」= 空文字として扱う。
 フレーム自体を読んでいない場合は、その要素を manifest に入れない
 （入れないものは未確認のままであり、0 とは数えない）。
+
+統合の規則（Claude の読み取り用。機械OCR用の fuzzy 統合は使わない）:
+  * 時刻順に並べ、**正規化後の文字列が完全に同じ**読み取りが**連続**したときだけ1つのテロップにまとめる
+  * 文字の無いコマ（text が null）はテロップの切れ目。同じ文言が空白を挟んで再登場したら別の出現
+  * 文字列が違えば必ず別のテロップ（短いほうを捨てない）
+
+被覆率（telop_coverage_pct）の分母は extract_signals.py が抽出したコマ（f_*.jpg）の数で、
+分子はそのうち読んだコマの数。extract_hook_frames.py の hook_*.jpg など抽出コマ以外の
+読み取りもテロップとしては取り込むが、被覆率には数えず telop_extra_reads に分けて残す
+（混ぜると 200% のような被覆率になる）。
+
+取り込み時に #PR 表記の最終判定（pr_status_final）をテロップ込みで再計算する。
 """
 import argparse
 import json
@@ -50,11 +64,36 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from extract_signals import merge_ocr_spans  # noqa: E402
+from common import normalize_text, read_jsonl  # noqa: E402
+from extract_signals import final_pr_status  # noqa: E402
 
 # Claude の読み取りは機械信頼度を持たないため、機械OCRの confidence と
 # 取り違えないよう固定値を入れる。100（=機械OCRの満点）は使わない。
 AGENT_CONFIDENCE = 95.0
+
+
+def merge_agent_reads(frame_reads):
+    """Claude の読み取りをテロップ区間にまとめる（時刻順の (秒, 文字, 信頼度) を受ける）。
+
+    旧実装は機械OCR用の merge_ocr_spans（類似度0.72・間隔上限なし）を流用していたため、
+      * 空白コマを挟んで再登場した同じテロップが1回に潰れ、
+      * 『Aもコンビニ』『Bもコンビニ』のような別テロップが1つにまとまって片方が消え、
+    テロップ経路の登場回数が過少になっていた。Claude の読み取りは機械OCRのような
+    ノイズを持たないので、完全一致の連続だけをまとめる。
+    """
+    spans = []
+    previous_text = None
+    for ts, text, conf in frame_reads:
+        if not text:
+            previous_text = None   # 文字の無いコマは切れ目
+            continue
+        key = normalize_text(text)
+        if spans and previous_text == key:
+            spans[-1]["end"] = ts
+        else:
+            spans.append({"start": ts, "end": ts, "text": text, "avg_confidence": conf})
+        previous_text = key
+    return spans
 
 
 def fail(message):
@@ -170,6 +209,9 @@ def main():
         for index, entry in enumerate(manifest["videos"])
     ]
 
+    # #PR の再判定に caption・hashtags が要る（signals には入っていない）。
+    videos = {v.get("video_id"): v for v in read_jsonl(run_dir / "normalized" / "videos.jsonl")}
+
     imported = []
     for video_id, frame_reads, signal, signal_path, is_photo in validated:
         if is_photo:
@@ -190,9 +232,23 @@ def main():
                 for idx, text, _c in frame_reads if text
             ]
         else:
-            spans = merge_ocr_spans(frame_reads)
-        read_count = len(frame_reads)
+            spans = merge_agent_reads(frame_reads)
         text_count = sum(1 for _ts, text, _c in frame_reads if text)
+
+        # 被覆率の分子は「抽出コマのうち読んだ数」。抽出コマ以外（hook_*.jpg 等）の
+        # 読み取りは数えない。数えると分子が分母を超える（実測 6/3 = 200%）。
+        read_keys = [key for key, _text, _c in frame_reads]
+        if is_photo:
+            sampled_keys = set(range(1, (len(signal.get("photo_paths") or [])
+                                         or signal.get("telop_frames_total") or 0) + 1))
+            covered = [k for k in read_keys if k in sampled_keys] if sampled_keys else read_keys
+        else:
+            sampled = [f.get("timestamp") for f in (signal.get("frame_files") or [])
+                       if isinstance(f.get("timestamp"), (int, float))]
+            covered = ([k for k in read_keys if any(abs(k - t) < 0.011 for t in sampled)]
+                       if sampled else read_keys)
+        read_count = len(covered)
+        extra_reads = len(read_keys) - read_count
 
         if not args.dry_run:
             signal["ocr_spans"] = spans
@@ -203,14 +259,23 @@ def main():
                      or len(signal.get("frame_files") or []) or 0)
             signal["telop_frames_total"] = total
             signal["telop_frames_read"] = read_count
-            signal["telop_coverage_pct"] = (round(read_count / total * 100, 1)
+            signal["telop_coverage_pct"] = (round(min(read_count, total) / total * 100, 1)
                                             if total else None)
+            signal["telop_extra_reads"] = extra_reads
+            # 読んだコマ（写真は何枚目か）の一覧。rank_patterns が「読んで文字なし」と
+            # 「読んでいない」を分けるのに使う（例: 最終写真の CTA 判定）。
+            signal["telop_read_keys"] = read_keys
             signal["telop_measured"] = True
             signal["telop_source"] = source
+            # テロップ中の「#PR」を判定に入れる。抽出時点ではテロップが空だったため、
+            # 取り込み後に再計算しないと #PR が一切反映されない。
+            video_record = videos.get(video_id, {"video_id": video_id})
+            signal["pr_status_final"] = final_pr_status(video_record, spans)
             signal["telop_import"] = {
                 "source": source,
                 "imported_at": datetime.now(timezone.utc).astimezone().isoformat(),
                 "frames_read": read_count,
+                "extra_reads_not_in_sampled_frames": extra_reads,
                 "frames_with_text": text_count,
                 "spans": len(spans),
                 "manifest": str(Path(args.manifest).expanduser()),

@@ -28,6 +28,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from acquire_media import attach_acquisition_fingerprint  # noqa: E402
+from common import resolve_media_path  # noqa: E402
+
+
+def with_resolved_paths(rec, media_dir):
+    """ハッシュ計算用に、台帳のパスを今の media/ 配下の実ファイルへ解決したコピーを返す。
+
+    search.mjs は `--run-dir run` のような相対指定だと `run/media/<id>.mp4` を
+    そのまま書く。run-dir を移動した場合も絶対パスが古い場所を指す。
+    解決できないものは元の文字列のまま渡し、従来どおり「媒体が無い」で失敗させる。
+    台帳に書き戻すのはハッシュだけで、パス文字列は書き換えない（取得側の記録を尊重する）。
+    """
+    def resolve(raw):
+        found = resolve_media_path(raw, media_dir)
+        return str(found) if found else raw
+
+    probe = dict(rec)
+    if probe.get("path"):
+        probe["path"] = resolve(probe["path"])
+    if probe.get("audio_path"):
+        probe["audio_path"] = resolve(probe["audio_path"])
+    if probe.get("photo_paths"):
+        probe["photo_paths"] = [resolve(p) for p in probe["photo_paths"]]
+    return probe
 
 
 def fail(msg):
@@ -71,12 +94,16 @@ def main():
             continue
 
         prev = rec.get("acquisition_sha256")
-        updated = attach_acquisition_fingerprint(rec)
-        if updated.get("status") != "ok":
+        fingerprinted = attach_acquisition_fingerprint(with_resolved_paths(rec, log_path.parent))
+        if fingerprinted.get("status") != "ok":
             # 媒体ファイルが消えている等。取得できなかったことを残す。
-            failed.append(f"{rec.get('video_id')}: {updated.get('error')}")
+            failed.append(f"{rec.get('video_id')}: {fingerprinted.get('error')}")
             lines.append(json.dumps(rec, ensure_ascii=False))
             continue
+        # 書き戻すのはハッシュだけ。パス文字列は台帳の記録のまま残す。
+        updated = dict(rec)
+        updated["media_hashes"] = fingerprinted["media_hashes"]
+        updated["acquisition_sha256"] = fingerprinted["acquisition_sha256"]
         now = updated.get("acquisition_sha256")
         if prev and prev != now:
             # 取得後に媒体が差し替わった＝資料の証拠と台帳が食い違う状態

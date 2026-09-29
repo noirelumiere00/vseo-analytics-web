@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Shared utilities for the tiktok-suite 02-analyze module.
+"""Shared utilities for the tiktok-suite tiktok-analyze module.
 
 build_dataset, acquire_media, extract_signals, classify_market_categories,
 measure_keywords, rank_patterns, import_browser_photos, select_evidence_frames
@@ -294,6 +294,53 @@ def extract_video_id(url: str):
 
 def is_short_link(url: str) -> bool:
     return bool(re.search(r"(vm|vt)\.tiktok\.com/", url or ""))
+
+
+def resolve_media_path(raw_path, media_dir):
+    """取得台帳（acquire_log.jsonl）に書かれた媒体パスを、今の run-dir の media/ 配下で解決する。
+
+    台帳のパスは search.mjs が**書いたときの形のまま**（絶対パス、または
+    `--run-dir run` で実行したときの `run/media/<id>.mp4` のようなカレント相対）。
+    これをそのまま Path() に渡すと、run-dir を移動・コピー・共有したときや、
+    解析をスキル側の scripts/ から実行したときに全件「媒体が無い」になる
+    （実測: 全投稿が error になり、既存の正常な signals まで上書きされた）。
+
+    そこで次の順に候補を試し、**解決後に media_dir の内側にある実在ファイル**だけを返す。
+    台帳を書き換えて media/ の外を読ませる改ざんは、最後の relative_to で従来どおり弾く。
+      1. 書かれたまま（絶対パス／カレント相対）
+      2. run-dir 基準・run-dir の親基準（search.mjs を相対 --run-dir で実行した場合）
+      3. パス中の最後の `media` より後ろを、今の media_dir に付け直したもの（run-dir を移動した場合）
+      4. `media` を含まないときは末尾2要素（<id>_photos/01.jpg）／末尾1要素
+    """
+    if not raw_path:
+        return None
+    media_dir = Path(media_dir)
+    try:
+        media_root = media_dir.resolve(strict=True)
+    except OSError:
+        return None
+    raw = Path(str(raw_path))
+    candidates = [raw]
+    if not raw.is_absolute():
+        run_dir = media_dir.parent
+        candidates += [run_dir / raw, run_dir.parent / raw]
+    parts = raw.parts
+    media_positions = [i for i, part in enumerate(parts) if part == "media"]
+    if media_positions and media_positions[-1] + 1 < len(parts):
+        candidates.append(media_dir.joinpath(*parts[media_positions[-1] + 1:]))
+    elif parts:
+        if len(parts) >= 2:
+            candidates.append(media_dir.joinpath(*parts[-2:]))
+        candidates.append(media_dir / parts[-1])
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=True)
+            resolved.relative_to(media_root)
+        except (OSError, ValueError):
+            continue
+        if resolved.is_file():
+            return resolved
+    return None
 
 
 def safe_artifact_id(value) -> str:

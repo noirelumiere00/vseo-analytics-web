@@ -17,6 +17,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import resolve_media_path  # noqa: E402
+
 
 def fail(msg):
     print(f"[STOP] {msg}", file=sys.stderr)
@@ -65,8 +68,10 @@ def main():
             results.append({"video_id": vid, "kind": "photo", "frames": 0,
                             "note": "写真投稿は <id>_photos/01.jpg を先頭として扱う"})
             continue
-        path = rec.get("path")
-        if not path or not Path(path).exists():
+        # 台帳のパスはカレント相対・移動前の絶対パスのことがあるので、
+        # 今の run-dir の media/ 配下へ解決してから使う（extract_signals と同じ規則）。
+        path = resolve_media_path(rec.get("path"), media_dir)
+        if not path:
             results.append({"video_id": vid, "kind": "video", "frames": 0,
                             "error": "媒体ファイルが見つかりません"})
             continue

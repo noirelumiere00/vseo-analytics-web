@@ -17,24 +17,31 @@ MIN_FREE_GB = 8
 # 資料生成しか使わない人に ffmpeg や faster-whisper を要求しない。
 # 値は (直し方, 必要なモジュール集合)。
 REQUIRED_BINARIES = {
-    "yt-dlp": ("02-analyze/scripts/requirements.txt を venv に入れる", {"analyze"}),
+    # yt-dlp は取得（search.mjs の予備経路・旧 acquire_media.py）でだけ使う。
+    # 分析だけの端末（別回線で取った raw/*.json と media/ を持ち込む運用）に要求しない。
+    "yt-dlp": ("tiktok-analyze/scripts/requirements.txt を venv に入れる", {"acquire"}),
     "ffmpeg": ("OS のパッケージマネージャで ffmpeg を入れる", {"analyze"}),
     "ffprobe": ("ffmpeg を入れる（ffprobe が同梱される）", {"analyze"}),
     # ③資料生成は pptxgenjs（Node）で描画する。python-pptx 時代の記述は誤りだった
     "node": ("Node.js 20 以降を入れる", {"acquire", "deck"}),
 }
 REQUIRED_MODULES = {
+    # stamp_acquire_log.py が acquire_media（冒頭で requests を import）を読むため、分析でも要る。
     "requests": ("requests", {"analyze"}),
-    "curl_cffi": ("curl-cffi", {"analyze"}),
+    # 写真投稿（<id>_photos/NN.jpg）の読み込みとコンタクトシート作成に使う。
+    # 無いと extract_signals が写真投稿を全件 error にするので任意ではない。
+    "PIL": ("Pillow", {"analyze"}),
     # 資料生成(deck)は標準ライブラリのみで動く。Python の外部パッケージは要らない。
-    # かつて PIL / python-pptx を必須にしていたが、現行 03-deck は使わない
+    # かつて PIL / python-pptx を必須にしていたが、現行 tiktok-deck は使わない
 }
 # 既定の工程では使わないが、入っていれば機能が増えるもの。
 # 無くても [STOP] にしない（無いこと自体は正常）
 OPTIONAL_MODULES = {
-    "faster_whisper": ("faster-whisper", {"analyze"}, "音声の文字起こし。無ければ「音声は未取得」と明記する"),
+    "faster_whisper": ("faster-whisper", {"analyze"},
+                       "音声の文字起こし。無ければ extract_signals は止まらず、動画の音声経路を"
+                       "「未計測（0件ではない）」として記録する（資料にもそう明記する）"),
     "scenedetect": ("scenedetect[opencv]", {"analyze"}, "シーン検出。無ければ等間隔になる（警告が出る）"),
-    "PIL": ("Pillow", {"analyze"}, "import_browser_photos.py を使う場合のみ"),
+    "curl_cffi": ("curl-cffi", {"acquire"}, "旧 acquire_media.py の取得で使う。無ければ requests で取得する"),
 }
 # 機械OCRは廃止したため tesseract / pytesseract は不要。
 # テロップは抽出フレームを Claude が読み、import_agent_telop.py で取り込む。
@@ -184,7 +191,7 @@ def main():
         if deck_root is None:
             problems.append({
                 "component": "node:pptxgenjs", "issue": "tiktok-deck が見つからない",
-                "fix": "スキル一式が壊れています。install.py で入れ直してください",
+                "fix": "スキル一式が壊れています。install.sh（Windows は install.ps1）で入れ直してください",
             })
         elif not (deck_root / "node_modules" / "pptxgenjs").is_dir():
             problems.append({
@@ -200,7 +207,7 @@ def main():
         problems.append({"component": "node", "issue": f"Node {node_version} is below 18", "fix": "install Node.js 18 or later"})
     if need_node and node_ok and not check_node_module():
         problems.append({
-            "component": "node:puppeteer-core", "issue": "01-acquire/scripts に入っていない",
+            "component": "node:puppeteer-core", "issue": "tiktok-acquire/scripts に入っていない",
             "fix": f"run: cd {SCRIPTS_DIR} && npm ci",
         })
 
@@ -253,7 +260,10 @@ def main():
             "fix": f"free at least {MIN_FREE_GB}GB before downloading video cohorts",
         })
 
-    if not args.skip_network:
+    # TikTok への到達性は取得（acquire）でだけ要る。分析は取得済みの raw/*.json と media/ を
+    # 読むだけなので、--module analyze で到達性を [STOP] にすると、別回線で取得したデータを
+    # 持ち込んで分析する（下の修正文言自身が勧めている）運用ができなくなる。
+    if not args.skip_network and needed({"acquire"}):
         # かつては不通のとき「経路B（Claude in Chrome でユーザーにログインさせる）」へ
         # 自動で切り替える設計だった。そのせいで別PCが7回ログインを試して詰まったので、
         # 切り替え先を持たせない。不通なら不通と報告して止める
@@ -263,7 +273,7 @@ def main():
                 problems.append({
                     "component": f"network:{name}", "issue": detail,
                     "fix": ("この回線から TikTok に到達できません。"
-                            "別の回線で 01-acquire を実行して raw/*.json を持ち込んでください。"
+                            "別の回線で tiktok-acquire を実行して raw/*.json を持ち込んでください。"
                             "ブラウザ操作ツールでログインして取る経路は採りません"
                             "（アカウント単位でブロックされる危険があるため）"),
                 })

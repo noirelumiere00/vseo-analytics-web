@@ -11,7 +11,8 @@
 という本スイート共通の作りに揃えている。
 
     python3 suggest_vocab.py --run-dir <run-dir>                  # 候補を出す
-    python3 suggest_vocab.py --run-dir <run-dir> --apply rules.json  # 確定させる
+    python3 suggest_vocab.py --run-dir <run-dir> --apply <run-dir>/rules.json  # 確定させる
+    # rules.json は案件データなので <run-dir> に置く（スキル本体の scripts/ に書かない）
 
 `rules.json` の形:
 
@@ -136,14 +137,14 @@ def main():
         "run_dir": str(run_dir),
         "records": len(recs),
         "note": ("これは候補であって分類ではない。ラベル付けは人／Claude が行い、"
-                 "rules.json にして --apply する。"
+                 f"{run_dir}/rules.json にして --apply する。"
                  "既定語彙（化粧品サンプル）を他業種に当てない"),
         "brand_and_axes": sorted(known),
         "unclassified_hashtags": [{"tag": t, "count": c} for t, c in tags.most_common(args.top)],
         "frequent_words_in_caption": [{"word": w, "count": c}
                                       for w, c in words.most_common(args.top)],
         "next": ("この候補を見て、意味のまとまりごとに label と terms を決め、"
-                 "rules.json に書いて --apply する"),
+                 f"{run_dir}/rules.json に書いて --apply する"),
     }, ensure_ascii=False, indent=2))
 
 

@@ -366,19 +366,27 @@ def compute_axis_metrics(video_ids, audits_by_video, valid_ids):
     if denominator == 0:
         return None
 
+    def route_status(vid, channel):
+        audit = audits_by_video.get(vid, {})
+        if channel == "asr":
+            return audit.get("voice_status")
+        if channel == "ocr":
+            return audit.get("telop_status")
+        return "measured"
+
     channels = {}
     for channel in ("caption", "hashtag", "ocr", "asr"):
-        # 経路ごとに分母を持つ。音声は写真投稿（BGMのみで発話が無い）を
-        # 構造的に対象外としているので、全件を分母にすると写真比率ぶん薄まる。
-        # README の3状態原則（not_applicable は分母から外す）をここで実際に適用する。
-        if channel == "asr":
-            # not_applicable（音声なし）だけでなく unmeasured（ASR未完了）も分母から外す。
-            # 残すと「計測していない＝0件」として登場率が薄まる
-            ch_pool = [vid for vid in pool
-                       if audits_by_video.get(vid, {}).get("voice_status") == "measured"]
-        else:
-            ch_pool = pool
-        excluded = len(pool) - len(ch_pool)
+        # 経路ごとに分母を持つ。3状態原則をここで実際に適用する:
+        #   measured       → 分子・分母に入れる
+        #   unmeasured     → 分母に入れない（0件にしない）。excluded_unmeasured に数える
+        #   not_applicable → 分母から外す。excluded_not_applicable に数える
+        # 音声は写真投稿（BGMのみ）が not_applicable、ASR未完了が unmeasured。
+        # テロップは import_agent_telop で取り込むまで unmeasured。旧実装は OCR 経路の
+        # 分母に未計測の投稿をそのまま入れ、全件未計測でも「テロップ登場率 0.0%」を出していた。
+        statuses = {vid: route_status(vid, channel) for vid in pool}
+        ch_pool = [vid for vid in pool if statuses[vid] == "measured"]
+        excluded_na = sum(1 for vid in pool if statuses[vid] == "not_applicable")
+        excluded_um = len(pool) - len(ch_pool) - excluded_na
         ch_den = len(ch_pool)
         counts = [audits_by_video.get(vid, {}).get("channel_counts", {}).get(channel, 0)
                   for vid in ch_pool]
@@ -386,7 +394,10 @@ def compute_axis_metrics(video_ids, audits_by_video, valid_ids):
         total = sum(counts)
         channels[channel] = {
             "valid_videos": ch_den,
-            "excluded_not_applicable": excluded,
+            # 「構造的に存在しない」だけを数える（資料側はこれを『対象外』と印字する）。
+            "excluded_not_applicable": excluded_na,
+            # 「まだ計測していない」。対象外と混ぜると『音声が無い』と誤読される。
+            "excluded_unmeasured": excluded_um,
             "videos_with_keyword": videos_with,
             "appearance_rate_pct": round(videos_with / ch_den * 100, 1) if ch_den else None,
             "total_mentions": total,
@@ -398,6 +409,12 @@ def compute_axis_metrics(video_ids, audits_by_video, valid_ids):
     videos_with_keyword = sum(1 for count in unique_counts if count > 0)
     surface_total = sum(surface_counts)
     unique_total = sum(unique_counts)
+    # 統合の登場率・平均回数は4経路の合算。テロップ／音声が未計測の投稿は
+    # その経路のぶんを数えていないので、ここの値は「下限値」になる。黙って確定値に見せない。
+    unmeasured_routes = {
+        "ocr": channels["ocr"]["excluded_unmeasured"],
+        "asr": channels["asr"]["excluded_unmeasured"],
+    }
     return {
         "valid_videos": denominator,
         "videos_with_keyword": videos_with_keyword,
@@ -406,6 +423,8 @@ def compute_axis_metrics(video_ids, audits_by_video, valid_ids):
         "avg_mentions_per_video": round(unique_total / denominator, 2),
         "surface_total_mentions": surface_total,
         "avg_surface_mentions_per_video": round(surface_total / denominator, 2),
+        "unmeasured_route_videos": unmeasured_routes,
+        "is_lower_bound": any(unmeasured_routes.values()),
         "channels": channels,
     }
 
@@ -450,7 +469,7 @@ def main():
             "telop の登場回数が 0 件として資料に流れます。\n"
             f"  未計測: {sample}{more}\n"
             "  対応1: 抽出フレームを読み、import_agent_telop.py で取り込んでから再実行する\n"
-            f"          python import_agent_telop.py --run-dir {run_dir} --manifest telop.json\n"
+            f"          python import_agent_telop.py --run-dir {run_dir} --manifest {run_dir}/telop.json\n"
             "  対応2: telop 抜きで集計してよい場合のみ --allow-unmeasured-telop を付ける\n"
             "          （その場合、資料には telop を『未計測（0件ではない）』と明記すること）",
             file=sys.stderr,
@@ -459,7 +478,9 @@ def main():
     if unmeasured_ids:
         print(
             f"WARNING: --allow-unmeasured-telop により、telop 未計測 {len(unmeasured_ids)}/"
-            f"{len(measurable_ids)} 件を telop 集計から除外しました。"
+            f"{len(measurable_ids)} 件をテロップ経路（ocr）の分母から除外しました"
+            "（channels.ocr.excluded_unmeasured）。統合の登場率・平均回数はテロップ未計測分を"
+            "含まない下限値です（overall.is_lower_bound）。"
             "資料には『未計測（0件ではない）』と明記してください。",
             file=sys.stderr,
         )
@@ -480,23 +501,37 @@ def main():
             vid for vid, video in videos.items()
             if any(a.get("source_file") == source_file for a in video.get("source_appearances", []))
         ]
-        pr_ids = [
-            vid for vid in member_ids if vid in signals and
-            signals[vid].get("pr_status_final", videos[vid].get("pr_status_prelim")) == "pr"
-        ]
-        no_pr_ids = [
-            vid for vid in member_ids if vid in signals and
-            signals[vid].get("pr_status_final", videos[vid].get("pr_status_prelim")) == "no_pr"
-        ]
+        # 広告（pr）群の定義は「#PR 表記（caption・hashtags・取り込み済みテロップ）」または
+        # 「TikTok 側の広告フラグ（isAd）」（2026-09-03 決定。SKILL.md・tiktok-deck と同じ）。
+        # #PR だけで割ると、同じ資料に別定義の PR 比率が併存する。内訳は pr_breakdown に残す。
+        def pr_tag(vid):
+            return signals[vid].get("pr_status_final", videos[vid].get("pr_status_prelim")) == "pr"
+
+        def platform_ad(vid):
+            return videos[vid].get("is_ad_platform_flag") is True
+
+        processed_members = [vid for vid in member_ids if vid in signals]
+        pr_ids = [vid for vid in processed_members if pr_tag(vid) or platform_ad(vid)]
+        no_pr_ids = [vid for vid in processed_members if not (pr_tag(vid) or platform_ad(vid))]
+        pr_breakdown = {
+            "pr_tag_only": sum(1 for vid in processed_members if pr_tag(vid) and not platform_ad(vid)),
+            "platform_ad_flag_only": sum(1 for vid in processed_members
+                                         if platform_ad(vid) and not pr_tag(vid)),
+            "both": sum(1 for vid in processed_members if pr_tag(vid) and platform_ad(vid)),
+        }
         axes.append({
             "role": file_cfg["role"],
             "label": file_cfg["label"],
             "source_file": source_file,
+            # search.mjs が「API応答はあるが該当0件（TIKTOK_TRULY_EMPTY）」と診断した軸。
+            # 取得失敗ではなく計測した0件（build_dataset が confirmed_config に記録）。
+            "zero_result": bool(file_cfg.get("zero_result")),
             "total_videos_in_file": len(set(member_ids)),
             "processed_videos_in_file": len(set(member_ids) & processed_ids),
             "overall": compute_axis_metrics(member_ids, audits_by_video, relevant_ids),
             "pr": compute_axis_metrics(pr_ids, audits_by_video, relevant_ids),
             "no_pr": compute_axis_metrics(no_pr_ids, audits_by_video, relevant_ids),
+            "pr_breakdown": pr_breakdown,
         })
 
     total_normalized = len(videos)
@@ -515,16 +550,17 @@ def main():
     # telop は機械OCR廃止後、取り込み済みの投稿だけが計測対象。
     # 「OCR完了」と書くと未計測分を 0 と読まれるため、実数で明示する。
     # 写真投稿はBGMのみで発話が無いため音声の分母から外す（計算上の除外は維持する）。
-    # ただし資料に出す注記は不要との判断のため、coverage_note には足さない。
-    # 除外実数は audit の voice_status / voice_excluded に機械可読で残す。
-    voice_na = [vid for vid in measurable_ids
-                # 分母から外したのは not_applicable だけではない。unmeasured も外している。
-                # ここを2値のままにすると、分母と除外実数が食い違う
-                if signals[vid].get("voice_channel") != "measured"]
+    # ただし「対象外」の注記は資料に不要との判断のため、coverage_note には足さない。
+    # 除外実数は audit の voice_status と channels.asr.excluded_not_applicable に機械可読で残す。
+    # 一方「未計測（ASR未完了・faster-whisper 未導入）」は0件と区別して必ず開示する。
+    voice_unmeasured = [vid for vid in measurable_ids
+                        if audits_by_video.get(vid, {}).get("voice_status") == "unmeasured"]
     if unmeasured_ids:
         coverage_note += (
             f" テロップは {telop_done} / {len(measurable_ids)} 件のみ計測済みで、"
             f"残り {len(unmeasured_ids)} 件は未計測（0件ではない）です。"
+            "テロップ経路の率は計測済みの投稿だけを分母にし、"
+            "統合の登場率・平均回数はテロップ未計測分を含まない下限値です。"
         )
     else:
         # 「件」で全件と書くと、1枚だけ読んだ投稿も計測済みに見える。
@@ -556,6 +592,11 @@ def main():
         else:
             coverage_note += (f" テロップは {telop_done} / {len(measurable_ids)} 件"
                               f"（{read} / {tot} 枚）すべて計測済みです。")
+    if voice_unmeasured:
+        coverage_note += (
+            f" 音声は {len(voice_unmeasured)} 件が未計測（文字起こし未完了。0件ではない）のため"
+            "音声経路の分母から外しています。統合の登場率・平均回数はその分を含まない下限値です。"
+        )
     if total_processed < total_normalized:
         coverage_note += " 未処理動画は0回として扱わず、追加処理後に再集計します。"
     if 0 < total_processed < 30:
@@ -572,6 +613,8 @@ def main():
         "keyword_variants": [v["display"] for v in variants],
         "merge_window_seconds": args.merge_window_seconds,
         "primary_count_definition": "unique_event_total",
+        # axes[].pr / no_pr の群分け定義。内訳は axes[].pr_breakdown。
+        "pr_definition": "pr = #PR表記（caption・hashtags・取り込み済みテロップ）または TikTok の広告フラグ（isAd）",
         "coverage_note": coverage_note,
         "total_videos_normalized": total_normalized,
         "total_videos_processed": total_processed,

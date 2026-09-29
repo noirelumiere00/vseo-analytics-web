@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-"""Extract OCR (on-screen telop/photo text) + ASR signals from acquired
+"""Extract frames (for Claude to read as telop) + ASR signals from acquired
 TikTok media, and make the final relevance / #PR decision.
 
-Frame sampling uses scene-detection (PySceneDetect) as the primary trigger
-— it catches telop changes that a fixed interval would straddle or waste
-compute re-reading — unioned with a coarse fixed-interval fallback so a
-slow pan/zoom with no hard cut still gets sampled. Total frames per video
-is capped so a long video can't blow up OCR cost.
+機械OCR（Tesseract）は撤去済み。ここでは読み取り対象のフレーム画像を
+<run-dir>/frames/<video_id>/f_TTTT.TT.jpg に残すだけで、テロップは
+Claude が読んで import_agent_telop.py で取り込むまで **未計測**
+（telop_measured=false）として記録する。
 
-Video OCR consecutive-frame text is merged into spans by fuzzy similarity
-(difflib), not exact match — real tesseract reads of the same static
-telop are rarely byte-identical (compression/motion-blur noise), so exact
-dedup would fragment one telop into many spurious spans.  Photo-mode posts
-are different: every actual carousel image is OCRed once, kept as its own
-span, and tied to its source path/photo index.  Their music/audio is still
-sent to ASR when it was acquired, but untimed photos are never falsely
-aligned with timed speech.
+Frame sampling uses scene-detection (PySceneDetect) as the primary trigger
+— it catches telop changes that a fixed interval would straddle — unioned
+with a coarse fixed-interval fallback so a slow pan/zoom with no hard cut
+still gets sampled. Total frames per video is capped (--max-frames).
+
+写真投稿は <id>_photos/NN.jpg そのものが読み取り対象（フレーム抽出しない）。
+写真投稿の音声は BGM のみで投稿者の発話が無いため not_applicable とし、
+文字起こしもしない（歌詞をキーワード言及として数えないため）。
+
+faster-whisper が未導入・読み込み失敗のときは止めずに、動画の音声経路を
+unmeasured（未計測。0件ではない）として記録する。
 
 Usage:
     python3 extract_signals.py --run-dir <dir> --confirmed-config confirmed_config.json \
-        [--video-ids id1,id2,...] [--max-frames 15] [--whisper-model small]
+        [--video-ids id1,id2,...] [--max-frames 24] [--whisper-model small]
 
     # After the ordinary full-corpus pass, densely re-analyze the top 10
     # unique posts in every search axis and generate Agent review sheets:
@@ -27,9 +29,10 @@ Usage:
         --dense-top-n-per-source 10 --dense-fps 4
 
 Output:
-    <run-dir>/signals/<video_id>.json   per-video OCR spans + ASR segments + final relevance/#PR
+    <run-dir>/frames/<video_id>/f_*.jpg  frames for Claude to read (telop)
+    <run-dir>/signals/<video_id>.json   per-video frames + ASR segments + final relevance/#PR
     <run-dir>/signals/extract_log.jsonl  checkpoint (one line per processed video)
-    <run-dir>/signals/dense_selection_manifest.json  per-axis top-N selection audit
+    <run-dir>/signals/_dense_selection_manifest.json  per-axis top-N selection audit
     <run-dir>/visual_review/dense_4fps/manifest.json  contact-sheet review manifest
 """
 import argparse
@@ -45,7 +48,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from common import (  # noqa: E402
     read_jsonl, append_jsonl, has_pr_tag, contains_term, normalize_text,
-    safe_artifact_id,
+    safe_artifact_id, resolve_media_path,
 )
 
 MAX_FRAMES_DEFAULT = 24
@@ -508,6 +511,19 @@ def transcribe(model, media_path, source_type="video_audio"):
     return out, getattr(info, "language", None)
 
 
+def final_pr_status(video_record, ocr_spans):
+    """#PR 表記の最終判定（caption・hashtags・テロップ）。
+
+    テロップは import_agent_telop.py で取り込むまで空なので、抽出時点の判定は
+    caption・hashtags だけになる。取り込み・引き継ぎのたびにこの関数で
+    再計算しないと、テロップ中の「#PR」が判定に一切反映されない（実測）。
+    """
+    ocr_text = " ".join(span.get("text", "") for span in (ocr_spans or []))
+    tagged = has_pr_tag(
+        ",".join(video_record.get("hashtags", []) or []), video_record.get("caption", ""), ocr_text)
+    return "pr" if tagged else video_record.get("pr_status_prelim", "no_pr")
+
+
 def decide_relevance(video_record, ocr_spans, asr_segments, brand, product):
     """Final (post-extraction) relevance call — see SKILL.md's two-pass
     design. Conservative: only 'relevant' on a real hit, otherwise
@@ -534,7 +550,8 @@ def decide_relevance(video_record, ocr_spans, asr_segments, brand, product):
 
 
 def process_video(video_record, media_path, whisper_model, max_frames, brand, product, tmp_dir,
-                  has_audio=True, frames_root=None):
+                  has_audio=True, frames_root=None, requested_whisper_model=None,
+                  asr_unavailable_reason=None):
     video_tmp_dir = tmp_dir / safe_artifact_id(video_record["video_id"])
     video_tmp_dir.mkdir(parents=True, exist_ok=True)
     # フレームは run-dir 配下に残す。Claude がこれを読み、
@@ -551,15 +568,23 @@ def process_video(video_record, media_path, whisper_model, max_frames, brand, pr
     ocr_spans = merge_ocr_spans(frame_reads)
     low_confidence_spans = [s for s in ocr_spans if s["avg_confidence"] < 55]
 
-    if has_audio and whisper_model:
+    # 音声の状態は「実際に文字起こしが走ったか」で決める。
+    # 旧実装は main() で無条件に measured / asr_completed=True を上書きしていたため、
+    # faster-whisper が無くて1秒も聞いていない動画まで「計測済み・0件」になっていた。
+    asr_ran = bool(has_audio and whisper_model)
+    if asr_ran:
         asr_segments, detected_lang = transcribe(whisper_model, media_path, "video_audio")
     else:
         asr_segments, detected_lang = [], None
+    if not has_audio:
+        voice_channel, voice_reason, asr_status = "not_applicable", "音声トラックが無い", "not_required"
+    elif asr_ran:
+        voice_channel, voice_reason, asr_status = "measured", None, "completed"
+    else:
+        voice_channel = "unmeasured"
+        voice_reason = asr_unavailable_reason or "音声の文字起こしを実行していない"
+        asr_status = "missing"
 
-    all_ocr_text = " ".join(s["text"] for s in ocr_spans)
-    pr_final = has_pr_tag(
-        ",".join(video_record.get("hashtags", [])), video_record.get("caption", ""), all_ocr_text
-    )
     relevance_final, relevance_hits = decide_relevance(video_record, ocr_spans, asr_segments, brand, product)
 
     return {
@@ -570,9 +595,13 @@ def process_video(video_record, media_path, whisper_model, max_frames, brand, pr
         "duration_seconds": video_record.get("duration_seconds"),
         # 動画は発話がありうるので音声を分母に含める（写真パス側で not_applicable にする）。
         # 音声トラックの有無だけで measured にすると、ASR が失敗・未実行でも
-        # 「計測済み・0件」として下流に流れる。実際に走ったかは後段で上書きする
-        "voice_channel": "pending" if has_audio else "not_applicable",
-        "voice_channel_reason": None if has_audio else "音声トラックが無い",
+        # 「計測済み・0件」として下流に流れる。実際に走ったかで3状態を決める
+        "voice_channel": voice_channel,
+        "voice_channel_reason": voice_reason,
+        "asr_required": has_audio,
+        "asr_completed": asr_ran or not has_audio,
+        "asr_status": asr_status,
+        "asr_model_actual": requested_whisper_model if asr_ran else None,
         "media_type": "video",
         "sampling_mode": "adaptive_scene_grid",
         "sampling_fps": None,
@@ -593,7 +622,7 @@ def process_video(video_record, media_path, whisper_model, max_frames, brand, pr
         "low_confidence_ocr_span_count": len(low_confidence_spans),
         "asr_segments": asr_segments,
         "asr_detected_language": detected_lang,
-        "pr_status_final": "pr" if pr_final else video_record.get("pr_status_prelim", "no_pr"),
+        "pr_status_final": final_pr_status(video_record, ocr_spans),
         "relevance_final": relevance_final,
         "relevance_final_hits": relevance_hits,
         "ocr_sampling_note": f"scene-aware/fixed-grid sampling, max {max_frames} frames",
@@ -669,10 +698,6 @@ def process_video_dense(video_record, media_path, whisper_model, dense_fps, bran
             asr_completed = not has_audio
             asr_status = "not_required" if not has_audio else "missing"
 
-        all_ocr_text = " ".join(span["text"] for span in ocr_spans)
-        pr_final = has_pr_tag(
-            ",".join(video_record.get("hashtags", [])), video_record.get("caption", ""),
-            all_ocr_text)
         relevance_final, relevance_hits = decide_relevance(
             video_record, ocr_spans, asr_segments, brand, product)
 
@@ -706,6 +731,9 @@ def process_video_dense(video_record, media_path, whisper_model, dense_fps, bran
             incomplete_reasons.append("ASR was required but did not complete")
         return {
             "video_id": video_id,
+            # import_agent_telop はこれで「別投稿の読み取り混入」を検出する。
+            # dense の signal に無いと、その検査が無言でスキップされていた。
+            "video_url": video_record.get("video_url"),
             "media_type": "video",
             "sampling_mode": _fps_token(dense_fps),
             "sampling_fps": dense_fps,
@@ -719,8 +747,8 @@ def process_video_dense(video_record, media_path, whisper_model, dense_fps, bran
             "ocr_frame_error_count": len(ocr_errors),
             "ocr_frame_errors": ocr_errors,
             "ocr_spans": ocr_spans,
-        "telop_measured": telop_is_measured(),
-        "telop_source": TELOP_SOURCE,
+            "telop_measured": telop_is_measured(),
+            "telop_source": TELOP_SOURCE,
             "low_confidence_ocr_span_count": len(low_confidence_spans),
             "asr_segments": asr_segments,
             "asr_detected_language": detected_lang,
@@ -739,7 +767,7 @@ def process_video_dense(video_record, media_path, whisper_model, dense_fps, bran
             "asr_reused_source_analysis_profile": (
                 reused_asr.get("source_analysis_profile") if reused_asr else None
             ),
-            "pr_status_final": "pr" if pr_final else video_record.get("pr_status_prelim", "no_pr"),
+            "pr_status_final": final_pr_status(video_record, ocr_spans),
             "relevance_final": relevance_final,
             "relevance_final_hits": relevance_hits,
             "ocr_sampling_note": (
@@ -791,30 +819,12 @@ def process_photo_post(video_record, photo_paths, audio_path, whisper_model, bra
         })
     low_confidence_spans = [span for span in ocr_spans if span["avg_confidence"] < 55]
 
-    if reused_asr is not None:
-        asr_segments = reused_asr.get("segments", [])
-        detected_lang = reused_asr.get("language")
-        asr_reused = True
-        asr_model_actual = reused_asr.get("model")
-        asr_completed = True
-        asr_status = "reused_completed"
-    elif audio_path and whisper_model:
-        asr_segments, detected_lang = transcribe(
-            whisper_model, audio_path, "tiktok_photo_audio")
-        asr_reused = False
-        asr_model_actual = requested_whisper_model
-        asr_completed = True
-        asr_status = "completed"
-    else:
-        asr_segments, detected_lang = [], None
-        asr_reused = False
-        asr_model_actual = None
-        asr_completed = not bool(audio_path)
-        asr_status = "not_required" if not audio_path else "missing"
-
-    all_ocr_text = " ".join(span["text"] for span in ocr_spans)
-    pr_final = has_pr_tag(
-        ",".join(video_record.get("hashtags", [])), video_record.get("caption", ""), all_ocr_text)
+    # 写真投稿の音声は BGM のみで、voice_channel は常に not_applicable。
+    # 旧実装はそれでも文字起こしをしていたため、(1) 結果はどこでも使わないのに
+    # faster-whisper が無いと写真投稿まで error になり、(2) BGM が上限秒数を超えると
+    # 投稿ごと skipped_too_long で分母から消えていた。文字起こし自体をしない。
+    # reused_asr / whisper_model は呼び出し互換のため受けるだけで使わない。
+    asr_segments, detected_lang = [], None
     relevance_final, relevance_hits = decide_relevance(
         video_record, ocr_spans, asr_segments, brand, product)
     return {
@@ -847,40 +857,36 @@ def process_photo_post(video_record, photo_paths, audio_path, whisper_model, bra
         "low_confidence_ocr_span_count": len(low_confidence_spans),
         "asr_segments": asr_segments,
         "asr_detected_language": detected_lang,
-        "asr_required": bool(audio_path),
-        "asr_completed": asr_completed,
-        "asr_status": asr_status,
-        "asr_model_actual": asr_model_actual,
-        "asr_reused_from_existing_signal": asr_reused,
-        "asr_reused_source_analysis_profile": (
-            reused_asr.get("source_analysis_profile") if reused_asr else None
-        ),
-        "pr_status_final": "pr" if pr_final else video_record.get("pr_status_prelim", "no_pr"),
+        "asr_required": False,
+        "asr_completed": True,
+        "asr_status": "not_applicable_photo_bgm",
+        "asr_model_actual": None,
+        "asr_reused_from_existing_signal": False,
+        "asr_reused_source_analysis_profile": None,
+        "pr_status_final": final_pr_status(video_record, ocr_spans),
         "relevance_final": relevance_final,
         "relevance_final_hits": relevance_hits,
         "ocr_sampling_note": "写真は全枚を抽出済み。読み取りは import_agent_telop での取り込み分のみ",
         "source_provenance": {
             "ocr_source_type": "actual_tiktok_photo",
             "ocr_photo_paths": [str(path) for path in photo_paths],
-            "asr_source_type": "tiktok_photo_audio" if audio_path else None,
-            "asr_media_path": str(audio_path) if audio_path else None,
+            "asr_source_type": None,
+            "asr_media_path": None,
+            # 取得できた BGM の所在は残す（文字起こしはしない）。
+            "photo_audio_path": str(audio_path) if audio_path else None,
         },
-        "_incomplete_reasons": (
-            ["ASR was required but did not complete"] if audio_path and not asr_completed else []
-        ),
+        "_incomplete_reasons": [],
     }
 
 
 def safe_acquired_path(raw_path, media_dir):
-    """Reject tampered checkpoint paths that escape this run's media folder."""
-    if not raw_path:
-        return None
-    try:
-        path = Path(raw_path).resolve(strict=True)
-        path.relative_to(media_dir.resolve(strict=True))
-    except (OSError, ValueError):
-        return None
-    return path if path.is_file() else None
+    """Reject tampered checkpoint paths that escape this run's media folder.
+
+    台帳のパスはカレント相対や移動前の絶対パスのことがあるため、
+    common.resolve_media_path で「今の media_dir 配下の実在ファイル」に解決する
+    （media_dir の外は従来どおり弾く）。
+    """
+    return resolve_media_path(raw_path, media_dir)
 
 
 def resolve_photo_acquisition(acquisition, media_dir):
@@ -1003,8 +1009,9 @@ def _dense_review_complete(review_manifest, video_id):
 
 def _signal_uses_requested_asr(signal, acquisition, requested_model):
     media_type = acquisition.get("media_type") or "video"
+    # 写真投稿の音声は not_applicable で文字起こししない（BGMのみ）。
     asr_required = (
-        bool(acquisition.get("audio_path")) if media_type == "photo"
+        False if media_type == "photo"
         else acquisition.get("has_audio") is not False
     )
     if not asr_required:
@@ -1024,9 +1031,11 @@ def _dense_signal_complete_payload(signal, profile, acquisition, requested_model
         return False
     if media_type == "photo":
         expected = acquisition.get("photo_count_expected", len(acquisition.get("photo_paths", [])))
+        # 機械OCR撤去後 photos_ocrd は常に 0 なので、それを完了条件にすると
+        # 写真投稿が dense で永久に未完了になる。全枚を抽出できたかで判定する。
         return (
             signal.get("sampling_mode") == "photo_all_images"
-            and signal.get("photos_ocrd") == expected
+            and signal.get("photos_extracted") == expected
         )
     return (
         signal.get("analysis_profile") == profile
@@ -1053,7 +1062,11 @@ def _adaptive_signal_complete(signal_path, profile, acquisition, requested_model
     sampling_mode = signal.get("sampling_mode")
     if (acquisition.get("media_type") or "video") == "photo":
         return sampling_mode == "photo_all_images"
-    return sampling_mode == profile or str(sampling_mode or "").startswith("dense_")
+    # 完了判定は checkpoint の鍵である analysis_profile（例 adaptive_scene_grid_max24）で行う。
+    # 旧実装は sampling_mode（"adaptive_scene_grid"）と profile を比べていたため一致せず、
+    # フラグなしの再実行だけで全動画が再処理されていた。
+    return (signal.get("analysis_profile") == profile
+            or str(sampling_mode or "").startswith("dense_"))
 
 
 def _photo_review_entry(video_record, photo_paths, result, review_video_dir):
@@ -1189,6 +1202,18 @@ def main():
     review_manifest_path = None
     review_manifest = None
     if dense_mode:
+        # 完了判定は取得台帳の指紋（acquisition_sha256）に紐づく。stamp_acquire_log.py を
+        # 飛ばすと指紋が None のままで、通常解析を何度やり直しても「通常解析が先に必要」で
+        # 永久に拒否される。本当の原因（スタンプ未実行）を名指しして止める。
+        unstamped = sorted(video_id for video_id, record in ok_acquisitions.items()
+                           if not record.get("acquisition_sha256"))
+        if unstamped:
+            ap.error(
+                "dense mode needs media fingerprints, but media/acquire_log.jsonl has no "
+                f"acquisition_sha256 for {len(unstamped)} post(s) (e.g. {', '.join(unstamped[:5])}). "
+                "stamp_acquire_log.py が未実行です。次の順で実行してください: "
+                f"stamp_acquire_log.py --run-dir {run_dir} → extract_signals.py（フラグなし・"
+                "取り込み済みテロップは引き継がれる） → このコマンド")
         missing_adaptive = missing_adaptive_checkpoint_ids(log_path, ok_acquisitions)
         if missing_adaptive:
             shown = ", ".join(missing_adaptive[:12])
@@ -1233,7 +1258,13 @@ def main():
                 for video_id in target_ids
             },
         }
-        selection_manifest_path = signals_dir / "dense_selection_manifest.json"
+        # 先頭を "_" にする。signals/*.json を投稿ごとの signal として読む側
+        # （tiktok-deck の build_deck.py は "_" 始まりだけを除外する）が、
+        # これを「解析対象外 1件（video_id=None）」と数えていた。
+        selection_manifest_path = signals_dir / "_dense_selection_manifest.json"
+        legacy_manifest_path = signals_dir / "dense_selection_manifest.json"
+        if legacy_manifest_path.exists():
+            legacy_manifest_path.unlink()
         _write_dense_selection_manifest(selection_manifest_path, selection_manifest)
 
         review_root = run_dir / "visual_review" / analysis_profile
@@ -1319,8 +1350,16 @@ def main():
         # 「対象0本」を無風で通すと、後段の measure_keywords が
         # 「すべて計測済み」と書き、資料に未計測が計測値として載る。
         # 全部済んでいるのか、1本も無いのかを分けて、後者では止める
-        if already_done and len(already_done) >= len(target_ids) > 0:
-            print(f"  すべて処理済みです（{len(already_done)} 件）")
+        # 媒体が未取得の対象（dense の上位に取得失敗が入る等）は処理しようがないので、
+        # 「取得できている対象がすべて済んだ」かで判定する。未取得分は件数を出して知らせる
+        # （0件ではなく未計測。dense では _dense_selection_manifest.json にも残る）。
+        acquirable_targets = [video_id for video_id in target_ids if video_id in ok_acquisitions]
+        if acquirable_targets and all(video_id in already_done for video_id in acquirable_targets):
+            print(f"  すべて処理済みです（{len(acquirable_targets)} 件）")
+            missing_media = len(target_ids) - len(acquirable_targets)
+            if missing_media:
+                print(f"  ただし {missing_media} 件は媒体が未取得のため解析していません"
+                      "（0件ではなく未計測）")
             return
         print("\n[STOP] 解析できる動画が1本もありません。")
         print(f"  対象 {len(target_ids)} 件 / 取得できている動画 {len(ok_acquisitions)} 件")
@@ -1342,24 +1381,45 @@ def main():
             if reusable is not None:
                 asr_reuse[video_id] = reusable
 
-    # All ordinary videos may contain audio.  Photo posts only require Whisper
-    # when an audio path was actually retained and no safe transcript is reusable.
+    # All ordinary videos may contain audio.  Photo posts never need Whisper:
+    # their audio is BGM only and the voice route is not_applicable.
     needs_asr = any(
-        video_id not in asr_reuse and (
-            (record.get("media_type") == "photo" and record.get("audio_path"))
-            or (record.get("media_type") != "photo" and record.get("has_audio") is not False)
-        )
+        video_id not in asr_reuse
+        and record.get("media_type") != "photo" and record.get("has_audio") is not False
         for video_id, record in ok_acquisitions.items() if video_id in to_process
     )
     model = None
+    asr_unavailable_reason = None
     if needs_asr:
         print(f"loading faster-whisper model '{args.whisper_model}' ...")
-        from faster_whisper import WhisperModel
-        model = WhisperModel(args.whisper_model, device="cpu", compute_type="int8")
+        # faster-whisper は requirements.txt / check_dependencies.py で「任意」扱い。
+        # 旧実装はここで ModuleNotFoundError になり signals が1件も作られなかった。
+        # 止めずに音声経路を unmeasured（未計測。0件ではない）として記録し、
+        # テロップ・キャプション側の工程は進められるようにする。
+        try:
+            from faster_whisper import WhisperModel
+            model = WhisperModel(args.whisper_model, device="cpu", compute_type="int8")
+        except Exception as exc:  # noqa: BLE001  未導入・モデル取得失敗のどちらも同じ扱い
+            asr_unavailable_reason = (
+                f"音声の文字起こし（faster-whisper '{args.whisper_model}'）を使えないため未計測: "
+                f"{type(exc).__name__}: {exc}")
+            remedy = (
+                "<PY> -m pip install 'faster-whisper>=1.1,<2' のあと"
+                if isinstance(exc, ImportError) else
+                f"モデル '{args.whisper_model}' を取得できる通信・キャッシュを用意したうえで")
+            print(
+                "[警告] faster-whisper を使えませんでした。動画の音声経路は"
+                "「未計測（0件ではない）」として記録し、音声の登場率の分母から外します。\n"
+                f"  原因: {type(exc).__name__}: {exc}\n"
+                f"  音声も計測する場合: {remedy}、"
+                "同じコマンドを再実行してください（未計測の投稿だけが再処理されます）。",
+                file=sys.stderr)
 
     tmp_dir = run_dir / "tmp" / "extract_frames"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
+    succeeded = 0
+    failures = []
     for i, vid in enumerate(to_process, 1):
         acquisition = ok_acquisitions[vid]
         video_record = videos.get(vid, {"video_id": vid})
@@ -1369,32 +1429,27 @@ def main():
                 photo_paths, audio_path = resolve_photo_acquisition(acquisition, media_dir)
                 if not photo_paths:
                     raise ValueError("photo-mode acquisition has no safe existing photo paths")
-                duration = get_duration(audio_path) if audio_path else None
-                if duration and duration > args.max_duration_seconds:
-                    result = {
-                        "video_id": vid, "status": "skipped_too_long", "media_type": "photo",
-                        "duration_seconds": duration,
-                        "error": f"photo-mode audio exceeds safety limit {args.max_duration_seconds}s; rerun with an explicit higher limit after review",
-                    }
-                else:
-                    result = process_photo_post(
-                        video_record, photo_paths, audio_path, model, brand, product,
-                        reused_asr=asr_reuse.get(vid),
-                        requested_whisper_model=args.whisper_model)
-                    if dense_mode:
-                        review_entry = _photo_review_entry(
-                            video_record, photo_paths, result,
-                            review_root / safe_artifact_id(vid))
-                        result["visual_review_contact_sheet_paths"] = [
-                            sheet["path"] for sheet in review_entry.get("contact_sheets", [])
-                        ]
-                        result["_visual_review_entry"] = review_entry
-                    incomplete_reasons = result.pop("_incomplete_reasons", [])
-                    result["status"] = "error" if incomplete_reasons else "ok"
-                    if incomplete_reasons:
-                        result["error"] = "; ".join(incomplete_reasons)
-                    result["whisper_model"] = result.get("asr_model_actual")
-                    result["max_frames"] = None
+                # 写真投稿には尺の上限を当てない。BGM は文字起こししない（not_applicable）ので
+                # 長さは処理コストに効かず、上限超えで投稿ごと skipped_too_long にすると
+                # キャプション・テロップ・分類のすべてから黙って消える（実測）。
+                result = process_photo_post(
+                    video_record, photo_paths, audio_path, model, brand, product,
+                    reused_asr=asr_reuse.get(vid),
+                    requested_whisper_model=args.whisper_model)
+                if dense_mode:
+                    review_entry = _photo_review_entry(
+                        video_record, photo_paths, result,
+                        review_root / safe_artifact_id(vid))
+                    result["visual_review_contact_sheet_paths"] = [
+                        sheet["path"] for sheet in review_entry.get("contact_sheets", [])
+                    ]
+                    result["_visual_review_entry"] = review_entry
+                incomplete_reasons = result.pop("_incomplete_reasons", [])
+                result["status"] = "error" if incomplete_reasons else "ok"
+                if incomplete_reasons:
+                    result["error"] = "; ".join(incomplete_reasons)
+                result["whisper_model"] = result.get("asr_model_actual")
+                result["max_frames"] = None
             else:
                 media_path = safe_acquired_path(acquisition.get("path"), media_dir)
                 if media_path is None:
@@ -1415,24 +1470,18 @@ def main():
                             has_audio=has_audio, reused_asr=asr_reuse.get(vid),
                             requested_whisper_model=args.whisper_model)
                     else:
+                        # 音声の3状態（measured / unmeasured / not_applicable）は
+                        # process_video が「文字起こしが実際に走ったか」で決める。
+                        # ここで無条件に measured へ上書きしてはいけない。
                         result = process_video(
                             video_record, media_path, model, args.max_frames, brand, product, tmp_dir,
-                            has_audio=has_audio, frames_root=(run_dir / "frames"))
+                            has_audio=has_audio, frames_root=(run_dir / "frames"),
+                            requested_whisper_model=args.whisper_model,
+                            asr_unavailable_reason=asr_unavailable_reason)
                     incomplete_reasons = result.pop("_incomplete_reasons", [])
                     result["status"] = "error" if incomplete_reasons else "ok"
                     if incomplete_reasons:
                         result["error"] = "; ".join(incomplete_reasons)
-                    if not dense_mode:
-                        result.update({
-                            "asr_required": has_audio,
-                            "asr_completed": True,
-                            "asr_status": "completed" if has_audio else "not_required",
-                            "asr_model_actual": args.whisper_model if has_audio else None,
-                            # ここで確定させないと "pending" のまま signal に書かれ、
-                            # 下流で「計測済みのASRが未計測」に化ける（分母が全件ゼロになる）
-                            "voice_channel": "measured" if has_audio else "not_applicable",
-                            "voice_channel_reason": None if has_audio else "音声トラックが無い",
-                        })
                     result["whisper_model"] = result.get("asr_model_actual")
                     result["max_frames"] = None if dense_mode else args.max_frames
         except Exception as e:
@@ -1475,26 +1524,77 @@ def main():
                 "asr_model_actual": result.get("asr_model_actual"),
                 "error": result.get("error"),
             })
-        # 取り込み済みのテロップ読み取りを引き継ぐ。
-        # フレームを読む作業は人手（Claude）のコストが高く、再解析で黙って
-        # 捨てると telop_measured が false に戻り「見せ方が無い」と誤集計される。
         sig_path = signals_dir / f"{safe_artifact_id(vid)}.json"
-        if sig_path.exists() and not getattr(args, "reset_telop", False):
+        prev = {}
+        if sig_path.exists():
             try:
                 prev = json.loads(sig_path.read_text(encoding="utf-8"))
             except (json.JSONDecodeError, OSError):
                 prev = {}
-            if prev.get("telop_measured") and prev.get("ocr_spans"):
-                result["ocr_spans"] = prev["ocr_spans"]
+            if not isinstance(prev, dict):
+                prev = {}
+        prev_sha = prev.get("acquisition_sha256")
+        current_sha = acquisition.get("acquisition_sha256")
+        # 指紋が両方ある時だけ「媒体が差し替わった」と断定できる。
+        # 片方が None（stamp 前に解析した等）は同一媒体とみなす（従来互換）。
+        same_media = not (prev_sha and current_sha and prev_sha != current_sha)
+
+        if result.get("status") == "ok" and prev.get("status") == "ok" and same_media:
+            # 通常解析で残したフレーム（Claude の読み取り対象）の所在を dense の signal に引き継ぐ。
+            # 無いと import_agent_telop の被覆率が None になり、読む対象も辿れない。
+            for key in ("frames_dir", "frame_files", "frames_retained"):
+                if key not in result and key in prev:
+                    result[key] = prev[key]
+            if "telop_frames_total" not in result and prev.get("frame_files"):
+                result["telop_frames_total"] = len(prev["frame_files"])
+                result.setdefault("telop_frames_read", 0)
+
+        # 取り込み済みのテロップ読み取りを引き継ぐ。
+        # フレームを読む作業は人手（Claude）のコストが高く、再解析で黙って
+        # 捨てると telop_measured が false に戻り「見せ方が無い」と誤集計される。
+        # 「読んだが文字が無かった（計測済み・0件）」も計測結果なので、spans が空でも引き継ぐ。
+        if (result.get("status") == "ok" and prev.get("telop_measured") is True
+                and not getattr(args, "reset_telop", False)):
+            if same_media:
+                frame_count_now = len(result.get("frame_files") or result.get("photo_paths") or [])
+                for key in ("ocr_spans", "telop_source", "telop_import", "telop_frames_read",
+                            "telop_frames_total", "telop_coverage_pct", "telop_read_keys",
+                            "telop_extra_reads"):
+                    if key in prev:
+                        result[key] = prev[key]
                 result["telop_measured"] = True
-                result["telop_source"] = prev.get("telop_source")
-                result["telop_import"] = prev.get("telop_import")
                 result["telop_carried_over"] = {
                     "reason": "再解析前の読み取りを引き継いだ（--reset-telop で破棄できる）",
-                    "spans": len(prev["ocr_spans"]),
+                    "spans": len(prev.get("ocr_spans") or []),
+                    # 抽出コマの組が変わった（--max-frames 変更など）ときは、読み取りが
+                    # 今のコマと1対1ではない。被覆率は読んだ当時の値のまま残す。
+                    "frame_set_changed": bool(
+                        frame_count_now and prev.get("telop_frames_total")
+                        and frame_count_now != prev.get("telop_frames_total")),
                 }
-        sig_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+                # テロップ中の #PR も判定に入れる（抽出時点ではテロップが空だった）
+                result["pr_status_final"] = final_pr_status(video_record, result.get("ocr_spans"))
+            else:
+                result["telop_carry_over_skipped"] = {
+                    "reason": "媒体が差し替わったため、以前のテロップ読み取りは引き継がない（未計測に戻す）",
+                    "previous_acquisition_sha256": prev_sha,
+                }
+
+        # 失敗で正常な signal を潰さない。同じ媒体に対する既存の ok 結果は、今回の失敗
+        # （パス解決・一時的な ffmpeg 失敗・尺上限など）では無効にならない。
+        # 旧実装は run-dir を移しただけで全件 error に上書きし、ASR 結果まで消していた。
+        keep_previous = (result.get("status") != "ok" and prev.get("status") == "ok" and same_media)
+        if keep_previous:
+            failures.append((vid, result.get("error")))
+            print(f"  [保持] {vid}: 今回は {result.get('status')}（{result.get('error')}）。"
+                  "同じ媒体の既存の正常な signals を上書きせず残します", file=sys.stderr)
+        else:
+            sig_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        if result.get("status") == "ok":
+            succeeded += 1
+        elif not keep_previous:
+            failures.append((vid, result.get("error")))
         append_jsonl(log_path, {
             "video_id": vid,
             "status": result["status"],
@@ -1502,6 +1602,8 @@ def main():
             "sampling_mode": result.get("sampling_mode"),
             "sampling_fps": result.get("sampling_fps"),
             "acquisition_sha256": acquisition.get("acquisition_sha256"),
+            **({"error": result.get("error")} if result.get("status") != "ok" else {}),
+            **({"previous_ok_signal_kept": True} if keep_previous else {}),
         })
         if dense_mode:
             # Publish completion only after both the signal payload and its
@@ -1512,6 +1614,20 @@ def main():
               + (f" frames={result.get('frames_sampled')} ocr_spans={len(result.get('ocr_spans', []))} "
                  f"asr_segs={len(result.get('asr_segments', []))} relevance={result.get('relevance_final')}"
                  if result["status"] == "ok" else f" error={result.get('error')}"))
+
+    print(f"done: ok={succeeded} / failed={len(failures)} / target={len(to_process)}")
+    if failures and not succeeded:
+        # 1本も成功していないのに exit 0 で終えると、後段が「解析済み」と読んで進む。
+        print("\n[STOP] 今回処理した投稿が1本も解析できませんでした。", file=sys.stderr)
+        for vid, error in failures[:10]:
+            print(f"  {vid}: {error}", file=sys.stderr)
+        print("  媒体が見つからない場合は media/acquire_log.jsonl のパスと <run-dir>/media の中身を"
+              "確認してください（run-dir を移動した場合も media/ 配下にあれば自動で解決します）。",
+              file=sys.stderr)
+        return 2
+    if failures:
+        print(f"[警告] {len(failures)} 件は解析できませんでした（0件としては扱われません）: "
+              + ", ".join(vid for vid, _e in failures[:10]), file=sys.stderr)
 
 
 if __name__ == "__main__":
